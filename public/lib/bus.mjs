@@ -59,6 +59,45 @@ export function parseStops(j) {
   return ways.sort((a, b) => a.dir - b.dir || b.stops.length - a.stops.length);
 }
 
+// ---- The timetable ----------------------------------------------------------------------------------
+
+// A route's timetable (TDX Schedule): per sub-route and direction, its trips'
+// times at every stop, or its headways. Kept 6 hours.
+export async function routeSchedule(route) {
+  const j = await tdx(`basic/v2/Bus/Schedule/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}`, { fresh: 6 * 3_600_000, persist: true });
+  return rows(j);
+}
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+// Does a trip run on a Taiwan date ('YYYY-MM-DD', dow 0 = Sunday)? Its special days decide first.
+export function runsOn(trip, date, dow) {
+  for (const sp of trip.SpecialDays || []) {
+    const inDates = (sp.Dates || []).includes(date);
+    const p = sp.DatePeriod;
+    const inPeriod = p && date >= p.StartDate && date <= p.EndDate;
+    if (inDates || inPeriod) return Number(sp.ServiceStatus) === 1;
+  }
+  return trip.ServiceDay ? Number(trip.ServiceDay[DAYS[dow]]) === 1 : true;
+}
+// The day's times at one stop (by StopUID, else by its name), one direction:
+// { times: ['06:00', …] } from the trips, or { every: [{ from, to, min, max }] }.
+export function stopTimes(sched, { stopUID, name, dir }, date, dow) {
+  const times = new Set();
+  const every = [];
+  for (const r of sched) {
+    if (dir != null && Number(r.Direction) !== dir) continue;
+    for (const t of r.Timetables || []) {
+      if (!runsOn(t, date, dow)) continue;
+      const st = (t.StopTimes || []).find(x => x.StopUID === stopUID) || (name ? (t.StopTimes || []).find(x => zh(x.StopName) === name) : null);
+      if (st?.DepartureTime || st?.ArrivalTime) times.add(st.DepartureTime || st.ArrivalTime);
+    }
+    for (const f of r.Frequencys || []) {
+      if (f.ServiceDay && Number(f.ServiceDay[DAYS[dow]]) !== 1) continue;
+      every.push({ from: f.StartTime, to: f.EndTime, min: Number(f.MinHeadwayMins) || null, max: Number(f.MaxHeadwayMins) || null });
+    }
+  }
+  return { times: [...times].sort(), every: every.sort((a, b) => (a.from < b.from ? -1 : 1)) };
+}
+
 // ---- When the bus comes -------------------------------------------------------------------------
 
 const ETA_FIELDS = '$select=StopUID,RouteUID,RouteName,SubRouteUID,Direction,EstimateTime,StopStatus,NextBusTime,PlateNumb,IsLastBus,Estimates,StopCountDown';

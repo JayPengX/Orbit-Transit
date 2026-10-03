@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans } from '../public/lib/plan.mjs';
-import { etaText, etaOf, findRoutes, parseStops, etaMap } from '../public/lib/bus.mjs';
+import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move } from '../public/lib/store.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
@@ -254,6 +254,23 @@ test('TDX’s YouBike first mile gets its stations; a long walk to a bus becomes
 });
 
 // ---- Buses -----------------------------------------------------------------------------------------
+
+test('a bus timetable: the day’s times at a stop, holidays and weekdays respected', () => {
+  const week = { Sunday: 0, Monday: 1, Tuesday: 1, Wednesday: 1, Thursday: 1, Friday: 1, Saturday: 0 };
+  const trip = (t0, extra = {}) => ({ ServiceDay: week, StopTimes: [{ StopUID: 'HSQ1', StopName: { Zh_tw: '竹北火車站' }, DepartureTime: t0 }, { StopUID: 'HSQ2', StopName: { Zh_tw: '竹北口' }, DepartureTime: t0.replace(/:(\d)0$/, ':$12') }], ...extra });
+  const sched = [
+    { Direction: 1, Timetables: [trip('06:30'), trip('07:10'), trip('08:00', { SpecialDays: [{ Dates: ['2026-10-09'], ServiceStatus: 0 }] })] },
+    { Direction: 0, Timetables: [trip('09:00')] },
+    { Direction: 1, Frequencys: [{ StartTime: '10:00', EndTime: '16:00', MinHeadwayMins: 15, MaxHeadwayMins: 20, ServiceDay: week }] }
+  ];
+  const mon = stopTimes(sched, { stopUID: 'HSQ1', dir: 1 }, '2026-10-05', 1);
+  assert.deepEqual(mon.times, ['06:30', '07:10', '08:00']);
+  assert.deepEqual(mon.every, [{ from: '10:00', to: '16:00', min: 15, max: 20 }]);
+  assert.deepEqual(stopTimes(sched, { stopUID: 'HSQ1', dir: 1 }, '2026-10-09', 5).times, ['06:30', '07:10'], '國慶 off');
+  assert.deepEqual(stopTimes(sched, { stopUID: 'HSQ1', dir: 1 }, '2026-10-04', 0).times, [], 'Sunday off');
+  assert.deepEqual(stopTimes(sched, { stopUID: 'X', name: '竹北口', dir: 1 }, '2026-10-05', 1).times.length, 3, 'by name when the UID differs');
+  assert.equal(runsOn({}, '2026-10-05', 1), true);
+});
 
 test('bus times say what a stop sign says', () => {
   assert.deepEqual(etaText({ sec: 40, status: 0, more: [] }), { main: '進站中', sub: '', tone: 'now' });
