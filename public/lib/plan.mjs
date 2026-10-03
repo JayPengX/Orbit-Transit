@@ -9,6 +9,7 @@
 //     sooner.
 
 import { meters, walkSec } from './util.mjs';
+import { journeys } from './rail.mjs';
 
 export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
@@ -121,14 +122,77 @@ export function bikeFromRail(plan, d, bikes) {
   return finish({ src: 'bike+', base: plan.src, legs });
 }
 
-// Everything, ranked: the soonest there first; plans that arrive later,
-// take longer and change more than another are dropped. Each gets its labels.
+// Trains of our own router (台鐵 + 高鐵, the changes included) between the
+// stations near both ends, for trips the planners answer with buses only.
+// `net` is raildata's railNetwork. Walks to and from the stations up to 2 km.
+export const RAIL_WALK_M = 2000;
+export function railPlans(net, o, d, at, { n = 4 } = {}) {
+  if (!net || meters(o.lat, o.lon, d.lat, d.lon) < 3000) return [];
+  const near = pt =>
+    [...net.st.values()]
+      .map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) }))
+      .filter(x => x.m <= RAIL_WALK_M)
+      .sort((a, b) => a.m - b.m)
+      .slice(0, 3);
+  const A = near(o);
+  const B = near(d);
+  if (!A.length || !B.length) return [];
+  const starts = A.map(x => ({ key: x.s.key, at: at + walkSec(x.m) * 1000 + 3 * 60_000 }));
+  const ends = B.map(x => ({ key: x.s.key, extra: walkSec(x.m) }));
+  let found = [];
+  try {
+    found = journeys(net, starts, ends, at, { n });
+  } catch {
+    return [];
+  }
+  const pt = k => {
+    const s = net.st.get(k);
+    return { name: s.sys === 'hsr' ? `高鐵${s.name.replace(/^高鐵/, '')}` : s.name, lat: s.lat, lon: s.lon };
+  };
+  return found.map(j => {
+    const legs = [];
+    const first = j.legs[0];
+    const w1 = walkLeg(o, pt(first.from), 0);
+    // At the station 3 minutes before the train (or the walk on to the other railway).
+    const ready = first.walk ? first.dep : first.dep - 3 * 60_000;
+    if (w1.dist > 20) legs.push({ ...w1, dep: ready - w1.dur * 1000, arr: ready });
+    for (const l of j.legs) {
+      if (l.walk) legs.push({ ...walkLeg(pt(l.from), pt(l.to), l.dep), arr: l.arr });
+      else
+        legs.push({
+          mode: l.trip.sys,
+          name: l.trip.sys === 'hsr' ? '高鐵' : l.trip.typeFull || l.trip.type,
+          short: l.trip.sys === 'hsr' ? `${l.trip.no} 次` : `${l.trip.type} ${l.trip.no}`,
+          headsign: l.trip.headsign,
+          from: pt(l.from),
+          to: pt(l.to),
+          dep: l.dep,
+          arr: l.arr,
+          dur: Math.round((l.arr - l.dep) / 1000),
+          stops: l.stops,
+          agency: l.trip.sys === 'hsr' ? '台灣高鐵' : l.trip.typeFull || '台鐵',
+          dist: Math.round(meters(net.st.get(l.from).lat, net.st.get(l.from).lon, net.st.get(l.to).lat, net.st.get(l.to).lon)),
+          train: { sys: l.trip.sys, no: l.trip.no, code: l.trip.code }
+        });
+    }
+    const last = j.legs.filter(l => !l.walk).at(-1);
+    const w2 = walkLeg(pt(j.end), d, last.arr);
+    if (w2.dist > 20) legs.push(w2);
+    return finish({ src: 'rail', legs });
+  });
+}
+
+// Everything, ranked: the soonest there first. Each gets its labels.
 export function rank(plans, { now = Date.now() } = {}) {
   const ok = plans.filter(p => p && p.legs?.length && p.arr != null && p.arr > now - 60_000);
-  const kept = ok.filter(a => !ok.some(b => b !== a && b.arr <= a.arr && b.dur <= a.dur && b.transfers <= a.transfers && b.walk <= a.walk && (b.arr < a.arr || b.dur < a.dur || b.walk < a.walk)));
+  // Every plan is shown, however much later it arrives (the owner's ask): every
+  // transit plan, and YouBike's ideas around them up to 12 in all, soonest first.
   const sig = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${Math.round((l.dep || 0) / 60_000)}`).join('|');
   const seen = new Set();
-  const list = kept.filter(p => !seen.has(sig(p)) && seen.add(sig(p))).sort((a, b) => a.arr - b.arr || a.dur - b.dur).slice(0, 8);
+  const uniq = ok.filter(p => !seen.has(sig(p)) && seen.add(sig(p))).sort((a, b) => a.arr - b.arr || a.dur - b.dur);
+  const transit = uniq.filter(p => !p.bike);
+  const bikes = uniq.filter(p => p.bike).slice(0, Math.max(4, 12 - transit.length));
+  const list = [...transit, ...bikes].sort((a, b) => a.arr - b.arr || a.dur - b.dur);
   if (!list.length) return [];
   const label = new Map(list.map(p => [p, []]));
   const by = (f, name) => {

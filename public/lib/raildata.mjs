@@ -4,7 +4,7 @@
 
 import { tdx, rows } from './api.mjs';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, traFare, hsrFare } from './rail.mjs';
-import { loadSystem, MAPS } from './metro.mjs';
+import { loadSystem, mapsNear } from './metro.mjs';
 import { tw, zh, twAt, addDays } from './util.mjs';
 
 const DAY = 86_400_000;
@@ -24,11 +24,18 @@ export function railStations() {
   return stationsP;
 }
 
-// Every metro system's stations (the map's markers and the router's links).
-let metroP = null;
-export function metroSystems() {
-  metroP ||= Promise.all(MAPS.flatMap(m => m.systems).map(sys => loadSystem(sys).catch(() => ({ sys, stations: [], lines: [] }))));
-  return metroP;
+// Metro systems' stations, loaded only where they're wanted (4 TDX answers a
+// system, kept a week): those of the maps an area touches ([s, w, n, e], or a
+// point), else the ones loaded already.
+const systemsP = new Map();
+const system = sys => {
+  if (!systemsP.has(sys)) systemsP.set(sys, loadSystem(sys).catch(() => (systemsP.delete(sys), { sys, stations: [], lines: [] })));
+  return systemsP.get(sys);
+};
+export function metroSystems(area) {
+  const box = area && !Array.isArray(area) ? [area.lat - 0.02, area.lon - 0.02, area.lat + 0.02, area.lon + 0.02] : area;
+  const want = box ? mapsNear(box).flatMap(m => m.systems) : [...systemsP.keys()];
+  return Promise.all(want.map(system));
 }
 
 // A day's trains (台鐵 and 高鐵): trips for the router.

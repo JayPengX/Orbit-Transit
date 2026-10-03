@@ -87,8 +87,10 @@ export async function stopsEta(items) {
 }
 // A bus stop on the map: every route through it (by its station), with times.
 export async function stationEta(station) {
-  const city = CITY_CODES[station.cityCode];
-  // A station with no city is a 公路客運 one (公路局's, THB…).
+  // Whose station it is comes from its UID (HSZ…: 新竹市's; THB…: 公路局's 公路客運,
+  // which TDX still files under the city it stands in): only its own operator knows it.
+  const owner = /^[A-Z]{3}/.exec(station.uid || '')?.[0];
+  const city = owner ? CITY_CODES[owner] : CITY_CODES[station.cityCode];
   const path = `advanced/v2/Bus/EstimatedTimeOfArrival/${city ? `City/${city}` : 'InterCity'}/PassThrough/Station/${encodeURIComponent(station.id)}`;
   const j = await tdx(`${path}?${ETA_FIELDS}`, { fresh: 20_000 });
   return rows(j).map(r => ({ ...etaOf(r), route: zh(r.RouteName), routeUID: r.RouteUID, stopUID: r.StopUID, dir: r.Direction, city: city || INTERCITY }));

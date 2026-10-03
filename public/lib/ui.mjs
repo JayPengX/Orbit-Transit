@@ -30,6 +30,8 @@ const I = {
   ferry: '<path d="M3 15.5l2.2 4h13.6l2.2-4zM6 15.5V10h12v5.5M9.5 10V6.5h5V10"/><path d="M2.5 21.5c2 0 2-.8 4-.8s2 .8 4 .8 2-.8 4-.8 2 .8 4 .8"/>',
   gondola: '<path d="M3 4l18 4M12 6v4"/><rect x="6.5" y="10" width="11" height="9" rx="2"/><path d="M6.5 14h11"/>',
   rail: '<rect x="6" y="3" width="12" height="15" rx="3"/><path d="M6 10.5h12M8.5 21l1.5-3M15.5 21L14 18"/>',
+  car: '<path d="M4 16.5V12l2-5h12l2 5v4.5zM4 12h16"/><circle cx="7.5" cy="16.5" r="1.6"/><circle cx="16.5" cy="16.5" r="1.6"/>',
+  plane: '<path d="M10.5 20.5l1.5-1 1.5 1V16l7-3v-2l-7 1.5V5a1.5 1.5 0 0 0-3 0v7.5L3.5 11v2l7 3z"/>',
   pin: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
   locate: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
   layers: '<path d="M12 3.5l9 4.8-9 4.8-9-4.8z"/><path d="M3 12.5l9 4.8 9-4.8M3 16.7l9 4.8 9-4.8"/>',
@@ -50,8 +52,8 @@ const I = {
 };
 export const icon = (name, cls = '') => `<svg class="ot-i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[name] || I.rail}</svg>`;
 
-export const MODE_NAME = { walk: '步行', bike: 'YouBike', bus: '公車', metro: '捷運', lightrail: '輕軌', tra: '台鐵', hsr: '高鐵', ferry: '渡輪', gondola: '纜車', rail: '鐵路' };
-export const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', rail: '#0ea5e9' };
+export const MODE_NAME = { walk: '步行', bike: 'YouBike', bus: '公車', metro: '捷運', lightrail: '輕軌', tra: '台鐵', hsr: '高鐵', ferry: '渡輪', gondola: '纜車', car: '計程車', plane: '飛機', rail: '鐵路' };
+export const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', car: '#eab308', plane: '#a78bfa', rail: '#0ea5e9' };
 export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : MODE_COLOR[l.mode] || '#94a3b8');
 
 // What a leg is called on its chip: 「區間車」「板南線」「182」「YouBike」.

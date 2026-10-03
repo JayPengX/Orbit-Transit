@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans } from '../public/lib/plan.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move } from '../public/lib/store.mjs';
@@ -199,14 +199,32 @@ test('all the way by bike only when it’s near enough', () => {
   assert.equal(list.length, 1, 'regular bike; 1.4 km is too short for the 電輔車 option');
 });
 
-test('ranking: soonest first, plans beaten on every count dropped, each labelled', () => {
+test('our own train plans: walk to a station near you, the trains, walk from the one near there', () => {
+  const o = { name: '家', lat: 24.8030, lon: 120.9690 };
+  const d = { name: '公司', lat: 25.0500, lon: 121.5200 };
+  const list = railPlans(net, o, d, T('08:10'));
+  assert.ok(list.length >= 1);
+  for (const p of list) {
+    assert.equal(p.legs[0].mode, 'walk');
+    assert.equal(p.legs.at(-1).mode, 'walk');
+    assert.ok(p.legs.some(l => l.mode === 'tra' || l.mode === 'hsr'));
+    assert.ok(p.dep >= T('08:10'));
+    for (let i = 1; i < p.legs.length; i++) assert.ok(p.legs[i].dep >= p.legs[i - 1].arr - 1000, 'legs in order');
+  }
+  assert.ok(list.some(p => p.legs.some(l => l.short === '自強 152')));
+  assert.deepEqual(railPlans(net, o, { lat: 24.81, lon: 120.98 }, T('08:10')), [], 'under 3 km: no trains');
+  assert.deepEqual(railPlans(net, o, { lat: 23.5, lon: 120.5 }, T('08:10')), [], 'no station near there');
+});
+
+test('ranking: soonest first, every transit plan kept however late, each labelled', () => {
   const list = withBikes([busPlan], O, D, BIKES, T('07:59'));
   assert.ok(list.length >= 2);
   assert.ok(list[0].arr <= list[1].arr);
   assert.ok(list[0].tags.includes('最快抵達'));
   assert.ok(list.some(p => p.tags.includes('YouBike')));
-  const worse = { ...busPlan, arr: busPlan.arr + 600_000, dur: busPlan.dur + 600, legs: busPlan.legs };
-  assert.equal(rank([busPlan, worse]).length, 1);
+  const later = { ...busPlan, arr: busPlan.arr + 1_800_000, dur: busPlan.dur + 1800, legs: busPlan.legs.map(l => ({ ...l, dep: l.dep + 60_000 })) };
+  assert.equal(rank([busPlan, later]).length, 2, 'a later bus is still shown');
+  assert.equal(rank([busPlan, { ...busPlan }]).length, 1, 'the same ride once');
   assert.ok(bikePoints([busPlan], O, D).length <= 6);
 });
 

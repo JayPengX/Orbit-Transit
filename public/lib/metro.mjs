@@ -8,11 +8,14 @@ import { zh, meters, tw, e } from './util.mjs';
 
 // The maps, by city; each draws one or more TDX rail systems.
 export const MAPS = [
-  { id: 'taipei', name: '台北・新北', systems: ['TRTC', 'NTMC', 'NTDLRT', 'NTALRT', 'TRTCMG'] },
-  { id: 'taoyuan', name: '桃園機場捷運', systems: ['TYMC'] },
-  { id: 'taichung', name: '台中', systems: ['TMRT'] },
-  { id: 'kaohsiung', name: '高雄', systems: ['KRTC', 'KLRT'] }
+  // box: [south, west, north, east], a little past the farthest station.
+  { id: 'taipei', name: '台北・新北', systems: ['TRTC', 'NTMC', 'NTDLRT', 'NTALRT', 'TRTCMG'], box: [24.9, 121.33, 25.22, 121.67] },
+  { id: 'taoyuan', name: '桃園機場捷運', systems: ['TYMC'], box: [24.93, 121.15, 25.1, 121.46] },
+  { id: 'taichung', name: '台中', systems: ['TMRT'], box: [24.1, 120.58, 24.22, 120.7] },
+  { id: 'kaohsiung', name: '高雄', systems: ['KRTC', 'KLRT'], box: [22.53, 120.25, 22.8, 120.44] }
 ];
+// The maps whose area a point (or a view [s, w, n, e]) touches.
+export const mapsNear = ([s, w, n, e]) => MAPS.filter(m => !(n < m.box[0] || s > m.box[2] || e < m.box[1] || w > m.box[3]));
 export const OPERATORS = { TRTC: '臺北捷運', NTMC: '新北捷運', NTDLRT: '淡海輕軌', NTALRT: '安坑輕軌', TRTCMG: '貓空纜車', TYMC: '桃園捷運', TMRT: '臺中捷運', KRTC: '高雄捷運', KLRT: '高雄輕軌' };
 // Which systems TDX gives a live board for, and a station timetable for.
 export const LIVE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT']);
