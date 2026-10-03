@@ -29,7 +29,8 @@ export const CITIES = [
   ['LienchiangCounty', '連江縣']
 ];
 export const cityName = code => CITIES.find(c => c[0] === code)?.[1] || code;
-export const cityShort = code => cityName(code).replace(/[市縣]$/, '');
+// 新竹 and 嘉義 are a 市 and a 縣 each: those keep it.
+export const cityShort = code => (/^(新竹|嘉義)/.test(cityName(code)) ? cityName(code) : cityName(code).replace(/[市縣]$/, ''));
 const BY_NAME = Object.fromEntries(CITIES.map(([code, name]) => [name, code]));
 // 「台北市」 is written both ways.
 export const cityOf = name => BY_NAME[String(name || '').replace(/台/g, '臺')] || null;
@@ -66,3 +67,15 @@ export function cityAt(towns, lat, lon) {
 
 // TDX's three-letter city codes (ISO 3166-2:TW), as bus stations carry them.
 export const CITY_CODES = { TPE: 'Taipei', NWT: 'NewTaipei', TAO: 'Taoyuan', TXG: 'Taichung', TNN: 'Tainan', KHH: 'Kaohsiung', KEE: 'Keelung', HSZ: 'Hsinchu', HSQ: 'HsinchuCounty', MIA: 'MiaoliCounty', CHA: 'ChanghuaCounty', NAN: 'NantouCounty', YUN: 'YunlinCounty', CYQ: 'ChiayiCounty', CYI: 'Chiayi', PIF: 'PingtungCounty', ILA: 'YilanCounty', HUA: 'HualienCounty', TTT: 'TaitungCounty', KIN: 'KinmenCounty', PEN: 'PenghuCounty', LIE: 'LienchiangCounty' };
+
+// Each city's neighbours: the bus search looks there too (a 竹北 rider's
+// 快捷8號 is 新竹縣's, the bus home may be 新竹市's).
+export const NEAR_CITIES = {
+  Taipei: ['NewTaipei', 'Keelung'], NewTaipei: ['Taipei', 'Keelung', 'Taoyuan'], Keelung: ['Taipei', 'NewTaipei'],
+  Taoyuan: ['NewTaipei', 'HsinchuCounty'], HsinchuCounty: ['Hsinchu', 'Taoyuan', 'MiaoliCounty'], Hsinchu: ['HsinchuCounty', 'MiaoliCounty'],
+  MiaoliCounty: ['HsinchuCounty', 'Hsinchu', 'Taichung'], Taichung: ['MiaoliCounty', 'ChanghuaCounty', 'NantouCounty'],
+  ChanghuaCounty: ['Taichung', 'NantouCounty', 'YunlinCounty'], NantouCounty: ['Taichung', 'ChanghuaCounty'], YunlinCounty: ['ChanghuaCounty', 'ChiayiCounty'],
+  ChiayiCounty: ['Chiayi', 'YunlinCounty', 'Tainan'], Chiayi: ['ChiayiCounty'], Tainan: ['ChiayiCounty', 'Kaohsiung'], Kaohsiung: ['Tainan', 'PingtungCounty'],
+  PingtungCounty: ['Kaohsiung', 'TaitungCounty'], YilanCounty: ['NewTaipei', 'HualienCounty'], HualienCounty: ['YilanCounty', 'TaitungCounty'], TaitungCounty: ['HualienCounty', 'PingtungCounty'],
+  KinmenCounty: [], PenghuCounty: [], LienchiangCounty: []
+};

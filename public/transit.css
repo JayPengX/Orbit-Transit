@@ -1602,3 +1602,86 @@ main {
     margin: 0;
   }
 }
+
+/* ---- A bus route's timetable ---- */
+.ot-view {
+  margin: 4px 0 10px;
+}
+.ot-tt-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+.ot-tt-head b {
+  font-size: 18px;
+}
+.ot-tt-head small {
+  color: var(--q-muted, #8a92a3);
+}
+.ot-timetable {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+}
+.ot-timetable span {
+  padding: 8px 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.ot-timetable .past {
+  opacity: 0.35;
+  font-weight: 400;
+}
+.ot-timetable .next {
+  background: var(--q-accent);
+  color: var(--q-accent-ink);
+}
+.ot-tt-stops {
+  flex-wrap: wrap;
+}
+
+/* ---- 附近站牌 on the bus tab ---- */
+.ot-near-h {
+  margin: 22px 0 8px;
+}
+.ot-near-stop {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ot-line);
+  border-radius: 16px;
+  background: var(--ot-card);
+}
+.ot-near-stop header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.ot-near-stop header small {
+  color: var(--q-muted, #8a92a3);
+}
+.ot-near-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 0;
+  border: 0;
+  border-top: 1px solid var(--ot-line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ot-near-row small {
+  color: var(--q-muted, #8a92a3);
+  font-size: 12px;
+}
+.ot-near-row .ot-eta {
+  margin-left: auto;
+}

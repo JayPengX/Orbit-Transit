@@ -4,12 +4,12 @@
 // any city, or 公路客運), shows its stops each way with the buses on them,
 // and puts a stop in a group.
 
-import { cityRoutes, findRoutes, routeStops, routeEta, stopsEta, etaText, INTERCITY } from './bus.mjs';
-import { errorText } from './api.mjs';
-import { CITIES, cityName, cityShort } from './city.mjs';
+import { cityRoutes, findRoutes, routeStops, routeEta, stopsEta, etaText, etaOf, routeSchedule, stopTimes, stationsNear, INTERCITY } from './bus.mjs';
+import { errorText, tdx, rows } from './api.mjs';
+import { CITIES, CITY_CODES, cityName, cityShort, NEAR_CITIES } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
-import { e, uid, meters, distText } from './util.mjs';
+import { e, uid, meters, distText, tw, zh } from './util.mjs';
 
 const $ = id => document.getElementById(id);
 let ctx = null;
@@ -102,11 +102,67 @@ function drawGroup(g) {
     ${error ? `<p class="ot-note bad">${e(error)}</p>` : ''}
     ${items || `<div class="ot-empty-card">${icon('bus', 'big')}<h3>${e(g.name)} 還沒有站牌</h3><p>搜尋路線，點你上車的站牌，就會出現在這裡，並顯示公車還有幾分鐘到。</p></div>`}
     <button class="q-btn primary ot-wide" type="button" data-act="add">${icon('plus')} 新增路線站牌</button>
-    ${g.items.length ? `<p class="ot-note center">${e(ago(lastAt))} · 每 20 秒更新</p>` : ''}`;
+    ${g.items.length ? `<p class="ot-note center">${e(ago(lastAt))} · 每 20 秒更新</p>` : ''}
+    ${nearHtml()}`;
+}
+
+// ---- 附近站牌: every bus due at the stops around you (one TDX ask) ------------------------------
+
+let near = null; // [{ name, dist, rows: [{ route, uid, city, dir, t }] }] | 'loading' | { error }
+async function loadNear() {
+  const h = ctx.here || (await ctx.locate());
+  if (!h) return (near = { error: '開啟定位就能看到附近站牌的公車。' });
+  near ||= 'loading';
+  try {
+    const at = p => (Math.round(p * 1000) / 1000).toFixed(3);
+    const [j, stations] = await Promise.all([
+      tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${at(h.lat)},${at(h.lon)},350)&$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates&$top=300`, { fresh: 20_000 }),
+      stationsNear(h.lat, h.lon).catch(() => [])
+    ]);
+    const dist = name => Math.min(...stations.filter(s => s.name === name).map(s => meters(h.lat, h.lon, s.lat, s.lon)), Infinity);
+    const byStop = new Map();
+    for (const r of rows(j)) {
+      const name = zh(r.StopName);
+      if (!byStop.has(name)) byStop.set(name, new Map());
+      const key = `${r.RouteUID}|${r.Direction}`;
+      const v = etaOf(r);
+      const old = byStop.get(name).get(key);
+      if (!old || (v.sec != null && (old.v.sec == null || v.sec < old.v.sec))) {
+        const code = /^[A-Z]{3}/.exec(r.RouteUID || '')?.[0];
+        byStop.get(name).set(key, { route: zh(r.RouteName), uid: r.RouteUID, city: CITY_CODES[code] || INTERCITY, dir: Number(r.Direction) || 0, stopUID: r.StopUID, v });
+      }
+    }
+    // Soonest first at each stop; buses that aren't running today last.
+    const rank = x => (x.v.sec != null ? x.v.sec : x.v.status === 1 ? 1e6 + (x.v.next || 0) / 1e9 : 2e6);
+    near = [...byStop]
+      .map(([name, m]) => ({ name, dist: dist(name), rows: [...m.values()].sort((a, b) => rank(a) - rank(b)) }))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 6);
+  } catch (err) {
+    near = { error: errorText(err) };
+  }
+}
+function nearHtml() {
+  if (near === null || near === 'loading') return '<h3 class="q-sheet-h ot-near-h">附近站牌</h3><p class="ot-note">找附近的公車…</p>';
+  if (near.error) return `<h3 class="q-sheet-h ot-near-h">附近站牌</h3><p class="ot-note">${e(near.error)}</p>`;
+  if (!near.length) return '<h3 class="q-sheet-h ot-near-h">附近站牌</h3><p class="ot-note">350 公尺內沒有公車站牌。</p>';
+  return `<h3 class="q-sheet-h ot-near-h">附近站牌</h3>${near
+    .map(
+      st => `<section class="ot-near-stop"><header><b>${e(st.name)}</b>${Number.isFinite(st.dist) ? `<small>${e(distText(st.dist))}</small>` : ''}</header>
+      ${st.rows
+        .slice(0, 8)
+        .map(x => {
+          const t = etaText(x.v);
+          return `<button class="ot-near-row" type="button" data-near="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"><span class="ot-route-no">${e(x.route)}</span><small>${x.dir ? '返程' : '去程'}</small><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b></span></button>`;
+        })
+        .join('')}</section>`
+    )
+    .join('')}`;
 }
 
 async function refresh() {
   const g = groups()[index];
+  loadNear().then(() => g && drawGroup(g));
   if (!g?.items.length) return;
   try {
     const m = await stopsEta(g.items);
@@ -127,6 +183,11 @@ function goTo(i) {
 }
 
 function onClick(ev) {
+  const n = ev.target.closest('[data-near]');
+  if (n) {
+    const x = JSON.parse(n.dataset.near);
+    return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
+  }
   const add = ev.target.closest('[data-act="add"]');
   if (add) return searchSheet();
   const open = ev.target.closest('[data-open]');
@@ -139,32 +200,40 @@ function onClick(ev) {
 // ---- Finding a route --------------------------------------------------------------------------------
 
 function searchSheet() {
-  let city = ctx.city || 'Taipei';
+  const home = ctx.city || 'Taipei';
+  // 附近: your city, its neighbours and 公路客運 together; or one city.
+  const NEAR = 'near';
+  let city = NEAR;
   let list = [];
+  let failed = '';
   const d = sheet(`${sheetHead('搜尋公車路線')}
-    <div class="ot-search-in"><input id="r-q" type="search" inputmode="search" placeholder="路線號碼或站名，例如 藍1、182、新竹車站" autocomplete="off" enterkeyhint="search"></div>
+    <div class="ot-search-in"><input id="r-q" type="search" inputmode="search" placeholder="路線號碼或站名，例如 藍1、快捷8、新竹車站" autocomplete="off" enterkeyhint="search"></div>
     <div class="q-chips ot-city-chips" id="r-city"></div>
     <div id="r-list" class="ot-list"></div>`, 'ot-tall-sheet');
   const cities = () =>
-    (d.querySelector('#r-city').innerHTML = [...CITIES.filter(([k]) => k === (ctx.city || 'Taipei')), [INTERCITY, '公路客運'], ...CITIES.filter(([k]) => k !== (ctx.city || 'Taipei'))].map(([k, n]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(k === INTERCITY ? n : cityShort(k))}</button>`).join(''));
+    (d.querySelector('#r-city').innerHTML = [[NEAR, `${cityShort(home)}附近`], [INTERCITY, '公路客運'], ...CITIES.map(([k]) => [k, cityShort(k)])]
+      .map(([k, n]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(n)}</button>`)
+      .join(''));
+  const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
   const draw = () => {
     const t = d.querySelector('#r-q').value;
-    const found = t ? findRoutes(list, t) : list.slice(0, 0);
+    const found = t ? findRoutes(list, t) : [];
     d.querySelector('#r-list').innerHTML = !list.length
-      ? '<p class="ot-note">載入路線中…</p>'
+      ? failed
+        ? `<p class="ot-note bad">${e(failed)}</p>`
+        : '<p class="ot-note">載入路線中…</p>'
       : !t
-        ? `<p class="ot-note">${e(city === INTERCITY ? '公路客運與國道客運' : cityName(city))}共 ${list.length} 條路線，輸入號碼或站名。</p>`
-        : found.map(r => `<button class="ot-row-btn" type="button" data-r="${e(r.uid)}"><span class="ot-route-no">${e(r.name)}</span><span><b>${e(r.from)} ↔ ${e(r.to)}</b></span>${icon('chevron')}</button>`).join('') || '<p class="ot-note">這個縣市沒有符合的路線，試試其他縣市或公路客運。</p>';
+        ? `<p class="ot-note">${e(city === NEAR ? `${cityShort(home)}、鄰近縣市與公路客運` : city === INTERCITY ? '公路客運與國道客運' : cityName(city))}共 ${list.length} 條路線，輸入號碼或站名。</p>`
+        : found.map(r => `<button class="ot-row-btn" type="button" data-r="${e(`${r.city}|${r.uid}`)}"><span class="ot-route-no">${e(r.name)}</span><span><b>${e(r.from)} ↔ ${e(r.to)}</b><small>${e(where(r))}</small></span>${icon('chevron')}</button>`).join('') || '<p class="ot-note">沒有符合的路線，試試其他縣市。</p>';
   };
   const load = async () => {
     list = [];
+    failed = '';
     draw();
-    try {
-      list = await cityRoutes(city);
-    } catch (err) {
-      d.querySelector('#r-list').innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`;
-      return;
-    }
+    const want = city === NEAR ? [home, ...(NEAR_CITIES[home] || []), INTERCITY] : [city];
+    const got = await Promise.all(want.map(c => cityRoutes(c).catch(err => ((failed = errorText(err)), []))));
+    // What loaded is searched; one city failing doesn't hide the rest.
+    list = got.flat();
     draw();
   };
   cities();
@@ -179,7 +248,7 @@ function searchSheet() {
     }
     const r = ev.target.closest('[data-r]');
     if (r) {
-      const route = list.find(x => x.uid === r.dataset.r);
+      const route = list.find(x => `${x.city}|${x.uid}` === r.dataset.r);
       d.close();
       openRoute(ctx, route, { add: true });
     }
@@ -196,24 +265,62 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   let live = new Map();
   let at = 0;
   let err = '';
+  // 即時 (the buses on the stops now) or 時刻表 (today's times at one stop).
+  let view = 'live';
+  let sched = null;
+  let picked = stopUID;
   const d = sheet(`<div id="rt"></div>`, 'ot-tall-sheet ot-route-sheet');
+  routeSchedule(route)
+    .then(x => {
+      sched = x;
+      if (d.open) draw();
+    })
+    .catch(() => (sched = []));
+  const today = () => tw();
+  // A bus not yet out with no time from TDX: the timetable's next one at the stop.
+  const planned = (w, s) => {
+    if (!sched?.length) return '';
+    const { date, dow, hm: now } = today();
+    const next = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, date, dow).times.find(t => t >= now);
+    return next || '';
+  };
+  const tableHtml = w => {
+    if (!sched) return '<p class="ot-note">載入時刻表…</p>';
+    const s = w.stops.find(x => x.uid === picked) || w.stops[0];
+    const { date, dow, hm: now } = today();
+    const { times, every } = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, date, dow);
+    const next = times.find(t => t >= now);
+    const body = times.length
+      ? `<div class="ot-timetable">${times.map(t => `<span class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t)}</span>`).join('')}</div>`
+      : every.length
+        ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? `每 ${f.min}–${f.max} 分` : `每 ${f.min || f.max} 分`}</b></div>`).join('')}</div>`
+        : '<p class="ot-note">今天這個站牌沒有排班資料（業者沒提供，或今天停駛）。</p>';
+    return `<div class="ot-tt-head"><b>${e(s.name)}</b><small>今天${times.length ? ` ${times.length} 班${next ? `・下一班 ${e(next)}` : '・今天已收班'}` : ''}</small></div>${body}
+      <p class="ot-note">換站牌：</p><div class="q-chips ot-tt-stops">${w.stops.map(x => `<button class="q-chip" type="button" data-pickstop="${e(x.uid)}" aria-pressed="${x.uid === s.uid}">${e(x.name)}</button>`).join('')}</div>`;
+  };
   const draw = () => {
     const w = ways?.[way];
     const head = sheetHead(`${e(route.name)}`, w ? `往 ${e(w.headsign)}${route.city === INTERCITY ? ' · 公路客運' : ` · ${e(cityShort(route.city))}`}` : '');
     const tabs = ways && ways.length > 1 ? `<div class="q-chips ot-dir">${ways.map((x, i) => `<button class="q-chip" type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}${x.subName && x.subName !== route.name ? `<small>${e(x.subName)}</small>` : ''}</button>`).join('')}</div>` : '';
+    const views = `<div class="q-chips ot-view"><button class="q-chip" type="button" data-view="live" aria-pressed="${view === 'live'}">即時到站</button><button class="q-chip" type="button" data-view="table" aria-pressed="${view === 'table'}">時刻表</button></div>`;
     const stops = !ways
       ? '<p class="ot-note">載入站牌中…</p>'
       : !w
         ? '<p class="ot-note">這條路線沒有站牌資料。</p>'
-        : `<ol class="ot-route-stops">${w.stops
+        : view === 'table'
+          ? tableHtml(w)
+          : `<ol class="ot-route-stops">${w.stops
             .map(s => {
-              const t = etaText(live.get(s.uid));
+              const v = live.get(s.uid);
+              let t = etaText(v);
+              // 尚未發車 without a time: the timetable's.
+              if ((!v || (v.status === 1 && !v.next) || t.main === '—') && planned(w, s)) t = { main: `${planned(w, s)} 班`, sub: '時刻表', tone: 'wait' };
               const mine = s.uid === stopUID;
               const inGroup = ctx.data.groups.some(g => g.items.some(x => x.stopUID === s.uid));
               return `<li class="${t.tone}${mine ? ' mine' : ''}" data-stop="${e(s.uid)}"><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b></span><span class="ot-rs-dot"></span><button class="ot-rs-name" type="button" data-add="${e(s.uid)}"><b>${e(s.name)}</b>${inGroup ? `<small>${icon('star')} 已加入</small>` : '<small>＋ 加入群組</small>'}</button></li>`;
             })
             .join('')}</ol>`;
-    d.querySelector('#rt').innerHTML = `${head}${tabs}${err ? `<p class="ot-note bad">${e(err)}</p>` : ''}${add ? '<p class="ot-note">點你上車的站牌，加入群組。</p>' : ''}${stops}<p class="ot-note center">${e(ago(at))}</p>`;
+    d.querySelector('#rt').innerHTML = `${head}${tabs}${views}${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${add && view === 'live' ? '<p class="ot-note">點你上車的站牌，加入群組。</p>' : ''}${stops}${view === 'live' ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
   };
   const refresh = async () => {
     try {
@@ -249,6 +356,16 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
     const w = ev.target.closest('[data-way]');
     if (w) {
       way = Number(w.dataset.way);
+      return draw();
+    }
+    const v = ev.target.closest('[data-view]');
+    if (v) {
+      view = v.dataset.view;
+      return draw();
+    }
+    const ps = ev.target.closest('[data-pickstop]');
+    if (ps) {
+      picked = ps.dataset.pickstop;
       return draw();
     }
     const a = ev.target.closest('[data-add]');
