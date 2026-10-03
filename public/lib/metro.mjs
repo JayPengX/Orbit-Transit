@@ -1,10 +1,9 @@
-// The metros: each city's system drawn as one big map from TDX's own
-// stations and lines (where they really are, so it lines up with the
-// streets), and a station's board: the next trains each way, live where the
+// The metros: each city's system from TDX's own stations and lines (drawn
+// on the real map by tab-metro.mjs), and a station's board: the next trains each way, live where the
 // operator sends it, else from the timetable.
 
 import { tdx, rows } from './api.mjs';
-import { zh, meters, tw, e } from './util.mjs';
+import { zh, meters, tw } from './util.mjs';
 
 // The maps, by city; each draws one or more TDX rail systems.
 export const MAPS = [
@@ -122,47 +121,6 @@ export function interchanges(stations) {
     else groups.push([s]);
   }
   return groups;
-}
-
-// The map as SVG: lines as thick coloured strokes, a dot per station, a
-// white ring per interchange, names beside them. Fitted to W × H.
-export function mapSvg(systems, { W = 1000, H = 1000, pad = 60 } = {}) {
-  const stations = systems.flatMap(s => s.stations);
-  const lines = systems.flatMap(s => s.lines);
-  if (!stations.length) return { svg: '', points: new Map() };
-  const lat0 = stations.reduce((a, s) => a + s.lat, 0) / stations.length;
-  const kx = Math.cos((lat0 * Math.PI) / 180);
-  const xs = stations.map(s => s.lon * kx);
-  const ys = stations.map(s => -s.lat);
-  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const scale = Math.min((W - 2 * pad) / (x1 - x0 || 1), (H - 2 * pad) / (y1 - y0 || 1));
-  const ox = (W - (x1 - x0) * scale) / 2;
-  const oy = (H - (y1 - y0) * scale) / 2;
-  const P = s => [ox + (s.lon * kx - x0) * scale, oy + (-s.lat - y0) * scale];
-  const byKey = new Map(stations.map(s => [s.key, s]));
-  const points = new Map(stations.map(s => [s.key, P(s)]));
-  const f = n => n.toFixed(1);
-  const paths = lines
-    .map(l =>
-      (l.paths?.length ? l.paths.map(p => p.map(k => byKey.get(k)).filter(Boolean)) : lineRuns(l, byKey))
-        .filter(r => r.length > 1)
-        .map(r => `<path d="M${r.map(s => points.get(s.key).map(f).join(' ')).join(' L')}" stroke="${e(l.color)}" class="mt-line" data-line="${e(l.id)}"/>`)
-        .join('')
-    )
-    .join('');
-  const colorOf = new Map(lines.flatMap(l => l.seq.map(k => [k, l.color])));
-  const groups = interchanges(stations);
-  const dots = groups
-    .map(g => {
-      const [x, y] = g.map(s => points.get(s.key)).reduce((a, p) => [a[0] + p[0] / g.length, a[1] + p[1] / g.length], [0, 0]);
-      const big = g.length > 1 || g[0].lines.length > 1;
-      const s = g[0];
-      const label = `<text x="${big ? 10 : 8}" y="4" class="mt-name${big ? ' big' : ''}">${e(s.name)}</text>`;
-      // Placed by CSS (translate, then scaled back by 1/zoom): the same size on screen at any zoom.
-      return `<g class="mt-st${big ? ' x' : ''}" data-st="${e(g.map(x => x.key).join(','))}" style="--x:${f(x)}px;--y:${f(y)}px"><circle r="15" class="mt-hit"/><circle r="${big ? 6.5 : 4.5}" class="mt-dot" stroke="${e(big ? '#0a0b0f' : colorOf.get(s.key) || '#fff')}"/>${label}</g>`;
-    })
-    .join('');
-  return { svg: `<svg viewBox="0 0 ${W} ${H}" class="mt-svg" xmlns="http://www.w3.org/2000/svg"><g class="mt-zoom"><g class="mt-lines">${paths}</g><g class="mt-dots">${dots}</g></g></svg>`, points };
 }
 
 // ---- A station's board --------------------------------------------------------------------------

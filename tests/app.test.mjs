@@ -3,13 +3,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish } from '../public/lib/plan.mjs';
+import { coverage, fareOf, tpassOf } from '../public/lib/tpass.mjs';
+import { sameRoute, liveTimes, adjustPlan, rideTime } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
-import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move } from '../public/lib/store.mjs';
+import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList } from '../public/lib/store.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
-import { parseSystem, lineRuns, mapSvg, upcoming, interchanges } from '../public/lib/metro.mjs';
+import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
 
 const T = hm => twAt('2026-10-05', hm);
 
@@ -216,11 +218,12 @@ test('our own train plans: walk to a station near you, the trains, walk from the
   assert.deepEqual(railPlans(net, o, { lat: 23.5, lon: 120.5 }, T('08:10')), [], 'no station near there');
 });
 
-test('ranking: soonest first, every transit plan kept however late, each labelled', () => {
+test('ranking: by what’s practical, every plan kept however late, the first few recommended, each labelled', () => {
   const list = withBikes([busPlan], O, D, BIKES, T('07:59'));
   assert.ok(list.length >= 2);
-  assert.ok(list[0].arr <= list[1].arr);
-  assert.ok(list[0].tags.includes('最快抵達'));
+  assert.ok(list[0].score <= list[1].score);
+  assert.ok(list[0].tags.includes('推薦'));
+  assert.ok(list[0].top);
   assert.ok(list.some(p => p.tags.includes('YouBike')));
   const later = { ...busPlan, arr: busPlan.arr + 1_800_000, dur: busPlan.dur + 1800, legs: busPlan.legs.map(l => ({ ...l, dep: l.dep + 60_000 })) };
   assert.equal(rank([busPlan, later]).length, 2, 'a later bus is still shown');
@@ -411,13 +414,9 @@ test('metro lines: drawn by the operator’s routes (the 蘆洲 branch from 大�
   assert.equal(SYS.lines.find(l => l.id === 'R').color, '#94a3b8', 'no colour from TDX: grey');
 });
 
-test('metro map: one interchange for 台北車站, every name escaped', () => {
+test('metro map: one interchange for 台北車站', () => {
   const groups = interchanges(SYS.stations);
   assert.equal(groups.find(g => g[0].name === '台北車站').length, 2);
-  const { svg } = mapSvg([SYS]);
-  assert.match(svg, /^<svg viewBox="0 0 1000 1000"/);
-  assert.equal((svg.match(/class="mt-st x"/g) || []).length, 1);
-  assert.ok(!svg.includes('<script'));
 });
 
 test('metro timetable: the next trains each way, after midnight counted as tonight', () => {
@@ -431,4 +430,140 @@ test('metro timetable: the next trains each way, after midnight counted as tonig
   );
   assert.equal(list.length, 1, 'Sunday’s timetable isn’t Monday’s');
   assert.deepEqual(list[0].times.map(t => new Date(t + 8 * 3_600_000).toISOString().slice(11, 16)), ['23:56', '00:08']);
+});
+
+// ---- What this round added ---------------------------------------------------------------------------
+
+test('saved trips, pinned trains and preferences: cleaned, nothing allowed is everything', () => {
+  const t = cleanSaved({ name: '上學', from: null, to: { name: '學校', lat: 24.78, lon: 121.04 }, time: '07:30', by: 'arrive', days: [1, 2, 9, 2, 5], back: '17:00' });
+  assert.deepEqual([t.from, t.time, t.by, t.days, t.back], [null, '07:30', 'arrive', [1, 2, 5], '17:00']);
+  assert.equal(cleanSaved({ to: { lat: 35, lon: 139 } }), null, 'not in Taiwan');
+  assert.equal(cleanSaved({ to: { lat: 24.8, lon: 121 }, time: '25:00' }).time, '');
+  assert.equal(cleanPin({ kind: 'train', from: { sys: 'tra', id: '1195', name: '六家' }, to: { sys: 'tra', id: '1203', name: '竹東' } }).kind, 'train');
+  assert.equal(cleanPin({ kind: 'trainNo', no: '1x;', from: { sys: 'tra', id: '1', name: 'a' }, to: { sys: 'tra', id: '2', name: 'b' } }), null);
+  const p = cleanPrefs({ modes: { bus: false, tra: false, hsr: false, metro: false, bike: false }, bike30: true, tpass: 'hh' });
+  assert.ok(Object.values(p.modes).every(Boolean));
+  assert.equal(p.bike30, true);
+  assert.deepEqual(modeList(cleanPrefs({ modes: { bike: false } })), ['bus', 'tra', 'hsr', 'metro']);
+  const d = decodeData(encodeData({ ...emptyData(), saved: [t], prefs: { modes: { bus: false } } }));
+  assert.equal(d.saved[0].name, '上學');
+  assert.equal(d.prefs.modes.bus, false);
+});
+
+test('TPASS: buses and 台鐵 inside its cities free, 高鐵 never, YouBike’s first half hour', () => {
+  const hh = tpassOf('hh');
+  const city = pt => (pt.lat > 24.75 ? 'HsinchuCounty' : 'MiaoliCounty');
+  const plan = { legs: [{ mode: 'bike', dur: 900, from: { lat: 24.8, lon: 121 }, to: { lat: 24.8, lon: 121 } }, { mode: 'bus', from: { lat: 24.8, lon: 121 }, to: { lat: 24.79, lon: 121 } }], fare: 30 };
+  assert.equal(coverage(plan, hh, city).all, true);
+  assert.equal(fareOf(plan, coverage(plan, hh, city)).cost, 0);
+  const out = { legs: [...plan.legs, { mode: 'tra', from: { lat: 24.79, lon: 121 }, to: { lat: 24.5, lon: 120.8 } }], fare: 60 };
+  assert.deepEqual([coverage(out, hh, city).all, coverage(out, hh, city).some], [false, true]);
+  assert.equal(coverage({ legs: [{ mode: 'hsr', from: { lat: 24.8, lon: 121 }, to: { lat: 24.8, lon: 121 } }] }, hh, city).some, false);
+  assert.equal(fareOf(out, coverage(out, null, city)).text, 'NT$60');
+});
+
+test('ways of moving: a plan only with what’s allowed (a taxi never)', () => {
+  const modes = { bus: false, tra: true, hsr: true, metro: true, bike: true };
+  assert.equal(allowed(busPlan, modes), false);
+  assert.equal(allowed(busPlan, { ...modes, bus: true }), true);
+  assert.equal(allowed({ legs: [{ mode: 'car' }] }, { ...modes, bus: true }), false);
+  // No bus: our own plans don't add bus ones, and the bus plan goes.
+  const list = withBikes([busPlan], O, D, BIKES, T('07:59'), { modes });
+  assert.ok(list.every(p => !p.legs.some(l => l.mode === 'bus')));
+});
+
+test('每 30 分鐘換車: a long ride cut at a station half way, each part under half an hour', () => {
+  const a = { uid: 'x1', name: '起點', lat: 24.80, lon: 120.97, bikes: 3, ebike: 0, ret: 3, ok: true };
+  const mid = { uid: 'x2', name: '半路', lat: 24.80, lon: 121.02, bikes: 2, ebike: 0, ret: 2, ok: true };
+  const b = { uid: 'x3', name: '終點', lat: 24.80, lon: 121.07, bikes: 2, ebike: 0, ret: 5, ok: true };
+  const whole = bikeTrip(a, b, [a, mid, b], T('08:00'));
+  assert.ok(whole.find(l => l.mode === 'bike').dur > 30 * 60, 'one ride is over 30 minutes');
+  const cut = bikeTrip(a, b, [a, mid, b], T('08:00'), { swap: true });
+  const rides = cut.filter(l => l.mode === 'bike');
+  assert.equal(rides.length, 2);
+  assert.ok(rides.every(l => l.dur <= 33 * 60));
+  assert.equal(rides[1].swap, true);
+  assert.ok(rides[1].dep >= rides[0].arr);
+  assert.deepEqual(swapRides(whole, [a, b]).length, whole.length, 'no station on the way: the ride stays whole');
+});
+
+test('our own trains by YouBike: a station 3 km away ridden to, its stations found, or no plan', () => {
+  const o = { name: '家', lat: 24.8300, lon: 120.9716 }; // ~3 km north of 新竹
+  const d = { name: '公司', lat: 25.0500, lon: 121.5200 };
+  const list = railPlans(net, o, d, T('08:00'), { bike: true });
+  const ridden = list.filter(p => p.legs[0].mode === 'bike' && p.legs[0].placeholder);
+  assert.ok(ridden.length, 'a station beyond walking reached by bike');
+  const docks = [
+    { uid: 'r1', name: '家附近', lat: 24.8302, lon: 120.9718, bikes: 4, ebike: 0, ret: 4, ok: true },
+    { uid: 'r2', name: '竹北車站', lat: 24.8390, lon: 121.0090, bikes: 2, ebike: 0, ret: 6, ok: true },
+    { uid: 'r3', name: '北新竹車站', lat: 24.8089, lon: 120.9852, bikes: 2, ebike: 0, ret: 6, ok: true }
+  ];
+  const out = withBikes(ridden, o, d, docks, T('08:00'));
+  const p = out.find(x => x.legs.some(l => l.mode === 'tra' || l.mode === 'hsr') && x.legs.some(l => l.mode === 'bike'));
+  assert.ok(p);
+  const bike = p.legs.find(l => l.mode === 'bike');
+  assert.equal(bike.rent.uid, 'r1');
+  assert.ok(bike.arr <= p.legs.find(l => l.mode === 'tra' || l.mode === 'hsr').dep, 'docked before the train');
+  assert.equal(withBikes(ridden, o, d, [], T('08:00')).filter(x => x.legs.some(l => l.placeholder)).length, 0, 'no stations: no plan');
+});
+
+test('practical first: a trip that goes the long way round, or changes bus to bus, sinks', () => {
+  const o = { lat: 24.821, lon: 121.018 };
+  const d = { lat: 24.733, lon: 121.088 };
+  const leg = (mode, short, a, b, dep, arr) => ({ mode, short, from: { name: short, ...a }, to: { name: short, ...b }, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0 });
+  const direct = finish({ legs: [leg('bus', '快捷8號支', o, d, '08:05', '08:45')] });
+  const round = finish({ legs: [leg('bus', '5615', o, { lat: 24.80, lon: 120.97 }, '08:00', '08:15'), leg('bus', '5608', { lat: 24.80, lon: 120.97 }, d, '08:25', '08:40')] });
+  assert.ok(round.arr < direct.arr, 'the long way is a little sooner');
+  const ranked = rank([round, direct], { now: T('08:00'), o, d });
+  assert.equal(ranked[0].legs[0].short, '快捷8號支');
+  assert.ok(score(round, { o, d, now: T('08:00') }) > score(direct, { o, d, now: T('08:00') }));
+  // Half way at night, the next bus in the morning: no plan (while there's another).
+  const overnight = finish({ legs: [leg('bus', '182', o, { lat: 24.80, lon: 121.0 }, '08:00', '08:10'), leg('tra', '區間車', { lat: 24.80, lon: 121.0 }, d, '13:00', '13:20')] });
+  assert.equal(rank([overnight, direct], { now: T('08:00'), o, d }).length, 1);
+});
+
+test('the buses now: names matched loosely, the bus you’d catch, the trip moved with it', async () => {
+  assert.ok(sameRoute('快捷8經興隆大橋', '快捷8號'));
+  assert.ok(sameRoute('藍1區間車', '藍1'));
+  assert.ok(!sameRoute('5', '5608'));
+  const now = T('08:00');
+  const rows = [{ RouteName: { Zh_tw: '5608' }, StopStatus: 0, EstimateTime: 900, Estimates: [{ EstimateTime: 900 }, { EstimateTime: 2400 }] }];
+  assert.deepEqual(liveTimes(rows, '5608', now).times.map(t => (t.at - now) / 60_000), [15, 40]);
+  assert.equal(liveTimes([{ RouteName: { Zh_tw: '5608' }, StopStatus: 3 }], '5608', now).off, 3);
+  const p = finish({ legs: [
+    { mode: 'walk', dur: 300, dist: 300, dep: T('08:00'), arr: T('08:05'), from: { lat: 24.8, lon: 121 }, to: { lat: 24.801, lon: 121 } },
+    { mode: 'bus', short: '5608', dur: 1200, dist: 9000, dep: T('08:06'), arr: T('08:26'), from: { name: '東關東', lat: 24.801, lon: 121 }, to: { name: '竹東高中', lat: 24.733, lon: 121.088 } }
+  ] });
+  const q = await adjustPlan(p, now, { near: async () => rows });
+  assert.equal(q.legs[1].dep, T('08:15'), 'the bus TDX says comes at 08:15');
+  assert.equal(q.arr, T('08:35'));
+  assert.equal(q.legs[0].arr, T('08:14'), 'leave so as to be there a minute before');
+  assert.ok(q.live);
+  const none = await adjustPlan(p, now, { near: async () => [] });
+  assert.equal(none.arr, p.arr, 'nothing from TDX: as planned');
+});
+
+test('a bus ride’s minutes: the timetable’s when a trip lists both stops, else the distance', () => {
+  const way = { dir: 0, stops: [{ uid: 'A', lat: 24.8, lon: 121 }, { uid: 'B', lat: 24.81, lon: 121 }, { uid: 'C', lat: 24.82, lon: 121 }] };
+  const sched = [{ Direction: 0, Timetables: [{ StopTimes: [{ StopUID: 'A', DepartureTime: '08:00' }, { StopUID: 'C', DepartureTime: '08:12' }] }] }];
+  assert.equal(rideTime(way, 0, 2, sched), 720);
+  const est = rideTime(way, 0, 2, []);
+  assert.ok(est > 300 && est < 600, `${est}`);
+});
+
+test('a saved trip’s way now: out from home, back from its far end, the time today or tomorrow', async () => {
+  const { tripNow } = await import('../public/lib/tab-go.mjs');
+  const home = { name: '家', lat: 24.821, lon: 121.018 };
+  const school = { name: '學校', lat: 24.733, lon: 121.088 };
+  const t = cleanSaved({ id: 's1', name: '上學', from: home, to: school, time: '07:30', days: [1, 2, 3, 4, 5], back: '17:00' });
+  const mon7 = T('07:00'); // 2026-10-05 is a Monday
+  const out = tripNow(t, home, mon7);
+  assert.equal(out.to.name, '學校');
+  assert.equal(out.from, null, 'from where you are (at home)');
+  assert.equal(out.at, T('07:30'));
+  assert.ok(out.today);
+  const back = tripNow(t, school, T('16:00'));
+  assert.equal(back.to.name, '家', 'at school: the way home');
+  assert.equal(back.at, T('17:00'));
+  assert.equal(tripNow(t, home, T('09:00')).at, twAt('2026-10-06', '07:30'), 'past today: tomorrow’s');
 });

@@ -183,8 +183,12 @@ export async function stationsNear(lat, lon) {
       lon: Number(s.StationPosition?.PositionLon),
       cityCode: s.LocationCityCode || '',
       bearing: s.Bearing || '',
-      routes: [...new Set((s.Stops || []).map(x => zh(x.RouteName)).filter(Boolean))]
+      routes: [...new Set((s.Stops || []).map(x => zh(x.RouteName)).filter(Boolean))],
+      stops: (s.Stops || []).map(x => ({ stopUID: x.StopUID, routeUID: x.RouteUID, route: zh(x.RouteName) })).filter(x => x.stopUID && x.routeUID)
     }))
     .filter(s => Number.isFinite(s.lat));
 }
+// A route's city from its UID (HSQ0747 → 新竹縣's; THB… is 公路客運).
+export const routeCity = uid => CITY_CODES[/^[A-Z]{3}/.exec(uid || '')?.[0]] || INTERCITY;
+
 export const BEARING = { E: '往東', W: '往西', S: '往南', N: '往北', SE: '往東南', NE: '往東北', SW: '往西南', NW: '往西北' };

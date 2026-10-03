@@ -1,5 +1,7 @@
 // Route plans: the proxy's (Google's transit routes and TDX's planner) plus
-// plans of our own that use YouBike where it's faster, ranked and labelled.
+// plans of our own that use YouBike where it's faster, ranked by what's
+// practical (not only the soonest there: few changes, heading the right way,
+// little walking, what it costs you) and labelled.
 //
 // YouBike ideas, each checked against the bikes and docks there now:
 //   - all the way by bike (or 電輔車, faster) when it's near enough;
@@ -15,7 +17,13 @@ export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
 export const BIKE_MAX_M = 12_000; // further than this, nobody wants to ride
 export const NEAR_M = 500; // a station farther than this from where you are isn't "here"
+export const SWAP_SEC = 30 * 60; // YouBike's free (TPASS) or cheapest first half hour
 const RAIL = new Set(['metro', 'tra', 'hsr', 'lightrail']);
+
+// Which of the person's allowed ways of moving a leg is (lightrail is the metro's).
+const KIND = { bus: 'bus', tra: 'tra', hsr: 'hsr', metro: 'metro', lightrail: 'metro', bike: 'bike' };
+// A plan uses only what's allowed (a taxi never: TDX sometimes ends a trip with one).
+export const allowed = (p, modes) => p.legs.every(l => l.mode !== 'car' && (!KIND[l.mode] || modes?.[KIND[l.mode]] !== false));
 
 export const rideSec = (m, ebike = false) => Math.round(((m * 1.25) / (ebike ? RIDE_M_MIN.ebike : RIDE_M_MIN.bike)) * 60);
 
@@ -43,9 +51,52 @@ const walkLeg = (from, to, dep) => {
   return { mode: 'walk', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dur, dist, dep, arr: dep + dur * 1000, straight: true };
 };
 
+// One ride from station to station, leaving at t.
+const rideLeg = (rent, ret, t, ebike = false) => {
+  const dist = Math.round(meters(rent.lat, rent.lon, ret.lat, ret.lon) * 1.25);
+  const dur = rideSec(dist / 1.25, ebike) + 2 * DOCK_SEC;
+  return { mode: 'bike', ebike, name: ebike ? 'YouBike 電輔車' : 'YouBike', from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon }, dur, dist, dep: t, arr: t + dur * 1000, rent, ret };
+};
+
+// A ride over half an hour, cut where you can return the bike and take one
+// again (每 30 分鐘換車: each half hour free with TPASS, or the cheapest):
+// at a station with a dock and a bike, ~26 minutes in. Rides that can't be
+// cut stay whole.
+export function swapRides(legs, bikes) {
+  const out = [];
+  for (const l of legs) {
+    if (l.mode !== 'bike' || l.dur <= SWAP_SEC || !l.rent || !l.ret) {
+      out.push(l);
+      continue;
+    }
+    let cur = l;
+    for (let guard = 0; cur.dur > SWAP_SEC && guard < 4; guard++) {
+      const f = (26 * 60) / cur.dur;
+      const at = { lat: cur.from.lat + (cur.to.lat - cur.from.lat) * f, lon: cur.from.lon + (cur.to.lon - cur.from.lon) * f };
+      const mid = bikes
+        .filter(s => s.ok !== false && s.ret >= 1 && (cur.ebike ? s.ebike : s.bikes + s.ebike) >= 1 && s.uid !== cur.rent.uid && s.uid !== cur.ret.uid)
+        .map(s => ({ s, d: meters(at.lat, at.lon, s.lat, s.lon) }))
+        .filter(x => x.d <= 700)
+        .sort((a, b) => a.d - b.d)[0]?.s;
+      if (!mid) break;
+      const first = rideLeg(cur.rent, mid, cur.dep, cur.ebike);
+      if (first.dur > SWAP_SEC + 3 * 60) break;
+      out.push(first);
+      cur = { ...rideLeg(mid, cur.ret, first.arr + DOCK_SEC * 1000, cur.ebike), swap: true };
+    }
+    out.push(cur);
+  }
+  // The rest of the trip after a longer ride moves with it.
+  for (let i = 1; i < out.length; i++) if (out[i].dep < out[i - 1].arr) {
+    const d = out[i - 1].arr - out[i].dep;
+    out[i] = { ...out[i], dep: out[i].dep + d, arr: out[i].arr + d };
+  }
+  return out;
+}
+
 // From a to b by YouBike, leaving at dep: walk, ride, walk. Null when there's
 // no bike near a or no dock near b.
-export function bikeTrip(a, b, bikes, dep, { ebike = false } = {}) {
+export function bikeTrip(a, b, bikes, dep, { ebike = false, swap = false } = {}) {
   const rent = rentNear(a, bikes, { ebike });
   const ret = returnNear(b, bikes);
   if (!rent || !ret || rent.uid === ret.uid) return null;
@@ -56,10 +107,9 @@ export function bikeTrip(a, b, bikes, dep, { ebike = false } = {}) {
     legs.push(w1);
     t = w1.arr;
   }
-  const dist = Math.round(meters(rent.lat, rent.lon, ret.lat, ret.lon) * 1.25);
-  const dur = rideSec(dist / 1.25, ebike) + 2 * DOCK_SEC;
-  legs.push({ mode: 'bike', ebike, name: ebike ? 'YouBike 電輔車' : 'YouBike', from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon }, dur, dist, dep: t, arr: t + dur * 1000, rent, ret });
-  t += dur * 1000;
+  const ride = rideLeg(rent, ret, t, ebike);
+  legs.push(...(swap ? swapRides([ride], bikes) : [ride]));
+  t = legs.at(-1).arr;
   const w2 = walkLeg({ ...ret }, b, t);
   if (w2.dist > 20) legs.push(w2);
   return legs;
@@ -75,14 +125,14 @@ export function finish(p) {
 const shift = (legs, ms) => legs.map(l => ({ ...l, dep: l.dep + ms, arr: l.arr + ms }));
 
 // All the way by bike (and by 電輔車 when one is there and it's worth it).
-export function bikeOnly(o, d, bikes, now) {
+export function bikeOnly(o, d, bikes, now, { swap = false } = {}) {
   const dist = meters(o.lat, o.lon, d.lat, d.lon);
   if (dist > BIKE_MAX_M || dist < 300) return [];
   const out = [];
-  const plain = bikeTrip(o, d, bikes, now);
+  const plain = bikeTrip(o, d, bikes, now, { swap });
   if (plain) out.push(finish({ src: 'bike', legs: plain }));
   if (dist >= 2000) {
-    const e = bikeTrip(o, d, bikes, now, { ebike: true });
+    const e = bikeTrip(o, d, bikes, now, { ebike: true, swap });
     if (e) out.push(finish({ src: 'bike', legs: e }));
   }
   return out;
@@ -126,22 +176,28 @@ export function bikeFromRail(plan, d, bikes, { anyRide = false } = {}) {
 // stations near both ends, for trips the planners answer with buses only.
 // `net` is raildata's railNetwork. Walks to and from the stations up to 2 km.
 export const RAIL_WALK_M = 2000;
-export function railPlans(net, o, d, at, { n = 4 } = {}) {
+// With YouBike allowed, stations this far are reached by bike (竹北 → 六家, 千甲).
+export const RAIL_BIKE_M = 4500;
+const BIKE_OVER_M = 1200; // past this, a station is ridden to rather than walked
+// Getting to (or from) a station m metres away: { mode, sec }.
+const access = (m, bike) => (bike && m > BIKE_OVER_M ? { mode: 'bike', sec: rideSec(m) + 2 * DOCK_SEC + 120 } : { mode: 'walk', sec: walkSec(m) });
+export function railPlans(net, o, d, at, { n = 4, bike = false, use = () => true } = {}) {
   if (!net || meters(o.lat, o.lon, d.lat, d.lon) < 3000) return [];
-  const near = pt =>
-    [...net.st.values()]
-      .map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) }))
-      .filter(x => x.m <= RAIL_WALK_M)
-      .sort((a, b) => a.m - b.m)
-      .slice(0, 3);
+  const near = pt => {
+    const all = [...net.st.values()].map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m);
+    const walk = all.filter(x => x.m <= RAIL_WALK_M).slice(0, 3);
+    const ride = bike ? all.filter(x => x.m > BIKE_OVER_M && x.m <= RAIL_BIKE_M && !walk.includes(x)).slice(0, 4) : [];
+    return [...walk, ...ride].map(x => ({ ...x, a: access(x.m, bike) }));
+  };
   const A = near(o);
   const B = near(d);
   if (!A.length || !B.length) return [];
-  const starts = A.map(x => ({ key: x.s.key, at: at + walkSec(x.m) * 1000 + 3 * 60_000 }));
-  const ends = B.map(x => ({ key: x.s.key, extra: walkSec(x.m) }));
+  const starts = A.map(x => ({ key: x.s.key, at: at + x.a.sec * 1000 + 3 * 60_000 }));
+  const ends = B.map(x => ({ key: x.s.key, extra: x.a.sec }));
+  const reach = new Map([...A.map(x => [`a:${x.s.key}`, x]), ...B.map(x => [`b:${x.s.key}`, x])]);
   let found = [];
   try {
-    found = journeys(net, starts, ends, at, { n });
+    found = journeys(net, starts, ends, at, { n: bike ? n + 2 : n, use });
   } catch {
     return [];
   }
@@ -155,7 +211,10 @@ export function railPlans(net, o, d, at, { n = 4 } = {}) {
     const w1 = walkLeg(o, pt(first.from), 0);
     // At the station 3 minutes before the train (or the walk on to the other railway).
     const ready = first.walk ? first.dep : first.dep - 3 * 60_000;
-    if (w1.dist > 20) legs.push({ ...w1, dep: ready - w1.dur * 1000, arr: ready });
+    // Ridden there: a YouBike leg whose stations are found once the bikes are known (withBikes).
+    const a = reach.get(`a:${first.from}`)?.a;
+    if (a?.mode === 'bike') legs.push(placeholder(o, pt(first.from), ready - a.sec * 1000, ready, 'arr'));
+    else if (w1.dist > 20) legs.push({ ...w1, dep: ready - w1.dur * 1000, arr: ready });
     for (const l of j.legs) {
       if (l.walk) legs.push({ ...walkLeg(pt(l.from), pt(l.to), l.dep), arr: l.arr });
       else
@@ -176,44 +235,114 @@ export function railPlans(net, o, d, at, { n = 4 } = {}) {
         });
     }
     const last = j.legs.filter(l => !l.walk).at(-1);
+    const b = reach.get(`b:${j.end}`)?.a;
     const w2 = walkLeg(pt(j.end), d, last.arr);
-    if (w2.dist > 20) legs.push(w2);
+    if (b?.mode === 'bike') legs.push(placeholder(pt(j.end), d, last.arr, last.arr + b.sec * 1000, 'dep'));
+    else if (w2.dist > 20) legs.push(w2);
     return finish({ src: 'rail', legs });
   });
 }
+const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: true, fix, name: 'YouBike', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dep, arr, dur: Math.round((arr - dep) / 1000), dist: Math.round(meters(from.lat, from.lon, to.lat, to.lon) * 1.25) });
 
-// Everything, ranked: the soonest there first. Each gets its labels.
-export function rank(plans, { now = Date.now() } = {}) {
+// What a plan costs you, in minutes: the time until you're there, and on
+// top of it each change (a bus to a bus is the riskiest: neither keeps
+// time), walking past a few minutes, riding, a trip that goes the long way
+// round (into 新竹市 and back out, when the place is the other way), what
+// it costs in money, and a train it would now miss.
+export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0 } = {}) {
+  const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
+  let s = by === 'arrive' && deadline ? (deadline - p.dep) / 60_000 : (p.arr - now) / 60_000;
+  for (let i = 1; i < rides.length; i++) s += rides[i - 1].mode === 'bus' && rides[i].mode === 'bus' ? 10 : 7;
+  s += Math.max(0, (p.walk || 0) / 75 - 6) * 0.5;
+  s += p.legs.filter(l => l.mode === 'bike').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.15;
+  if (o && d) {
+    const direct = Math.max(1000, meters(o.lat, o.lon, d.lat, d.lon));
+    const path = p.legs.reduce((a, l) => a + (l.from?.lat != null && l.to?.lat != null ? meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) : 0), 0);
+    s += Math.max(0, path / direct - 1.2) * 45;
+    // Heading away: a change made farther from the place than where you started.
+    const away = rides.slice(0, -1).some(l => l.to?.lat != null && meters(l.to.lat, l.to.lon, d.lat, d.lon) > direct + 1500);
+    if (away) s += 8;
+  }
+  s += fare / 12;
+  if (p.miss) s += 25;
+  if (p.off) s += 120;
+  return s;
+}
+
+// The same rides (the lines, where you get on and off), whatever the walks and bikes around them.
+const ridesSig = p =>
+  p.legs
+    .filter(l => l.mode !== 'walk' && l.mode !== 'bike')
+    .map(l => `${l.mode}:${l.short || l.name || ''}:${l.from?.name || ''}`)
+    .join('|') || `bike:${p.legs.some(l => l.ebike)}`;
+
+const mainLine = p => {
+  const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
+  const m = rides.reduce((a, l) => (!a || (l.dur || 0) > (a.dur || 0) ? l : a), null);
+  return m ? `${m.mode}:${m.short || m.name || ''}` : `bike:${p.legs.some(l => l.ebike)}`;
+};
+
+// Everything, ranked by what's practical (score). The first few that ride
+// different lines are the recommendations (`top`); the rest stay, later.
+// Each gets its labels. `cost(p)` adds what a plan costs you in money.
+export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4 } = {}) {
   const ok = plans.filter(p => p && p.legs?.length && p.arr != null && p.arr > now - 60_000);
-  // Every plan is shown, however much later it arrives (the owner's ask): every
-  // transit plan, and YouBike's ideas around them up to 12 in all, soonest first.
   const sig = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${Math.round((l.dep || 0) / 60_000)}`).join('|');
   const seen = new Set();
-  const uniq = ok.filter(p => !seen.has(sig(p)) && seen.add(sig(p))).sort((a, b) => a.arr - b.arr || a.dur - b.dur);
-  const transit = uniq.filter(p => !p.bike);
-  const bikes = uniq.filter(p => p.bike).slice(0, Math.max(4, 12 - transit.length));
-  const list = [...transit, ...bikes].sort((a, b) => a.arr - b.arr || a.dur - b.dur);
+  const uniq = ok.filter(p => !seen.has(sig(p)) && seen.add(sig(p)));
+  const scored = uniq.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }) })).sort((a, b) => a.s - b.s || a.p.arr - b.p.arr);
+  // Not running at all (末班已過, 今日未營運), or waiting hours half way (the
+  // last bus gone, the first train tomorrow), is no plan, unless it's all there is.
+  const longWait = p => p.legs.some((l, i) => i > 0 && l.dep - p.legs[i - 1].arr > 90 * 60_000);
+  const running = scored.filter(x => !x.p.off && !longWait(x.p));
+  const list = (running.length ? running : scored).slice(0, 24).map(x => ({ ...x.p, score: Math.round(x.s) }));
   if (!list.length) return [];
+  // Different ways first: each recommendation rides a different main line
+  // (its longest ride); then, if there are fewer, different rides at all.
+  const picked = new Set();
+  const mains = new Set();
+  const lines = new Set();
+  for (const p of list) {
+    if (picked.size >= top) break;
+    if (mains.has(mainLine(p))) continue;
+    mains.add(mainLine(p));
+    lines.add(ridesSig(p));
+    picked.add(p);
+  }
+  for (const p of list) {
+    if (picked.size >= top) break;
+    if (picked.has(p) || lines.has(ridesSig(p))) continue;
+    lines.add(ridesSig(p));
+    picked.add(p);
+  }
   const label = new Map(list.map(p => [p, []]));
-  const by = (f, name) => {
+  const by_ = (f, name) => {
     const best = list.reduce((a, b) => (f(b) < f(a) ? b : a));
     if (list.filter(p => f(p) === f(best)).length < list.length) label.get(best).push(name);
   };
-  label.get(list[0]).push('最快抵達');
-  by(p => p.dur, '最省時');
-  by(p => p.transfers, '最少轉乘');
-  by(p => p.walk, '最少步行');
+  label.get(list[0]).push('推薦');
+  by_(p => p.arr, '最快抵達');
+  by_(p => p.transfers, '最少轉乘');
+  by_(p => p.walk, '最少步行');
   for (const p of list) if (p.bike) label.get(p).push(p.legs.some(l => l.ebike) ? '電輔車' : 'YouBike');
-  return list.map(p => ({ ...p, tags: [...new Set(label.get(p))] }));
+  for (const p of list) if (p.live) label.get(p).push('即時');
+  return list.map(p => ({ ...p, top: picked.has(p), tags: [...new Set(label.get(p))] }));
 }
 
-// Our plans added to the proxy's, from the bikes near both ends and the stations.
-export function withBikes(plans, o, d, bikes, now = Date.now()) {
-  // A planner's own bike legs (TDX's YouBike first and last mile) get the
-  // stations they start and end at, with the bikes and docks there now.
-  const out = plans.map(p => (p.legs.some(l => l.mode === 'bike' && !l.rent) ? withStations(p, bikes) : p));
-  if (bikes.length) {
-    out.push(...bikeOnly(o, d, bikes, now));
+// Our plans added to the proxy's, from the bikes near both ends and the
+// stations. `opts`: { modes (what's allowed), swap (每 30 分鐘換車), rank's own }.
+export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
+  const { modes = null, swap = false } = opts;
+  const bike = modes?.bike !== false;
+  // A planner's own bike legs (TDX's YouBike first and last mile) and our
+  // router's rides to a station get the stations they start and end at, with
+  // the bikes and docks there now; a ride with no station near is no plan.
+  const out = plans
+    .map(p => (p.legs.some(l => l.mode === 'bike' && !l.rent) ? withStations(p, bikes) : p))
+    .filter(Boolean)
+    .map(p => (swap && p.legs.some(l => l.mode === 'bike' && l.dur > SWAP_SEC) ? finish({ ...p, legs: swapRides(p.legs, bikes) }) : p));
+  if (bikes.length && bike) {
+    out.push(...bikeOnly(o, d, bikes, now, { swap }));
     for (const p of plans) {
       if (p.bike) continue;
       // By bike to the train (instead of the bus to it), and to the first
@@ -230,7 +359,10 @@ export function withBikes(plans, o, d, bikes, now = Date.now()) {
       }
     }
   }
-  return rank(out, { now });
+  return rank(
+    out.filter(p => allowed(p, modes)),
+    { now, o, d, ...opts }
+  );
 }
 
 function withStations(p, bikes) {
@@ -241,6 +373,23 @@ function withStations(p, bikes) {
       if (l.mode !== 'bike' || l.rent) return l;
       const rent = rentNear(l.from, bikes, { max: 700 });
       const ret = returnNear(l.to, bikes, { max: 700 });
+      // Our router's ride to a station: its stations, or the plan goes (a walk that long is no plan).
+      if (l.placeholder) {
+        if (!rent || !ret || rent.uid === ret.uid) return null;
+        const w1 = walkLeg(l.from, rent, 0);
+        const ride = rideLeg(rent, ret, 0);
+        const w2 = walkLeg(ret, l.to, 0);
+        const total = (w1.dist > 20 ? w1.dur : 0) + ride.dur + (w2.dist > 20 ? w2.dur : 0);
+        // Timed to its end (to a train) or its start (from one).
+        let t = l.fix === 'arr' ? l.arr - total * 1000 : l.dep;
+        const seq = [];
+        for (const x of [w1.dist > 20 ? w1 : null, ride, w2.dist > 20 ? w2 : null]) {
+          if (!x) continue;
+          seq.push({ ...x, dep: t, arr: t + x.dur * 1000 });
+          t += x.dur * 1000;
+        }
+        return seq;
+      }
       // Under 500 m, or one station at both ends: that's a walk, not a ride.
       if ((l.dist || 0) < 500 || (rent && ret && rent.uid === ret.uid)) {
         const w = walkLeg(l.from, l.to, l.dep);
@@ -248,13 +397,19 @@ function withStations(p, bikes) {
       }
       return { ...l, name: 'YouBike', rent, ret, from: rent ? { name: rent.name, lat: rent.lat, lon: rent.lon } : { ...l.from, name: l.from.name || '附近的 YouBike 站' }, to: ret ? { name: ret.name, lat: ret.lat, lon: ret.lon } : { ...l.to, name: l.to.name || '附近的 YouBike 站' } };
     });
-  return finish({ ...p, legs });
+  if (legs.some(l => l === null)) return null;
+  return finish({ ...p, legs: legs.flat() });
 }
 
 // The points whose YouBike stations a set of plans needs: both ends, and
 // where each plan first boards and last leaves a train or metro.
-export function bikePoints(plans, o, d) {
+export function bikePoints(plans, o, d, { swap = false } = {}) {
   const pts = [o, d];
+  // 每 30 分鐘換車: where a long ride would be cut, every ~5 km on the way.
+  if (swap) {
+    const n = Math.floor(meters(o.lat, o.lon, d.lat, d.lon) / 5000);
+    for (let k = 1; k <= Math.min(n, 3); k++) pts.push({ lat: o.lat + ((d.lat - o.lat) * k) / (n + 1), lon: o.lon + ((d.lon - o.lon) * k) / (n + 1) });
+  }
   for (const p of plans) {
     const rail = p.legs.filter(l => RAIL.has(l.mode));
     if (rail[0]?.from?.lat) pts.push(rail[0].from);
@@ -267,5 +422,5 @@ export function bikePoints(plans, o, d) {
   // One per ~400 m.
   const out = [];
   for (const p of pts) if (!out.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400)) out.push({ lat: p.lat, lon: p.lon });
-  return out.slice(0, 8);
+  return out.slice(0, swap ? 11 : 8);
 }
