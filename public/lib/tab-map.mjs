@@ -725,7 +725,7 @@ function plansHtml(c) {
 }
 
 // Which planner didn't answer, said plainly (the plans shown come from the rest).
-const SOURCE = { google: 'Google 路線', tdx: 'TDX 規劃' };
+const SOURCE = { google: 'Google 路線', tdx: 'TDX 規劃', tdxBike: 'TDX 單車轉乘' };
 function sourcesNote(src) {
   const why = v => (v === 'cap' ? '本月免費額度已用完' : v === 'busy' ? '忙碌中' : v === 'nokey' ? '未設定' : v === 'http 403' ? '金鑰未開通此服務' : '暫時沒有回應');
   const bad = Object.entries(src || {}).filter(([k, v]) => SOURCE[k] && v !== 'ok');
@@ -740,7 +740,7 @@ function stepsHtml(p) {
         l.mode === 'walk'
           ? `步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(l.to.name)}` : ''}`
           : l.mode === 'bike'
-            ? `${l.ebike ? 'YouBike 電輔車' : 'YouBike'}：在 <b>${e(l.from.name)}</b> 借車（${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}`} 台），騎到 <b>${e(l.to.name)}</b> 還車（空位 ${l.ret.ret}）`
+            ? `${l.ebike ? 'YouBike 電輔車' : 'YouBike'}：在 <b>${e(l.from.name)}</b> 借車${l.rent ? `（${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}・電輔 ${l.rent.ebike || 0}`} 台）` : ''}，騎 ${e(distText(l.dist))} 到 <b>${e(l.to.name)}</b> 還車${l.ret ? `（空位 ${l.ret.ret}）` : ''}`
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${l.headsign ? ` 往 ${e(l.headsign)}` : ''}<br><small>${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}${l.agency ? ` · ${e(l.agency)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
