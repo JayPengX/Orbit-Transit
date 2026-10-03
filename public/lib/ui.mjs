@@ -1,0 +1,83 @@
+// Shared UI: sheets, the transport icons, a plan's legs as chips.
+
+import { e, minsText, hm } from './util.mjs';
+
+// A modal sheet (the kit's look): closed by its × or a tap outside.
+export function sheet(html, cls = '') {
+  const d = document.createElement('dialog');
+  d.className = `q-sheet ot-sheet ${cls}`;
+  d.innerHTML = html;
+  d.addEventListener('click', ev => (ev.target === d || ev.target.closest('[data-act="close"]')) && d.close());
+  d.addEventListener('close', () => {
+    d.onclosed?.();
+    d.remove();
+  });
+  document.body.append(d);
+  d.showModal();
+  return d;
+}
+export const sheetHead = (title, sub = '') => `<div class="q-sheet-head"><div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" aria-label="關閉">×</button></div>`;
+
+// 24×24 stroked icons, one per way of moving.
+const I = {
+  walk: '<circle cx="13" cy="4.5" r="2"/><path d="M10.5 21l2-6.5 3 3V21M7 12.5l2.5-4.5 4 1 2.5 3.5M12.5 9l-1.5 5.5"/>',
+  bike: '<circle cx="6" cy="16.5" r="3.5"/><circle cx="18" cy="16.5" r="3.5"/><path d="M6 16.5l4-8h5l3 8M10 8.5L12.5 16.5h-6.5M14 5.5h2.5"/>',
+  bus: '<rect x="4.5" y="3.5" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 18.5V21M16 18.5V21"/><circle cx="8" cy="15" r=".6"/><circle cx="16" cy="15" r=".6"/>',
+  metro: '<rect x="5.5" y="3" width="13" height="15" rx="4"/><path d="M5.5 11.5h13M9 21l1.5-3M15 21l-1.5-3"/><circle cx="9" cy="14.8" r=".6"/><circle cx="15" cy="14.8" r=".6"/>',
+  lightrail: '<rect x="5.5" y="6" width="13" height="12" rx="3"/><path d="M9 3h6M12 3v3M5.5 12h13M8.5 21l1.5-3M15.5 21L14 18"/>',
+  tra: '<rect x="6" y="3" width="12" height="15" rx="3"/><path d="M6 10.5h12M12 3v7.5M8.5 21l1.5-3M15.5 21L14 18"/><circle cx="9" cy="14.5" r=".6"/><circle cx="15" cy="14.5" r=".6"/>',
+  hsr: '<path d="M3.5 15.5c2-6 6.5-9.5 13-9.5h3.5v9.5z"/><path d="M3.5 15.5h16.5M8 20.5h9M12 6.3v9.2"/>',
+  ferry: '<path d="M3 15.5l2.2 4h13.6l2.2-4zM6 15.5V10h12v5.5M9.5 10V6.5h5V10"/><path d="M2.5 21.5c2 0 2-.8 4-.8s2 .8 4 .8 2-.8 4-.8 2 .8 4 .8"/>',
+  gondola: '<path d="M3 4l18 4M12 6v4"/><rect x="6.5" y="10" width="11" height="9" rx="2"/><path d="M6.5 14h11"/>',
+  rail: '<rect x="6" y="3" width="12" height="15" rx="3"/><path d="M6 10.5h12M8.5 21l1.5-3M15.5 21L14 18"/>',
+  pin: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
+  locate: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
+  layers: '<path d="M12 3.5l9 4.8-9 4.8-9-4.8z"/><path d="M3 12.5l9 4.8 9-4.8M3 16.7l9 4.8 9-4.8"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/>',
+  swap: '<path d="M7 4v15M3.5 7.5L7 4l3.5 3.5M17 20V5M13.5 16.5L17 20l3.5-3.5"/>',
+  route: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6h6.5a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 0 0 7h6.5"/>',
+  star: '<path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  up: '<path d="M6 14l6-6 6 6"/>',
+  down: '<path d="M6 10l6 6 6-6"/>',
+  trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  bolt: '<path d="M13 2.5L5.5 13.5H11l-1 8 7.5-11H12z"/>',
+  chevron: '<path d="M9 5l7 7-7 7"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  live: '<circle cx="12" cy="12" r="2.3"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8"/>'
+};
+export const icon = (name, cls = '') => `<svg class="ot-i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[name] || I.rail}</svg>`;
+
+export const MODE_NAME = { walk: '步行', bike: 'YouBike', bus: '公車', metro: '捷運', lightrail: '輕軌', tra: '台鐵', hsr: '高鐵', ferry: '渡輪', gondola: '纜車', rail: '鐵路' };
+export const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', rail: '#0ea5e9' };
+export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : MODE_COLOR[l.mode] || '#94a3b8');
+
+// What a leg is called on its chip: 「區間車」「板南線」「182」「YouBike」.
+export function legLabel(l) {
+  if (l.mode === 'walk') return minsText(l.dur);
+  if (l.mode === 'bike') return l.ebike ? '電輔車' : 'YouBike';
+  if (l.mode === 'bus') return l.short || l.name || '公車';
+  if (l.mode === 'hsr') return '高鐵';
+  return l.short || l.name || MODE_NAME[l.mode];
+}
+// A plan's legs as a row of chips (walks under 3 minutes left out).
+export function legChips(legs) {
+  return legs
+    .filter((l, i) => !(l.mode === 'walk' && l.dur < 180 && i > 0 && i < legs.length - 1))
+    .map(l => {
+      const c = legColor(l);
+      return l.mode === 'walk' ? `<span class="ot-leg walk">${icon('walk')}${e(legLabel(l))}</span>` : `<span class="ot-leg" style="--c:${e(c)}">${icon(l.mode)}<b>${e(legLabel(l))}</b></span>`;
+    })
+    .join('<span class="ot-leg-sep">›</span>');
+}
+
+export const timeRange = (dep, arr) => `${hm(dep)} – ${hm(arr)}`;
+
+// A line of "updated N seconds ago".
+export function ago(at, now = Date.now()) {
+  if (!at) return '';
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  return s < 15 ? '剛剛更新' : s < 60 ? `${s} 秒前更新` : `${Math.round(s / 60)} 分鐘前更新`;
+}

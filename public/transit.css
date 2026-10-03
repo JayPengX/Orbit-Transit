@@ -1,0 +1,1568 @@
+/* Orbit Transit on the Quadra kit (quadra.css): always dark
+   (html[data-theme=dark]), the app's green, and its own pieces: the map
+   under a floating search, the cards that rise from the bottom, the bus
+   groups swiped sideways, the train search, the metro map. */
+
+:root {
+  --q-accent: #22c55e;
+  --q-accent-ink: #04110a;
+  --q-status-bg: var(--q-page);
+  --ot-max: 640px;
+  --ot-card: #12151c;
+  --ot-line: rgba(255, 255, 255, 0.07);
+  --ot-good: #3dd598;
+  --ot-warn: #ffb547;
+  --ot-bad: #ff6b66;
+  --ot-bike: #f5b301;
+  --ot-tabs: var(--q-nav, 0px);
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--q-page);
+  color: var(--q-text);
+  font-family: var(--q-font);
+  -webkit-tap-highlight-color: transparent;
+}
+main {
+  min-height: 0;
+}
+.ot-panel[hidden] {
+  display: none !important;
+}
+.ot-i {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ot-i.big {
+  width: 44px;
+  height: 44px;
+  stroke-width: 1.5;
+  color: var(--q-accent);
+}
+.ot-note {
+  margin: 10px 2px;
+  color: var(--q-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.ot-note.bad {
+  color: var(--ot-bad);
+}
+.ot-note.center {
+  text-align: center;
+}
+.ot-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--q-muted);
+}
+.warn {
+  color: var(--ot-warn);
+}
+.ot-wide {
+  width: 100%;
+  justify-content: center;
+  margin-top: 10px;
+}
+.q-btn .ot-i {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---- The header: on the map it floats over it, with the search ---- */
+.ot-search {
+  display: none;
+}
+.tab-map .q-appbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  border: 0;
+  background: linear-gradient(to bottom, rgba(10, 11, 15, 0.92), rgba(10, 11, 15, 0.55) 70%, rgba(10, 11, 15, 0));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.tab-map .q-brand {
+  display: none;
+}
+.tab-map .ot-search {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  margin: 2px 0;
+  padding: 0 8px 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 23px;
+  background: rgba(22, 25, 33, 0.94);
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.8);
+  color: var(--q-muted);
+}
+.ot-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--q-text);
+  font: 500 16px var(--q-font);
+}
+.ot-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.ot-x {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--q-text-2);
+  font-size: 18px;
+  line-height: 1;
+}
+.tab-map #status:empty {
+  display: none;
+}
+.tab-map .q-status {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--ot-tabs) + 16px);
+  transform: translateX(-50%);
+  z-index: 45;
+  max-width: calc(100% - 40px);
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: rgba(22, 25, 33, 0.96);
+  color: var(--q-text);
+  font-size: 13px;
+  box-shadow: var(--q-shadow);
+}
+
+/* ---- The map ---- */
+.ot-map-panel {
+  position: fixed;
+  inset: 0 0 var(--ot-tabs) 0;
+  overflow: hidden;
+}
+.ot-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0; /* the map's own panes (Leaflet's go to 700) stay under the app's buttons */
+  background: #0d0f14;
+}
+/* Taiwan's NLSC map is light: turned dark to match. */
+.ot-tiles {
+  filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.92) contrast(0.92);
+}
+.leaflet-container {
+  background: #0d0f14;
+  font-family: var(--q-font);
+}
+.leaflet-control-attribution {
+  background: rgba(10, 11, 15, 0.6) !important;
+  color: var(--q-muted) !important;
+  font-size: 10px;
+}
+.ot-map-chips {
+  position: absolute;
+  top: calc(var(--q-top, 0px) + 62px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  padding: 0 16px 6px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+.ot-map-chips::-webkit-scrollbar {
+  display: none;
+}
+.ot-map-chips .q-chip {
+  flex: none;
+  background: rgba(22, 25, 33, 0.94);
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.9);
+}
+.ot-layer-chip[aria-pressed='false'] {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.ot-map-chips .ot-layer-chip[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--q-accent) 45%, transparent);
+  background: rgba(20, 40, 28, 0.95);
+  color: #a7f3c4;
+}
+.ot-chip-muted {
+  color: var(--q-muted);
+}
+.ot-fabs {
+  position: absolute;
+  right: 14px;
+  bottom: 22px;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+}
+.ot-fab {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 23px;
+  background: rgba(22, 25, 33, 0.95);
+  color: var(--q-text);
+  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.9);
+}
+.ot-fab:active {
+  transform: scale(0.94);
+}
+.ot-card:not([hidden]) ~ .ot-fabs,
+.ot-map-panel:has(.ot-card:not([hidden])) .ot-fabs {
+  display: none;
+}
+
+/* Search results drop under the search. */
+.ot-results {
+  position: absolute;
+  top: calc(var(--q-top, 0px) + 60px);
+  left: 12px;
+  right: 12px;
+  z-index: 41;
+  max-width: var(--ot-max);
+  margin: 0 auto;
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--ot-line);
+  border-radius: 20px;
+  background: rgba(18, 21, 28, 0.98);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+}
+.ot-res {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.ot-res:active,
+.ot-res:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.ot-res-i {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--q-text-2);
+  font-size: 17px;
+}
+.ot-res-t {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ot-res-t b,
+.ot-res-t small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-res-t small {
+  color: var(--q-muted);
+  font-size: 12.5px;
+}
+.ot-res-d {
+  color: var(--q-muted);
+  font-size: 12px;
+}
+
+/* ---- Markers ---- */
+.ot-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.ot-mk {
+  position: absolute;
+  left: 0;
+  top: 0;
+  cursor: pointer;
+  will-change: transform;
+}
+.leaflet-marker-icon.ot-mk {
+  position: absolute;
+  background: none;
+  border: 0;
+}
+.ot-mk > * {
+  pointer-events: auto;
+}
+/* YouBike: a yellow pill, the bikes there now (⚡ the 電輔車). */
+.ot-mk.bike {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 7px;
+  margin: -11px 0 0 -14px;
+  border: 2px solid #0d0f14;
+  border-radius: 11px;
+  background: var(--ot-bike);
+  color: #1a1300;
+  font: 800 12px/1 var(--q-font);
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+.ot-mk.bike i {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 10.5px;
+  opacity: 0.85;
+}
+.ot-mk.bike.few {
+  background: #f59e0b;
+}
+.ot-mk.bike.none {
+  background: #6b7280;
+  color: #e5e7eb;
+}
+.ot-mk.bike.off {
+  background: #374151;
+  color: #9ca3af;
+}
+.ot-mk.bus {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid #0d0f14;
+  border-radius: 7px;
+  background: #16a34a;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.ot-mk.bus .ot-i {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
+}
+.ot-mk.rail,
+.ot-mk.metro {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font: 700 12px/1 var(--q-font);
+  color: #e8ecf3;
+  text-shadow: 0 0 3px #000, 0 0 6px #000;
+}
+.ot-mk.rail {
+  margin: -13px 0 0 -13px;
+}
+.ot-mk.rail .ot-i {
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  box-sizing: border-box;
+  border: 2px solid #0d0f14;
+  border-radius: 9px;
+  background: #0284c7;
+  color: #fff;
+  stroke-width: 2.2;
+}
+.ot-mk.rail.hsr .ot-i {
+  background: #ea580c;
+}
+.ot-mk.metro {
+  margin: -8px 0 0 -8px;
+}
+.ot-mk.metro i {
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--c);
+  border-radius: 50%;
+  background: #fff;
+}
+.ot-mk.me {
+  margin: -11px 0 0 -11px;
+}
+.ot-me {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #3b82f6;
+  box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.25), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.ot-mk.sel {
+  margin: -36px 0 0 -16px;
+  color: var(--q-accent);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+}
+.ot-mk.sel .ot-i {
+  width: 32px;
+  height: 36px;
+  fill: var(--q-accent);
+  stroke: #0d0f14;
+  stroke-width: 1.4;
+}
+.ot-mk.end i {
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: -8px 0 0 -8px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #22c55e;
+}
+.ot-mk.board i {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--c);
+  color: #fff;
+}
+.ot-mk.board .ot-i {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
+}
+
+/* ---- The card that rises from the bottom ---- */
+.ot-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  max-width: var(--ot-max);
+  margin: 0 auto;
+  max-height: 46%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 16px 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--ot-line);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  background: var(--ot-card);
+  box-shadow: 0 -18px 50px -20px rgba(0, 0, 0, 0.9);
+  animation: ot-rise 0.22s ease-out;
+}
+.ot-card.tall {
+  max-height: 72%;
+}
+@keyframes ot-rise {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+}
+.ot-card-grip {
+  width: 40px;
+  height: 5px;
+  margin: 4px auto 8px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+.ot-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ot-card-title {
+  flex: 1;
+  min-width: 0;
+}
+.ot-card-title h2 {
+  margin: 2px 0 2px;
+  font-size: 19px;
+  line-height: 1.25;
+}
+.ot-card-title p {
+  margin: 0;
+  color: var(--q-muted);
+  font-size: 13px;
+}
+.ot-badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  color: #fff;
+}
+.ot-badge.bike {
+  background: var(--ot-bike);
+  color: #1a1300;
+}
+.ot-badge.bus {
+  background: #16a34a;
+}
+.ot-badge.tra {
+  background: #0284c7;
+}
+.ot-badge.hsr {
+  background: #ea580c;
+}
+.ot-badge.metro {
+  background: #2563eb;
+}
+.ot-badge.place {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--q-accent);
+}
+.ot-card-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ot-card-acts .q-btn {
+  flex: none;
+}
+.ot-bike-now {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 14px 0 6px;
+}
+.ot-bike-now > div {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  border-radius: 16px;
+  background: rgba(245, 179, 1, 0.1);
+}
+.ot-bike-now > div.e {
+  background: rgba(59, 130, 246, 0.12);
+}
+.ot-bike-now > div.d {
+  background: rgba(34, 197, 94, 0.1);
+}
+.ot-bike-now b {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.ot-bike-now span {
+  color: var(--q-text-2);
+  font-size: 12.5px;
+}
+
+/* Arrival rows (a stop's buses) and boards (a station's trains). */
+.ot-eta-list,
+.ot-board {
+  display: grid;
+  gap: 2px;
+  margin-top: 10px;
+}
+.ot-eta-row,
+.ot-board-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--ot-line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-route-no {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 46px;
+  height: 30px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: rgba(34, 197, 94, 0.14);
+  color: #7ee2a8;
+  font: 800 15px/1 var(--q-font);
+  white-space: nowrap;
+}
+.ot-route-no.big {
+  min-width: 60px;
+  height: 40px;
+  font-size: 18px;
+  border-radius: 12px;
+}
+.ot-eta {
+  display: grid;
+  justify-items: end;
+  margin-left: auto;
+  text-align: right;
+}
+.ot-eta b {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ot-eta small {
+  color: var(--q-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.ot-eta.now b {
+  color: var(--ot-bad);
+}
+.ot-eta.soon b {
+  color: var(--ot-warn);
+}
+.ot-eta.wait b {
+  color: var(--q-text);
+}
+.ot-eta.off b {
+  color: var(--q-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.ot-time {
+  flex: none;
+  width: 60px;
+  white-space: nowrap;
+  font: 800 17px var(--q-font);
+  font-variant-numeric: tabular-nums;
+}
+.ot-train {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ot-train small {
+  color: var(--q-muted);
+  font-size: 12.5px;
+}
+.ot-delay {
+  flex: none;
+  color: var(--q-text-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+.ot-delay.ok {
+  color: var(--ot-good);
+}
+.ot-delay.warn {
+  color: var(--ot-warn);
+}
+.ot-delay.bad {
+  color: var(--ot-bad);
+}
+.ot-times {
+  display: flex;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.ot-times b:first-child {
+  color: var(--q-accent);
+}
+
+/* ---- Plans ---- */
+.ot-od p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+  font-size: 14.5px;
+}
+.ot-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.ot-dot.from {
+  border: 2.5px solid var(--q-accent);
+  box-sizing: border-box;
+}
+.ot-dot.to {
+  background: var(--q-accent);
+}
+.ot-when {
+  margin: 10px 0 4px;
+}
+.ot-plans {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ot-plan {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--ot-line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-plan.on {
+  border-color: color-mix(in srgb, var(--q-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--q-accent) 7%, transparent);
+}
+.ot-plan-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+.ot-plan-dur {
+  font-size: 21px;
+}
+.ot-plan-time {
+  color: var(--q-text-2);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ot-tag {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--q-text-2);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.ot-tag.best {
+  background: color-mix(in srgb, var(--q-accent) 22%, transparent);
+  color: #86efac;
+}
+.ot-tag.bike {
+  background: rgba(245, 179, 1, 0.18);
+  color: #fcd34d;
+}
+.ot-legs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0 6px;
+}
+.ot-leg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--c, #475569);
+  color: #fff;
+  font-size: 12.5px;
+}
+.ot-leg .ot-i {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.2;
+}
+.ot-leg.walk {
+  padding: 0 2px;
+  background: none;
+  color: var(--q-muted);
+}
+.ot-leg-sep {
+  color: var(--q-muted);
+  font-size: 13px;
+}
+.ot-plan-sub {
+  color: var(--q-muted);
+  font-size: 12.5px;
+}
+.ot-steps {
+  display: grid;
+  gap: 0;
+  margin: 12px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+.ot-steps li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px 28px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 7px 0 9px;
+}
+.ot-steps li::before {
+  content: '';
+  position: absolute;
+  left: 67px;
+  top: 34px;
+  bottom: -6px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--c, rgba(255, 255, 255, 0.15));
+  opacity: 0.8;
+}
+.ot-steps li.end::before,
+.ot-steps li:last-child::before {
+  display: none;
+}
+.ot-step-time {
+  color: var(--q-text-2);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding-top: 4px;
+}
+.ot-step-i {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--c, rgba(255, 255, 255, 0.08));
+  color: #fff;
+}
+.ot-step-i .ot-i {
+  width: 16px;
+  height: 16px;
+}
+.ot-step-what {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.ot-step-what small {
+  color: var(--q-muted);
+  font-size: 12.5px;
+}
+.ot-step-dur {
+  color: var(--q-muted);
+}
+.ot-live {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ot-warn);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.ot-live .ot-i {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- Sheets ---- */
+.ot-sheet .q-sheet-head h2 {
+  margin: 0;
+}
+.ot-sheet-sub {
+  margin: 2px 0 0;
+  color: var(--q-muted);
+  font-size: 13px;
+}
+.ot-tall-sheet {
+  min-height: 70vh;
+}
+.ot-field {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 13px;
+  color: var(--q-text-2);
+}
+.ot-field input,
+.ot-search-in input,
+.ot-name-in {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid var(--q-border);
+  border-radius: 14px;
+  background: var(--q-sunken);
+  color: var(--q-text);
+  font: 500 16px var(--q-font);
+}
+.ot-field.inline {
+  margin: 0;
+  min-width: 0;
+}
+.ot-field.inline input {
+  min-width: 0;
+  padding: 0 10px;
+}
+.ot-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ot-row input {
+  flex: 1;
+}
+.ot-actions {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.ot-list {
+  display: grid;
+  gap: 6px;
+}
+.ot-row-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--ot-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-row-btn > span:not(.ot-route-no) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ot-row-btn small {
+  color: var(--q-muted);
+  font-size: 12.5px;
+}
+.ot-row-btn:disabled {
+  opacity: 0.5;
+}
+.ot-order-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--ot-line);
+}
+.ot-order-row > span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ot-order-row small {
+  color: var(--q-muted);
+  font-size: 12px;
+}
+.ot-order-row .ot-i {
+  width: 18px;
+  height: 18px;
+}
+.ot-order-row.head {
+  border: 0;
+}
+.ot-order-row.head .ot-name-in {
+  flex: 1;
+  font-weight: 700;
+}
+.ot-manage {
+  margin: 10px 0 14px;
+  padding: 8px 12px 6px;
+  border: 1px solid var(--ot-line);
+  border-radius: 18px;
+}
+.ot-search-in {
+  margin: 10px 0;
+}
+.ot-city-chips,
+.ot-dir,
+.ot-sys-tabs {
+  margin: 8px 0 12px;
+}
+.ot-city-chips .q-chip {
+  min-width: 52px;
+  justify-content: center;
+}
+.q-chip small {
+  margin-left: 4px;
+  color: var(--q-muted);
+  font-size: 11px;
+}
+
+/* ---- 公車 ---- */
+.ot-bus-panel {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--ot-tabs) - var(--q-top, 0px) - 48px);
+}
+.ot-groups {
+  flex: none;
+  padding: 4px 16px 10px;
+  max-width: calc(var(--ot-max) + 32px);
+  margin: 0 auto;
+  box-sizing: border-box;
+  width: 100%;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+.ot-groups .q-chip {
+  flex: none;
+}
+.ot-groups .q-chip[aria-pressed='true'] {
+  background: var(--q-accent);
+  border-color: var(--q-accent);
+  color: var(--q-accent-ink);
+}
+.ot-groups .q-chip[aria-pressed='true'] small {
+  color: inherit;
+}
+.ot-pager {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.ot-pager::-webkit-scrollbar {
+  display: none;
+}
+.ot-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  padding: 2px max(16px, calc((100% - var(--ot-max)) / 2)) 30px;
+}
+.ot-page > * {
+  margin: 0 0 10px;
+}
+.ot-stop-card {
+  border: 1px solid var(--ot-line);
+  border-radius: 20px;
+  background: var(--ot-card);
+}
+.ot-stop-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-stop-what {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ot-stop-what b {
+  font-size: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-stop-what small {
+  color: var(--q-muted);
+  font-size: 12.5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-stop-card .ot-eta b {
+  font-size: 22px;
+}
+.ot-empty-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 36px 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  text-align: center;
+}
+.ot-empty-card h3 {
+  margin: 8px 0 0;
+}
+.ot-empty-card p {
+  margin: 0;
+  color: var(--q-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.ot-route-stops {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ot-route-stops li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 82px 22px 1fr;
+  align-items: center;
+  min-height: 50px;
+}
+.ot-route-stops li::before {
+  content: '';
+  position: absolute;
+  left: 92px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: rgba(34, 197, 94, 0.35);
+}
+.ot-route-stops li:first-child::before {
+  top: 50%;
+}
+.ot-route-stops li:last-child::before {
+  bottom: 50%;
+}
+.ot-route-stops .ot-eta {
+  justify-items: end;
+  padding-right: 10px;
+}
+.ot-route-stops .ot-eta b {
+  font-size: 14px;
+}
+.ot-rs-dot {
+  position: relative;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  margin-left: 4px;
+  border: 3px solid #22c55e;
+  border-radius: 50%;
+  background: #0d0f14;
+  box-sizing: border-box;
+}
+.ot-route-stops li.now .ot-rs-dot {
+  background: var(--ot-bad);
+  border-color: var(--ot-bad);
+  box-shadow: 0 0 0 5px rgba(255, 107, 102, 0.2);
+}
+.ot-route-stops li.mine {
+  background: color-mix(in srgb, var(--q-accent) 9%, transparent);
+  border-radius: 12px;
+}
+.ot-rs-name {
+  display: grid;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-rs-name small {
+  color: var(--q-muted);
+  font-size: 11.5px;
+}
+.ot-rs-name small .ot-i {
+  width: 11px;
+  height: 11px;
+  vertical-align: -1px;
+}
+
+/* ---- 火車 ---- */
+.ot-scroll {
+  min-height: calc(100dvh - var(--ot-tabs));
+}
+.ot-wrap {
+  max-width: var(--ot-max);
+  margin: 0 auto;
+  padding: 4px 16px 40px;
+}
+.ot-od-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--ot-line);
+  border-radius: 22px;
+  background: var(--ot-card);
+}
+.ot-st-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 8px 64px 8px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-st-pick small {
+  width: 32px;
+  color: var(--q-muted);
+  font-size: 12.5px;
+}
+.ot-st-pick b {
+  font-size: 21px;
+}
+.ot-st-pick b.muted {
+  color: var(--q-muted);
+  font-size: 17px;
+  font-weight: 600;
+}
+.ot-sys {
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+.ot-sys.tra {
+  background: rgba(2, 132, 199, 0.2);
+  color: #7dd3fc;
+}
+.ot-sys.hsr {
+  background: rgba(234, 88, 12, 0.2);
+  color: #fdba74;
+}
+.ot-swap {
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-top: -21px;
+  border: 1px solid var(--ot-line);
+  border-radius: 21px;
+  background: #1b1f29;
+  color: var(--q-text);
+}
+.ot-mode {
+  margin: 12px 0;
+}
+.ot-mode .q-chip[aria-pressed='true'],
+.ot-sys-tabs .q-chip[aria-pressed='true'] {
+  background: var(--q-accent);
+  border-color: var(--q-accent);
+  color: var(--q-accent-ink);
+}
+.ot-when-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: end;
+}
+.ot-when-row .q-btn {
+  grid-column: 1 / -1;
+  justify-content: center;
+  min-height: 48px;
+  font-size: 16px;
+}
+.ot-recent {
+  margin: 12px 0 0;
+}
+#t-results {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.ot-jny {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--ot-line);
+  border-radius: 20px;
+  background: var(--ot-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-jny.on {
+  border-color: color-mix(in srgb, var(--q-accent) 50%, transparent);
+}
+.ot-jny-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ot-jny-time {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.ot-jny-dur {
+  color: var(--q-text-2);
+  font-weight: 700;
+}
+.ot-jny-legs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0;
+}
+.ot-train-chip {
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+  background: rgba(2, 132, 199, 0.22);
+  color: #bae6fd;
+}
+.ot-train-chip.local {
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+}
+.ot-train-chip.hsr {
+  background: rgba(234, 88, 12, 0.25);
+  color: #fed7aa;
+}
+.ot-jny-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ot-jny-sub span {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--q-text-2);
+  font-size: 12px;
+}
+.ot-jny-sub span.warn {
+  color: var(--ot-warn);
+}
+.ot-steps.rail li {
+  grid-template-columns: 28px 1fr;
+}
+.ot-steps.rail li::before {
+  left: 13px;
+}
+.ot-steps.rail li.ride {
+  --c: #0284c7;
+}
+.ot-steps.rail li.ride.hsr {
+  --c: #ea580c;
+}
+.ot-steps.rail li.change .ot-step-i,
+.ot-steps.rail li.walk .ot-step-i {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--q-text-2);
+}
+.ot-ride {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0;
+}
+.ot-ride b {
+  display: inline-block;
+  width: 46px;
+  font-variant-numeric: tabular-nums;
+}
+.ot-st-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+.ot-st-btn {
+  position: relative;
+  min-height: 46px;
+  padding: 6px;
+  border: 1px solid var(--ot-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: 600 15px var(--q-font);
+}
+.ot-st-btn i {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--q-accent);
+}
+
+/* ---- 捷運 ---- */
+.ot-metro-panel {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--ot-tabs) - var(--q-top, 0px) - 48px);
+}
+.ot-metro-chips {
+  flex: none;
+  padding: 4px 16px 10px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+.ot-metro-chips .q-chip {
+  flex: none;
+}
+.ot-metro-chips .q-chip[aria-pressed='true'] {
+  background: var(--q-accent);
+  border-color: var(--q-accent);
+  color: var(--q-accent-ink);
+}
+.ot-metro-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 10px 10px;
+  overflow: hidden;
+  border: 1px solid var(--ot-line);
+  border-radius: 24px;
+  background: radial-gradient(120% 90% at 50% 40%, #121722 0%, #0b0d12 70%);
+  touch-action: none;
+}
+.ot-metro-stage,
+.mt-svg {
+  width: 100%;
+  height: 100%;
+}
+.mt-svg {
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mt-line {
+  fill: none;
+  stroke-width: calc(3px + 1.1px * min(var(--k, 1), 4));
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mt-st {
+  transform: translate(var(--x), var(--y)) scale(var(--inv, 1));
+  cursor: pointer;
+}
+.mt-dot {
+  fill: #fff;
+  stroke-width: 2.4;
+}
+.mt-st.x .mt-dot {
+  stroke-width: 2.8;
+}
+.mt-hit {
+  fill: transparent;
+}
+.mt-name {
+  display: none;
+  fill: #dfe5ee;
+  font: 600 11px var(--q-font);
+  paint-order: stroke;
+  stroke: #0b0d12;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.mt-name.big {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+.mt-svg.names .mt-name {
+  display: block;
+}
+.ot-metro-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  gap: 8px;
+}
+.ot-metro-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  max-width: calc(100% - 90px);
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(10, 11, 15, 0.75);
+  color: var(--q-text-2);
+  font-size: 11.5px;
+  pointer-events: none;
+}
+.ot-metro-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ot-metro-legend i {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+}
+.ot-line-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.ot-line-chips span {
+  padding: 3px 10px;
+  border-radius: 9px;
+  background: var(--c);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* A computer's browser: the map and pages keep a phone's width in the middle. */
+@media (min-width: 900px) {
+  .ot-card {
+    left: 16px;
+    right: auto;
+    width: 420px;
+    bottom: 16px;
+    border-radius: 24px;
+    border-bottom: 1px solid var(--ot-line);
+    max-height: calc(100% - 140px);
+  }
+  .ot-results {
+    left: 16px;
+    right: auto;
+    width: 420px;
+    margin: 0;
+  }
+}

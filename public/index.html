@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0b0f" />
+<meta name="build-version" content="dev" />
+<title>Orbit Transit</title>
+<meta name="description" content="台灣大眾運輸：地圖、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。" />
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="Transit" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="application-name" content="Orbit Transit" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="preconnect" href="https://orbit-workers-proxy.pengzjay.workers.dev" crossorigin />
+<link rel="stylesheet" href="./quadra.css" />
+<link rel="stylesheet" href="./transit.css" />
+</head>
+<body class="tab-map">
+<div id="loading" data-title="Orbit Transit" data-cache="orbit-transit-"></div>
+<script src="./boot.js"></script>
+<header class="q-appbar">
+  <div class="q-appbar-inner">
+    <div class="q-brand">
+      <img class="q-brand-logo" src="./favicon.svg" alt="" width="34" height="34" />
+      <div class="q-brand-text">
+        <h1 id="title">Orbit Transit</h1>
+        <p id="status" class="q-status" aria-live="polite"></p>
+      </div>
+    </div>
+    <form id="map-search" class="ot-search" role="search" autocomplete="off">
+      <svg class="ot-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/></svg>
+      <input id="q" type="search" enterkeyhint="search" placeholder="搜尋地點、車站、地址" aria-label="搜尋地點" />
+      <button id="q-clear" class="ot-x" type="button" aria-label="清除" hidden>×</button>
+    </form>
+    <nav id="tabs" class="q-tabbar" aria-label="分頁"></nav>
+    <div id="top-actions" class="q-actions"></div>
+  </div>
+</header>
+<main id="main">
+  <section id="panel-map" class="ot-panel ot-map-panel" role="tabpanel" aria-labelledby="tab-map">
+    <div id="map" class="ot-map" aria-label="地圖"></div>
+    <div id="map-chips" class="q-chips ot-map-chips"></div>
+    <div id="results" class="ot-results" hidden></div>
+    <div class="ot-fabs">
+      <button id="fab-layers" class="ot-fab" type="button" aria-label="圖層"></button>
+      <button id="fab-locate" class="ot-fab" type="button" aria-label="我的位置"></button>
+    </div>
+    <div id="card" class="ot-card" hidden></div>
+  </section>
+  <section id="panel-bus" class="ot-panel ot-bus-panel" role="tabpanel" aria-labelledby="tab-bus" hidden>
+    <nav id="groups" class="q-chips ot-groups" aria-label="群組"></nav>
+    <div id="bus-pager" class="ot-pager"></div>
+  </section>
+  <section id="panel-train" class="ot-panel ot-scroll" role="tabpanel" aria-labelledby="tab-train" hidden></section>
+  <section id="panel-metro" class="ot-panel ot-metro-panel" role="tabpanel" aria-labelledby="tab-metro" hidden></section>
+</main>
+<script type="module" src="./app.mjs" onerror="window.__fxFail()"></script>
+</body>
+</html>

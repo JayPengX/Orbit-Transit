@@ -1,0 +1,9 @@
+{
+  "name": "orbit-transit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "start": "npx --yes http-server public -p 8080 -c-1"
+  }
+}
