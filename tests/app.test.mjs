@@ -671,3 +671,32 @@ test('a weekday trip on a Sunday is Monday’s; a day of its own keeps its own t
   assert.equal(tripNow(t, school, twAt('2026-10-08', '12:00')).at, twAt('2026-10-08', '17:00'));
   assert.equal(tripNow(t, home, twAt('2026-10-08', '20:00')).at, twAt('2026-10-09', '07:30'), 'Friday out: the usual time');
 });
+
+test('the buzz: a chime where there’s no vibrating (an iPhone), once a tap has started the audio', async () => {
+  const { buzz, primeBuzz } = await import('../public/lib/buzz.mjs');
+  const started = [];
+  const param = { setValueAtTime() {}, exponentialRampToValueAtTime() {} };
+  globalThis.AudioContext = class {
+    state = 'suspended';
+    currentTime = 0;
+    destination = {};
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    createGain() { return { gain: param, connect: x => x }; }
+    createOscillator() { return { frequency: {}, connect: x => x, start: t => started.push(t), stop() {} }; }
+  };
+  try {
+    buzz();
+    assert.equal(started.length, 0, 'no sound before a tap');
+    primeBuzz();
+    buzz();
+    assert.equal(started.length, 2, 'two notes');
+    const pulses = [];
+    Object.defineProperty(navigator, 'vibrate', { value: p => pulses.push(p) > 0, configurable: true });
+    buzz();
+    assert.deepEqual(pulses, [[200, 100, 200]]);
+    assert.equal(started.length, 2, 'a phone that vibrates: no chime');
+  } finally {
+    delete globalThis.AudioContext;
+    delete navigator.vibrate;
+  }
+});

@@ -1,10 +1,11 @@
 // One-time bus alerts: "tell me when the 5608 is 5 minutes from my stop".
 // Checked every 20 s while the app is open (TDX's estimates at that stop),
-// told by a notification (and a buzz and the status line), then gone. Kept
+// told by a notification (and a buzz, a chime on an iPhone, and the status line), then gone. Kept
 // on this device for two hours, so a reload doesn't lose one.
 
 import { stationEta } from './bus.mjs';
 import { uid } from './util.mjs';
+import { buzz, primeBuzz } from './buzz.mjs';
 
 const KEY = 'orbit-transit.alerts';
 const TTL = 2 * 60 * 60_000;
@@ -39,6 +40,7 @@ export const alertFor = (station, routeUID, dir) => list.find(a => a.station.uid
 
 // `station`: the map's stop ({ uid, id, cityCode, name }); the bus by its route and way.
 export async function addAlert({ station, routeUID, route, dir, min }) {
+  primeBuzz();
   list = list.filter(a => !(a.station.uid === station.uid && a.routeUID === routeUID && a.dir === dir));
   list.push({ id: uid(), station: { uid: station.uid, id: station.id, cityCode: station.cityCode || '', name: station.name }, routeUID, route, dir, min, at: Date.now() });
   keep();
@@ -60,9 +62,7 @@ export function startAlerts(status) {
 
 async function notify(text, body) {
   say(text);
-  try {
-    navigator.vibrate?.([200, 100, 200]);
-  } catch {}
+  buzz();
   try {
     if (globalThis.Notification?.permission !== 'granted') return;
     const reg = await navigator.serviceWorker?.getRegistration?.();
