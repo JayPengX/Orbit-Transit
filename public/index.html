@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0b0f" />
 <meta name="build-version" content="dev" />
 <title>Orbit Transit</title>
-<meta name="description" content="台灣大眾運輸：地圖、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。" />
+<meta name="description" content="台灣大眾運輸：地圖與路線導航、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。" />
 <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="Transit" />
@@ -50,13 +50,18 @@
       <button id="fab-locate" class="ot-fab" type="button" aria-label="我的位置"></button>
     </div>
     <div id="card" class="ot-card" hidden></div>
+    <div id="nav" class="ot-nav" hidden></div>
   </section>
-  <section id="panel-bus" class="ot-panel ot-bus-panel" role="tabpanel" aria-labelledby="tab-bus" hidden>
-    <nav id="groups" class="q-chips ot-groups" aria-label="群組"></nav>
-    <div id="bus-pager" class="ot-pager"></div>
+  <section id="panel-go" class="ot-panel ot-scroll" role="tabpanel" aria-labelledby="tab-go" hidden></section>
+  <section id="panel-times" class="ot-panel ot-scroll" role="tabpanel" aria-labelledby="tab-times" hidden>
+    <nav id="times-seg" class="q-chips ot-seg" aria-label="查時刻"><button class="q-chip" type="button" data-view="train">台鐵・高鐵</button><button class="q-chip" type="button" data-view="bus">公車</button></nav>
+    <div id="panel-train"></div>
+    <div id="times-bus" hidden></div>
   </section>
-  <section id="panel-train" class="ot-panel ot-scroll" role="tabpanel" aria-labelledby="tab-train" hidden></section>
-  <section id="panel-metro" class="ot-panel ot-metro-panel" role="tabpanel" aria-labelledby="tab-metro" hidden></section>
+  <section id="panel-me" class="ot-panel ot-scroll" role="tabpanel" aria-labelledby="tab-me" hidden>
+    <div id="me-main"></div>
+    <div id="panel-metro" class="ot-metro-panel" hidden></div>
+  </section>
 </main>
 <script type="module" src="./app.mjs" onerror="window.__fxFail()"></script>
 </body>

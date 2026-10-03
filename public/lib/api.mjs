@@ -14,15 +14,41 @@ const token = async () => {
   return t;
 };
 
-async function get(path, { signal } = {}) {
+// One ask of the proxy, given `wait` ms (a phone on a bad connection, or
+// TDX slow behind it, shouldn't hang a card for ever), asked once more after
+// a moment when it failed for a reason that passes (no answer, a timeout, a
+// 5xx, TDX busy): most of what used to say 暫時無法取得資料 was one of those.
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const passing = err => !err.status || err.status === 429 || err.status >= 500;
+async function ask(path, { signal, wait = 15_000 } = {}) {
   const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(await token())}`;
-  const res = await fetch(url, { signal });
+  const timer = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const stop = setTimeout(() => timer?.abort(), wait);
+  signal?.addEventListener?.('abort', () => timer?.abort());
+  let res;
+  try {
+    res = await fetch(url, { signal: timer?.signal || signal });
+  } catch (err) {
+    const offline = globalThis.navigator?.onLine === false;
+    throw Object.assign(new Error('network'), { code: offline ? 'OFFLINE' : signal?.aborted ? 'ABORTED' : timer?.signal.aborted ? 'TIMEOUT' : 'NETWORK', status: 0, cause: err });
+  } finally {
+    clearTimeout(stop);
+  }
   let body = null;
   try {
     body = await res.json();
   } catch {}
   if (!res.ok) throw Object.assign(new Error(body?.code || `${res.status}`), { code: body?.code || 'HTTP', status: res.status });
   return body;
+}
+async function get(path, opts = {}) {
+  try {
+    return await ask(path, opts);
+  } catch (err) {
+    if (!passing(err) || err.code === 'OFFLINE' || err.code === 'ABORTED' || err.code === 'SIGNED_OUT' || opts.signal?.aborted) throw err;
+    await sleep(err.status === 429 ? 1500 : 700);
+    return ask(path, opts);
+  }
 }
 
 // ---- TDX through the proxy -----------------------------------------------------------------
@@ -38,13 +64,17 @@ async function kept(path) {
     return null;
   }
 }
-async function keep(path, data, at) {
+async function keep(path, data, at, max = Infinity) {
   if (!hasCaches()) return;
   try {
-    await (await caches.open(DATA_CACHE)).put(`https://data.transit/${path}`, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'x-at': String(at) } }));
+    const text = JSON.stringify(data);
+    if (text.length > max) return;
+    await (await caches.open(DATA_CACHE)).put(`https://data.transit/${path}`, new Response(text, { headers: { 'content-type': 'application/json', 'x-at': String(at) } }));
   } catch {}
 }
 const inflight = new Map();
+// Paths answered from an old copy after a failed ask: path → when that copy is from.
+export const stale = new Map();
 
 // A TDX path (see transit.js TDX_RULES), parsed. `fresh`: how long a copy
 // here is good (ms); `persist`: kept on the device across launches.
@@ -66,11 +96,17 @@ export async function tdx(path, { fresh = 30_000, persist = false } = {}) {
     try {
       const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}`);
       memory.set(path, { at: Date.now(), data });
-      if (persist) keep(path, data, Date.now());
+      stale.delete(path);
+      // Live answers are kept too (a minute's copy beats an error after a relaunch).
+      keep(path, data, Date.now(), persist ? Infinity : 200_000);
       return data;
     } catch (err) {
-      const last = memory.get(path);
-      if (last) return last.data;
+      // The last copy, here or kept on the device, however old: better than nothing.
+      const last = memory.get(path) || (persist ? null : await kept(path));
+      if (last) {
+        stale.set(path, last.at);
+        return last.data;
+      }
       throw err;
     } finally {
       inflight.delete(path);
@@ -90,7 +126,8 @@ export const rows = j => (Array.isArray(j) ? j : j && typeof j === 'object' ? Ob
 export const config = () => get('/transit/config');
 export const searchPlaces = (q, { lat, lon, session: s } = {}, opts) => get(`/transit/search?q=${encodeURIComponent(q)}${lat != null ? `&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}` : ''}${s ? `&s=${s}` : ''}`, opts);
 export const placeDetails = (id, { name = false, session: s } = {}) => get(`/transit/place?id=${encodeURIComponent(id)}${name ? '&name=1' : ''}${s ? `&s=${s}` : ''}`);
-export const routePlans = (from, to, { at = null, by = 'depart' } = {}) => get(`/transit/route?from=${from.lat.toFixed(5)},${from.lon.toFixed(5)}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}${at ? `&at=${at}` : ''}&by=${by}`);
+export const routePlans = (from, to, { at = null, by = 'depart', modes = null } = {}) =>
+  get(`/transit/route?from=${from.lat.toFixed(5)},${from.lon.toFixed(5)}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}${at ? `&at=${at}` : ''}&by=${by}${modes ? `&modes=${modes.join(',')}` : ''}`, { wait: 30_000 });
 
 // Taiwan's townships (the weather route's open list), kept a month.
 const TOWNS_KEY = 'orbit-transit.towns';
@@ -136,11 +173,18 @@ export function watchPosition(fn, nav = globalThis.navigator) {
   return () => nav.geolocation.clearWatch(id);
 }
 
+// What went wrong, said plainly: the network here, the data source there, or busy.
 export const errorText = err =>
-  err?.code === 'TDX_BUSY' || err?.status === 429
-    ? '查詢的人有點多，請稍候幾秒再試。'
-    : err?.code === 'TDX_NO_KEY'
-      ? '交通資料尚未開通（TDX 金鑰還沒設定）。'
-      : err?.code === 'SIGNED_OUT'
-        ? '請先登入 Quadra Pass。'
-        : '暫時無法取得資料，請檢查網路。';
+  err?.code === 'OFFLINE'
+    ? '沒有網路連線，連上後會自動更新。'
+    : err?.code === 'TDX_BUSY' || err?.status === 429
+      ? '查詢的人有點多，稍後自動再試。'
+      : err?.code === 'TDX_NO_KEY'
+        ? '交通資料尚未開通（TDX 金鑰還沒設定）。'
+        : err?.code === 'SIGNED_OUT'
+          ? '請先登入 Quadra Pass。'
+          : err?.code === 'TIMEOUT'
+            ? '資料來源回應太慢，稍後自動再試。'
+            : err?.code === 'TDX_FAILED' || err?.status >= 500
+              ? '交通部 TDX 暫時沒有回應，稍後自動再試。'
+              : '暫時無法取得資料，稍後自動再試。';

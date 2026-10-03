@@ -1,4 +1,4 @@
-// 火車: 台鐵 and 高鐵 from one station to another, changing wherever it's
+// 查時刻 → 台鐵・高鐵: from one station to another, changing wherever it's
 // faster (the router in rail.mjs): a branch line to the trunk line, 台鐵 to
 // 高鐵 and back, the walk between them timed. The start is the nearest
 // station (or any, picked by city first); each option shows its trains,
@@ -9,6 +9,7 @@ import { journeys, tags, SYSTEMS } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { CITIES, cityShort } from './city.mjs';
 import { remember, trainKey } from './store.mjs';
+import { pinTrain } from './tab-go.mjs';
 import { sheet, sheetHead, icon } from './ui.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText } from './util.mjs';
 
@@ -37,7 +38,14 @@ export function show() {
     ctx.trainFrom = null;
     render();
   }
+  // 交通's pinned connection: asked again now.
+  if (ctx.trainQuery) {
+    Object.assign(state, { from: ctx.trainQuery.from, to: ctx.trainQuery.to, time: null, date: null });
+    ctx.trainQuery = null;
+    search();
+  }
 }
+const pinnedConn = () => state.from && state.to && ctx.data.pins.some(p => p.kind === 'train' && p.from.id === state.from.id && p.to.id === state.to.id && p.from.sys === state.from.sys);
 
 async function nearestStart() {
   const h = await ctx.locate();
@@ -85,7 +93,8 @@ function resultsHtml() {
   if (!state.results) return `<div class="ot-empty-card">${icon('tra', 'big')}<h3>台鐵、高鐵一起查</h3><p>選起訖站，自動找出最快的走法：支線換幹線、台鐵換高鐵，換車要走多久都算好了。</p></div>`;
   if (!state.results.length) return '<p class="ot-note">這個時間之後找不到班次，換個時間或日期試試。</p>';
   const labels = tags(state.results);
-  return state.results
+  const pinBar = `<div class="ot-pin-bar"><button class="q-btn${pinnedConn() ? ' on' : ''}" type="button" data-act="pin-conn" ${pinnedConn() ? 'disabled' : ''}>${icon('star')} ${pinnedConn() ? '已釘選，在「交通」看下一班' : `釘選 ${e(stationLabel(state.from))} → ${e(stationLabel(state.to))}`}</button></div>`;
+  return pinBar + state.results
     .map((j, i) => {
       const rides = j.legs.filter(l => !l.walk);
       const delay = rides.reduce((a, l) => a + (l.trip.sys === 'tra' ? state.delays.get(l.trip.no) || 0 : 0), 0);
@@ -122,8 +131,10 @@ function detailHtml(j) {
     }
     const t = l.trip;
     const d = t.sys === 'tra' ? state.delays.get(t.no) : 0;
+    const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no);
     out.push(`<li class="ride ${t.sys}"><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what">
       <b>${e(t.typeFull || t.type)} ${e(t.no)} 次</b> 往 ${e(t.headsign)}${d ? ` <span class="warn">晚 ${d} 分</span>` : ''}
+      <span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')} ${pinned ? '已釘選' : '釘選這班'}</span>
       <span class="ot-ride"><span><b>${e(hm(l.dep))}</b> ${e(nameOf(l.from))}</span><span><b>${e(hm(l.arr))}</b> ${e(nameOf(l.to))}</span></span>
       <small>${l.stops} 站 · ${e(minsText((l.arr - l.dep) / 1000))}${state.fares.get(fareKey(l)) ? ` · NT$${state.fares.get(fareKey(l))}` : ''}${t.bike ? ' · 可攜自行車' : ''}</small></span></li>`);
   });
@@ -170,7 +181,20 @@ async function search() {
   }
 }
 
+const keyStation = key => {
+  const s = net?.st.get(key);
+  return s ? { sys: s.sys, id: s.id, name: s.name } : null;
+};
 function onClick(ev) {
+  const pt = ev.target.closest('[data-pin-train]');
+  if (pt) {
+    const x = JSON.parse(pt.dataset.pinTrain);
+    if (pinTrain(ctx, { kind: 'trainNo', sys: x.sys, no: x.no, type: x.type, dep: x.dep, from: keyStation(x.from), to: keyStation(x.to) })) {
+      ctx.status(`已釘選 ${x.no} 次，在「交通」看它的時間和誤點`);
+      $('t-results').innerHTML = resultsHtml();
+    }
+    return;
+  }
   const pick = ev.target.closest('[data-pick]');
   if (pick) return pickStation(pick.dataset.pick);
   const mode = ev.target.closest('[data-mode]');
@@ -195,6 +219,10 @@ function onClick(ev) {
     [state.from, state.to] = [state.to, state.from];
     state.results = null;
     return render();
+  }
+  if (act === 'pin-conn') {
+    if (pinTrain(ctx, { kind: 'train', from: state.from, to: state.to })) ctx.status('已釘選，在「交通」看接下來的車');
+    return ($('t-results').innerHTML = resultsHtml());
   }
   if (act === 'go') {
     // The time shown when nobody changed it is "now", whenever 查詢 is pressed.
