@@ -366,6 +366,13 @@ dialog.q-moved {
   margin: 0;
   border: 0;
 }
+/* …and everything in it: the steps box and the sign-in form are 100% wide
+   with padding (the steps scrolled 8px sideways on the install screen). */
+.q-gate *,
+.q-gate *::before,
+.q-gate *::after {
+  box-sizing: border-box;
+}
 dialog.q-gate::backdrop {
   background: var(--q-page);
 }
