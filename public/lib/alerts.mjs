@@ -2,8 +2,11 @@
 // Checked every 20 s while the app is open (TDX's estimates at that stop),
 // told by a notification (and a buzz, a chime on an iPhone, and the status line), then gone. Kept
 // on this device for two hours, so a reload doesn't lose one.
+// The Worker gets the list too (the kit's schedulePush, check `bus` in
+// push.js) and checks each 2 minutes itself: an iPhone stops the app once
+// it's locked or in the background, so that's what tells you then.
 
-import { stationEta } from './bus.mjs';
+import { stationEta, stationEtaAsk } from './bus.mjs';
 import { uid } from './util.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 
@@ -12,6 +15,7 @@ const TTL = 2 * 60 * 60_000;
 let list = load();
 let timer = 0;
 let say = () => {};
+let push = null;
 const listeners = new Set();
 
 function load() {
@@ -27,12 +31,25 @@ function keep() {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {}
   listeners.forEach(f => f());
+  push?.schedule(list.map(pushItem));
   if (list.length && !timer) timer = setInterval(check, 20_000);
   if (!list.length && timer) {
     clearInterval(timer);
     timer = 0;
   }
 }
+
+// One alert as the Worker's notice: its check runs from when it was set
+// until it lapses; the Worker writes {result} ("約 4 分鐘到站").
+export const pushItem = a => ({
+  at: a.at,
+  until: a.at + TTL,
+  title: `${a.route} 快到了`,
+  body: `{result}（${a.station.name}）`,
+  tag: `bus:${a.id}`,
+  kind: 'bus',
+  check: { bus: { path: stationEtaAsk(a.station), route: a.routeUID, dir: Number(a.dir), min: a.min } }
+});
 
 export const alerts = () => list;
 export const onAlerts = f => listeners.add(f);
@@ -43,10 +60,13 @@ export async function addAlert({ station, routeUID, route, dir, min }) {
   primeBuzz();
   list = list.filter(a => !(a.station.uid === station.uid && a.routeUID === routeUID && a.dir === dir));
   list.push({ id: uid(), station: { uid: station.uid, id: station.id, cityCode: station.cityCode || '', name: station.name }, routeUID, route, dir, min, at: Date.now() });
-  keep();
   try {
     if (globalThis.Notification?.permission === 'default') await Notification.requestPermission();
   } catch {}
+  // Asking for an alert is asking for notices (unless they were turned off).
+  const why = push?.allow();
+  keep();
+  if (why) say(why);
   check();
 }
 export function removeAlert(id) {
@@ -55,18 +75,20 @@ export function removeAlert(id) {
 }
 
 // The status line and the like (app.mjs).
-export function startAlerts(status) {
+// `withPush`: { schedule(items), allow() → why the lock screen won't hear of it, or '' }.
+export function startAlerts(status, withPush = null) {
   say = status;
+  push = withPush;
   keep();
 }
 
-async function notify(text, body) {
+async function notify(text, body, tag) {
   say(text);
   buzz();
   try {
     if (globalThis.Notification?.permission !== 'granted') return;
     const reg = await navigator.serviceWorker?.getRegistration?.();
-    if (reg?.showNotification) await reg.showNotification(text, { body, tag: 'bus-alert', renotify: true, icon: './icons/icon-192.png' });
+    if (reg?.showNotification) await reg.showNotification(text, { body, tag, renotify: true, icon: './icons/icon-192.png' });
     else new Notification(text, { body });
   } catch {}
 }
@@ -90,7 +112,7 @@ async function check() {
         const r = rows.find(x => x.routeUID === a.routeUID && Number(x.dir) === Number(a.dir) && x.sec != null);
         if (!r || r.sec > a.min * 60) continue;
         const m = Math.max(0, Math.round(r.sec / 60));
-        await notify(`${a.route} ${m <= 1 ? '即將進站' : `${m} 分後到站`}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''}：該出發了`);
+        await notify(`${a.route} ${m <= 1 ? '即將進站' : `${m} 分後到站`}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''}：該出發了`, `transit:bus:${a.id}`);
         list = list.filter(x => x !== a);
       }
     }

@@ -700,3 +700,15 @@ test('the buzz: a chime where there’s no vibrating (an iPhone), once a tap has
     delete navigator.vibrate;
   }
 });
+
+test('a bus alert as the Worker’s notice: the stop’s own TDX ask, checked from when it was set for two hours', async () => {
+  const { pushItem } = await import('../public/lib/alerts.mjs');
+  const a = { id: 'a1', at: 1_000, route: '5608', routeUID: 'HSZ0058', dir: '0', min: 5, station: { uid: 'HSZ1234', id: '1234', cityCode: 'HSZ', name: '竹東高中' } };
+  const item = pushItem(a);
+  assert.equal(item.until - item.at, 2 * 60 * 60_000);
+  assert.equal(item.kind, 'bus');
+  assert.equal(item.body, '{result}（竹東高中）');
+  assert.deepEqual({ ...item.check.bus, path: undefined }, { path: undefined, route: 'HSZ0058', dir: 0, min: 5 });
+  // What push.js takes: a station's arrivals, by City or InterCity.
+  assert.match(item.check.bus.path, /^advanced\/v2\/Bus\/EstimatedTimeOfArrival\/City\/Hsinchu\/PassThrough\/Station\/1234\?\$select=/);
+});
