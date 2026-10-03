@@ -1,7 +1,7 @@
 {
   "name": "Orbit Transit",
   "short_name": "Transit",
-  "description": "台灣大眾運輸：地圖、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。",
+  "description": "台灣大眾運輸：地圖與路線導航、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。",
   "lang": "zh-Hant-TW",
   "start_url": "./",
   "scope": "./",
@@ -9,9 +9,29 @@
   "background_color": "#0a0b0f",
   "theme_color": "#0a0b0f",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ]
 }

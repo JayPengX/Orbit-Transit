@@ -25,6 +25,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: The shared kit (Shared-Proxy/kit), for the tests
+        uses: actions/checkout@v4
+        with:
+          repository: JayPengX/Shared-Proxy
+          path: .shared
+          sparse-checkout: kit
+      - run: ln -sfn .shared/kit .kit
       - name: Run tests
         run: npm test
       - name: Cache-bust every script, module and stylesheet

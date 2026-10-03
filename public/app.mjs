@@ -13,7 +13,7 @@
 //   我的    places, trips, pinned transit, preferences (ways of moving,
 //           TPASS), tickets, the metro maps
 
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell } from './lib/quadra.mjs';
+import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition, permissionState } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';

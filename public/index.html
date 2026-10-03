@@ -5,23 +5,56 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#0a0b0f" />
 <meta name="build-version" content="dev" />
+<!-- brand: Shared-Proxy/brand/generate.mjs writes this block -->
 <title>Orbit Transit</title>
 <meta name="description" content="台灣大眾運輸：地圖與路線導航、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。" />
-<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<meta name="application-name" content="Orbit Transit" />
 <meta name="apple-mobile-web-app-title" content="Transit" />
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="./icons/favicon-32.png" sizes="32x32" type="image/png" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Orbit" />
+<meta property="og:title" content="Orbit Transit" />
+<meta property="og:description" content="台灣大眾運輸：地圖與路線導航、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。" />
+<meta property="og:url" content="https://jaypengx.github.io/Orbit-Transit/" />
+<meta property="og:locale" content="zh_TW" />
+<meta property="og:locale:alternate" content="en_US" />
+<meta property="og:image" content="https://jaypengx.github.io/Orbit-Transit/share/og.jpg" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Orbit Transit：全台公車、火車、捷運與 YouBike，一次規劃" />
+<meta property="og:image" content="https://jaypengx.github.io/Orbit-Transit/share/square.jpg" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="1200" />
+<meta property="og:image:alt" content="Orbit Transit：全台公車、火車、捷運與 YouBike，一次規劃" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Orbit Transit" />
+<meta name="twitter:description" content="台灣大眾運輸：地圖與路線導航、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。" />
+<meta name="twitter:image" content="https://jaypengx.github.io/Orbit-Transit/share/x.jpg" />
+<meta name="twitter:image:alt" content="Orbit Transit：全台公車、火車、捷運與 YouBike，一次規劃" />
+<!-- /brand -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-<meta name="application-name" content="Orbit Transit" />
 <link rel="manifest" href="./manifest.webmanifest" />
 <link rel="preconnect" href="https://orbit-workers-proxy.pengzjay.workers.dev" crossorigin />
-<link rel="stylesheet" href="./quadra.css" />
+<!-- kit:head: where the app's stylesheets end, before any module. The kit
+     comes from one place for every app (Shared-Proxy's GitHub Pages, same
+     site as the apps), at the version this device last saw (quadra.kit, set
+     by the kit's watchUpdates), so a change to the kit is one push to
+     Shared-Proxy and every app has it the next time it's opened. -->
+<script>!function(b,v,q,m,f,i){try{v=localStorage.getItem('quadra.kit')||''}catch(e){v=''}q=v?'?v='+encodeURIComponent(v):'';m={'#kit/':b};f=['quadra.mjs','logos.mjs','names.mjs','photos.mjs','catalog.mjs'];for(i=0;i<f.length;i++)m['#kit/'+f[i]]=b+f[i]+q;window.QUADRA_KIT={base:b,version:v,url:function(x){return b+x+q}};document.write('<script type="import'+'map">'+JSON.stringify({imports:m})+'<\/script><link rel="stylesheet" href="'+b+'quadra.css'+q+'"><link rel="modulepreload" href="'+b+'quadra.mjs'+q+'">')}('../Shared-Proxy/kit/')</script>
+<!-- /kit:head -->
 <link rel="stylesheet" href="./transit.css" />
 </head>
 <body class="tab-map">
 <div id="loading" data-title="Orbit Transit" data-cache="orbit-transit-"></div>
-<script src="./boot.js"></script>
+<!-- kit:boot: right after <div id="loading">. -->
+<script>document.write('<script src="'+QUADRA_KIT.url('boot.js')+'"><\/script>')</script>
+<!-- /kit:boot -->
 <header class="q-appbar">
   <div class="q-appbar-inner">
     <div class="q-brand">
