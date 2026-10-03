@@ -2181,3 +2181,217 @@ main {
 #st-days {
   flex-wrap: wrap;
 }
+
+/* ---- Round 3 ---- */
+/* The tabs that scroll: room under their last card for the tab bar. */
+.ot-scroll {
+  padding-bottom: calc(var(--q-nav, 0px) + 24px);
+}
+/* The header on a phone: solid, and kept at the top (iOS lays a blur over
+   the top edge of what scrolls under a see-through bar). Sticky, not fixed,
+   and no filter: the tab bar inside it stays fixed to the screen. */
+.q-touch body:not(.tab-map) .q-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--q-page);
+}
+.tab-map .q-appbar {
+  background: linear-gradient(to bottom, var(--q-page) 0, var(--q-page) var(--q-top), rgba(10, 11, 15, 0.92) calc(var(--q-top) + 1px), rgba(10, 11, 15, 0.6) 75%, rgba(10, 11, 15, 0));
+}
+
+/* A plan's actions: navigate (only when it leaves soon) and pin it. */
+.ot-plan-acts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.ot-plan-acts .q-btn {
+  min-width: 0;
+  justify-content: center;
+  white-space: nowrap;
+}
+.ot-plan-acts .q-btn.on {
+  color: var(--ot-bike);
+}
+.ot-nav-later {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px dashed var(--ot-line);
+  border-radius: 14px;
+  color: var(--q-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+.ot-pinned {
+  align-self: center;
+  color: var(--ot-bike);
+}
+.ot-pinned .ot-i {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+.ot-plan,
+.ot-plan * {
+  box-sizing: border-box;
+}
+.ot-plan {
+  overflow: hidden;
+}
+.ot-steps {
+  max-width: 100%;
+}
+.ot-step-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 交通: a trip's plan with its ☆. */
+.ot-go-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid var(--ot-line);
+}
+.ot-go-plan-row .ot-go-plan {
+  border-top: 0;
+  min-width: 0;
+}
+.ot-go-plan-row .q-icon-btn.on {
+  color: var(--ot-bike);
+}
+.ot-go-plan-row .q-icon-btn.on .ot-i {
+  fill: currentColor;
+}
+.ot-go-legs small.warn {
+  color: var(--ot-warn);
+}
+.ot-go-tip {
+  margin: 6px 0 2px;
+  font-size: 12.5px;
+}
+
+/* 導航: the bus or train to catch, always on top. */
+.ot-nav-catch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--c) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+}
+.ot-nav-catch > .ot-i {
+  color: var(--c);
+  flex: none;
+}
+.ot-nav-catch span {
+  display: grid;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.ot-nav-catch b {
+  font-size: 15px;
+}
+.ot-nav-catch small {
+  overflow: hidden;
+  color: var(--q-text-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-nav-catch em {
+  flex: none;
+  max-width: 44%;
+  color: var(--q-accent);
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* Fields: one look for text, time, date and choices. */
+.ot-field > span {
+  color: var(--q-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.ot-field input,
+.ot-search-in input,
+.ot-name-in,
+.ot-mine select,
+.ot-sheet select {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: #171a22;
+  color: var(--q-text);
+  font: 500 16px var(--q-font);
+  line-height: 48px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ot-field input::placeholder,
+.ot-search-in input::placeholder {
+  color: #6b7280;
+}
+.ot-field input:focus,
+.ot-search-in input:focus,
+.ot-name-in:focus,
+.ot-mine select:focus,
+.ot-sheet select:focus {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--q-accent) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--q-accent) 18%, transparent);
+}
+.ot-field input[type='time'],
+.ot-field input[type='date'] {
+  display: block;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  color-scheme: dark;
+}
+.ot-field input::-webkit-date-and-time-value {
+  text-align: left;
+}
+.ot-mine select,
+.ot-sheet select {
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa3b2' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+.ot-row select {
+  width: auto;
+  flex: none;
+}
+.ot-search-in {
+  position: relative;
+}
+.ot-search-in input {
+  padding-left: 42px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%239aa3b2' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+}
+.ot-days .q-chip {
+  flex-direction: column;
+  gap: 0;
+  min-width: 64px;
+  line-height: 1.2;
+}
+.ot-days .q-chip small {
+  opacity: 0.7;
+  font-size: 11px;
+}

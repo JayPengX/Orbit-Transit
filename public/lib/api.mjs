@@ -80,7 +80,8 @@ export const stale = new Map();
 // here is good (ms); `persist`: kept on the device across launches.
 // A failed ask falls back to the last copy of any age (`{ stale: true }` on
 // the returned array/object's meta via lastMeta).
-export async function tdx(path, { fresh = 30_000, persist = false } = {}) {
+// `store: false`: never written to the device (a big answer kept in a smaller form by its caller).
+export async function tdx(path, { fresh = 30_000, persist = false, store = true } = {}) {
   const now = Date.now();
   const mem = memory.get(path);
   if (mem && now - mem.at < fresh) return mem.data;
@@ -98,11 +99,11 @@ export async function tdx(path, { fresh = 30_000, persist = false } = {}) {
       memory.set(path, { at: Date.now(), data });
       stale.delete(path);
       // Live answers are kept too (a minute's copy beats an error after a relaunch).
-      keep(path, data, Date.now(), persist ? Infinity : 200_000);
+      if (store) keep(path, data, Date.now(), persist ? Infinity : 200_000);
       return data;
     } catch (err) {
       // The last copy, here or kept on the device, however old: better than nothing.
-      const last = memory.get(path) || (persist ? null : await kept(path));
+      const last = memory.get(path) || (persist || !store ? null : await kept(path));
       if (last) {
         stale.set(path, last.at);
         return last.data;
@@ -115,6 +116,10 @@ export async function tdx(path, { fresh = 30_000, persist = false } = {}) {
   inflight.set(path, p);
   return p;
 }
+// Something of the app's own kept on the device (a compact timetable): → { at, data } or null.
+export const keptLocal = key => kept(`local/${key}`);
+export const keepLocal = (key, data) => keep(`local/${key}`, data, Date.now());
+
 // What's already here for a path (no network), or null.
 export const peek = path => memory.get(path)?.data ?? null;
 

@@ -17,6 +17,7 @@ import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell } fr
 import { useSession, config, townships, getPosition, permissionState } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
+import { warmRail } from './lib/raildata.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
@@ -155,6 +156,9 @@ async function boot() {
   select(OLD[want] || want);
   if (want === 'metro') ctx.openMetro?.();
   ctx.locate();
+  // The day's trains loaded while nothing else is (a timetable search, a plan, 交通's pins use them).
+  const P = ctx.data.prefs?.modes;
+  if (!P || P.tra || P.hsr) setTimeout(() => (window.requestIdleCallback || (f => f()))(() => warmRail()), 2500);
 }
 q.on('active', live => live && ctx.data.t && q.write({ payload: encodeData(ctx.data) }).catch(() => {}));
 if (!gated) boot();

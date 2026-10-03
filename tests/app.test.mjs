@@ -567,3 +567,58 @@ test('a saved trip’s way now: out from home, back from its far end, the time t
   assert.equal(back.at, T('17:00'));
   assert.equal(tripNow(t, home, T('09:00')).at, twAt('2026-10-06', '07:30'), 'past today: tomorrow’s');
 });
+
+test('by a departure time: a plan that has you leave before it sinks out; riding most of the way sinks', () => {
+  const o = { lat: 24.821, lon: 121.018 };
+  const d = { lat: 24.733, lon: 121.088 };
+  const leg = (mode, short, dep, arr, x = {}) => ({ mode, short, from: { name: short, ...o }, to: { name: short, ...d }, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0, ...x });
+  const early = finish({ legs: [leg('bike', 'YouBike', '05:40', '06:00'), leg('tra', '區間 1234', '06:02', '06:25')] });
+  const after = finish({ legs: [leg('bus', '快捷8號', '06:05', '06:40')] });
+  const ranked = rank([early, after], { now: T('06:00'), o, d });
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0].legs[0].short, '快捷8號');
+  // By an arrival time: what arrives late goes, what arrives before stays.
+  const arr = rank([early, after], { now: T('06:30'), by: 'arrive', deadline: T('06:30'), clock: T('05:00'), o, d });
+  assert.deepEqual(arr.map(p => p.legs[0].short), ['YouBike']);
+  // 55 minutes on a bike against 50 by bus with a change: the bus first.
+  const ride = finish({ legs: [leg('bike', 'YouBike', '06:05', '07:00')] });
+  const mid = { name: '竹東', lat: 24.777, lon: 121.053 };
+  const bus = finish({ legs: [leg('bus', '5608', '06:05', '06:30', { to: mid }), leg('bus', '5700', '06:32', '06:55', { from: mid })] });
+  assert.equal(rank([ride, bus], { now: T('06:00'), o, d })[0].legs[0].short, '5608');
+});
+
+test('a pinned recommendation: known by its lines (trains by their stations), shown first in 交通', async () => {
+  const { pickSig } = await import('../public/lib/plan.mjs');
+  const { tripPlans } = await import('../public/lib/tab-go.mjs');
+  const a = { mode: 'tra', short: '區間 1234', from: { name: '竹北車站' }, to: { name: '竹東' } };
+  const b = { mode: 'tra', short: '區間 1250', from: { name: '竹北' }, to: { name: '竹東站' } };
+  assert.equal(pickSig({ legs: [a] }), pickSig({ legs: [b] }), 'another day’s train, another planner’s names');
+  assert.equal(pickSig({ legs: [{ mode: 'bus', short: '快捷8號' }] }), pickSig({ legs: [{ mode: 'bus', name: '快捷8' }] }));
+  assert.equal(pickSig({ legs: [{ mode: 'bike' }] }), 'bike');
+  const now = T('07:00');
+  const P = (k, dep, top) => ({ legs: [{ mode: 'bus', short: k }], dep: T(dep), arr: T(dep) + 1, top });
+  const plans = [P('YouBike', '07:01', true), P('A', '07:02', true), P('B', '07:03', true), P('C', '07:04', true), P('5608', '07:30', false), P('5608', '07:10', false), P('5608', '07:50', false)];
+  const { first, rest } = tripPlans(plans, [pickSig(P('5608'))], now);
+  assert.deepEqual(first.map(p => `${p.legs[0].short} ${(p.dep - now) / 60_000}`), ['5608 10', '5608 30', 'YouBike 1', 'A 2']);
+  assert.equal(rest.length, 3);
+  assert.equal(cleanSaved({ to: { name: 'x', lat: 24.8, lon: 121 }, picks: ['a', 'a', 5, 'b'] }).picks.join(), 'a,b');
+});
+
+test('the day’s trains kept compact: the same trips back', async () => {
+  const { packTrips, unpackTrips } = await import('../public/lib/raildata.mjs');
+  const trips = [{ id: 't', sys: 'tra', no: '1', code: '6', stops: [{ st: 'tra:1210', arr: T('23:50'), dep: T('23:52') }, { st: 'tra:1180', arr: twAt('2026-10-06', '00:05'), dep: twAt('2026-10-06', '00:05') }] }];
+  const back = unpackTrips(JSON.parse(JSON.stringify(packTrips('2026-10-05', trips))));
+  assert.deepEqual(back, trips);
+});
+
+test('navigation only for a plan leaving soon; its ride said the way the sign says it', async () => {
+  const { canNav, rideName } = await import('../public/lib/nav.mjs');
+  const now = T('07:00');
+  assert.ok(canNav({ dep: T('07:15'), arr: T('08:00') }, now));
+  assert.ok(!canNav({ dep: T('07:40'), arr: T('08:00') }, now));
+  assert.ok(canNav({ dep: T('06:50'), arr: T('08:00') }, now), 'already on the way');
+  assert.equal(rideName({ mode: 'tra', short: '區間 1234', train: { no: '1234' } }), '台鐵 區間 1234 次');
+  assert.equal(rideName({ mode: 'tra', short: '區間車' }), '台鐵 區間車');
+  assert.equal(rideName({ mode: 'hsr', short: '613 次' }), '高鐵 613 次');
+  assert.equal(rideName({ mode: 'bus', short: '5608' }), '公車 5608');
+});
