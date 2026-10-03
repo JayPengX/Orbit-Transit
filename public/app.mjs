@@ -1,5 +1,5 @@
-// Orbit Transit: Taiwan's public transport in one app. A Quadra app (a
-// related add-on, like Orbit Weather): the Quadra Pass signs in and keeps the
+// Orbit Transit: Taiwan's public transport in one app. An Orbit app (the
+// everyday tools, like Orbit Weather): the Quadra Pass signs in and keeps the
 // bus groups and places; the kit draws the loading screen, the tab bar and
 // the account, and keeps the app current.
 //

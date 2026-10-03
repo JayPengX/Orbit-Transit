@@ -16,8 +16,8 @@ Live: https://jaypengx.github.io/Orbit-Transit/
 ## How it's built
 
 A static site (`public/`), no build step, on the shared Quadra kit
-(`lib/quadra.mjs`, `quadra.css`, `boot.js`: copied from
-`Shared-Proxy/kit/` by `node kit/sync.mjs`, never edited here).
+(loaded from Shared-Proxy's Pages: `#kit/quadra.mjs`, the page's
+`kit:head` and `kit:boot`, `Shared-Proxy/kit/loader.html`).
 
 | File | What |
 | --- | --- |
