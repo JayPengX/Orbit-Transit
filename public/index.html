@@ -46,7 +46,7 @@
      site as the apps), at the version this device last saw (quadra.kit, set
      by the kit's watchUpdates), so a change to the kit is one push to
      Shared-Proxy and every app has it the next time it's opened. -->
-<script>!function(b,v,q,m,f,i){try{v=localStorage.getItem('quadra.kit')||''}catch(e){v=''}q=v?'?v='+encodeURIComponent(v):'';m={'#kit/':b};f=['quadra.mjs','logos.mjs','names.mjs','photos.mjs','catalog.mjs'];for(i=0;i<f.length;i++)m['#kit/'+f[i]]=b+f[i]+q;window.QUADRA_KIT={base:b,version:v,url:function(x){return b+x+q}};document.write('<script type="import'+'map">'+JSON.stringify({imports:m})+'<\/script><link rel="stylesheet" href="'+b+'quadra.css'+q+'"><link rel="modulepreload" href="'+b+'quadra.mjs'+q+'">')}('../Shared-Proxy/kit/')</script>
+<script>!function(b,v,q,m,f,i){try{v=localStorage.getItem('quadra.kit')||''}catch(e){v=''}q=v?'?v='+encodeURIComponent(v):'';m={'#kit/':b};f=['quadra.mjs','logos.mjs','names.mjs','photos.mjs','catalog.mjs'];for(i=0;i<f.length;i++)m['#kit/'+f[i]]=b+f[i]+q;window.QUADRA_KIT={base:b,version:v,url:function(x){return b+x+q}};document.write('<script type="import'+'map">'+JSON.stringify({imports:m})+'<\/script><link rel="stylesheet" href="'+b+'quadra.css'+q+'"><link rel="modulepreload" href="'+b+'quadra.mjs'+q+'"><link rel="modulepreload" href="'+b+'brand.mjs'+q+'">')}('../Shared-Proxy/kit/')</script>
 <!-- /kit:head -->
 <link rel="stylesheet" href="./transit.css" />
 </head>
