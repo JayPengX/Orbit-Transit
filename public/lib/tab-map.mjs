@@ -8,7 +8,7 @@
 // starts navigation.
 
 import { createMap } from './map.mjs';
-import { searchPlaces, placeDetails, errorText, watchPosition, PROXY } from './api.mjs';
+import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, PROXY } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, stationEta, etaText, BEARING } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
@@ -97,6 +97,10 @@ export async function init(c) {
     showPlan(p, from, to);
   };
   ctx.togglePick = togglePick;
+  (ctx.onRefresh ||= []).push(() => {
+    drawChips();
+    if (card) renderCard();
+  });
   idle();
   if (pendingTrip) show();
 }
@@ -302,10 +306,10 @@ function refreshCard() {
 
 const placeOf = c => ({ name: c.item.name || '', lat: c.item.lat ?? c.lat, lon: c.item.lon ?? c.lon });
 function actions(c, { pin = true } = {}) {
-  const pinned = ctx.data.places.some(p => meters(p.lat, p.lon, c.lat, c.lon) < 30);
+  const pinned = ctx.data.places.find(p => meters(p.lat, p.lon, c.lat, c.lon) < 30);
   return `<div class="ot-card-acts">
     <button class="q-btn primary" type="button" data-card="go">${icon('route')} 路線</button>
-    ${pin ? `<button class="q-btn" type="button" data-card="pin" ${pinned ? 'disabled' : ''}>${icon('star')} ${pinned ? '已釘選' : '釘選'}</button>` : ''}
+    ${pin ? (pinned ? `<button class="q-btn on" type="button" data-card="edit-pin" data-id="${e(pinned.id)}">${icon('star')} ${e(pinned.name)} · 編輯</button>` : `<button class="q-btn" type="button" data-card="pin">${icon('star')} 釘選</button>`) : ''}
   </div>`;
 }
 function head(title, sub, badge = '') {
@@ -412,6 +416,7 @@ async function cardClick(ev) {
   // From where you are; the start can be changed on the plan.
   if (act === 'go') return plan(null, placeOf(card));
   if (act === 'pin') return pinSheet(placeOf(card));
+  if (act === 'edit-pin') return ctx.editPlace?.(ev.target.closest('[data-id]').dataset.id);
   if (act === 'back') return card.back ? openCard(card.back) : closeCard();
   if (act === 'swap') return card.from?.lat != null && plan(card.to, card.fromHere ? null : card.from, { swapHere: card.fromHere });
   if (act === 'edit-from' || act === 'edit-to') {
@@ -911,8 +916,31 @@ function selectPlan(i) {
   card.sel = card.sel === i ? -1 : i;
   renderCard();
   drawPlan(card.plans[card.sel >= 0 ? card.sel : 0], { fit: card.sel >= 0 });
-  // The buses' next times, for the plan opened.
-  if (card.sel >= 0) liveLegs(card.plans[card.sel]);
+  // The buses' next times, and the roads its walks and rides take, for the plan opened.
+  if (card.sel >= 0) {
+    liveLegs(card.plans[card.sel]);
+    roadLegs(card.plans[card.sel]);
+  }
+}
+// The streets a plan's walks and YouBike rides go along (planners give
+// walks a line; our own legs are straight until this), then drawn again.
+async function roadLegs(p, { lit = -1 } = {}) {
+  const todo = p.legs.filter(l => (l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
+  if (!todo.length) return;
+  await Promise.all(
+    todo.map(async l => {
+      const r = await roadPath(l.mode, l.from, l.to);
+      if (!r) return;
+      l.road = true;
+      l.poly = r.poly;
+      l.fmt = '';
+      if (l.mode === 'bike') l.dist = r.dist;
+    })
+  );
+  if (card?.plans?.includes(p) && (card.plans[card.sel] === p || navigating())) {
+    drawPlan(p, { fit: false, lit });
+    if (!navigating()) renderCard();
+  }
 }
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
@@ -968,6 +996,7 @@ function navigate(p) {
   document.body.classList.add('ot-navigating');
   following = true;
   stopWatch();
+  roadLegs(p);
   startNav(p, {
     box: $('nav'),
     here: ctx.here,
@@ -998,22 +1027,75 @@ function navigate(p) {
 export function saveTripSheet(c, { edit = null } = {}) {
   const from = edit ? edit.from : c.fromHere ? null : { name: c.from.name, lat: c.from.lat, lon: c.from.lon };
   const to = edit ? edit.to : { name: c.to.name, lat: c.to.lat, lon: c.to.lon };
-  const x = edit || { name: to.name, time: '', by: 'depart', days: [], back: '' };
+  const x = edit || { name: to.name, time: '', by: 'depart', days: [], back: '', alt: [] };
   if (!edit && ctx.data.saved.length >= MAX_SAVED) return ctx.status(`最多 ${MAX_SAVED} 個行程`);
+  const days = new Set(x.days);
+  // Days whose times differ: one row each (平日 07:30, but 週三 09:10).
+  const alt = (x.alt || []).map(a => ({ days: new Set(a.days), time: a.time, back: a.back }));
+  const W = '日一二三四五六';
   const d = sheet(`${sheetHead(edit ? '編輯行程' : '釘選行程', `${e(from ? from.name : '目前位置')} → ${e(to.name)}`)}
     <label class="ot-field"><span>名稱</span><input id="st-name" maxlength="24" value="${e(x.name)}" placeholder="例如：上學、回家"></label>
-    <div class="ot-field"><span>時間（可不填）</span><div class="ot-row"><select id="st-by"><option value="depart" ${x.by === 'depart' ? 'selected' : ''}>出發</option><option value="arrive" ${x.by === 'arrive' ? 'selected' : ''}>抵達</option></select><input id="st-time" type="time" value="${e(x.time)}"></div></div>
-    <div class="ot-field"><span>常用：每週這幾天（可不選）</span><div class="q-chips" id="st-days">${'日一二三四五六'.split('').map((n, i) => `<button class="q-chip" type="button" data-day="${i}" aria-pressed="${x.days.includes(i)}">${n}</button>`).join('')}</div></div>
-    <label class="ot-field"><span>回程時間（常用行程，可不填：反方向也會自動顯示）</span><input id="st-back" type="time" value="${e(x.back)}"></label>
+    <div class="ot-field"><span>每週這幾天（可不選）</span><div class="q-chips ot-weekdays" id="st-days"></div>
+      <div class="q-chips ot-quick"><button class="q-chip" type="button" data-quick="12345">平日</button><button class="q-chip" type="button" data-quick="0123456">每天</button><button class="q-chip" type="button" data-quick="06">週末</button><button class="q-chip" type="button" data-quick="">不固定</button></div></div>
+    <div class="ot-field"><span>時間（可不填）</span><div class="ot-times"><select id="st-by"><option value="depart" ${x.by === 'depart' ? 'selected' : ''}>出發</option><option value="arrive" ${x.by === 'arrive' ? 'selected' : ''}>抵達</option></select><input id="st-time" type="time" value="${e(x.time)}"><span class="ot-times-l">回程</span><input id="st-back" type="time" value="${e(x.back)}" aria-label="回程時間"></div></div>
+    <div id="st-alt"></div>
     <div class="ot-row ot-actions">${edit ? '<button class="q-btn" type="button" data-del="1">刪除</button>' : ''}<button class="q-btn primary" type="button" data-save="1">儲存</button></div>`);
-  const days = new Set(x.days);
+  const drawDays = () =>
+    (d.querySelector('#st-days').innerHTML = W.split('')
+      .map((n, i) => `<button class="q-chip" type="button" data-day="${i}" aria-pressed="${days.has(i)}">${n}</button>`)
+      .join(''));
+  const drawAlt = () => {
+    const box = d.querySelector('#st-alt');
+    if (!days.size) return (box.innerHTML = '');
+    box.innerHTML = `${alt
+      .map(
+        (a, k) => `<div class="ot-alt"><div class="q-chips ot-weekdays small">${W.split('')
+          .map((n, i) => (days.has(i) ? `<button class="q-chip" type="button" data-alt-day="${k}:${i}" aria-pressed="${a.days.has(i)}">${n}</button>` : ''))
+          .join('')}</div><div class="ot-times"><span class="ot-times-l">去</span><input type="time" data-alt-time="${k}" value="${e(a.time)}" aria-label="這幾天的時間"><span class="ot-times-l">回</span><input type="time" data-alt-back="${k}" value="${e(a.back)}" aria-label="這幾天的回程"><button class="q-icon-btn" type="button" data-alt-del="${k}" aria-label="移除">${icon('trash')}</button></div></div>`
+      )
+      .join('')}${alt.length < 4 ? `<button class="ot-go-link" type="button" data-alt-add="1">${icon('plus')} 某幾天時間不一樣</button>` : ''}${alt.length ? '<p class="ot-note">沒填的時間就用上面的。</p>' : ''}`;
+  };
+  drawDays();
+  drawAlt();
+  d.addEventListener('input', ev => {
+    const t = ev.target;
+    if (t.dataset.altTime) alt[Number(t.dataset.altTime)].time = t.value;
+    if (t.dataset.altBack) alt[Number(t.dataset.altBack)].back = t.value;
+  });
   d.addEventListener('click', ev => {
     const day = ev.target.closest('[data-day]');
-    if (day) {
-      const k = Number(day.dataset.day);
-      days.has(k) ? days.delete(k) : days.add(k);
-      day.setAttribute('aria-pressed', String(days.has(k)));
-      return;
+    const quick = ev.target.closest('[data-quick]');
+    if (day || quick) {
+      if (quick) {
+        days.clear();
+        for (const ch of quick.dataset.quick) days.add(Number(ch));
+      } else {
+        const k = Number(day.dataset.day);
+        days.has(k) ? days.delete(k) : days.add(k);
+      }
+      for (const a of alt) for (const k of [...a.days]) if (!days.has(k)) a.days.delete(k);
+      drawDays();
+      return drawAlt();
+    }
+    const ad = ev.target.closest('[data-alt-day]');
+    if (ad) {
+      const [k, i] = ad.dataset.altDay.split(':').map(Number);
+      if (alt[k].days.has(i)) alt[k].days.delete(i);
+      else {
+        // A day is in one row only.
+        alt.forEach(a => a.days.delete(i));
+        alt[k].days.add(i);
+      }
+      return drawAlt();
+    }
+    if (ev.target.closest('[data-alt-add]')) {
+      alt.push({ days: new Set(), time: '', back: '' });
+      return drawAlt();
+    }
+    const del = ev.target.closest('[data-alt-del]');
+    if (del) {
+      alt.splice(Number(del.dataset.altDel), 1);
+      return drawAlt();
     }
     if (ev.target.closest('[data-del]')) {
       ctx.data.saved = ctx.data.saved.filter(y => y.id !== edit.id);
@@ -1023,7 +1105,18 @@ export function saveTripSheet(c, { edit = null } = {}) {
       return;
     }
     if (!ev.target.closest('[data-save]')) return;
-    const clean = cleanSaved({ id: edit?.id, picks: edit?.picks, name: d.querySelector('#st-name').value.trim() || to.name, from, to, time: d.querySelector('#st-time').value, by: d.querySelector('#st-by').value, days: [...days], back: d.querySelector('#st-back').value });
+    const clean = cleanSaved({
+      id: edit?.id,
+      picks: edit?.picks,
+      name: d.querySelector('#st-name').value.trim() || to.name,
+      from,
+      to,
+      time: d.querySelector('#st-time').value,
+      by: d.querySelector('#st-by').value,
+      days: [...days],
+      back: d.querySelector('#st-back').value,
+      alt: alt.map(a => ({ days: [...a.days], time: a.time, back: a.back }))
+    });
     if (!clean) return;
     ctx.data.saved = edit ? ctx.data.saved.map(y => (y.id === edit.id ? clean : y)) : [...ctx.data.saved, clean];
     ctx.save();

@@ -7,15 +7,16 @@
 //      bus (竹中 → 5608 → 竹東高中), when one comes soon;
 //   3. the buses re-timed by what TDX says they're doing now;
 //   4. YouBike near both ends and the stations, its ideas added;
-//   5. ranked by what's practical, what TPASS covers counted free.
+//   5. ranked by what's practical, what TPASS covers counted free; a trip
+//      inside your TPASS's area only by what the pass takes.
 // Only the ways of moving the person allows (我的 → 交通偏好) are used.
 
 import { routePlans, townships } from './api.mjs';
-import { bikesNear } from './bike.mjs';
+import { bikesNear, cityBikes } from './bike.mjs';
 import { railNetwork } from './raildata.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed } from './plan.mjs';
 import { adjustPlan, busLink } from './live.mjs';
-import { coverage, fareOf, tpassOf } from './tpass.mjs';
+import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
 import { meters, tw } from './util.mjs';
@@ -60,12 +61,17 @@ export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}
   const now = Date.now();
   const t0 = at || now;
   const useRail = modes.tra || modes.hsr;
+  const cityOf = await cityFinder();
+  const pass = tpassOf(prefs.tpass);
+  const passTrip = inPass(from, to, pass, cityOf);
+  // Inside your TPASS's area, our router looks only at the trains the pass takes.
+  const useTrain = x => modes[x.sys] !== false && (!passTrip || (x.sys === 'tra' && !PREMIUM.has(String(x.code))));
   const [res, trains] = await Promise.all([
     routePlans(from, to, { at, by, modes: modeList(prefs) }).catch(err => ({ plans: [], sources: {}, err })),
     by === 'arrive' || !useRail
       ? []
       : railNetwork(tw(t0).date, { next: tw(t0).min >= 21 * 60 })
-          .then(net => railPlans(net, from, to, t0, { bike: modes.bike, use: x => modes[x.sys] !== false }))
+          .then(net => railPlans(net, from, to, t0, { bike: modes.bike, use: useTrain }))
           .catch(() => [])
   ]);
   if (res.err && !trains.length) return { plans: [], sources: res.sources || {}, error: res.err };
@@ -81,14 +87,17 @@ export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}
   // YouBike near both ends and the stations the plans use.
   let bikes = [];
   if (modes.bike) {
-    const pts = bikePoints(plans, from, to, { swap: prefs.bike30 });
-    const near = (await Promise.all(pts.map(p => bikesNear(p.lat, p.lon).catch(() => [])))).flat();
+    const pts = bikePoints(plans, from, to);
+    // 每 30 分鐘換車: every station of the cities at both ends (the map's
+    // list, kept), so a long ride can be cut wherever it passes one.
+    const cities = prefs.bike30 ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
+    const near = (await Promise.all([...pts.map(p => bikesNear(p.lat, p.lon).catch(() => [])), ...cities.map(c => cityBikes(c).catch(() => []))])).flat();
     bikes = [...new Map(near.map(s => [s.uid, s])).values()];
   }
-  const pass = tpassOf(prefs.tpass);
-  const cityOf = await cityFinder();
   const cost = p => fareOf(p, coverage(p, pass, cityOf)).cost;
-  const ranked = withBikes(plans, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null });
+  // Both ends inside your TPASS's area: only what the pass takes (no 高鐵, no 普悠瑪), unless there's nothing else.
+  const keep = passTrip ? p => passOk(p, pass, cityOf) : null;
+  const ranked = withBikes(plans, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null, keep });
   // Each plan's fare line (TPASS counted).
   for (const p of ranked) p.fareText = fareOf(p, coverage(p, pass, cityOf)).text;
   return { plans: ranked, sources: res.sources || {}, error: ranked.length ? null : res.err || null };

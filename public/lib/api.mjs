@@ -193,3 +193,24 @@ export const errorText = err =>
             : err?.code === 'TDX_FAILED' || err?.status >= 500
               ? '交通部 TDX 暫時沒有回應，稍後自動再試。'
               : '暫時無法取得資料，稍後自動再試。';
+
+// ---- The roads a walk or a YouBike ride takes ------------------------------------------------
+// OpenStreetMap's routers (FOSSGIS's OSRM, open to all, light use only:
+// a plan's legs when it's opened), kept for the session.
+const OSRM = { bike: 'https://routing.openstreetmap.de/routed-bike', walk: 'https://routing.openstreetmap.de/routed-foot' };
+const roads = new Map();
+// → { poly (Google-encoded), dist (m), dur (s) } or null.
+export function roadPath(mode, a, b) {
+  const base = OSRM[mode];
+  if (!base || a?.lat == null || b?.lat == null) return Promise.resolve(null);
+  const k = `${mode}:${a.lat.toFixed(5)},${a.lon.toFixed(5)}:${b.lat.toFixed(5)},${b.lon.toFixed(5)}`;
+  if (!roads.has(k))
+    roads.set(
+      k,
+      fetch(`${base}/route/v1/driving/${a.lon.toFixed(5)},${a.lat.toFixed(5)};${b.lon.toFixed(5)},${b.lat.toFixed(5)}?overview=full&geometries=polyline`, { signal: AbortSignal.timeout?.(8000) })
+        .then(r => (r.ok ? r.json() : null))
+        .then(j => (j?.routes?.[0] ? { poly: j.routes[0].geometry, dist: Math.round(j.routes[0].distance), dur: Math.round(j.routes[0].duration) } : null))
+        .catch(() => (roads.delete(k), null))
+    );
+  return roads.get(k);
+}

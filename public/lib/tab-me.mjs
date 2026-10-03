@@ -36,6 +36,7 @@ export function init(c) {
     const t = ctx.data.saved.find(x => x.id === id);
     if (t) ctx.saveTrip?.(null, { edit: t });
   };
+  ctx.editPlace = placeSheet;
   ctx.openMetro = () => {
     ctx.goTab('me');
     openMetro();
@@ -62,11 +63,11 @@ function render() {
   const platform = ios() ? 'ios' : 'android';
   $('me-main').innerHTML = `<div class="ot-wrap ot-mine">
     <h3 class="ot-go-h">地點</h3>
-    <section class="ot-go-card">${D.places.map((p, i) => `<div class="ot-order-row"><span>${PLACE_ICONS[p.icon] || '📍'} ${e(p.name)}<small>${e(p.address || '')}</small></span><button class="q-icon-btn" type="button" data-place-up="${i}" aria-label="上移" ${i ? '' : 'disabled'}>${icon('up')}</button><button class="q-icon-btn" type="button" data-place-del="${e(p.id)}" aria-label="刪除">${icon('trash')}</button></div>`).join('') || '<p class="ot-note">還沒有釘選地點：在地圖上點一個地方，按「釘選」。</p>'}
+    <section class="ot-go-card">${D.places.map((p, i) => `<div class="ot-order-row"><button class="ot-place-name" type="button" data-place-edit="${e(p.id)}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span><b>${e(p.name)}</b><small>${e(p.address || '點一下改名稱或圖示')}</small></span>${icon('edit')}</button><button class="q-icon-btn" type="button" data-place-up="${i}" aria-label="上移" ${i ? '' : 'disabled'}>${icon('up')}</button><button class="q-icon-btn" type="button" data-place-del="${e(p.id)}" aria-label="刪除">${icon('trash')}</button></div>`).join('') || '<p class="ot-note">還沒有釘選地點：在地圖上點一個地方，按「釘選」。</p>'}
       <button class="q-btn ot-wide" type="button" data-act="add-place">${icon('plus')} 在地圖上找地點釘選</button></section>
 
     <h3 class="ot-go-h">行程</h3>
-    <section class="ot-go-card">${D.saved.map(t => `<button class="ot-row-btn" type="button" data-trip="${e(t.id)}">${icon(t.days.length ? 'clock' : 'route')}<span><b>${e(t.name || t.to.name)}</b><small>${e(t.from ? t.from.name : '目前位置')} → ${e(t.to.name)}${t.time ? ` · ${t.by === 'arrive' ? '抵達' : '出發'} ${e(t.time)}` : ''}${t.days.length ? ` · ${e(daysText(t.days))}` : ''}${t.back ? ` · 回程 ${e(t.back)}` : ''}</small></span>${icon('edit')}</button>`).join('') || '<p class="ot-note">還沒有行程：在地圖上查路線時按 ☆，就能釘選（可以設定時間，或每週固定幾天）。</p>'}
+    <section class="ot-go-card">${D.saved.map(t => `<button class="ot-row-btn" type="button" data-trip="${e(t.id)}">${icon(t.days.length ? 'clock' : 'route')}<span><b>${e(t.name || t.to.name)}</b><small>${e(t.from ? t.from.name : '目前位置')} → ${e(t.to.name)}${t.time ? ` · ${t.by === 'arrive' ? '抵達' : '出發'} ${e(t.time)}` : ''}${t.days.length ? ` · ${e(daysText(t.days))}` : ''}${t.back ? ` · 回程 ${e(t.back)}` : ''}${(t.alt || []).map(a => ` · 週${e(a.days.map(x => DAYS[x]).join(''))} ${e([a.time, a.back && `回 ${a.back}`].filter(Boolean).join(' '))}`).join('')}</small></span>${icon('edit')}</button>`).join('') || '<p class="ot-note">還沒有行程：在地圖上查路線時按 ☆，就能釘選（可以設定時間，或每週固定幾天）。</p>'}
       <button class="q-btn ot-wide" type="button" data-act="add-trip">${icon('plus')} 新增行程</button></section>
 
     <h3 class="ot-go-h">釘選交通</h3>
@@ -97,6 +98,8 @@ function onClick(ev) {
   const D = ctx.data;
   const t = ev.target.closest('[data-trip]');
   if (t) return ctx.editTrip(t.dataset.trip);
+  const pe = ev.target.closest('[data-place-edit]');
+  if (pe) return placeSheet(pe.dataset.placeEdit);
   const up = ev.target.closest('[data-place-up]');
   if (up) {
     D.places = move(D.places, Number(up.dataset.placeUp), -1);
@@ -143,6 +146,29 @@ document.addEventListener('change', ev => {
   ctx.data.prefs.tpass = ev.target.value;
   done();
 });
+// A pinned place's name and icon.
+export function placeSheet(id) {
+  const p = ctx.data.places.find(x => x.id === id);
+  if (!p) return;
+  let ic = p.icon;
+  const d = sheet(`${sheetHead('編輯地點', e(p.address || ''))}
+    <label class="ot-field"><span>名稱</span><input id="pl-name" maxlength="30" value="${e(p.name)}" placeholder="例如：家、公司、學校"></label>
+    <div class="ot-field"><span>圖示</span><div class="q-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === ic}">${v}</button>`).join('')}</div></div>
+    <div class="ot-row ot-actions"><button class="q-btn" type="button" data-del="1">刪除</button><button class="q-btn primary" type="button" data-save="1">儲存</button></div>`);
+  setTimeout(() => d.querySelector('#pl-name').select(), 50);
+  d.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-icon]');
+    if (b) {
+      ic = b.dataset.icon;
+      return d.querySelectorAll('[data-icon]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.icon === ic)));
+    }
+    if (ev.target.closest('[data-del]')) ctx.data.places = ctx.data.places.filter(x => x.id !== id);
+    else if (ev.target.closest('[data-save]')) ctx.data.places = ctx.data.places.map(x => (x.id === id ? { ...x, name: d.querySelector('#pl-name').value.trim().slice(0, 30) || x.name, icon: ic } : x));
+    else return;
+    d.close();
+    done();
+  });
+}
 function done() {
   ctx.save();
   render();
