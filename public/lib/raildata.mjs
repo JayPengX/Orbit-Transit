@@ -2,7 +2,7 @@
 // the stations (a week on the device), a day's timetables (6 hours), the
 // live boards (under a minute), and the network the router searches.
 
-import { tdx, rows } from './api.mjs';
+import { tdx, rows, keptLocal, keepLocal } from './api.mjs';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, traFare, hsrFare } from './rail.mjs';
 import { loadSystem, mapsNear } from './metro.mjs';
 import { tw, zh, twAt, addDays } from './util.mjs';
@@ -38,22 +38,54 @@ export function metroSystems(area) {
   return Promise.all(want.map(system));
 }
 
-// A day's trains (台鐵 and 高鐵): trips for the router.
+// A day's trains (台鐵 and 高鐵): trips for the router. TDX's 台鐵 day is
+// 3.7 MB of JSON; what the router needs of it is kept on the device in a
+// compact form (about a tenth), so a second look the same day reads that
+// instead of parsing it all again.
 const days = new Map();
+const TRIPS_FRESH = 6 * 3_600_000;
+const tripsKey = date => `rail-trips-v1/${date}`;
+export function packTrips(date, trips) {
+  const base = twAt(date, '00:00');
+  return { date, base, trips: trips.map(({ stops, ...t }) => ({ ...t, s: stops.flatMap(x => [x.st, Math.round((x.arr - base) / 60_000), Math.round((x.dep - base) / 60_000)]) })) };
+}
+export function unpackTrips(p) {
+  return (p?.trips || []).map(({ s, ...t }) => {
+    const stops = [];
+    for (let i = 0; i + 2 < s.length; i += 3) stops.push({ st: s[i], arr: p.base + s[i + 1] * 60_000, dep: p.base + s[i + 2] * 60_000 });
+    return { ...t, stops };
+  });
+}
 export function dayTrips(date) {
   if (!days.has(date)) {
     days.set(
       date,
-      Promise.all([
-        tdx(`basic/v3/Rail/TRA/DailyTrainTimetable/TrainDate/${date}`, { fresh: 6 * 3_600_000, persist: true }).then(traTrips).catch(() => []),
-        tdx(`basic/v2/Rail/THSR/DailyTimetable/TrainDate/${date}`, { fresh: 6 * 3_600_000, persist: true }).then(hsrTrips).catch(() => [])
-      ]).then(([a, b]) => {
-        if (!a.length && !b.length) days.delete(date);
-        return [...a, ...b];
-      })
+      (async () => {
+        const old = await keptLocal(tripsKey(date));
+        if (old && Date.now() - old.at < TRIPS_FRESH) return unpackTrips(old.data);
+        const [a, b] = await Promise.all([
+          tdx(`basic/v3/Rail/TRA/DailyTrainTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(traTrips).catch(() => null),
+          tdx(`basic/v2/Rail/THSR/DailyTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(hsrTrips).catch(() => null)
+        ]);
+        // Nothing came: the last copy kept, however old, else nothing (asked again next time).
+        if (!a?.length && !b?.length) {
+          if (old) return unpackTrips(old.data);
+          days.delete(date);
+          return [];
+        }
+        const trips = [...(a || []), ...(b || [])];
+        if (a?.length && b?.length) keepLocal(tripsKey(date), packTrips(date, trips));
+        return trips;
+      })()
     );
   }
   return days.get(date);
+}
+
+// Ready before it's asked for: the day's network, built while the app is idle.
+export function warmRail() {
+  const t = tw();
+  return railNetwork(t.date, { next: t.min >= 21 * 60 }).catch(() => null);
 }
 
 // The network for a day: its trains (those past midnight included), every
@@ -67,7 +99,8 @@ export async function railNetwork(date, { next = false } = {}) {
       key,
       (async () => {
         const stations = await railStations();
-        const trips = [...(await dayTrips(date)), ...(next ? await dayTrips(addDays(date, 1)) : [])];
+        const [a, b] = await Promise.all([dayTrips(date), next ? dayTrips(addDays(date, 1)) : []]);
+        const trips = [...a, ...b];
         return network(stations, trips, links(stations));
       })().catch(err => {
         nets.delete(key);
