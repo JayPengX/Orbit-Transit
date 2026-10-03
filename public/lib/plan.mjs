@@ -241,6 +241,11 @@ function withStations(p, bikes) {
       if (l.mode !== 'bike' || l.rent) return l;
       const rent = rentNear(l.from, bikes, { max: 700 });
       const ret = returnNear(l.to, bikes, { max: 700 });
+      // Under 500 m, or one station at both ends: that's a walk, not a ride.
+      if ((l.dist || 0) < 500 || (rent && ret && rent.uid === ret.uid)) {
+        const w = walkLeg(l.from, l.to, l.dep);
+        return { ...w, arr: Math.max(w.arr, l.arr) };
+      }
       return { ...l, name: 'YouBike', rent, ret, from: rent ? { name: rent.name, lat: rent.lat, lon: rent.lon } : { ...l.from, name: l.from.name || '附近的 YouBike 站' }, to: ret ? { name: ret.name, lat: ret.lat, lon: ret.lon } : { ...l.to, name: l.to.name || '附近的 YouBike 站' } };
     });
   return finish({ ...p, legs });
