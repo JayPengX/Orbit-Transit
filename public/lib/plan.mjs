@@ -254,7 +254,10 @@ export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = nul
   let s = by === 'arrive' && deadline ? (deadline - p.dep) / 60_000 : (p.arr - now) / 60_000;
   for (let i = 1; i < rides.length; i++) s += rides[i - 1].mode === 'bus' && rides[i].mode === 'bus' ? 10 : 7;
   s += Math.max(0, (p.walk || 0) / 75 - 6) * 0.5;
-  s += p.legs.filter(l => l.mode === 'bike').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.15;
+  // Riding: a few minutes to a station is nothing; riding most of the way
+  // (50–70 minutes on a YouBike) is not how anyone goes every day.
+  const ride = p.legs.filter(l => l.mode === 'bike').reduce((a, l) => a + (l.dur || 0) / 60, 0);
+  s += Math.min(ride, 15) * 0.15 + Math.max(0, ride - 15) * 0.6;
   if (o && d) {
     const direct = Math.max(1000, meters(o.lat, o.lon, d.lat, d.lon));
     const path = p.legs.reduce((a, l) => a + (l.from?.lat != null && l.to?.lat != null ? meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) : 0), 0);
@@ -269,12 +272,23 @@ export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = nul
   return s;
 }
 
-// The same rides (the lines, where you get on and off), whatever the walks and bikes around them.
-const ridesSig = p =>
+// The same rides (the lines, where you get on and off), whatever the walks
+// and bikes around them: also what a pinned recommendation is known by.
+export const ridesSig = p =>
   p.legs
     .filter(l => l.mode !== 'walk' && l.mode !== 'bike')
     .map(l => `${l.mode}:${l.short || l.name || ''}:${l.from?.name || ''}`)
     .join('|') || `bike:${p.legs.some(l => l.ebike)}`;
+
+// A pinned recommendation's way, whatever the day's train numbers and each
+// planner's names for things (快捷8號 / 快捷8, 竹北車站 / 竹北): the buses
+// and metro by their line, the trains by where you get on and off.
+const norm = x => String(x || '').replace(/\s+/g, '').replace(/[號线線]/g, '').replace(/[（(].*$/, '').replace(/^高鐵/, '').replace(/(火車站|車站|站)$/, '').replace(/台/g, '臺').toUpperCase();
+export const pickSig = p =>
+  p.legs
+    .filter(l => l.mode !== 'walk' && l.mode !== 'bike')
+    .map(l => (l.mode === 'tra' || l.mode === 'hsr' ? `${l.mode}:${norm(l.from?.name)}>${norm(l.to?.name)}` : `${l.mode}:${norm(l.short || l.name)}`))
+    .join('|') || 'bike';
 
 const mainLine = p => {
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
@@ -285,8 +299,13 @@ const mainLine = p => {
 // Everything, ranked by what's practical (score). The first few that ride
 // different lines are the recommendations (`top`); the rest stay, later.
 // Each gets its labels. `cost(p)` adds what a plan costs you in money.
-export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4 } = {}) {
-  const ok = plans.filter(p => p && p.legs?.length && p.arr != null && p.arr > now - 60_000);
+export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now() } = {}) {
+  // (By an arrival time, `now` is that time: what's gone is what left before the clock's now.)
+  const all = plans.filter(p => p && p.legs?.length && p.arr != null && (by === 'arrive' && deadline ? p.dep > clock - 2 * 60_000 : p.arr > now - 60_000));
+  // Leaving before the time asked (a ride to the train worked out backwards
+  // from it), or arriving after it, is no plan, unless it's all there is.
+  const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 : p.dep >= now - 2 * 60_000));
+  const ok = fits.length ? fits : all;
   const sig = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${Math.round((l.dep || 0) / 60_000)}`).join('|');
   const seen = new Set();
   const uniq = ok.filter(p => !seen.has(sig(p)) && seen.add(sig(p)));

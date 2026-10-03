@@ -78,7 +78,9 @@ export function cleanSaved(x) {
     time: hhmm(x.time),
     by: x.by === 'arrive' ? 'arrive' : 'depart',
     days: [...new Set((Array.isArray(x.days) ? x.days : []).map(Number).filter(d => d >= 0 && d <= 6))].sort(),
-    back: hhmm(x.back)
+    back: hhmm(x.back),
+    // Recommendations pinned on it (their rides: ridesSig in plan.mjs), shown first.
+    picks: [...new Set((Array.isArray(x.picks) ? x.picks : []).filter(k => typeof k === 'string' && k.length <= 300))].slice(0, 6)
   };
 }
 // A pinned train: a connection (from → to, every train), or one train by its number.

@@ -8,16 +8,18 @@
 // starts navigation.
 
 import { createMap } from './map.mjs';
-import { searchPlaces, placeDetails, errorText, watchPosition, tdx, rows, PROXY } from './api.mjs';
+import { searchPlaces, placeDetails, errorText, watchPosition, PROXY } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, stationEta, etaText, BEARING } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
-import { startNav, stopNav, navigating } from './nav.mjs';
+import { etaNear, liveTimes } from './live.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD } from './nav.mjs';
+import { pickSig } from './plan.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays } from './util.mjs';
 import { openRoute } from './bus-ui.mjs';
 
 const $ = id => document.getElementById(id);
@@ -88,11 +90,13 @@ export async function init(c) {
     return plan(from, to, opts);
   };
   // 交通's one tap: that plan, navigated at once.
+  // (A plan leaving later only opens: navigation starts 20 minutes before it.)
   ctx.navPlan = (p, from, to) => {
     ctx.goTab('map');
     if (!map) return (pendingTrip = { nav: p, from, to });
     showPlan(p, from, to);
   };
+  ctx.togglePick = togglePick;
   idle();
   if (pendingTrip) show();
 }
@@ -100,9 +104,14 @@ let pendingTrip = null;
 function showPlan(p, from, to) {
   card = { kind: 'plans', from: { name: from?.name || '目前位置', lat: from?.lat, lon: from?.lon }, fromHere: !from || from.name === '目前位置', to, lat: to.lat, lon: to.lon, plans: [{ ...p, top: true }], sel: 0, more: false, sources: {} };
   document.body.classList.add('ot-planning');
+  if (canNav(p)) {
+    renderCard();
+    drawPlan(p, { fit: false });
+    return navigate(card.plans[0]);
+  }
+  card.sel = 0;
   renderCard();
-  drawPlan(p, { fit: false });
-  navigate(card.plans[0]);
+  drawPlan(p, { fit: true });
 }
 
 export function show() {
@@ -388,7 +397,8 @@ async function cardClick(ev) {
     return openRoute(ctx, { uid: d.routeUid, name: d.route, city: d.city }, { stopUID: d.stop, dir: Number(d.dir) });
   }
   // 開始導航 sits inside its plan's button: it goes first.
-  if (act === 'nav' && card) return navigate(card.plans?.[card.sel]);
+  if (act === 'nav' && card) return canNav(card.plans?.[card.sel]) && navigate(card.plans[card.sel]);
+  if (act === 'pick' && card) return togglePick(card, card.plans?.[card.sel]);
   const planBtn = ev.target.closest('[data-plan]');
   if (planBtn) return selectPlan(Number(planBtn.dataset.plan));
   const when = ev.target.closest('[data-when]');
@@ -423,7 +433,10 @@ async function cardClick(ev) {
     return renderCard();
   }
   if (act === 'nav') return navigate(card.plans?.[card.sel]);
-  if (act === 'save-trip') return saveTripSheet(card);
+  if (act === 'save-trip') {
+    const t = tripOf(card);
+    return saveTripSheet(card, t ? { edit: t } : {});
+  }
   if (act === 'train') {
     ctx.trainFrom = { sys: card.kind, id: card.item.id, name: card.item.name };
     return ctx.goTab('times');
@@ -773,28 +786,47 @@ async function plan(from, to, opts = {}) {
   }
 }
 
+// 出發時間 / 抵達時間: a day (today, tomorrow…) and a time; it stays until
+// 現在出發 is chosen again. A time already past today means tomorrow's.
 function setWhen(kind) {
-  if (kind === 'now') when = { by: 'now', at: null };
-  else {
-    const d = sheet(`${sheetHead(kind === 'arrive' ? '抵達時間' : '出發時間')}
-      <label class="ot-field"><span>日期</span><input id="w-date" type="date" value="${tw().date}"></label>
-      <label class="ot-field"><span>時間</span><input id="w-time" type="time" value="${tw(Date.now() + 15 * 60_000).hm}"></label>
-      <div class="ot-row ot-actions"><button class="q-btn primary" type="button" data-ok="1">查詢</button></div>`);
-    d.querySelector('[data-ok]').addEventListener('click', () => {
-      const at = twAt(d.querySelector('#w-date').value, d.querySelector('#w-time').value || '08:00');
-      when = { by: kind, at: Math.max(at, Date.now()) };
-      d.close();
-      if (card?.kind === 'plans') plan(card.fromHere ? null : card.from, card.to);
-    });
-    return;
+  const replan = () => card?.kind === 'plans' && plan(card.fromHere ? null : card.from, card.to);
+  if (kind === 'now') {
+    when = { by: 'now', at: null };
+    return replan();
   }
-  if (card?.kind === 'plans') plan(card.fromHere ? null : card.from, card.to);
+  const base = when.at && when.at > Date.now() ? when.at : Date.now() + 15 * 60_000;
+  const today = tw().date;
+  const dayChips = [0, 1, 2].map(n => [addDays(today, n), ['今天', '明天', '後天'][n]]);
+  let date = tw(base).date;
+  const d = sheet(`${sheetHead(kind === 'arrive' ? '抵達時間' : '出發時間')}
+    <div class="ot-field"><span>日期</span><div class="q-chips ot-days">${dayChips.map(([v, n]) => `<button class="q-chip" type="button" data-day="${v}" aria-pressed="${v === date}">${n}<small>${e(v.slice(5).replace('-', '/'))}</small></button>`).join('')}</div></div>
+    <label class="ot-field"><span>時間</span><input id="w-time" type="time" value="${tw(base).hm}"></label>
+    <div class="ot-row ot-actions"><button class="q-btn primary" type="button" data-ok="1">查詢</button></div>`);
+  d.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-day]');
+    if (b) {
+      date = b.dataset.day;
+      d.querySelectorAll('[data-day]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.day === date)));
+      return;
+    }
+    if (!ev.target.closest('[data-ok]')) return;
+    const time = d.querySelector('#w-time').value || '08:00';
+    let at = twAt(date, time);
+    if (at < Date.now() - 5 * 60_000 && date === today) at = twAt(addDays(today, 1), time);
+    when = { by: kind, at: Math.max(at, Date.now()) };
+    d.close();
+    replan();
+  });
 }
 
+const whenDay = at => {
+  const n = Math.round((twAt(tw(at).date, '12:00') - twAt(tw().date, '12:00')) / 86_400_000);
+  return n === 0 ? '' : n === 1 ? '明天 ' : n === 2 ? '後天 ' : `${tw(at).date.slice(5).replace('-', '/')} `;
+};
 const MODE_OFF = { bus: '公車', tra: '台鐵', hsr: '高鐵', metro: '捷運', bike: 'YouBike' };
 function plansHtml(c) {
   const whenText = when.by === 'now' ? '現在出發' : `${when.by === 'arrive' ? '抵達' : '出發'} ${hm(when.at)}`;
-  const saved = ctx.data.saved.some(x => meters(x.to.lat, x.to.lon, c.to.lat, c.to.lon) < 50 && (c.fromHere ? !x.from : x.from && meters(x.from.lat, x.from.lon, c.from.lat, c.from.lon) < 50));
+  const saved = Boolean(tripOf(c));
   const off = Object.entries(ctx.data.prefs.modes).filter(([, v]) => !v).map(([k]) => MODE_OFF[k]);
   const top = `<div class="ot-card-grip" data-card="grow"></div>
     <div class="ot-card-head"><button class="q-icon-btn" type="button" data-card="back" aria-label="返回">${icon('back')}</button>
@@ -802,25 +834,25 @@ function plansHtml(c) {
       <button class="q-icon-btn" type="button" data-card="swap" aria-label="對調起訖">${icon('swap')}</button>
       <button class="q-icon-btn${saved ? ' on' : ''}" type="button" data-card="save-trip" aria-label="釘選這個行程">${icon('star')}</button>
       <button class="q-close" type="button" data-card="close" aria-label="關閉">×</button></div>
-    <div class="q-chips ot-when"><button class="q-chip" type="button" data-when="now" aria-pressed="${when.by === 'now'}">現在出發</button><button class="q-chip" type="button" data-when="depart" aria-pressed="${when.by === 'depart'}">出發時間</button><button class="q-chip" type="button" data-when="arrive" aria-pressed="${when.by === 'arrive'}">抵達時間</button>${off.length ? `<span class="ot-off">不搭 ${e(off.join('、'))}</span>` : ''}</div>`;
+    <div class="q-chips ot-when"><button class="q-chip" type="button" data-when="now" aria-pressed="${when.by === 'now'}">現在出發</button><button class="q-chip" type="button" data-when="depart" aria-pressed="${when.by === 'depart'}">${when.by === 'depart' ? `${e(whenDay(when.at))}${hm(when.at)} 出發` : '出發時間'}</button><button class="q-chip" type="button" data-when="arrive" aria-pressed="${when.by === 'arrive'}">${when.by === 'arrive' ? `${e(whenDay(when.at))}${hm(when.at)} 抵達` : '抵達時間'}</button>${off.length ? `<span class="ot-off">不搭 ${e(off.join('、'))}</span>` : ''}</div>`;
   if (!c.plans) return `${top}<p class="ot-note">${e(whenText)}：比較公車、火車、捷運和 YouBike，看公車現在的位置…</p>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : '<p class="ot-note">找不到大眾運輸方案。</p>'}${sourcesNote(c.sources)}`;
   const row = (p, i) => `<button class="ot-plan${i === c.sel ? ' on' : ''}" type="button" data-plan="${i}">
-        <div class="ot-plan-top"><b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${p.tags.map(t => `<span class="ot-tag${t === 'YouBike' || t === '電輔車' ? ' bike' : t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
+        <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${p.tags.map(t => `<span class="ot-tag${t === 'YouBike' || t === '電輔車' ? ' bike' : t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
         <div class="ot-legs">${legChips(p.legs)}</div>
         <div class="ot-plan-sub">${[leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')].filter(Boolean).map(e).join(' · ')}</div>
         ${p.miss || p.off ? `<div class="ot-plan-sub warn">${e(p.off || p.miss)}</div>` : ''}
-        ${i === c.sel ? stepsHtml(p) : ''}
+        ${i === c.sel ? stepsHtml(p, c) : ''}
       </button>`;
   const tops = c.plans.map((p, i) => [p, i]).filter(([p]) => p.top);
   const rest = c.plans.map((p, i) => [p, i]).filter(([p]) => !p.top);
   return `${top}<div class="ot-plans">${tops.map(([p, i]) => row(p, i)).join('')}</div>
     ${rest.length ? `<button class="q-btn ot-wide ot-more" type="button" data-card="more">${c.more ? '收起其他方案' : `其他 ${rest.length} 個方案`}</button>${c.more ? `<div class="ot-plans">${rest.map(([p, i]) => row(p, i)).join('')}</div>` : ''}` : ''}`;
 }
-// 「12 分後出發」 for a plan leaving soon.
+// When to leave: 「12 分後出發」 soon, else 「建議 06:05 出發」; and when you're there.
 function leaveText(p) {
   const m = Math.round((p.dep - Date.now()) / 60_000);
-  return m <= 0 ? '現在出發' : m < 90 ? `${m} 分後出發` : `${hm(p.dep)} 出發`;
+  return m <= 0 ? '現在出發' : m < 60 ? `${m} 分後出發` : `建議 ${hm(p.dep)} 出發`;
 }
 
 // Which planner didn't answer, said plainly: only when no plan came at all
@@ -832,7 +864,33 @@ function sourcesNote(src) {
   return bad.length ? `<p class="ot-note">${bad.map(([k, v]) => `${SOURCE[k]}：${why(v)}`).map(e).join('；')}。</p>` : '';
 }
 
-function stepsHtml(p) {
+// The saved trip a plans card is (the same two ends), and the plans pinned on it.
+function tripOf(c) {
+  const near = (a, b) => a && b && a.lat != null && b.lat != null && meters(a.lat, a.lon, b.lat, b.lon) < 80;
+  return ctx.data.saved.find(x => (near(x.to, c.to) && (c.fromHere ? !x.from : near(x.from, c.from))) || (x.from && near(x.from, c.to) && (c.fromHere ? !x.to : near(x.to, c.from)))) || null;
+}
+const picked = (c, p) => Boolean(tripOf(c)?.picks.includes(pickSig(p)));
+// ☆ on one plan: that way pinned on the trip (the trip saved first when it isn't), shown first in 交通.
+function togglePick(c, p) {
+  if (!p) return;
+  const k = pickSig(p);
+  let t = tripOf(c);
+  if (!t) {
+    if (ctx.data.saved.length >= MAX_SAVED) return ctx.status(`最多 ${MAX_SAVED} 個行程`);
+    t = cleanSaved({ name: c.to.name, from: c.fromHere ? null : { name: c.from.name, lat: c.from.lat, lon: c.from.lon }, to: { name: c.to.name, lat: c.to.lat, lon: c.to.lon }, picks: [] });
+    if (!t) return;
+    ctx.data.saved = [...ctx.data.saved, t];
+  }
+  const on = t.picks.includes(k);
+  const next = cleanSaved({ ...t, picks: on ? t.picks.filter(x => x !== k) : [k, ...t.picks] });
+  ctx.data.saved = ctx.data.saved.map(x => (x.id === t.id ? next : x));
+  ctx.save();
+  ctx.status(on ? '已取消釘選這個方案' : `已釘選這個方案：「交通」會先列出它的下一班`);
+  if (card) renderCard();
+  ctx.refreshTabs?.();
+}
+
+function stepsHtml(p, c = card) {
   return `<ol class="ot-steps">${p.legs
     .map(l => {
       const c = legColor(l);
@@ -845,7 +903,7 @@ function stepsHtml(p) {
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
     .join('')}<li class="end"><span class="ot-step-time">${e(hm(p.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>抵達</b></span></li></ol>
-    <span class="q-btn primary ot-wide" role="button" data-card="nav">${icon('route')} 開始導航</span>`;
+    <span class="ot-plan-acts">${canNav(p) ? `<span class="q-btn primary" role="button" data-card="nav">${icon('route')} 開始導航</span>` : `<span class="ot-nav-later">${e(hm(p.dep - NAV_LEAD))} 起可以開始導航</span>`}<span class="q-btn${picked(c, p) ? ' on' : ''}" role="button" data-card="pick">${icon('star')} ${picked(c, p) ? '已釘選' : '釘選這個方案'}</span></span>`;
 }
 
 function selectPlan(i) {
@@ -878,18 +936,25 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (fit && pts.length) map.fit(pts, { top: 120, bottom: Math.round(innerHeight * 0.55), left: 30, right: 30 });
 }
 
-// A plan's buses: when the next one comes to the stop it starts from.
+// A plan's buses: the one you'd catch, when you'll be at its stop (the
+// plan's time there), not the one that happens to be coming now.
 async function liveLegs(p) {
-  for (const l of p.legs) {
+  for (const [k, l] of p.legs.entries()) {
     if (l.mode !== 'bus' || !l.from?.lat) continue;
+    if (l.dep > Date.now() + 90 * 60_000) break;
     try {
-      const j = await tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${l.from.lat.toFixed(5)},${l.from.lon.toFixed(5)},150)&$select=RouteName,EstimateTime,StopStatus,NextBusTime,Direction,StopName`, { fresh: 20_000 });
       const name = l.short || l.name;
-      const mine = rows(j).filter(r => (r.RouteName?.Zh_tw || '') === name);
-      const best = mine.filter(r => r.EstimateTime != null).sort((a, b) => a.EstimateTime - b.EstimateTime)[0] || mine[0];
-      const t = best ? etaText({ sec: best.EstimateTime ?? null, status: best.StopStatus || 0, next: best.NextBusTime ? Date.parse(best.NextBusTime) : null, more: [] }) : null;
+      const { times, off } = liveTimes(await etaNear(l.from.lat, l.from.lon, 150), name);
+      const ready = Math.max(Date.now(), k ? p.legs[k - 1].arr : l.dep - 60_000);
+      const bus = times.find(t => t.at >= ready - 60_000);
+      const gone = times.length && !bus;
+      const text = bus
+        ? `${bus.planned ? '預計' : '即時'}：${hm(bus.at)} 到站（${Math.max(0, Math.round((bus.at - Date.now()) / 60_000))} 分後）${bus.at - l.dep > 3 * 60_000 ? `，比時刻表晚 ${Math.round((bus.at - l.dep) / 60_000)} 分` : ''}`
+        : gone
+          ? `即時：現在來的那班你趕不上（${Math.max(0, Math.round((times[0].at - Date.now()) / 60_000))} 分後到站），下一班看時刻表`
+          : off === 3 ? '末班已過' : off === 4 ? '今日未營運' : '';
       const el = document.querySelector(`[data-live="${CSS.escape(`${l.mode}|${name}|${l.from.lat}|${l.from.lon}`)}"]`);
-      if (el && t) el.innerHTML = `${icon('live')} 現在：${e(t.main)}`;
+      if (el && text) el.innerHTML = `${icon('live')} ${e(text)}`;
     } catch {}
   }
 }
@@ -958,7 +1023,7 @@ export function saveTripSheet(c, { edit = null } = {}) {
       return;
     }
     if (!ev.target.closest('[data-save]')) return;
-    const clean = cleanSaved({ id: edit?.id, name: d.querySelector('#st-name').value.trim() || to.name, from, to, time: d.querySelector('#st-time').value, by: d.querySelector('#st-by').value, days: [...days], back: d.querySelector('#st-back').value });
+    const clean = cleanSaved({ id: edit?.id, picks: edit?.picks, name: d.querySelector('#st-name').value.trim() || to.name, from, to, time: d.querySelector('#st-time').value, by: d.querySelector('#st-by').value, days: [...days], back: d.querySelector('#st-back').value });
     if (!clean) return;
     ctx.data.saved = edit ? ctx.data.saved.map(y => (y.id === edit.id ? clean : y)) : [...ctx.data.saved, clean];
     ctx.save();

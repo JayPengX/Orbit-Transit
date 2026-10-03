@@ -17,6 +17,9 @@ const ARRIVED = { walk: 35, bike: 60 };
 const NEXT_STOP_M = 600;
 
 export const navigating = () => Boolean(nav);
+// Only a plan you'd set out on now: one leaving within 20 minutes, or already under way.
+export const NAV_LEAD = 20 * 60_000;
+export const canNav = (p, now = Date.now()) => Boolean(p) && p.dep - now <= NAV_LEAD && p.arr > now;
 
 // Google Maps' own navigation for one step (walking, riding) or the rest by transit.
 export function gmapsLink(from, to, mode) {
@@ -26,6 +29,17 @@ export function gmapsLink(from, to, mode) {
   return `https://www.google.com/maps/dir/?${p}`;
 }
 
+const RIDE = l => l && l.mode !== 'walk' && l.mode !== 'bike';
+// The ride itself, said the way its sign says it: 公車 5608 往 竹東, 區間 1234 次 往 新竹.
+export function rideName(l) {
+  const s = String(l.short || l.name || '').trim();
+  if (l.mode === 'tra') {
+    const t = `${s}${l.train?.no && !s.includes(l.train.no) ? ` ${l.train.no}` : ''}`;
+    return `台鐵 ${t}${/\d$/.test(t) ? ' 次' : ''}`;
+  }
+  if (l.mode === 'hsr') return s.startsWith('高鐵') ? s : `高鐵 ${s}`;
+  return `${MODE_NAME[l.mode] || ''} ${s}`.trim();
+}
 // What to do on a leg, before (or while) doing it.
 function stepText(plan, i, phase) {
   const l = plan.legs[i];
@@ -33,10 +47,11 @@ function stepText(plan, i, phase) {
   const where = l.to?.name || (next?.from?.name ?? '') || '目的地';
   if (l.mode === 'walk') return { title: `步行到 ${i === plan.legs.length - 1 ? '目的地' : where}`, sub: '' };
   if (l.mode === 'bike') return { title: `${l.swap ? '還車再借一台，' : `在 ${l.from.name} 借 YouBike，`}騎到 ${l.to.name} 還車`, sub: l.swap ? '每 30 分鐘換一次車' : '' };
-  const line = `${MODE_NAME[l.mode] || ''} ${l.short || l.name || ''}`.trim();
-  if (phase === 'on') return { title: `坐到 ${l.to.name} 下車`, sub: `${line}${l.stops ? ` · ${l.stops} 站` : ''}` };
-  return { title: `在 ${l.from.name} 搭 ${line}`, sub: `${l.headsign ? `往 ${l.headsign} · ` : ''}${hm(l.dep)} 開` };
+  if (phase === 'on') return { title: `坐到 ${l.to.name} 下車`, sub: `${rideName(l)}${l.stops ? ` · ${l.stops} 站` : ''} · ${hm(l.arr)} 到` };
+  return { title: `在 ${l.from.name} 搭 ${rideName(l)}`, sub: `${l.headsign ? `往 ${l.headsign} · ` : ''}${hm(l.dep)} 開` };
 }
+// The ride this step leads to (the bus or train you're on your way to catch), or this step's own.
+const rideOf = (plan, i) => plan.legs.slice(i).findIndex(RIDE) + i;
 
 // plan: a ranked plan; `draw(plan, i)` shows it on the map with leg i lit;
 // `follow(pos)` keeps the map on you; `onEnd()` when it's closed.
@@ -51,10 +66,16 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null }) {
     const l = plan.legs[state.i];
     const t = stepText(plan, state.i, state.phase);
     const left = state.pos && l.to?.lat ? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon) : null;
-    const extra = [t.sub, left != null && (l.mode === 'walk' || l.mode === 'bike' || state.phase === 'on') ? `還有 ${distText(left)}` : '', state.live].filter(Boolean).join(' · ');
+    const extra = [t.sub, left != null && (l.mode === 'walk' || l.mode === 'bike' || state.phase === 'on') ? `還有 ${distText(left)}` : '', state.phase === 'on' ? state.live : ''].filter(Boolean).join(' · ');
     const gm = l.mode === 'walk' || l.mode === 'bike' ? gmapsLink(state.pos, l.to, l.mode === 'bike' ? 'bicycling' : 'walking') : gmapsLink(state.pos, plan.legs.at(-1).to, 'transit');
     const nextLeg = plan.legs[state.i + 1];
-    box.innerHTML = `<div class="ot-nav-main" style="--c:${e(legColor(l))}">
+    // Always the bus or train to catch next: its line, which way, when, live.
+    const ri = rideOf(plan, state.i);
+    const r = ri >= state.i ? plan.legs[ri] : null;
+    const catchHtml = r && !(ri === state.i && state.phase === 'on')
+      ? `<div class="ot-nav-catch" style="--c:${e(legColor(r))}">${icon(r.mode)}<span><b>${ri === state.i ? '要搭' : '接著搭'} ${e(rideName(r))}</b><small>${e([r.headsign ? `往 ${r.headsign}` : '', `${r.from?.name || ''} ${hm(r.dep)} 開`, r.train?.platform ? `${r.train.platform} 月台` : ''].filter(Boolean).join(' · '))}</small></span><em>${e(state.live || leaveIn(r.dep))}</em></div>`
+      : '';
+    box.innerHTML = `${catchHtml}<div class="ot-nav-main" style="--c:${e(legColor(l))}">
         <span class="ot-nav-i">${icon(l.mode)}</span>
         <div class="ot-nav-text"><b>${e(t.title)}</b><small>${e(extra)}</small></div>
       </div>
@@ -73,21 +94,34 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null }) {
     render();
     refreshLive();
   };
-  // A bus: when it really comes; a train: its delay.
+  // The ride to catch (this step's, or the next one's): a bus, when it
+  // really comes to the stop at the time you'll be there; a train, its delay.
   const refreshLive = async () => {
-    const l = plan.legs[state.i];
     const at = state.i;
+    const ri = rideOf(plan, state.i);
+    const l = plan.legs[ri];
+    let live = '';
     try {
-      if (l.mode === 'bus' && state.phase === 'before' && l.from?.lat) {
+      if (l?.mode === 'bus' && !(ri === state.i && state.phase === 'on') && l.from?.lat) {
         const { times, off } = liveTimes(await etaNear(l.from.lat, l.from.lon, 150), l.short || l.name);
-        const next = times.find(x => x.at > Date.now() - 30_000);
-        state.live = next ? `${next.planned ? '預計 ' : ''}${Math.max(0, Math.round((next.at - Date.now()) / 60_000))} 分後到站${next.last ? '（末班）' : ''}` : off === 3 ? '末班已過' : off === 4 ? '今日未營運' : '';
-      } else if (l.mode === 'tra' && l.train?.no) {
+        // When you'll be at the stop: now plus what's left of the way there.
+        const ready = Date.now() + plan.legs.slice(state.i, ri).reduce((a, x, k) => a + (k === 0 && x.arr > Date.now() ? x.arr - Math.max(Date.now(), x.dep) : (x.dur || 0) * 1000), 0);
+        const next = times.find(x => x.at >= ready - 60_000) || null;
+        const soon = times.find(x => x.at > Date.now() - 30_000);
+        live = next
+          ? `${next.planned ? '預計 ' : ''}${hm(next.at)} 到站（${Math.max(0, Math.round((next.at - Date.now()) / 60_000))} 分後）${next.last ? '・末班' : ''}`
+          : soon
+            ? `下一班 ${Math.max(0, Math.round((soon.at - Date.now()) / 60_000))} 分後到站，可能趕不上`
+            : off === 3 ? '末班已過' : off === 4 ? '今日未營運' : '';
+      } else if (l?.mode === 'tra' && l.train?.no) {
         const d = (await traDelays()).get(l.train.no);
-        state.live = d ? `晚 ${d} 分` : '準點';
+        live = d ? `晚 ${d} 分` : '準點';
       }
     } catch {}
-    if (state.i === at) render();
+    if (state.i === at) {
+      state.live = state.phase === 'on' && state.live === '快到了，準備下車' ? state.live : live;
+      render();
+    }
   };
   const moved = p => {
     state.pos = p;
@@ -140,5 +174,10 @@ export function stopNav() {
   nav.wake?.release?.().catch(() => {});
   nav = null;
 }
+
+const leaveIn = t => {
+  const m = Math.round((t - Date.now()) / 60_000);
+  return m <= 0 ? '現在' : `${m} 分後開`;
+};
 
 export const navSummary = p => `${minsText(p.dur)} · ${hm(p.dep)} 出發`;
