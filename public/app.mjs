@@ -7,8 +7,7 @@
 //           stations; search, plans from here to anywhere (ranked by what's
 //           practical, the buses' real times in them), navigation
 //   交通    what's coming that you'd take: your trips' next ways to go,
-//           the buses, trains and bikes around you and your places, what
-//           you pinned
+//           what you pinned, your places
 //   查時刻  a timetable on purpose: 台鐵 / 高鐵 station to station, a bus route
 //   我的    places, trips, pinned transit, preferences (ways of moving,
 //           TPASS), tickets, the metro maps
@@ -18,6 +17,7 @@ import { useSession, config, townships, getPosition, permissionState } from './l
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
 import { warmRail } from './lib/raildata.mjs';
+import { startAlerts } from './lib/alerts.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
@@ -156,6 +156,7 @@ async function boot() {
   select(OLD[want] || want);
   if (want === 'metro') ctx.openMetro?.();
   ctx.locate();
+  startAlerts(t => ctx.status(t));
   // The day's trains loaded while nothing else is (a timetable search, a plan, 交通's pins use them).
   const P = ctx.data.prefs?.modes;
   if (!P || P.tra || P.hsr) setTimeout(() => (window.requestIdleCallback || (f => f()))(() => warmRail()), 2500);

@@ -2395,3 +2395,364 @@ main {
   opacity: 0.7;
   font-size: 11px;
 }
+
+/* ---- Round 4: the map's first screen ---- */
+/* Markers: a bus stop is a small round sign; a bike station its bike and count. */
+.ot-mk.bus {
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+.ot-mk.bus .ot-i {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.6;
+}
+.ot-mk.bike {
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px 0 5px;
+  margin: -12px 0 0 -16px;
+  border-radius: 12px;
+}
+.ot-mk.bike .ot-i {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
+}
+.ot-mk.bike::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  bottom: -6px;
+  border: 5px solid transparent;
+  border-top-color: #0d0f14;
+  border-bottom: 0;
+}
+/* The chips: your places, one ＋. */
+.ot-map-chips .q-chip .ot-i {
+  width: 15px;
+  height: 15px;
+}
+/* The YouBike stations nearest you, a row along the bottom. */
+.ot-nearbikes {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  z-index: 29;
+  display: flex;
+  gap: 10px;
+  padding: 4px 16px 6px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.ot-nearbikes::-webkit-scrollbar {
+  display: none;
+}
+.ot-nearbikes[hidden],
+.ot-map-panel:has(.ot-card:not([hidden])) .ot-nearbikes,
+.ot-planning .ot-nearbikes,
+.ot-navigating .ot-nearbikes,
+.ot-picking .ot-nearbikes {
+  display: none;
+}
+.ot-map-panel:has(.ot-nearbikes:not([hidden])) .ot-fabs {
+  bottom: 116px;
+}
+.ot-nb {
+  flex: none;
+  display: grid;
+  gap: 5px;
+  width: min(62vw, 230px);
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 4px solid var(--ot-bike);
+  border-radius: 16px;
+  background: rgba(20, 23, 31, 0.96);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  scroll-snap-align: start;
+  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.95);
+}
+.ot-nb.few {
+  border-left-color: #f59e0b;
+}
+.ot-nb.none,
+.ot-nb.off {
+  border-left-color: #6b7280;
+}
+.ot-nb-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.ot-nb-top b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+.ot-nb-i {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--ot-bike);
+  color: #1a1300;
+}
+.ot-nb-i .ot-i {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.3;
+}
+.ot-nb-n {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--q-muted);
+}
+.ot-nb-n em {
+  font: 800 17px/1 var(--q-font);
+  font-style: normal;
+  color: var(--q-text);
+}
+.ot-nb-n em.e {
+  margin-left: 6px;
+  color: #fcd34d;
+}
+.ot-nb-n em.d {
+  margin-left: 6px;
+  color: #93c5fd;
+}
+.ot-nb-d {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--q-muted);
+  font-size: 11.5px;
+}
+.ot-nb-d .ot-i {
+  width: 13px;
+  height: 13px;
+}
+
+/* Search: your places as tiles, then 最近 (each forgettable). */
+.ot-res-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 10px 4px;
+  color: var(--q-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.ot-res-clear {
+  border: 0;
+  background: none;
+  color: var(--q-accent);
+  font: inherit;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.ot-res-places {
+  display: flex;
+  gap: 8px;
+  padding: 2px 6px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ot-res-place {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 66px;
+  padding: 10px 8px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+}
+.ot-res-place i {
+  font-style: normal;
+  font-size: 22px;
+  line-height: 1;
+}
+.ot-res-place span {
+  max-width: 80px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-res-w {
+  display: flex;
+  align-items: center;
+}
+.ot-res-w .ot-res {
+  flex: 1;
+  min-width: 0;
+}
+.ot-res-del {
+  flex: none;
+  color: var(--q-muted);
+}
+.ot-res-del .ot-i {
+  width: 16px;
+  height: 16px;
+}
+
+/* A stop's card: go there on foot or by bike; a bell for each bus. */
+.ot-go-there {
+  display: flex;
+  gap: 8px;
+  margin: 2px 0 10px;
+}
+.ot-go-there .q-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  font-size: 14px;
+}
+.ot-go-there .ot-i {
+  width: 17px;
+  height: 17px;
+}
+.ot-eta-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ot-eta-wrap .ot-eta-row {
+  flex: 1;
+  min-width: 0;
+}
+.ot-bell {
+  flex: none;
+  color: var(--q-muted);
+}
+.ot-bell.on {
+  color: #fbbf24;
+}
+.ot-bell.on .ot-i {
+  fill: currentColor;
+}
+.ot-note .ot-i {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+.ot-alert-min .q-chip {
+  min-width: 56px;
+  justify-content: center;
+}
+
+/* 我的: a place's name opens its sheet. */
+.ot-place-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-place-name > i {
+  font-style: normal;
+  font-size: 20px;
+}
+.ot-place-name > span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ot-place-name small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--q-muted);
+}
+.ot-place-name > .ot-i {
+  width: 15px;
+  height: 15px;
+  color: var(--q-muted);
+}
+
+/* The trip sheet: days, quick picks, times on one line, days of their own. */
+.ot-weekdays {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.ot-weekdays .q-chip {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  padding-inline: 0;
+}
+.ot-weekdays.small .q-chip {
+  flex: 0 0 38px;
+  min-height: 32px;
+}
+.ot-quick {
+  margin-top: 8px;
+}
+.ot-quick .q-chip {
+  min-height: 30px;
+  font-size: 12.5px;
+}
+.ot-times {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ot-times select {
+  flex: 0 0 auto;
+  width: auto;
+}
+.ot-times input {
+  flex: 1;
+  min-width: 0;
+}
+.ot-times-l {
+  flex: none;
+  color: var(--q-muted);
+  font-size: 13px;
+}
+.ot-alt {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--ot-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.ot-eta-to {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--q-text-2);
+  font-size: 13.5px;
+}
+.ot-eta-row .ot-eta {
+  margin-left: auto;
+}
