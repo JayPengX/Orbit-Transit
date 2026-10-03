@@ -2178,3 +2178,6 @@ main {
   font-weight: 600;
   white-space: nowrap;
 }
+#st-days {
+  flex-wrap: wrap;
+}
