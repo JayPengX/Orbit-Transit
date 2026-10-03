@@ -100,7 +100,7 @@ function drawGroup(g) {
     .join('');
   el.innerHTML = `
     ${error ? `<p class="ot-note bad">${e(error)}</p>` : ''}
-    ${items || `<div class="ot-empty-card">${icon('bus', 'big')}<h3>${e(g.name)} 還沒有站牌</h3><p>搜尋路線，點你上車的站牌，就會出現在這裡，並顯示公車還有幾分鐘到。</p></div>`}
+    ${items || `<p class="ot-note ot-empty-line">「${e(g.name)}」還沒有站牌：搜尋路線，點你上車的站牌加進來，或點下面附近站牌的公車。</p>`}
     <button class="q-btn primary ot-wide" type="button" data-act="add">${icon('plus')} 新增路線站牌</button>
     ${g.items.length ? `<p class="ot-note center">${e(ago(lastAt))} · 每 20 秒更新</p>` : ''}
     ${nearHtml()}`;
