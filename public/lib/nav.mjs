@@ -45,7 +45,7 @@ function stepText(plan, i, phase) {
   const l = plan.legs[i];
   const next = plan.legs[i + 1];
   const where = l.to?.name || (next?.from?.name ?? '') || '目的地';
-  if (l.mode === 'walk') return { title: `步行到 ${i === plan.legs.length - 1 ? '目的地' : where}`, sub: '' };
+  if (l.mode === 'walk') return { title: `步行到 ${i === plan.legs.length - 1 && !l.to?.name ? '目的地' : where}`, sub: '' };
   if (l.mode === 'bike') return { title: `${l.swap ? '還車再借一台，' : `在 ${l.from.name} 借 YouBike，`}騎到 ${l.to.name} 還車`, sub: l.swap ? '每 30 分鐘換一次車' : '' };
   if (phase === 'on') return { title: `坐到 ${l.to.name} 下車`, sub: `${rideName(l)}${l.stops ? ` · ${l.stops} 站` : ''} · ${hm(l.arr)} 到` };
   return { title: `在 ${l.from.name} 搭 ${rideName(l)}`, sub: `${l.headsign ? `往 ${l.headsign} · ` : ''}${hm(l.dep)} 開` };
