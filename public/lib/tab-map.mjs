@@ -555,7 +555,7 @@ function alertSheet(c, x) {
   const d = sheet(`${sheetHead(`${e(x.route)} 到站提醒`, e(st.name))}
     <p class="ot-note">公車還有幾分鐘到站時通知你（一次）：</p>
     <div class="q-chips ot-alert-min">${[2, 3, 5, 8, 10, 15].map(m => `<button class="q-chip" type="button" data-min="${m}" aria-pressed="${on?.min === m}">${m} 分</button>`).join('')}</div>
-    <p class="ot-note">App 開著（或在背景）時每 20 秒看一次公車的即時位置。</p>
+    <p class="ot-note">App 開著時每 20 秒看一次公車的即時位置；手機鎖著或 App 關著時，由伺服器每 2 分鐘看一次再通知你（iPhone 要先把 App 加到主畫面並允許通知）。</p>
     ${on ? '<div class="ot-row ot-actions"><button class="q-btn" type="button" data-off="1">取消提醒</button></div>' : ''}`);
   d.addEventListener('click', ev => {
     const m = ev.target.closest('[data-min]');

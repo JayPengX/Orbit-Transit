@@ -125,13 +125,20 @@ export async function stopsEta(items) {
   return out;
 }
 // A bus stop on the map: every route through it (by its station), with times.
-export async function stationEta(station) {
-  // Whose station it is comes from its UID (HSZ…: 新竹市's; THB…: 公路局's 公路客運,
-  // which TDX still files under the city it stands in): only its own operator knows it.
+// Whose station it is comes from its UID (HSZ…: 新竹市's; THB…: 公路局's 公路客運,
+// which TDX still files under the city it stands in): only its own operator knows it.
+const stationCity = station => {
   const owner = /^[A-Z]{3}/.exec(station.uid || '')?.[0];
-  const city = owner ? CITY_CODES[owner] : CITY_CODES[station.cityCode];
-  const path = `advanced/v2/Bus/EstimatedTimeOfArrival/${city ? `City/${city}` : 'InterCity'}/PassThrough/Station/${encodeURIComponent(station.id)}`;
-  const j = await tdx(`${path}?${ETA_FIELDS}`, { fresh: 20_000 });
+  return owner ? CITY_CODES[owner] : CITY_CODES[station.cityCode];
+};
+// The TDX ask for a station's arrivals (the Worker asks the same for a bus alert).
+export function stationEtaAsk(station) {
+  const city = stationCity(station);
+  return `advanced/v2/Bus/EstimatedTimeOfArrival/${city ? `City/${city}` : 'InterCity'}/PassThrough/Station/${encodeURIComponent(station.id)}?${ETA_FIELDS}`;
+}
+export async function stationEta(station) {
+  const city = stationCity(station);
+  const j = await tdx(stationEtaAsk(station), { fresh: 20_000 });
   return rows(j).map(r => ({ ...etaOf(r), route: zh(r.RouteName), routeUID: r.RouteUID, stopUID: r.StopUID, dir: r.Direction, city: city || INTERCITY }));
 }
 

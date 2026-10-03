@@ -12,7 +12,7 @@
 //   我的    places, trips, pinned transit, preferences (ways of moving,
 //           TPASS), tickets, the metro maps
 
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell } from '#kit/quadra.mjs';
+import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition, permissionState } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
@@ -156,7 +156,17 @@ async function boot() {
   select(OLD[want] || want);
   if (want === 'metro') ctx.openMetro?.();
   ctx.locate();
-  startAlerts(t => ctx.status(t));
+  startAlerts(t => ctx.status(t), {
+    schedule: items => schedulePush(q, items),
+    // Whether the Worker can tell you with the phone locked; if not, why.
+    allow() {
+      if (!('Notification' in globalThis)) return '加到主畫面後，手機鎖著也能收到到站提醒';
+      if (Notification.permission !== 'granted') return '沒有允許通知：只在 App 開著時提醒';
+      if (notifyPrefs().on === false) return '通知在帳戶裡關閉了：只在 App 開著時提醒';
+      if (!notifyOn()) setNotifyOn(true, q);
+      return '';
+    }
+  });
   // The day's trains loaded while nothing else is (a timetable search, a plan, 交通's pins use them).
   const P = ctx.data.prefs?.modes;
   if (!P || P.tra || P.hsr) setTimeout(() => (window.requestIdleCallback || (f => f()))(() => warmRail()), 2500);
