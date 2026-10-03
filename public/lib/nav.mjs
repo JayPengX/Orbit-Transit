@@ -6,6 +6,7 @@
 // Each step moves on by itself when you get there; ‹ › move by hand.
 
 import { watchPosition } from './api.mjs';
+import { buzz, primeBuzz } from './buzz.mjs';
 import { etaNear, liveTimes } from './live.mjs';
 import { traDelays } from './raildata.mjs';
 import { icon, MODE_NAME, legColor } from './ui.mjs';
@@ -56,6 +57,8 @@ const rideOf = (plan, i) => plan.legs.slice(i).findIndex(RIDE) + i;
 // plan: a ranked plan; `draw(plan, i)` shows it on the map with leg i lit;
 // `follow(pos)` keeps the map on you; `onEnd()` when it's closed.
 export function startNav(plan, { box, draw, follow, onEnd, here = null }) {
+  // Started by a tap (mostly): the iPhone's chime may sound from now on.
+  primeBuzz();
   stopNav();
   const state = { plan, i: 0, phase: 'before', pos: here, live: '', alerted: -1, wake: null };
   nav = state;
@@ -136,7 +139,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null }) {
         if (state.phase === 'before' && l.from?.lat && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 200 && left < meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon)) state.phase = 'on';
         if (state.phase === 'on' && left < NEXT_STOP_M && state.alerted !== state.i) {
           state.alerted = state.i;
-          navigator.vibrate?.([200, 100, 200]);
+          buzz();
           state.live = '快到了，準備下車';
         }
         if (state.phase === 'on' && left < 120 && state.i < plan.legs.length - 1) return go(state.i + 1);
@@ -147,6 +150,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null }) {
   state.stopWatch = watchPosition(moved);
   state.timer = setInterval(refreshLive, 20_000);
   box.onclick = ev => {
+    primeBuzz();
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
     if (a === 'prev') go(state.i - 1);
     if (a === 'next') go(state.i + 1);

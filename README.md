@@ -27,7 +27,7 @@ A static site (`public/`), no build step, on the shared Quadra kit
 | `lib/planner.mjs` | A trip planned the whole way: planners, our trains, train + bus, live buses, YouBike, TPASS, ranking |
 | `lib/plan.mjs` | The YouBike plans (30-minute swaps), our own train plans, the score and the ranking |
 | `lib/live.mjs` | TDX's live bus estimates in plans; a direct bus between two places |
-| `lib/nav.mjs` | Navigation |
+| `lib/nav.mjs`, `buzz.mjs` | Navigation; the buzz (a chime on an iPhone, which can't vibrate) |
 | `lib/tab-go.mjs` | 交通 |
 | `lib/tab-times.mjs`, `tab-train.mjs`, `rail.mjs`, `raildata.mjs` | 查時刻; the train router (Connection Scan over a day's 台鐵 + 高鐵 timetable) and its data |
 | `lib/tab-me.mjs`, `tpass.mjs` | 我的; TPASS passes and what they cover |
