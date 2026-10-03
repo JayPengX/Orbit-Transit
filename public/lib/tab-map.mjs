@@ -18,6 +18,7 @@ import { etaNear, liveTimes } from './live.mjs';
 import { startNav, stopNav, navigating, canNav, NAV_LEAD } from './nav.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
+import { buyTicket } from './tickets.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec } from './util.mjs';
@@ -485,6 +486,8 @@ export function metroBoardHtml(live) {
 
 async function cardClick(ev) {
   const act = ev.target.closest('[data-card]')?.dataset.card;
+  const tk = ev.target.closest('[data-ticket]');
+  if (tk) return buyTicket(JSON.parse(tk.dataset.ticket), t => ctx.status(t));
   const bell = ev.target.closest('[data-alert]');
   if (bell && card?.kind === 'bus') return alertSheet(card, JSON.parse(bell.dataset.alert));
   const routeBtn = ev.target.closest('[data-route]');
@@ -1032,6 +1035,16 @@ function togglePick(c, p) {
   ctx.refreshTabs?.();
 }
 
+// 訂票 on a 高鐵 or a reserved-seat 台鐵 train (自強, 莒光…; a 區間車 has no tickets to book).
+function ticketBtn(l) {
+  if (l.mode !== 'hsr' && l.mode !== 'tra') return '';
+  const no = l.train?.no || /\d{2,4}/.exec(`${l.short || ''} ${l.name || ''}`)?.[0];
+  const reserved = l.mode === 'hsr' || ['1', '2', '3', '4', '11'].includes(String(l.train?.code ?? '')) || /自強|莒光|普悠瑪|太魯閣/.test(`${l.name || ''}${l.short || ''}`);
+  if (!no || !reserved) return '';
+  const t = { sys: l.mode, no, date: tw(l.dep).date, dep: hm(l.dep), from: String(l.from.name || '').replace(/^高鐵/, ''), to: String(l.to.name || '').replace(/^高鐵/, '') };
+  return ` <span class="ot-pin-train ticket" role="button" data-ticket="${e(JSON.stringify(t))}">${icon('ticket')} 訂票</span>`;
+}
+
 function stepsHtml(p, c = card) {
   return `<ol class="ot-steps">${p.legs
     .map(l => {
@@ -1041,7 +1054,7 @@ function stepsHtml(p, c = card) {
           ? `步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(l.to.name)}` : ''}`
           : l.mode === 'bike'
             ? `${l.swap ? '<b>換車</b>（每 30 分鐘內）・' : ''}${l.ebike ? 'YouBike 電輔車' : 'YouBike'}：在 <b>${e(l.from.name)}</b> 借車${l.rent ? `（${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}・電輔 ${l.rent.ebike || 0}`} 台）` : ''}，騎 ${e(distText(l.dist))} 到 <b>${e(l.to.name)}</b> 還車${l.ret ? `（空位 ${l.ret.ret}）` : ''}`
-            : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${l.headsign ? ` 往 ${e(l.headsign)}` : ''}<br><small>${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}${l.agency ? ` · ${e(l.agency)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
+            : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${l.headsign ? ` 往 ${e(l.headsign)}` : ''}<br><small>${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}${l.agency ? ` · ${e(l.agency)}` : ''}</small>${ticketBtn(l)}<span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
     .join('')}<li class="end"><span class="ot-step-time">${e(hm(p.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>抵達</b></span></li></ol>
@@ -1174,8 +1187,9 @@ export function saveTripSheet(c, { edit = null } = {}) {
     <label class="ot-field"><span>名稱</span><input id="st-name" maxlength="24" value="${e(x.name)}" placeholder="例如：上學、回家"></label>
     <div class="ot-field"><span>每週這幾天（可不選）</span><div class="q-chips ot-weekdays" id="st-days"></div>
       <div class="q-chips ot-quick"><button class="q-chip" type="button" data-quick="12345">平日</button><button class="q-chip" type="button" data-quick="0123456">每天</button><button class="q-chip" type="button" data-quick="06">週末</button><button class="q-chip" type="button" data-quick="">不固定</button></div></div>
-    <div class="ot-field"><span>時間（可不填）</span><div class="ot-times"><select id="st-by"><option value="depart" ${x.by === 'depart' ? 'selected' : ''}>出發</option><option value="arrive" ${x.by === 'arrive' ? 'selected' : ''}>抵達</option></select><input id="st-time" type="time" value="${e(x.time)}"><span class="ot-times-l">回程</span><input id="st-back" type="time" value="${e(x.back)}" aria-label="回程時間"></div></div>
-    <div id="st-alt"></div>
+    <div class="ot-field"><span>時間（可不填）</span><div class="ot-times"><select id="st-by"><option value="depart" ${x.by === 'depart' ? 'selected' : ''}>出發</option><option value="arrive" ${x.by === 'arrive' ? 'selected' : ''}>抵達</option></select><input id="st-time" type="time" value="${e(x.time)}"></div>
+      <div class="ot-times"><span class="ot-times-l wide">回程出發</span><input id="st-back" type="time" value="${e(x.back)}" aria-label="回程時間"></div></div>
+    <div id="st-alt" class="ot-field"></div>
     <div class="ot-row ot-actions">${edit ? '<button class="q-btn" type="button" data-del="1">刪除</button>' : ''}<button class="q-btn primary" type="button" data-save="1">儲存</button></div>`);
   const drawDays = () =>
     (d.querySelector('#st-days').innerHTML = W.split('')
@@ -1186,9 +1200,9 @@ export function saveTripSheet(c, { edit = null } = {}) {
     if (!days.size) return (box.innerHTML = '');
     box.innerHTML = `${alt
       .map(
-        (a, k) => `<div class="ot-alt"><div class="q-chips ot-weekdays small">${W.split('')
+        (a, k) => `<div class="ot-alt"><div class="ot-alt-top"><div class="q-chips ot-weekdays small">${W.split('')
           .map((n, i) => (days.has(i) ? `<button class="q-chip" type="button" data-alt-day="${k}:${i}" aria-pressed="${a.days.has(i)}">${n}</button>` : ''))
-          .join('')}</div><div class="ot-times"><span class="ot-times-l">去</span><input type="time" data-alt-time="${k}" value="${e(a.time)}" aria-label="這幾天的時間"><span class="ot-times-l">回</span><input type="time" data-alt-back="${k}" value="${e(a.back)}" aria-label="這幾天的回程"><button class="q-icon-btn" type="button" data-alt-del="${k}" aria-label="移除">${icon('trash')}</button></div></div>`
+          .join('')}</div><button class="q-icon-btn" type="button" data-alt-del="${k}" aria-label="移除">${icon('trash')}</button></div><div class="ot-times"><span class="ot-times-l">去</span><input type="time" data-alt-time="${k}" value="${e(a.time)}" aria-label="這幾天的時間"><span class="ot-times-l">回</span><input type="time" data-alt-back="${k}" value="${e(a.back)}" aria-label="這幾天的回程"></div></div>`
       )
       .join('')}${alt.length < 4 ? `<button class="ot-go-link" type="button" data-alt-add="1">${icon('plus')} 某幾天時間不一樣</button>` : ''}${alt.length ? '<p class="ot-note">沒填的時間就用上面的。</p>' : ''}`;
   };

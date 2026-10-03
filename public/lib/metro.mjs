@@ -19,8 +19,8 @@ export const OPERATORS = { TRTC: '臺北捷運', NTMC: '新北捷運', NTDLRT: '
 // Which systems TDX gives a live board for, and a station timetable for.
 export const LIVE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT']);
 export const TIMETABLE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT', 'NTDLRT', 'NTALRT', 'NTMC']);
-// Colours TDX leaves out (貓空纜車 has none).
-const FALLBACK_COLOR = { TRTCMG: '#77bc1f' };
+// Colours TDX leaves out (貓空纜車 has none, 高雄 often none): by system, or system:line.
+const FALLBACK_COLOR = { TRTCMG: '#77bc1f', 'KRTC:R': '#e2211c', 'KRTC:O': '#f8a51b', KLRT: '#7cc24d', TYMC: '#8246af', TMRT: '#8ec31f', NTDLRT: '#e3002c', NTALRT: '#c3b091' };
 
 const DAY = 86_400_000;
 
@@ -52,7 +52,7 @@ export function parseSystem(sys, st, of, ln, ro = []) {
     const m = meta.get(id) || {};
     const seq = (l.Stations || []).slice().sort((a, b) => a.Sequence - b.Sequence).map(s => stations.get(s.StationID)).filter(Boolean);
     for (const s of seq) if (!s.lines.includes(id)) s.lines.push(id);
-    lines.push({ id, sys, name: zh(m.LineName) || id, color: normColor(m.LineColor) || FALLBACK_COLOR[sys] || '#94a3b8', branch: m.IsBranch === true, seq: seq.map(s => s.key), paths: [] });
+    lines.push({ id, sys, name: zh(m.LineName) || id, color: normColor(m.LineColor) || FALLBACK_COLOR[`${sys}:${id}`] || FALLBACK_COLOR[sys] || '#94a3b8', branch: m.IsBranch === true, seq: seq.map(s => s.key), paths: [] });
   }
   // The routes, one way each (the other way is the same stations backwards).
   const seen = new Set();

@@ -53,8 +53,11 @@ export async function show() {
     try {
       saved = localStorage.getItem(KEY);
     } catch {}
-    const byCity = { Taipei: 'taipei', NewTaipei: 'taipei', Keelung: 'taipei', Taoyuan: 'taoyuan', Taichung: 'taichung', Kaohsiung: 'kaohsiung' };
-    await open(byCity[ctx.city] || saved || 'taipei');
+    // The system you're in (or within 10 km of); else the last one you chose; else 台北.
+    const h = ctx.here;
+    const away = m => (!h ? Infinity : meters(h.lat, h.lon, Math.min(Math.max(h.lat, m.box[0]), m.box[2]), Math.min(Math.max(h.lon, m.box[1]), m.box[3])));
+    const here = h ? MAPS.map(m => [away(m), m]).sort((a, b) => a[0] - b[0])[0] : null;
+    await open(here && here[0] < 10_000 ? here[1].id : MAPS.some(m => m.id === saved) ? saved : 'taipei');
   }
   if (ctx.metroStation) {
     const st = ctx.metroStation;
@@ -126,7 +129,7 @@ function names() {
       const lon = g.reduce((a, x) => a + x.lon, 0) / g.length;
       const big = g.length > 1 || s.lines.length > 1;
       const label = z >= 14 || (big && z >= 12);
-      return { id: `m:${s.key}`, lat, lon, cls: `mstop${big ? ' x' : ''}`, z: big ? 6 : 5, data: g, html: `<i style="--c:${e(colorOf(s))}"></i>${label ? `<span>${e(s.name)}</span>` : ''}` };
+      return { id: `m:${s.key}`, lat, lon, cls: `mstop${big ? ' x' : ''}${z < 13 ? ' far' : ''}`, z: big ? 6 : 5, data: g, html: `<i style="--c:${e(colorOf(s))}"></i>${label ? `<span>${e(s.name)}</span>` : ''}` };
     })
   );
 }
