@@ -140,9 +140,11 @@ export function bikeOnly(o, d, bikes, now, { swap = false } = {}) {
 
 // The plan with its start swapped for a bike ride to its first train or
 // metro: the same train, leaving later. Only when it replaces a bus or a
-// walk of 600 m or more.
-export function bikeToRail(plan, o, bikes, { anyRide = false } = {}) {
-  const k = plan.legs.findIndex(l => (anyRide ? l.mode !== 'walk' && l.mode !== 'bike' : RAIL.has(l.mode)));
+// walk of 600 m or more. `at`: a ride further on instead (the bus after a
+// change), so the rides before it go: by bike to the one bus that goes the
+// whole way.
+export function bikeToRail(plan, o, bikes, { anyRide = false, at = -1 } = {}) {
+  const k = at >= 0 ? at : plan.legs.findIndex(l => (anyRide ? l.mode !== 'walk' && l.mode !== 'bike' : RAIL.has(l.mode)));
   if (k <= 0) return null;
   const before = plan.legs.slice(0, k);
   if (!before.some(l => l.mode === 'bus') && before.reduce((a, l) => a + (l.mode === 'walk' ? l.dist || 0 : 0), 0) < 600) return null;
@@ -152,14 +154,15 @@ export function bikeToRail(plan, o, bikes, { anyRide = false } = {}) {
   if (!ride) return null;
   const took = ride.at(-1).arr; // from 0
   const leave = board.dep - 2 * 60_000 - took;
-  if (leave <= plan.dep + 60_000) return null; // not later than the plan already leaves
+  if (at < 0 && leave <= plan.dep + 60_000) return null; // not later than the plan already leaves
   return finish({ src: 'bike+', base: plan.src, legs: [...shift(ride, leave), ...plan.legs.slice(k)] });
 }
 
 // The plan's end swapped for a bike ride from its last train or metro.
-export function bikeFromRail(plan, d, bikes, { anyRide = false } = {}) {
-  let k = -1;
-  plan.legs.forEach((l, i) => (anyRide ? l.mode !== 'walk' && l.mode !== 'bike' : RAIL.has(l.mode)) && (k = i));
+// `at`: an earlier ride instead (the first bus, the change after it gone).
+export function bikeFromRail(plan, d, bikes, { anyRide = false, at = -1 } = {}) {
+  let k = at;
+  if (k < 0) plan.legs.forEach((l, i) => (anyRide ? l.mode !== 'walk' && l.mode !== 'bike' : RAIL.has(l.mode)) && (k = i));
   if (k < 0 || k === plan.legs.length - 1) return null;
   const after = plan.legs.slice(k + 1);
   if (!after.some(l => l.mode === 'bus') && after.reduce((a, l) => a + (l.mode === 'walk' ? l.dist || 0 : 0), 0) < 600) return null;
@@ -168,7 +171,8 @@ export function bikeFromRail(plan, d, bikes, { anyRide = false } = {}) {
   const ride = bikeTrip(off.to, d, bikes, off.arr + 60_000);
   if (!ride) return null;
   const legs = [...plan.legs.slice(0, k + 1), ...ride];
-  if (legs.at(-1).arr >= plan.arr - 60_000) return null; // not sooner
+  // Sooner; or, with a change gone, not much later.
+  if (legs.at(-1).arr >= plan.arr - (at >= 0 ? -10 * 60_000 : 60_000)) return null;
   return finish({ src: 'bike+', base: plan.src, legs });
 }
 
@@ -252,7 +256,7 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0 } = {}) {
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   let s = by === 'arrive' && deadline ? (deadline - p.dep) / 60_000 : (p.arr - now) / 60_000;
-  for (let i = 1; i < rides.length; i++) s += rides[i - 1].mode === 'bus' && rides[i].mode === 'bus' ? 10 : 7;
+  for (let i = 1; i < rides.length; i++) s += rides[i - 1].mode === 'bus' && rides[i].mode === 'bus' ? 14 : 9;
   s += Math.max(0, (p.walk || 0) / 75 - 6) * 0.5;
   // Riding: a few minutes to a station is nothing; riding most of the way
   // (50–70 minutes on a YouBike) is not how anyone goes every day.
@@ -299,7 +303,12 @@ const mainLine = p => {
 // Everything, ranked by what's practical (score). The first few that ride
 // different lines are the recommendations (`top`); the rest stay, later.
 // Each gets its labels. `cost(p)` adds what a plan costs you in money.
-export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now() } = {}) {
+export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now(), keep = null } = {}) {
+  // Only what `keep` allows (inside your TPASS's area: what the pass takes), unless that's nothing.
+  if (keep) {
+    const kept = plans.filter(p => p?.legs?.length && keep(p));
+    if (kept.length) plans = kept;
+  }
   // (By an arrival time, `now` is that time: what's gone is what left before the clock's now.)
   const all = plans.filter(p => p && p.legs?.length && p.arr != null && (by === 'arrive' && deadline ? p.dep > clock - 2 * 60_000 : p.arr > now - 60_000));
   // Leaving before the time asked (a ride to the train worked out backwards
@@ -376,6 +385,17 @@ export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
           if (ab) out.push(ab);
         }
       }
+      // A change gone: by bike to the bus (or train) after it, which goes
+      // the rest of the way; or off the first one and on by bike.
+      const rides = p.legs.map((l, i) => (l.mode !== 'walk' && l.mode !== 'bike' ? i : -1)).filter(i => i >= 0);
+      for (const k of rides.slice(1)) {
+        const a = bikeToRail(p, o, bikes, { at: k });
+        if (a) out.push(a);
+      }
+      for (const k of rides.slice(0, -1)) {
+        const b = bikeFromRail(p, d, bikes, { at: k });
+        if (b) out.push(b);
+      }
     }
   }
   return rank(
@@ -422,13 +442,8 @@ function withStations(p, bikes) {
 
 // The points whose YouBike stations a set of plans needs: both ends, and
 // where each plan first boards and last leaves a train or metro.
-export function bikePoints(plans, o, d, { swap = false } = {}) {
+export function bikePoints(plans, o, d) {
   const pts = [o, d];
-  // 每 30 分鐘換車: where a long ride would be cut, every ~5 km on the way.
-  if (swap) {
-    const n = Math.floor(meters(o.lat, o.lon, d.lat, d.lon) / 5000);
-    for (let k = 1; k <= Math.min(n, 3); k++) pts.push({ lat: o.lat + ((d.lat - o.lat) * k) / (n + 1), lon: o.lon + ((d.lon - o.lon) * k) / (n + 1) });
-  }
   for (const p of plans) {
     const rail = p.legs.filter(l => RAIL.has(l.mode));
     if (rail[0]?.from?.lat) pts.push(rail[0].from);
@@ -437,9 +452,12 @@ export function bikePoints(plans, o, d, { swap = false } = {}) {
     const rides = p.legs.filter(l => l.mode !== 'walk');
     if (rides[0]?.from?.lat) pts.push(rides[0].from);
     if (rides.at(-1)?.to?.lat) pts.push(rides.at(-1).to);
+    // Where a later ride boards near the start, an earlier one ends near the end (a change ridden round).
+    for (const l of rides.slice(1)) if (l.from?.lat && meters(o.lat, o.lon, l.from.lat, l.from.lon) < 6000) pts.push(l.from);
+    for (const l of rides.slice(0, -1)) if (l.to?.lat && meters(d.lat, d.lon, l.to.lat, l.to.lon) < 6000) pts.push(l.to);
   }
   // One per ~400 m.
   const out = [];
   for (const p of pts) if (!out.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400)) out.push({ lat: p.lat, lon: p.lon });
-  return out.slice(0, swap ? 11 : 8);
+  return out.slice(0, 12);
 }

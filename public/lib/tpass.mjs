@@ -1,6 +1,7 @@
 // TPASS 行政院通勤月票: which pass you have (我的 → TPASS), and what of a
 // plan it covers: buses, 台鐵 and metros inside its cities (never 高鐵),
-// and YouBike's first 30 minutes where the pass includes it. Prices are
+// and YouBike's first 30 minutes where the pass includes it; 台鐵's
+// 太魯閣, 普悠瑪 and EMU3000 never. Prices are
 // what each pass costs a month (shown only; the ranking uses what a plan
 // would still cost you).
 
@@ -17,6 +18,13 @@ export const tpassOf = id => TPASSES.find(p => p.id === id) || null;
 
 const PAID = new Set(['bus', 'tra', 'metro', 'lightrail']);
 
+// 台鐵 trains no TPASS takes: 太魯閣, 普悠瑪 and the EMU3000 自強 (type
+// codes 1, 2, 11; Google names them). Every other class does (自強 too).
+export const PREMIUM = new Set(['1', '2', '11']);
+export const passTrain = l => l.mode !== 'tra' || !(PREMIUM.has(String(l.train?.code ?? l.trip?.code ?? '')) || /普悠瑪|太魯閣|3000/.test(`${l.name || ''} ${l.short || ''} ${l.typeFull || ''}`));
+// Can a ride ever be on the pass (高鐵 and a taxi never are)?
+export const passMode = l => l.mode === 'walk' || l.mode === 'bike' || (PAID.has(l.mode) && passTrain(l));
+
 // Each leg: covered by the pass or not. `cityOf(pt)` → TDX city of a point.
 // → { all (every paid leg covered), some, legs: [bool] }.
 export function coverage(plan, pass, cityOf) {
@@ -25,7 +33,7 @@ export function coverage(plan, pass, cityOf) {
   const legs = plan.legs.map(l => {
     if (l.mode === 'walk') return true;
     if (l.mode === 'bike') return pass.bike && (l.dur || 0) <= 30 * 60;
-    if (PAID.has(l.mode)) return inside(l.from) && inside(l.to);
+    if (PAID.has(l.mode)) return passTrain(l) && inside(l.from) && inside(l.to);
     return false;
   });
   const paid = plan.legs.map((l, i) => [l, legs[i]]).filter(([l]) => l.mode !== 'walk');
@@ -35,6 +43,13 @@ export function coverage(plan, pass, cityOf) {
 // What a plan's fare line says, and what it still costs (for the ranking):
 // covered by the pass → 0; partly → the fare as known (Google's or TDX's
 // whole-trip price), marked as partly covered.
+// A trip with both ends inside the pass's cities: only what the pass takes.
+export const inPass = (o, d, pass, cityOf) => Boolean(pass) && [o, d].every(p => p?.lat != null && pass.cities.includes(cityOf(p)));
+
+// Every ride of a plan one the pass takes (a long YouBike ride too: it
+// only costs a little past the half hour).
+export const passOk = (plan, pass, cityOf) => plan.legs.every(l => l.mode === 'walk' || l.mode === 'bike' || (passMode(l) && [l.from, l.to].every(p => p?.lat != null && pass.cities.includes(cityOf(p)))));
+
 export function fareOf(plan, cov) {
   const fare = Number(plan.fare) || 0;
   if (cov?.all) return { text: 'TPASS 涵蓋', cost: 0 };

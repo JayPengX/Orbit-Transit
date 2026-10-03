@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish } from '../public/lib/plan.mjs';
-import { coverage, fareOf, tpassOf } from '../public/lib/tpass.mjs';
+import { coverage, fareOf, tpassOf, passOk, inPass } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
@@ -621,4 +621,53 @@ test('navigation only for a plan leaving soon; its ride said the way the sign sa
   assert.equal(rideName({ mode: 'tra', short: '區間車' }), '台鐵 區間車');
   assert.equal(rideName({ mode: 'hsr', short: '613 次' }), '高鐵 613 次');
   assert.equal(rideName({ mode: 'bus', short: '5608' }), '公車 5608');
+});
+
+test('inside your TPASS area only what the pass takes: no 高鐵, no 普悠瑪, unless that’s all', () => {
+  const pass = tpassOf('hh');
+  const city = pt => (pt.lat > 24.6 ? 'HsinchuCounty' : 'Taipei');
+  const a = { lat: 24.8, lon: 121 };
+  const b = { lat: 24.7, lon: 121.1 };
+  const leg = (mode, extra, dep, arr) => ({ mode, from: a, to: b, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0, ...extra });
+  const puyuma = finish({ legs: [leg('tra', { name: '自強(普悠瑪)', short: '自強 123', train: { code: '2' } }, '08:00', '08:20')] });
+  const local = finish({ legs: [leg('tra', { name: '區間', short: '區間 1234', train: { code: '6' } }, '08:05', '08:40')] });
+  const hsr = finish({ legs: [leg('hsr', { name: '高鐵' }, '08:00', '08:10')] });
+  assert.ok(inPass(a, b, pass, city));
+  assert.equal(inPass(a, { lat: 24.5, lon: 121.5 }, pass, city), false);
+  assert.deepEqual([puyuma, local, hsr].map(p => passOk(p, pass, city)), [false, true, false]);
+  assert.equal(coverage(puyuma, pass, city).all, false);
+  const keep = p => passOk(p, pass, city);
+  assert.deepEqual(rank([puyuma, local, hsr], { now: T('08:00'), keep }).map(p => p.legs[0].name), ['區間']);
+  assert.equal(rank([puyuma, hsr], { now: T('08:00'), keep }).length, 2);
+});
+
+test('a change gone: by YouBike to the one bus that goes the whole way', () => {
+  const o = { lat: 24.821, lon: 121.018 };
+  const s = { lat: 24.835, lon: 121.0 }; // where the second bus boards, ~2.4 km away
+  const d = { lat: 24.733, lon: 121.088 };
+  const bikes = [
+    { uid: 'h', name: '家', lat: 24.8212, lon: 121.0182, bikes: 4, ebike: 0, ret: 4, ok: true },
+    { uid: 's', name: '轉乘站', lat: 24.8352, lon: 121.0002, bikes: 2, ebike: 0, ret: 6, ok: true }
+  ];
+  const leg = (mode, short, a, b, dep, arr) => ({ mode, short, from: { name: short, ...a }, to: { name: short, ...b }, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0 });
+  const two = finish({ legs: [leg('bus', '5615', o, s, '08:00', '08:12'), leg('bus', '5608', s, d, '08:25', '09:05')] });
+  const ranked = withBikes([two], o, d, bikes, T('07:55'), { modes: null });
+  const direct = ranked.find(p => p.legs.some(l => l.mode === 'bike') && p.legs.filter(l => l.mode === 'bus').length === 1);
+  assert.ok(direct, 'a plan riding to the 5608');
+  assert.equal(direct.legs.find(l => l.mode === 'bus').short, '5608');
+  assert.equal(ranked[0], direct);
+});
+
+test('a weekday trip on a Sunday is Monday’s; a day of its own keeps its own time', async () => {
+  const { tripNow } = await import('../public/lib/tab-go.mjs');
+  const home = { name: '家', lat: 24.821, lon: 121.018 };
+  const school = { name: '學校', lat: 24.733, lon: 121.088 };
+  const t = cleanSaved({ id: 's1', name: '上學', from: home, to: school, time: '07:30', days: [1, 2, 3, 4, 5], back: '17:00', alt: [{ days: [3], time: '09:10', back: '' }, { days: [3, 5], time: '', back: '15:00' }] });
+  assert.deepEqual(t.alt, [{ days: [3], time: '09:10', back: '' }, { days: [5], time: '', back: '15:00' }]);
+  const sun = twAt('2026-10-04', '20:00'); // a Sunday
+  assert.equal(tripNow(t, home, sun).at, twAt('2026-10-05', '07:30'));
+  assert.equal(tripNow(t, home, twAt('2026-10-06', '09:00')).at, twAt('2026-10-07', '09:10'), 'Tuesday after: Wednesday’s own time');
+  assert.equal(tripNow(t, school, twAt('2026-10-09', '12:00')).at, twAt('2026-10-09', '15:00'), 'Friday home earlier');
+  assert.equal(tripNow(t, school, twAt('2026-10-08', '12:00')).at, twAt('2026-10-08', '17:00'));
+  assert.equal(tripNow(t, home, twAt('2026-10-08', '20:00')).at, twAt('2026-10-09', '07:30'), 'Friday out: the usual time');
 });

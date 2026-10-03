@@ -10,13 +10,14 @@ import { errorText } from './api.mjs';
 import { CITIES, cityShort } from './city.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
+import { tpassOf, PREMIUM } from './tpass.mjs';
 import { sheet, sheetHead, icon } from './ui.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText } from './util.mjs';
 
 const $ = id => document.getElementById(id);
 let ctx = null;
 let shownNow = '';
-const state = { from: null, to: null, mode: 'all', date: null, time: null, results: null, open: -1, error: '', delays: new Map(), fares: new Map() };
+const state = { from: null, to: null, mode: 'all', date: null, time: null, results: null, open: -1, error: '', delays: new Map(), fares: new Map(), passOnly: false };
 
 export function init(c) {
   ctx = c;
@@ -93,17 +94,17 @@ function resultsHtml() {
   if (!state.results) return `<div class="ot-empty-card">${icon('tra', 'big')}<h3>台鐵、高鐵一起查</h3><p>選起訖站，自動找出最快的走法：支線換幹線、台鐵換高鐵，換車要走多久都算好了。</p></div>`;
   if (!state.results.length) return '<p class="ot-note">這個時間之後找不到班次，換個時間或日期試試。</p>';
   const labels = tags(state.results);
-  const pinBar = `<div class="ot-pin-bar"><button class="q-btn${pinnedConn() ? ' on' : ''}" type="button" data-act="pin-conn" ${pinnedConn() ? 'disabled' : ''}>${icon('star')} ${pinnedConn() ? '已釘選，在「交通」看下一班' : `釘選 ${e(stationLabel(state.from))} → ${e(stationLabel(state.to))}`}</button></div>`;
-  return pinBar + state.results
+  const passNote = state.passOnly ? `<p class="ot-note">在你的 TPASS（${e(pass().name)}）範圍內：只列月票能搭的車（不含高鐵、太魯閣、普悠瑪、EMU3000）。</p>` : '';
+  const pinBar = `<div class="ot-pin-bar"><button class="q-btn${pinnedConn() ? ' on' : ''}" type="button" data-act="pin-conn">${icon('star')} ${pinnedConn() ? '已釘選（再按一次取消）' : `釘選 ${e(stationLabel(state.from))} → ${e(stationLabel(state.to))}`}</button></div>`;
+  return pinBar + passNote + state.results
     .map((j, i) => {
       const rides = j.legs.filter(l => !l.walk);
       const delay = rides.reduce((a, l) => a + (l.trip.sys === 'tra' ? state.delays.get(l.trip.no) || 0 : 0), 0);
       const first = rides[0];
-      const fare = rides.map(l => state.fares.get(fareKey(l))).reduce((a, b) => (a == null || b == null ? null : a + b), 0);
       return `<button class="ot-jny${i === state.open ? ' on' : ''}" type="button" data-j="${i}">
         <div class="ot-jny-top"><span class="ot-jny-time"><b>${e(hm(j.dep))}</b> → <b>${e(hm(j.arr))}</b></span><span class="ot-jny-dur">${e(minsText((j.arr - j.dep) / 1000))}</span></div>
         <div class="ot-jny-legs">${rides.map(l => `<span class="ot-train-chip ${l.trip.sys} ${l.trip.code === '6' || l.trip.code === '10' ? 'local' : ''}">${e(l.trip.type)} ${e(l.trip.no)}</span>`).join('<span class="ot-leg-sep">›</span>')}</div>
-        <div class="ot-jny-sub">${[j.transfers ? `轉乘 ${j.transfers} 次` : '直達', first && state.delays.get(first.trip.no) ? `首班晚 ${state.delays.get(first.trip.no)} 分` : '', fare ? `約 NT$${fare}` : '', ...(labels.get(j) || [])].filter(Boolean).map(t => `<span>${e(t)}</span>`).join('')}${delay && !state.delays.get(first?.trip.no) ? `<span class="warn">途中誤點 ${delay} 分</span>` : ''}</div>
+        <div class="ot-jny-sub">${[j.transfers ? `轉乘 ${j.transfers} 次` : '直達', first && state.delays.get(first.trip.no) ? `首班晚 ${state.delays.get(first.trip.no)} 分` : '', fareText(rides), ...(labels.get(j) || [])].filter(Boolean).map(t => `<span>${e(t)}</span>`).join('')}${delay && !state.delays.get(first?.trip.no) ? `<span class="warn">途中誤點 ${delay} 分</span>` : ''}</div>
         ${i === state.open ? detailHtml(j) : ''}
       </button>`;
     })
@@ -111,6 +112,17 @@ function resultsHtml() {
 }
 
 const fareKey = l => `${l.from}>${l.to}:${l.trip.code}`;
+// Your TPASS (我的 → TPASS): a 台鐵 ride inside its cities, not a 太魯閣, 普悠瑪 or EMU3000.
+const pass = () => tpassOf(ctx.data.prefs.tpass);
+const inPassSt = key => Boolean(pass()?.cities.includes(net?.st.get(key)?.city));
+const onPass = l => Boolean(pass()) && l.trip.sys === 'tra' && !PREMIUM.has(String(l.trip.code)) && inPassSt(l.from) && inPassSt(l.to);
+// What a journey costs you: the legs your pass doesn't take.
+function fareText(rides) {
+  const paid = rides.filter(l => !onPass(l));
+  if (!paid.length && pass()) return 'TPASS 涵蓋';
+  const f = paid.map(l => state.fares.get(fareKey(l))).reduce((a, b) => (a == null || b == null ? null : a + b), 0);
+  return f ? `約 NT$${f}${paid.length < rides.length ? '（其餘 TPASS）' : ''}` : '';
+}
 let net = null;
 const nameOf = key => {
   const s = net?.st.get(key);
@@ -131,12 +143,12 @@ function detailHtml(j) {
     }
     const t = l.trip;
     const d = t.sys === 'tra' ? state.delays.get(t.no) : 0;
-    const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no);
+    const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no && p.sys === t.sys);
     out.push(`<li class="ride ${t.sys}"><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what">
       <b>${e(t.typeFull || t.type)} ${e(t.no)} 次</b> 往 ${e(t.headsign)}${d ? ` <span class="warn">晚 ${d} 分</span>` : ''}
       <span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')} ${pinned ? '已釘選' : '釘選這班'}</span>
       <span class="ot-ride"><span><b>${e(hm(l.dep))}</b> ${e(nameOf(l.from))}</span><span><b>${e(hm(l.arr))}</b> ${e(nameOf(l.to))}</span></span>
-      <small>${l.stops} 站 · ${e(minsText((l.arr - l.dep) / 1000))}${state.fares.get(fareKey(l)) ? ` · NT$${state.fares.get(fareKey(l))}` : ''}${t.bike ? ' · 可攜自行車' : ''}</small></span></li>`);
+      <small>${l.stops} 站 · ${e(minsText((l.arr - l.dep) / 1000))}${onPass(l) ? ' · TPASS' : state.fares.get(fareKey(l)) ? ` · NT$${state.fares.get(fareKey(l))}` : ''}${t.bike ? ' · 可攜自行車' : ''}</small></span></li>`);
   });
   return `<ol class="ot-steps rail">${out.join('')}</ol>`;
 }
@@ -166,7 +178,16 @@ async function search() {
     // the walks are in the network.)
     const starts = [{ key: fromKey, at: Math.max(t, now - 60_000) }];
     const ends = [{ key: toKey, extra: 0 }];
-    state.results = journeys(net, starts, ends, t, { use, n: 6 });
+    // Both stations inside your TPASS's cities: only the trains it takes (unless there are none).
+    state.passOnly = false;
+    if (state.mode !== 'hsr' && inPassSt(fromKey) && inPassSt(toKey)) {
+      const mine = journeys(net, starts, ends, t, { use: x => x.sys === 'tra' && !PREMIUM.has(String(x.code)) && use(x), n: 6 });
+      if (mine.length) {
+        state.passOnly = true;
+        state.results = mine;
+      }
+    }
+    if (!state.passOnly) state.results = journeys(net, starts, ends, t, { use, n: 6 });
   } catch (err) {
     state.error = errorText(err);
     state.results = null;
@@ -189,6 +210,14 @@ function onClick(ev) {
   const pt = ev.target.closest('[data-pin-train]');
   if (pt) {
     const x = JSON.parse(pt.dataset.pinTrain);
+    const had = ctx.data.pins.find(p => p.kind === 'trainNo' && p.no === x.no && p.sys === x.sys);
+    if (had) {
+      ctx.data.pins = ctx.data.pins.filter(p => p !== had);
+      ctx.save();
+      ctx.status(`已取消釘選 ${x.no} 次`);
+      $('t-results').innerHTML = resultsHtml();
+      return;
+    }
     if (pinTrain(ctx, { kind: 'trainNo', sys: x.sys, no: x.no, type: x.type, dep: x.dep, from: keyStation(x.from), to: keyStation(x.to) })) {
       ctx.status(`已釘選 ${x.no} 次，在「交通」看它的時間和誤點`);
       $('t-results').innerHTML = resultsHtml();
@@ -221,6 +250,12 @@ function onClick(ev) {
     return render();
   }
   if (act === 'pin-conn') {
+    if (pinnedConn()) {
+      ctx.data.pins = ctx.data.pins.filter(p => !(p.kind === 'train' && p.from.id === state.from.id && p.to.id === state.to.id && p.from.sys === state.from.sys));
+      ctx.save();
+      ctx.status('已取消釘選');
+      return ($('t-results').innerHTML = resultsHtml());
+    }
     if (pinTrain(ctx, { kind: 'train', from: state.from, to: state.to })) ctx.status('已釘選，在「交通」看接下來的車');
     return ($('t-results').innerHTML = resultsHtml());
   }

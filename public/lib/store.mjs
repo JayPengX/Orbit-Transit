@@ -79,10 +79,30 @@ export function cleanSaved(x) {
     by: x.by === 'arrive' ? 'arrive' : 'depart',
     days: [...new Set((Array.isArray(x.days) ? x.days : []).map(Number).filter(d => d >= 0 && d <= 6))].sort(),
     back: hhmm(x.back),
+    // Days whose times differ (星期五 earlier home): [{ days, time, back }], each a day only once.
+    alt: cleanAlt(x.alt),
     // Recommendations pinned on it (their rides: ridesSig in plan.mjs), shown first.
     picks: [...new Set((Array.isArray(x.picks) ? x.picks : []).filter(k => typeof k === 'string' && k.length <= 300))].slice(0, 6)
   };
 }
+function cleanAlt(list) {
+  const used = new Set();
+  const out = [];
+  for (const a of Array.isArray(list) ? list : []) {
+    const days = [...new Set((Array.isArray(a?.days) ? a.days : []).map(Number).filter(d => d >= 0 && d <= 6 && !used.has(d)))].sort();
+    const x = { days, time: hhmm(a?.time), back: hhmm(a?.back) };
+    if (!days.length || !(x.time || x.back) || out.length >= 4) continue;
+    days.forEach(d => used.add(d));
+    out.push(x);
+  }
+  return out;
+}
+// A saved trip's times on a day of the week: that day's own, else the usual.
+export function slotOf(t, dow) {
+  const a = t.alt?.find(x => x.days.includes(dow));
+  return a ? { time: a.time || t.time, back: a.back || t.back } : { time: t.time, back: t.back };
+}
+
 // A pinned train: a connection (from → to, every train), or one train by its number.
 export function cleanPin(x) {
   if (!x || typeof x !== 'object') return null;
