@@ -231,22 +231,26 @@ test('ranking: soonest first, every transit plan kept however late, each labelle
 test('TDX’s YouBike first mile gets its stations; a long walk to a bus becomes a ride to it', () => {
   // TDX's answer: bike to the express bus, ride, a zero-length walk, bike from the end.
   const tdxBike = P(T('08:00'), [
-    { mode: 'bike', dur: 400, dist: 1500, dep: T('08:00'), arr: T('08:07'), from: { name: '', lat: 24.8011, lon: 120.9902 }, to: { name: '東門', lat: 24.8013, lon: 120.9905 } },
-    { mode: 'bus', short: '快捷8號', dur: 1800, dist: 14000, dep: T('08:10'), arr: T('08:40'), from: { name: '東門', lat: 24.8013, lon: 120.9905 }, to: { name: '新竹站', lat: 24.8018, lon: 120.9720 } },
+    { mode: 'bike', dur: 400, dist: 1500, dep: T('08:00'), arr: T('08:07'), from: { name: '', lat: 24.8011, lon: 120.9902 }, to: { name: '東門', lat: 24.8013, lon: 120.9780 } },
+    { mode: 'bus', short: '快捷8號', dur: 1800, dist: 14000, dep: T('08:10'), arr: T('08:40'), from: { name: '東門', lat: 24.8013, lon: 120.9780 }, to: { name: '新竹站', lat: 24.8018, lon: 120.9720 } },
     { mode: 'walk', dur: 0, dist: 0, dep: T('08:40'), arr: T('08:40'), from: { name: '新竹站', lat: 24.8018, lon: 120.9720 }, to: { name: '新竹站', lat: 24.8018, lon: 120.9720 } }
   ], 'tdx-bike');
-  const out = withBikes([tdxBike], O, D, BIKES, T('07:59'));
+  const near = [...BIKES, { uid: 'f', name: '站前 YouBike', lat: 24.8013, lon: 120.9781, bikes: 1, ebike: 0, ret: 6, ok: true }];
+  const out = withBikes([tdxBike], O, D, near, T('07:59'));
   const mine = out.find(p => p.src === 'tdx-bike');
   assert.equal(mine.legs[0].from.name, '家附近', 'the station with a bike');
   assert.equal(mine.legs[0].rent.uid, 'a');
+  assert.equal(mine.legs[0].to.name, '站前 YouBike');
   assert.equal(mine.legs.length, 2, 'the empty walk gone');
+  // A 220 m "ride" back to the same station is a walk.
+  const stub = P(T('08:00'), [{ ...tdxBike.legs[0], dist: 220, to: { name: '東門', lat: 24.8013, lon: 120.9905 } }, { ...tdxBike.legs[1] }], 'tdx-bike');
+  assert.equal(withBikes([stub], O, D, BIKES, T('07:59')).find(p => p.src === 'tdx-bike').legs[0].mode, 'walk');
   // Google's plan with 1.2 km on foot to its first bus: by bike to that bus instead.
   const far = { lat: 24.8012, lon: 120.9780 };
   const walkToBus = P(T('08:00'), [
     { mode: 'walk', dur: 900, dist: 1300, dep: T('08:00'), arr: T('08:15'), from: { ...BIKES[0] }, to: far },
     { mode: 'bus', short: '5608', dur: 1200, dist: 8000, dep: T('08:20'), arr: T('08:40'), from: { name: '站前', ...far }, to: { name: '竹東', lat: 24.74, lon: 121.09 } }
   ]);
-  const near = [...BIKES, { uid: 'f', name: '站前 YouBike', lat: 24.8013, lon: 120.9781, bikes: 1, ebike: 0, ret: 6, ok: true }];
   const list = withBikes([walkToBus], BIKES[0], { lat: 24.74, lon: 121.09 }, near, T('07:59'));
   const biked = list.find(p => p.src === 'bike+' && p.legs.some(l => l.mode === 'bus'));
   assert.ok(biked, 'a bike to the bus');
