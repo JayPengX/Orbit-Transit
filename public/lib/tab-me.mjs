@@ -20,8 +20,9 @@ const $ = id => document.getElementById(id);
 let ctx = null;
 let metroOpen = false;
 
-// Where to buy tickets: the operators' own apps (the App Store / Google Play
-// page opens the app when it's installed) and their booking sites.
+// Where to buy tickets: the operators' booking sites (a train found in
+// 查時刻 or a plan opens them with its details copied: tickets.mjs), and
+// their apps' store pages.
 const ios = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const TICKETS = [
   { id: 'hsr', name: '高鐵 T Express', sub: '台灣高鐵行動購票', app: { ios: 'https://apps.apple.com/tw/app/id468963664', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E7%81%A3%E9%AB%98%E9%90%B5%20T%20Express&c=apps' }, web: 'https://irs.thsrc.com.tw/IMINT/?locale=tw' },
@@ -87,7 +88,8 @@ function render() {
     </section>
 
     <h3 class="ot-go-h">車票</h3>
-    <section class="ot-go-card">${TICKETS.map(t => `<div class="ot-ticket"><span>${icon(t.id)}<b>${e(t.name)}</b><small>${e(t.sub)}</small></span><a class="q-btn primary" href="${e(t.app[platform])}" target="_blank" rel="noopener">開啟 App</a><a class="q-btn" href="${e(t.web)}" target="_blank" rel="noopener">網頁訂票</a></div>`).join('')}</section>
+    <p class="ot-note ot-go-tip">查時刻和路線裡，每班台鐵、高鐵都有「訂票」：開訂票頁，車次、日期、起訖站先幫你複製好。</p>
+    <section class="ot-go-card">${TICKETS.map(t => `<div class="ot-ticket"><span>${icon(t.id)}<b>${e(t.name)}</b><small>${e(t.sub)}</small></span><a class="q-btn primary" href="${e(t.web)}" target="_blank" rel="noopener">網頁訂票</a><a class="q-btn" href="${e(t.app[platform])}" target="_blank" rel="noopener">App</a></div>`).join('')}</section>
 
     <h3 class="ot-go-h">工具</h3>
     <section class="ot-go-card"><button class="ot-row-btn" type="button" data-act="metro">${icon('metro')}<span><b>捷運路網圖</b><small>台北・新北、桃園機捷、台中、高雄：車站在真正的地圖上，點車站看下一班</small></span>${icon('chevron')}</button></section>

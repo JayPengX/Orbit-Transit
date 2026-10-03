@@ -2756,3 +2756,199 @@ main {
 .ot-eta-row .ot-eta {
   margin-left: auto;
 }
+
+/* ---- Round 4: 捷運路網圖 above the solid header (its city buttons were under it) ---- */
+#panel-metro {
+  z-index: 60;
+}
+.ot-metro-top {
+  min-height: 52px;
+}
+.ot-metro-top .q-icon-btn {
+  flex: none;
+}
+.ot-mk.mstop.far i {
+  width: 6px;
+  height: 6px;
+  margin: -4px 0 0 -4px;
+  border-width: 2px;
+}
+.ot-mk.mstop.x.far i {
+  width: 8px;
+  height: 8px;
+  margin: -5px 0 0 -5px;
+}
+.ot-train-acts {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ot-pin-train.ticket {
+  color: #fdba74;
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+/* 公車: tiles of route numbers (recent, around you), rows of routes found. */
+.ot-bus .ot-go-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ot-bus .ot-go-h .ot-i {
+  width: 15px;
+  height: 15px;
+}
+.ot-bus .ot-go-h .ot-res-clear {
+  margin-left: auto;
+}
+.ot-scroll-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin: 10px -16px 4px;
+  padding: 0 16px 4px;
+  scrollbar-width: none;
+}
+.ot-scroll-chips::-webkit-scrollbar {
+  display: none;
+}
+.ot-scroll-chips .q-chip {
+  flex: none;
+}
+.ot-bus-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ot-bus-tile {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 10px 9px;
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(34, 197, 94, 0.14), rgba(34, 197, 94, 0.04));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-bus-tile b {
+  color: #86efac;
+  font: 800 18px/1.1 var(--q-font);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-bus-tile small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--q-muted);
+  font-size: 11.5px;
+}
+.ot-bus-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ot-bus-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--ot-line);
+  border-radius: 16px;
+  background: var(--q-surface, rgba(255, 255, 255, 0.03));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-bus-row > .ot-i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--q-muted);
+}
+.ot-bus-no {
+  flex: none;
+  min-width: 58px;
+  max-width: 96px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #16a34a;
+  color: #fff;
+  font: 800 16px/1.1 var(--q-font);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ot-bus-ends {
+  display: grid;
+  grid-template-columns: minmax(0, auto) auto minmax(0, auto);
+  align-items: center;
+  column-gap: 6px;
+  flex: 1;
+  min-width: 0;
+  justify-content: start;
+}
+.ot-bus-ends b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14.5px;
+}
+.ot-bus-ends i {
+  font-style: normal;
+  color: var(--q-muted);
+}
+.ot-bus-ends small {
+  grid-column: 1 / -1;
+  color: var(--q-muted);
+  font-size: 12px;
+}
+.ot-bus-ends em {
+  font-style: normal;
+  color: #86efac;
+  font-weight: 700;
+}
+.ot-times-l.wide {
+  width: 92px;
+  text-align: center;
+}
+.ot-alt .ot-times input {
+  min-height: 42px;
+  line-height: 42px;
+  padding: 0 8px;
+  font-size: 15px;
+}
+.ot-alt .q-icon-btn {
+  flex: none;
+}
+#st-alt:empty {
+  display: none;
+}
+#st-alt {
+  grid-template-columns: minmax(0, 1fr);
+}
+#st-alt > *,
+.ot-alt > * {
+  min-width: 0;
+}
+.ot-alt-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ot-alt-top .ot-weekdays {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+.ot-weekdays.small .q-chip {
+  flex: 0 0 34px;
+}
+#st-alt .ot-go-link {
+  justify-self: start;
+}
