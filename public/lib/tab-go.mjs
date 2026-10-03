@@ -228,8 +228,13 @@ function nearHtml() {
   else if (!S.near.length) out.push('<p class="ot-note">附近 350 公尺內沒有公車站牌。</p>');
   else {
     // Every bus due around you, soonest first, its stop beside it.
-    const all = S.near.flatMap(st => st.rows.map(r => ({ ...r, lat: st.lat, lon: st.lon, sd: st.dist }))).sort((a, b) => etaRank(a.v) - etaRank(b.v)).slice(0, 8);
-    out.push(all.map(x => busRow(x)).join(''));
+    const all = S.near.flatMap(st => st.rows.map(r => ({ ...r, lat: st.lat, lon: st.lon, sd: st.dist }))).sort((a, b) => etaRank(a.v) - etaRank(b.v));
+    // Buses done for the day are one line, not a list.
+    const done = x => x.v && (x.v.status === 3 || x.v.status === 4);
+    const running = all.filter(x => !done(x));
+    out.push(running.slice(0, 8).map(x => busRow(x)).join(''));
+    const off = new Set(all.filter(done).map(x => x.route));
+    if (off.size) out.push(`<p class="ot-note">${running.length ? '另有 ' : '附近的公車'}${e([...off].slice(0, 6).join('、'))}${off.size > 6 ? ' 等' : ''}今天已收班。</p>`);
   }
   if (S.station?.st) {
     const s = S.station.st;
