@@ -91,8 +91,8 @@ export function bikeOnly(o, d, bikes, now) {
 // The plan with its start swapped for a bike ride to its first train or
 // metro: the same train, leaving later. Only when it replaces a bus or a
 // walk of 600 m or more.
-export function bikeToRail(plan, o, bikes) {
-  const k = plan.legs.findIndex(l => RAIL.has(l.mode));
+export function bikeToRail(plan, o, bikes, { anyRide = false } = {}) {
+  const k = plan.legs.findIndex(l => (anyRide ? l.mode !== 'walk' && l.mode !== 'bike' : RAIL.has(l.mode)));
   if (k <= 0) return null;
   const before = plan.legs.slice(0, k);
   if (!before.some(l => l.mode === 'bus') && before.reduce((a, l) => a + (l.mode === 'walk' ? l.dist || 0 : 0), 0) < 600) return null;
@@ -107,9 +107,9 @@ export function bikeToRail(plan, o, bikes) {
 }
 
 // The plan's end swapped for a bike ride from its last train or metro.
-export function bikeFromRail(plan, d, bikes) {
+export function bikeFromRail(plan, d, bikes, { anyRide = false } = {}) {
   let k = -1;
-  plan.legs.forEach((l, i) => RAIL.has(l.mode) && (k = i));
+  plan.legs.forEach((l, i) => (anyRide ? l.mode !== 'walk' && l.mode !== 'bike' : RAIL.has(l.mode)) && (k = i));
   if (k < 0 || k === plan.legs.length - 1) return null;
   const after = plan.legs.slice(k + 1);
   if (!after.some(l => l.mode === 'bus') && after.reduce((a, l) => a + (l.mode === 'walk' ? l.dist || 0 : 0), 0) < 600) return null;
@@ -209,21 +209,41 @@ export function rank(plans, { now = Date.now() } = {}) {
 
 // Our plans added to the proxy's, from the bikes near both ends and the stations.
 export function withBikes(plans, o, d, bikes, now = Date.now()) {
-  const out = [...plans];
+  // A planner's own bike legs (TDX's YouBike first and last mile) get the
+  // stations they start and end at, with the bikes and docks there now.
+  const out = plans.map(p => (p.legs.some(l => l.mode === 'bike' && !l.rent) ? withStations(p, bikes) : p));
   if (bikes.length) {
     out.push(...bikeOnly(o, d, bikes, now));
     for (const p of plans) {
-      const a = bikeToRail(p, o, bikes);
-      const b = bikeFromRail(p, d, bikes);
-      if (a) out.push(a);
-      if (b) out.push(b);
-      if (a) {
-        const ab = bikeFromRail(a, d, bikes);
-        if (ab) out.push(ab);
+      if (p.bike) continue;
+      // By bike to the train (instead of the bus to it), and to the first
+      // bus too (instead of a long walk to it); the same from the end.
+      for (const anyRide of [false, true]) {
+        const a = bikeToRail(p, o, bikes, { anyRide });
+        const b = bikeFromRail(p, d, bikes, { anyRide });
+        if (a) out.push(a);
+        if (b) out.push(b);
+        if (a) {
+          const ab = bikeFromRail(a, d, bikes, { anyRide });
+          if (ab) out.push(ab);
+        }
       }
     }
   }
   return rank(out, { now });
+}
+
+function withStations(p, bikes) {
+  const legs = p.legs
+    // TDX's zero-length walks between two halves of one stop.
+    .filter(l => !(l.mode === 'walk' && (l.dist || 0) < 5 && (l.dur || 0) < 30))
+    .map(l => {
+      if (l.mode !== 'bike' || l.rent) return l;
+      const rent = rentNear(l.from, bikes, { max: 700 });
+      const ret = returnNear(l.to, bikes, { max: 700 });
+      return { ...l, name: 'YouBike', rent, ret, from: rent ? { name: rent.name, lat: rent.lat, lon: rent.lon } : { ...l.from, name: l.from.name || '附近的 YouBike 站' }, to: ret ? { name: ret.name, lat: ret.lat, lon: ret.lon } : { ...l.to, name: l.to.name || '附近的 YouBike 站' } };
+    });
+  return finish({ ...p, legs });
 }
 
 // The points whose YouBike stations a set of plans needs: both ends, and
@@ -234,9 +254,13 @@ export function bikePoints(plans, o, d) {
     const rail = p.legs.filter(l => RAIL.has(l.mode));
     if (rail[0]?.from?.lat) pts.push(rail[0].from);
     if (rail.at(-1)?.to?.lat) pts.push(rail.at(-1).to);
+    // The first and last stops of any ride, and a planner's own bike legs' ends.
+    const rides = p.legs.filter(l => l.mode !== 'walk');
+    if (rides[0]?.from?.lat) pts.push(rides[0].from);
+    if (rides.at(-1)?.to?.lat) pts.push(rides.at(-1).to);
   }
   // One per ~400 m.
   const out = [];
   for (const p of pts) if (!out.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400)) out.push({ lat: p.lat, lon: p.lon });
-  return out.slice(0, 6);
+  return out.slice(0, 8);
 }

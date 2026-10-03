@@ -333,7 +333,11 @@ export function tags(list) {
 
 // TDX v3 TRA ODFare → the adult one-way price for a train type code.
 export function traFare(j, code) {
-  const fares = j?.ODFares || [];
+  // Each fare comes twice: the short way, and the long way round the island
+  // (竹北 → 香山 by 862 km). Only the short one is the trip.
+  const all = j?.ODFares || [];
+  const km = Math.min(...all.map(f => Number(f.TravelDistance)).filter(Number.isFinite));
+  const fares = Number.isFinite(km) ? all.filter(f => !(Number(f.TravelDistance) > km)) : all;
   const pick = fares.find(f => String(f.TrainType) === String(code)) || fares.find(f => String(f.TrainType) === (EXPRESS.has(String(code)) ? '3' : '6')) || fares[0];
   const p = pick?.Fares?.find(f => f.TicketType === 1 && f.FareClass === 1) || pick?.Fares?.[0];
   return p ? Number(p.Price) : null;

@@ -14,13 +14,14 @@ import { e, hm, minsText, tw, twAt, addDays, meters, distText } from './util.mjs
 
 const $ = id => document.getElementById(id);
 let ctx = null;
+let shownNow = '';
 const state = { from: null, to: null, mode: 'all', date: null, time: null, results: null, open: -1, error: '', delays: new Map(), fares: new Map() };
 
 export function init(c) {
   ctx = c;
   $('panel-train').addEventListener('click', onClick);
   $('panel-train').addEventListener('change', ev => {
-    if (ev.target.id === 't-time') state.time = ev.target.value || null;
+    if (ev.target.id === 't-time') state.time = ev.target.value && ev.target.value !== shownNow ? ev.target.value : null;
     if (ev.target.id === 't-date') state.date = ev.target.value || null;
   });
   const last = ctx.data.trains[0];
@@ -70,7 +71,7 @@ function render() {
       </div>
       <div class="ot-when-row">
         <label class="ot-field inline"><span>日期</span><input id="t-date" type="date" value="${date}" min="${today}" max="${addDays(today, 30)}"></label>
-        <label class="ot-field inline"><span>出發</span><input id="t-time" type="time" value="${state.time || ''}" placeholder="現在"></label>
+        <label class="ot-field inline"><span>出發時間</span><input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}"></label>
         <button class="q-btn primary" type="button" data-act="go" ${state.from && state.to ? '' : 'disabled'}>${icon('search')} 查詢</button>
       </div>
       ${recent.length ? `<div class="q-chips ot-recent">${recent.map((x, i) => `<button class="q-chip" type="button" data-recent="${i}">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</button>`).join('')}</div>` : ''}
@@ -196,7 +197,9 @@ function onClick(ev) {
     return render();
   }
   if (act === 'go') {
-    state.time = $('t-time').value || null;
+    // The time shown when nobody changed it is "now", whenever 查詢 is pressed.
+    const v = $('t-time').value;
+    state.time = v && v !== shownNow ? v : null;
     state.date = $('t-date').value || null;
     return search();
   }
