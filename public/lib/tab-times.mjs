@@ -2,14 +2,14 @@
 // itself). 台鐵・高鐵: station to station, the changes found (tab-train.mjs).
 // 公車: a route by its number or a stop's name, in your city, its
 // neighbours and 公路客運; its stops each way with the buses now, or a stop's
-// whole timetable for today; ☆ pins a stop.
+// timetable for any day of the coming week; ☆ pins a stop.
 
 import * as trainTab from './tab-train.mjs';
 import { cityRoutes, findRoutes, stationsNear, routeCity, INTERCITY } from './bus.mjs';
 import { tpassOf } from './tpass.mjs';
 import { openRoute, useBusCtx } from './bus-ui.mjs';
 import { errorText } from './api.mjs';
-import { CITIES, cityName, cityShort, NEAR_CITIES } from './city.mjs';
+import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
 import { e, meters } from './util.mjs';
 
@@ -55,9 +55,9 @@ function pick(v) {
 }
 
 // ---- 公車 -----------------------------------------------------------------------------------------------
-// Nothing typed: the routes you looked at lately and those at the stops
-// around you, as number tiles; typed: the routes found, each with its two
-// ends (and TPASS when your pass takes it).
+// Nothing typed: the routes you looked at lately (rows) and the stops
+// around you, each with its routes' numbers; typed: the routes found, each
+// with its two ends (and TPASS when your pass takes it).
 
 const NEAR = 'near';
 const RECENT = 'orbit-transit.routes';
@@ -97,7 +97,7 @@ function busInit() {
     const r = ev.target.closest('[data-r]');
     if (r) {
       const [city, uid] = r.dataset.r.split('|');
-      const route = bus.list.find(x => x.uid === uid) || recentRoutes().find(x => x.uid === uid) || bus.around?.find(x => x.uid === uid) || { uid, city, name: r.dataset.name || '' };
+      const route = bus.list.find(x => x.uid === uid) || recentRoutes().find(x => x.uid === uid) || bus.around?.flatMap(x => x.routes).find(x => x.uid === uid) || { uid, city, name: r.dataset.name || '' };
       return openBus(route);
     }
     if (ev.target.closest('[data-clear-routes]')) {
@@ -114,16 +114,27 @@ function busShow() {
   else busDraw();
   if (!bus.around) aroundRoutes();
 }
-// The routes at the stops within ~400 m of you.
+// The stops within ~400 m of you, nearest first, each with its routes:
+// [{ name, dist, routes: [{ uid, name, city }] }] (a stop's two sides as one).
 async function aroundRoutes() {
   const h = ctx.here || (await ctx.locate());
   if (!h) return;
   try {
     const list = await stationsNear(h.lat, h.lon);
-    const near = list.filter(s => meters(h.lat, h.lon, s.lat, s.lon) <= 400).sort((a, b) => meters(h.lat, h.lon, a.lat, a.lon) - meters(h.lat, h.lon, b.lat, b.lon));
-    const seen = new Map();
-    for (const s of near) for (const x of s.stops) if (!seen.has(x.routeUID)) seen.set(x.routeUID, { uid: x.routeUID, name: x.route, city: routeCity(x.routeUID), stop: s.name });
-    bus.around = [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant', { numeric: true })).slice(0, 24);
+    const byName = new Map();
+    for (const s of list) {
+      const dist = meters(h.lat, h.lon, s.lat, s.lon);
+      if (dist > 400) continue;
+      const stop = byName.get(s.name) || { name: s.name, dist, routes: new Map() };
+      stop.dist = Math.min(stop.dist, dist);
+      for (const x of s.stops) if (!stop.routes.has(x.routeUID)) stop.routes.set(x.routeUID, { uid: x.routeUID, name: x.route, city: routeCity(x.routeUID) });
+      byName.set(s.name, stop);
+    }
+    const byNo = (a, b) => a.name.localeCompare(b.name, 'zh-Hant', { numeric: true });
+    bus.around = [...byName.values()]
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 5)
+      .map(x => ({ ...x, routes: [...x.routes.values()].sort(byNo) }));
   } catch {
     bus.around = [];
   }
@@ -143,7 +154,10 @@ async function busLoad() {
 const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
 // A city bus inside your TPASS's cities (公路客運 runs between them: not marked).
 const onPass = r => Boolean(tpassOf(ctx.data.prefs.tpass)?.cities.includes(r.city));
-const tile = r => `<button class="ot-bus-tile" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"><b>${e(r.name)}</b><small>${e(r.to ? `往 ${r.to}` : r.stop || where(r))}</small></button>`;
+// A route as a row: its number, then where it runs.
+const row = r => `<button class="ot-bus-row" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"><span class="ot-bus-no">${e(r.name)}</span><span class="ot-bus-ends">${r.from && r.to ? `<b>${e(r.from)}</b><i>↔</i><b>${e(r.to)}</b>` : `<b>${e(r.to ? `往 ${r.to}` : where(r))}</b>`}<small>${e(where(r))}${onPass(r) ? ' · <em>TPASS</em>' : ''}</small></span>${icon('chevron')}</button>`;
+// A stop near you: its name and distance, its routes as numbers to tap.
+const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${Math.round(s.dist / 10) * 10} 公尺</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}">${e(r.name)}</button>`).join('')}</div></div>`;
 function busDraw() {
   const home = ctx.city || 'Taipei';
   $('tb-city').innerHTML = [[NEAR, `${cityShort(home)}附近`], [INTERCITY, '公路客運'], ...CITIES.map(([k]) => [k, cityShort(k)])]
@@ -154,16 +168,14 @@ function busDraw() {
     const recent = recentRoutes();
     const around = bus.around || [];
     $('tb-list').innerHTML =
-      (recent.length ? `<h3 class="ot-go-h">最近查看<button class="ot-res-clear" type="button" data-clear-routes="1">清除</button></h3><div class="ot-bus-tiles">${recent.map(tile).join('')}</div>` : '') +
-      (around.length ? `<h3 class="ot-go-h">${icon('pin')} 你附近的站牌</h3><div class="ot-bus-tiles">${around.map(tile).join('')}</div>` : bus.around ? '' : '<p class="ot-note">找你附近的路線…</p>') +
-      `<p class="ot-note">${!bus.list.length ? (bus.failed ? e(bus.failed) : '載入路線中…') : `${e(bus.city === NEAR ? `${cityShort(home)}、鄰近縣市與公路客運` : bus.city === INTERCITY ? '公路客運與國道客運' : cityName(bus.city))}共 ${bus.list.length} 條路線：輸入號碼或站名。`}</p>`;
+      (recent.length ? `<h3 class="ot-go-h">最近查看<button class="ot-res-clear" type="button" data-clear-routes="1">清除</button></h3><div class="ot-bus-group">${recent.slice(0, 5).map(row).join('')}</div>` : '') +
+      (around.length ? `<h3 class="ot-go-h">${icon('pin')} 你附近的站牌</h3>${around.map(nearStop).join('')}` : bus.around ? '' : '<p class="ot-note">找你附近的站牌…</p>') +
+      (bus.failed && !bus.list.length ? `<p class="ot-note bad">${e(bus.failed)}</p>` : '');
     return;
   }
   const found = findRoutes(bus.list, t);
   $('tb-list').innerHTML = !bus.list.length
     ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || '載入路線中…')}</p>`
-    : `<div class="ot-bus-results">${found
-        .map(r => `<button class="ot-bus-row" type="button" data-r="${e(`${r.city}|${r.uid}`)}"><span class="ot-bus-no">${e(r.name)}</span><span class="ot-bus-ends"><b>${e(r.from)}</b><i>↔</i><b>${e(r.to)}</b><small>${e(where(r))}${onPass(r) ? ' · <em>TPASS</em>' : ''}</small></span>${icon('chevron')}</button>`)
-        .join('')}</div>` || '<p class="ot-note">沒有符合的路線，試試其他縣市。</p>';
+    : `<div class="ot-bus-group">${found.map(row).join('')}</div>`;
   if (bus.list.length && !found.length) $('tb-list').innerHTML = '<p class="ot-note">沒有符合的路線，試試其他縣市。</p>';
 }

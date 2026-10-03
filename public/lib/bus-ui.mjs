@@ -9,8 +9,11 @@ import { errorText, tdx, rows } from './api.mjs';
 import { CITIES, CITY_CODES, cityName, cityShort, NEAR_CITIES } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
-import { e, uid, meters, tw, zh } from './util.mjs';
+import { e, uid, meters, tw, zh, addDays } from './util.mjs';
 
+const WEEK = '日一二三四五六';
+// 'HH:MM' times as a stop's sign has them: an hour a row, its minutes beside it.
+export const hours = times => [...times.reduce((m, t) => m.set(t.slice(0, 2), [...(m.get(t.slice(0, 2)) || []), t]), new Map())];
 let ctx = null;
 export const useBusCtx = c => (ctx = c);
 
@@ -116,8 +119,10 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   let live = new Map();
   let at = 0;
   let err = '';
-  // 即時 (the buses on the stops now) or 時刻表 (today's times at one stop).
+  // 即時 (the buses on the stops now) or 時刻表 (a day's times at one stop:
+  // today, or any day of the coming week, since weekends run their own).
   let view = 'live';
+  let day = 0;
   let sched = null;
   let picked = stopUID;
   const d = sheet(`<div id="rt"></div>`, 'ot-tall-sheet ot-route-sheet');
@@ -138,22 +143,32 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   const tableHtml = w => {
     if (!sched) return '<p class="ot-note">載入時刻表…</p>';
     const s = w.stops.find(x => x.uid === picked) || w.stops[0];
-    const { date, dow, hm: now } = today();
+    const t0 = today();
+    const date = addDays(t0.date, day);
+    const dow = (t0.dow + day) % 7;
+    // Today's past times greyed and its next one marked; another day's all alike.
+    const now = day ? '' : t0.hm;
     const { times, every } = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, date, dow);
-    const next = times.find(t => t >= now);
+    const next = day ? null : times.find(t => t >= now);
+    const named = day === 0 ? '今天' : day === 1 ? '明天' : `週${WEEK[dow]}`;
+    // The coming week, a day a column: 今天, 明天, then by weekday.
+    const days = `<div class="ot-tt-days" role="group" aria-label="哪一天">${[0, 1, 2, 3, 4, 5, 6].map(i => `<button type="button" data-day="${i}" aria-pressed="${i === day}"><small>${i === 0 ? '今天' : i === 1 ? '明天' : '週'}</small><b>${WEEK[(t0.dow + i) % 7]}</b></button>`).join('')}</div>`;
+    // The stop: a native picker (an iPhone's wheel), its name the label.
+    const stopPick = `<label class="ot-tt-stop"><b>${e(s.name)}</b>${icon('down')}<select data-pickstop aria-label="換站牌">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(x.name)}</option>`).join('')}</select></label>`;
     const body = times.length
-      ? `<div class="ot-timetable">${times.map(t => `<span class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t)}</span>`).join('')}</div>`
+      ? `<div class="ot-timetable">${hours(times)
+          .map(([h, list]) => `<div class="ot-tt-hour"><b>${e(h)}</b><span>${list.map(t => `<i class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t.slice(3, 5))}</i>`).join('')}</span></div>`)
+          .join('')}</div>`
       : every.length
         ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? `每 ${f.min}–${f.max} 分` : `每 ${f.min || f.max} 分`}</b></div>`).join('')}</div>`
-        : '<p class="ot-note">今天這個站牌沒有排班資料（業者沒提供，或今天停駛）。</p>';
-    return `<div class="ot-tt-head"><b>${e(s.name)}</b><small>今天${times.length ? ` ${times.length} 班${next ? `・下一班 ${e(next)}` : '・今天已收班'}` : ''}</small></div>${body}
-      <p class="ot-note">換站牌：</p><div class="q-chips ot-tt-stops">${w.stops.map(x => `<button class="q-chip" type="button" data-pickstop="${e(x.uid)}" aria-pressed="${x.uid === s.uid}">${e(x.name)}</button>`).join('')}</div>`;
+        : `<p class="ot-note">${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。</p>`;
+    return `${days}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${times.length} 班${day ? '' : next ? `・下一班 ${e(next)}` : '・已收班'}` : ''}</small></div>${body}`;
   };
   const draw = () => {
     const w = ways?.[way];
     const head = sheetHead(`${e(route.name)}`, w ? `往 ${e(w.headsign)}${route.city === INTERCITY ? ' · 公路客運' : ` · ${e(cityShort(route.city))}`}` : '');
-    const tabs = ways && ways.length > 1 ? `<div class="q-chips ot-dir">${ways.map((x, i) => `<button class="q-chip" type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}${x.subName && x.subName !== route.name ? `<small>${e(x.subName)}</small>` : ''}</button>`).join('')}</div>` : '';
-    const views = `<div class="q-chips ot-view"><button class="q-chip" type="button" data-view="live" aria-pressed="${view === 'live'}">即時到站</button><button class="q-chip" type="button" data-view="table" aria-pressed="${view === 'table'}">時刻表</button></div>`;
+    const tabs = ways && ways.length > 1 ? `<div class="ot-segctl ot-dir" role="group" aria-label="方向">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}${x.subName && x.subName !== route.name ? `<small>${e(x.subName)}</small>` : ''}</button>`).join('')}</div>` : '';
+    const views = `<div class="ot-segctl ot-view" role="group" aria-label="即時或時刻表"><button type="button" data-view="live" aria-pressed="${view === 'live'}">即時到站</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">時刻表</button></div>`;
     const stops = !ways
       ? '<p class="ot-note">載入站牌中…</p>'
       : !w
@@ -203,6 +218,11 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   d.onclosed = () => clearInterval(t);
   // Scrolled to the stop asked for.
   if (stopUID) requestAnimationFrame(() => d.querySelector(`[data-stop="${CSS.escape(stopUID)}"]`)?.scrollIntoView({ block: 'center' }));
+  d.addEventListener('change', ev => {
+    if (!ev.target.matches('[data-pickstop]')) return;
+    picked = ev.target.value;
+    draw();
+  });
   d.addEventListener('click', ev => {
     const w = ev.target.closest('[data-way]');
     if (w) {
@@ -214,9 +234,9 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
       view = v.dataset.view;
       return draw();
     }
-    const ps = ev.target.closest('[data-pickstop]');
-    if (ps) {
-      picked = ps.dataset.pickstop;
+    const dy = ev.target.closest('[data-day]');
+    if (dy) {
+      day = Number(dy.dataset.day);
       return draw();
     }
     const a = ev.target.closest('[data-add]');

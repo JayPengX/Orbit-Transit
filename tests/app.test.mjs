@@ -712,3 +712,14 @@ test('a bus alert as the Worker’s notice: the stop’s own TDX ask, checked fr
   // What push.js takes: a station's arrivals, by City or InterCity.
   assert.match(item.check.bus.path, /^advanced\/v2\/Bus\/EstimatedTimeOfArrival\/City\/Hsinchu\/PassThrough\/Station\/1234\?\$select=/);
 });
+
+test('a stop’s timetable an hour a row; any day of the coming week', async () => {
+  const { hours } = await import('../public/lib/bus-ui.mjs');
+  assert.deepEqual(hours(['06:00', '06:20', '07:40', '24:10']), [['06', ['06:00', '06:20']], ['07', ['07:40']], ['24', ['24:10']]]);
+  const { stopTimes } = await import('../public/lib/bus.mjs');
+  const day = on => Object.fromEntries(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => [d, on(i) ? 1 : 0]));
+  const trip = (at, on) => ({ ServiceDay: day(on), StopTimes: [{ StopUID: 'S1', DepartureTime: at }] });
+  const sched = [{ Direction: 0, Timetables: [trip('06:00', d => d >= 1 && d <= 5), trip('08:00', d => d === 0 || d === 6)] }];
+  assert.deepEqual(stopTimes(sched, { stopUID: 'S1', dir: 0 }, '2026-10-04', 0).times, ['08:00'], 'a Sunday');
+  assert.deepEqual(stopTimes(sched, { stopUID: 'S1', dir: 0 }, '2026-10-05', 1).times, ['06:00'], 'the Monday after');
+});
