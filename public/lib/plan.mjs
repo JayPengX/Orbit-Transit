@@ -256,14 +256,19 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //   - time on a bus, a little (it's late, it's early, it's full);
 //   - walking past a few minutes;
 //   - each ride on a bike by its own length, not the total: 10 minutes to the
-//     station is nothing, 20 is a workout, 30 in work clothes is not how
-//     anyone goes every day. Two short rides beat one long one. (A ride cut
-//     at 30 minutes to stay free is still one ride.) 電輔車 is easier going;
-//     a bike at a station with only one or two left may be gone;
-//   - a trip that goes the long way round (into 新竹市 and back out, when the
-//     place is the other way), what it costs in money, and a train it would
-//     now miss.
-export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 10) * 0.6 + Math.max(min - 20, 0) * 1.5;
+//     station is nothing, 18 is a workout, past that every minute counts
+//     three times the minute it saves (28 minutes across town in work clothes
+//     is not how anyone goes every day). Two short rides beat one long one.
+//     (A ride cut at 30 minutes to stay free is still one ride.) 電輔車 is a
+//     little easier going, not a free pass; a bike at a station with only one
+//     or two left may be gone;
+//   - a trip whose buses or trains go the long way round (into 新竹市 and back
+//     out, when the place is the other way), or change farther from the place
+//     than you started. Getting to the first one is not the long way round:
+//     riding north to 竹北's station for a train south costs its minutes and
+//     its ride, nothing more;
+//   - what it costs in money, and a train it would now miss.
+export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.max(min - 18, 0) * 3;
 export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0 } = {}) {
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   let s = by === 'arrive' && deadline ? (deadline - p.dep) / 60_000 : (p.arr - now) / 60_000;
@@ -282,15 +287,21 @@ export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = nul
     else bikes.push((ride = { min: (l.dur || 0) / 60, ebike: !!l.ebike, rent: l.rent }));
   }
   for (const r of bikes) {
-    s += 1.5 + rideEffort(r.ebike ? r.min * 0.7 : r.min);
+    s += 1.5 + rideEffort(r.ebike ? r.min * 0.9 : r.min);
     const left = r.rent ? (r.ebike ? r.rent.ebike : r.rent.bikes) : null;
     if (left != null && left < 3) s += 3;
   }
+  const placed = rides.filter(l => l.from?.lat != null && l.to?.lat != null);
+  if (placed.length) {
+    // The rides' own way against the straight line from the first stop to the last.
+    const [a, b] = [placed[0].from, placed.at(-1).to];
+    const span = Math.max(1000, meters(a.lat, a.lon, b.lat, b.lon));
+    const path = placed.reduce((x, l) => x + meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon), 0);
+    s += Math.max(0, path / span - 1.2) * 45;
+  }
   if (o && d) {
-    const direct = Math.max(1000, meters(o.lat, o.lon, d.lat, d.lon));
-    const path = p.legs.reduce((a, l) => a + (l.from?.lat != null && l.to?.lat != null ? meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) : 0), 0);
-    s += Math.max(0, path / direct - 1.2) * 45;
     // Heading away: a change made farther from the place than where you started.
+    const direct = Math.max(1000, meters(o.lat, o.lon, d.lat, d.lon));
     const away = rides.slice(0, -1).some(l => l.to?.lat != null && meters(l.to.lat, l.to.lon, d.lat, d.lon) > direct + 1500);
     if (away) s += 8;
   }
@@ -318,6 +329,25 @@ export const pickSig = p =>
     .map(l => (l.mode === 'tra' || l.mode === 'hsr' ? `${l.mode}:${norm(l.from?.name)}>${norm(l.to?.name)}` : `${l.mode}:${norm(l.short || l.name)}`))
     .join('|') || 'bike';
 
+// Two plans are one way when they ride the same buses and trains, whatever
+// gets you on and off them: each train by its number, each bus or metro by its
+// line and when it leaves (within a few minutes: the next stop down the road).
+// All the way by bike is one way.
+const vehicles = p => p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
+const trainNo = l => l.train?.no || (RAIL.has(l.mode) && l.mode !== 'metro' && String(l.short || '').match(/\d{2,}/)?.[0]) || null;
+export function sameWay(a, b) {
+  const [x, y] = [vehicles(a), vehicles(b)];
+  if (x.length !== y.length) return false;
+  if (!x.length) return a.legs.some(l => l.mode === 'bike') === b.legs.some(l => l.mode === 'bike');
+  return x.every((l, i) => {
+    const m = y[i];
+    if (l.mode !== m.mode) return false;
+    const [n, k] = [trainNo(l), trainNo(m)];
+    if (n || k) return n === k;
+    return norm(l.short || l.name) === norm(m.short || m.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 8 * 60_000;
+  });
+}
+
 const mainLine = p => {
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   const m = rides.reduce((a, l) => (!a || (l.dur || 0) > (a.dur || 0) ? l : a), null);
@@ -339,10 +369,11 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // from it), or arriving after it, is no plan, unless it's all there is.
   const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 : p.dep >= now - 2 * 60_000));
   const ok = fits.length ? fits : all;
-  const sig = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${Math.round((l.dep || 0) / 60_000)}`).join('|');
-  const seen = new Set();
-  const uniq = ok.filter(p => !seen.has(sig(p)) && seen.add(sig(p)));
-  const scored = uniq.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }) })).sort((a, b) => a.s - b.s || a.p.arr - b.p.arr);
+  // One plan per way (sameWay): walking or riding to the same bus, boarding
+  // the same train a station up the line, 電輔車 or not: only the best of them.
+  const scored = [];
+  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }) })).sort((a, b) => a.s - b.s || a.p.arr - b.p.arr))
+    if (!scored.some(y => sameWay(x.p, y.p))) scored.push(x);
   // Not running at all (末班已過, 今日未營運), or waiting hours half way (the
   // last bus gone, the first train tomorrow), is no plan, unless it's all there is.
   const longWait = p => p.legs.some((l, i) => i > 0 && l.dep - p.legs[i - 1].arr > 90 * 60_000);

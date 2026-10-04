@@ -225,7 +225,7 @@ test('ranking: by what’s practical, every plan kept however late, the first fe
   assert.ok(list[0].tags.includes('推薦'));
   assert.ok(list[0].top);
   assert.ok(list.some(p => p.tags.includes('YouBike')));
-  const later = { ...busPlan, arr: busPlan.arr + 1_800_000, dur: busPlan.dur + 1800, legs: busPlan.legs.map(l => ({ ...l, dep: l.dep + 60_000 })) };
+  const later = { ...busPlan, arr: busPlan.arr + 1_800_000, dur: busPlan.dur + 1800, legs: busPlan.legs.map(l => ({ ...l, dep: l.dep + 1_800_000, arr: l.arr + 1_800_000 })) };
   assert.equal(rank([busPlan, later]).length, 2, 'a later bus is still shown');
   assert.equal(rank([busPlan, { ...busPlan }]).length, 1, 'the same ride once');
   assert.ok(bikePoints([busPlan], O, D).length <= 8);
@@ -756,4 +756,24 @@ test('a pinned ride: on and off, and the way back by itself from wherever you ar
   const alone = cleanItem({ routeUID: 'HSZ0001', stopUID: 'A0', stop: '新竹火車站' });
   assert.equal(rideNow(alone, work).stopUID, 'A0', 'a stop pinned alone stays');
   assert.equal(alone.off, undefined);
+});
+
+test('新竹縣體育場 → 新竹大遠百: by bike to 竹北 for the train, not 28 minutes on a 電輔車, not on to 北新竹 for the same train; one of each way', () => {
+  const o = { name: '新竹縣體育場', lat: 24.8212, lon: 121.0176 };
+  const d = { name: '新竹大遠百', lat: 24.8018, lon: 120.9653 };
+  const zhubei = { name: '竹北', lat: 24.8392, lon: 121.0095 };
+  const north = { name: '北新竹', lat: 24.8086, lon: 120.9838 };
+  const hsinchu = { name: '新竹', lat: 24.8016, lon: 120.9716 };
+  const st = (uid, pt, n = 8) => ({ uid, name: `${pt.name}站`, lat: pt.lat + 0.0003, lon: pt.lon + 0.0003, bikes: n, ebike: n, ret: n, ok: true });
+  const bikes = [st('o', o), st('z', zhubei), st('n', north), st('h', hsinchu), st('d', d)];
+  const train = (from, dep) => ({ mode: 'tra', name: '區間', short: '區間 1187', train: { sys: 'tra', no: '1187' }, from, to: hsinchu, dep: T(dep), arr: T('08:29'), dur: (T('08:29') - T(dep)) / 1000 });
+  const walkEnd = { mode: 'walk', from: hsinchu, to: d, dep: T('08:30'), arr: T('08:39'), dur: 540, dist: 700 };
+  const ph = (to, dep, arr) => ({ mode: 'bike', placeholder: true, fix: 'arr', from: o, to, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0 });
+  const viaZhubei = finish({ src: 'rail', legs: [ph(zhubei, '08:02', '08:17'), train(zhubei, '08:20'), walkEnd] });
+  const viaNorth = finish({ src: 'rail', legs: [ph(north, '07:59', '08:22'), train(north, '08:25'), walkEnd] });
+  const walked = finish({ src: 'rail', legs: [{ mode: 'walk', from: o, to: zhubei, dep: T('07:50'), arr: T('08:17'), dur: 1620, dist: 2600 }, train(zhubei, '08:20'), walkEnd] });
+  const list = withBikes([viaZhubei, viaNorth, walked], o, d, bikes, T('08:00'));
+  assert.equal(list[0].legs.find(l => l.mode === 'tra').from.name, '竹北', list.map(p => `${p.score} ${p.legs.map(l => l.mode + ':' + (l.from?.name || '')).join(' ')}`).join('\n'));
+  assert.equal(list.filter(p => p.legs.some(l => l.train?.no === '1187')).length, 1, 'the train 1187 once, by the best way onto it');
+  assert.ok(list.filter(p => !p.legs.some(l => l.mode !== 'walk' && l.mode !== 'bike')).length <= 1, 'all the way by bike once (bike or 電輔車)');
 });
