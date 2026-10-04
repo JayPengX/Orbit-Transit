@@ -37,11 +37,13 @@ export function sameRoute(a, b) {
 }
 
 // A route's buses at those stops, as moments: [{ at, last, plate }], and
-// whether it isn't running (末班已過, 今日未營運).
+// whether it isn't running (末班已過, 今日未營運): only when no row of it
+// there still is (the other way's last bus gone says nothing of yours).
 export function liveTimes(list, name, now = Date.now(), { dir = null, routeUID = '' } = {}) {
   const mine = list.filter(r => (routeUID ? r.RouteUID === routeUID : sameRoute(zh(r.RouteName), name)) && (dir == null || Number(r.Direction) === dir));
   const times = [];
   let off = 0;
+  const running = mine.some(r => ![3, 4].includes(Number(r.StopStatus) || 0));
   for (const r of mine) {
     const st = Number(r.StopStatus) || 0;
     if (r.EstimateTime != null && st === 0) times.push({ at: now + Number(r.EstimateTime) * 1000, last: r.IsLastBus === true, plate: r.PlateNumb || '' });
@@ -51,7 +53,7 @@ export function liveTimes(list, name, now = Date.now(), { dir = null, routeUID =
   }
   const seen = new Set();
   const uniq = times.filter(t => Number.isFinite(t.at) && !seen.has(Math.round(t.at / 30_000)) && seen.add(Math.round(t.at / 30_000))).sort((a, b) => a.at - b.at);
-  return { found: mine.length > 0, times: uniq, off: uniq.length ? 0 : off };
+  return { found: mine.length > 0, times: uniq, off: uniq.length || running ? 0 : off };
 }
 
 const FIXED = new Set(['tra', 'hsr', 'metro', 'lightrail']);

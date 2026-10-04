@@ -1745,6 +1745,10 @@ main {
 .tab-map.ot-picking .ot-search {
   display: none;
 }
+/* The app bar's frosted glass would sit over the navigation card. */
+.tab-map.ot-navigating .q-appbar {
+  display: none;
+}
 .ot-card-head .q-icon-btn.on,
 .q-icon-btn.on {
   color: var(--ot-bike);
@@ -2384,6 +2388,31 @@ main {
   border-radius: 14px;
   background: color-mix(in srgb, var(--c) 18%, transparent);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+}
+.ot-nav-leave {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 8px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid var(--ot-line);
+}
+.ot-nav-leave > .ot-i {
+  color: var(--q-accent);
+  flex: none;
+}
+.ot-nav-leave span {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.ot-nav-leave b {
+  font-size: 15px;
+}
+.ot-nav-leave small {
+  color: var(--q-text-2);
+  font-size: 12.5px;
 }
 .ot-nav-catch > .ot-i {
   color: var(--c);

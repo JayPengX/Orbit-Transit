@@ -18,9 +18,9 @@ const ARRIVED = { walk: 35, bike: 60 };
 const NEXT_STOP_M = 600;
 
 export const navigating = () => Boolean(nav);
-// Only a plan you'd set out on now: one leaving within 20 minutes, or already under way.
+// Any plan not yet over: one leaving later starts too, saying when to set out.
 export const NAV_LEAD = 20 * 60_000;
-export const canNav = (p, now = Date.now()) => Boolean(p) && p.dep - now <= NAV_LEAD && p.arr > now;
+export const canNav = (p, now = Date.now()) => Boolean(p) && p.arr > now;
 
 // Google Maps' own navigation for one step (walking, riding) or the rest by transit.
 export function gmapsLink(from, to, mode) {
@@ -78,7 +78,10 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null }) {
     const catchHtml = r && !(ri === state.i && state.phase === 'on')
       ? `<div class="ot-nav-catch" style="--c:${e(legColor(r))}">${icon(r.mode)}<span><b>${ri === state.i ? '要搭' : '接著搭'} ${e(rideName(r))}</b><small>${e([r.headsign ? `往 ${r.headsign}` : '', `${r.from?.name || ''} ${hm(r.dep)} 開`, r.train?.platform ? `${r.train.platform} 月台` : ''].filter(Boolean).join(' · '))}</small></span><em>${e(state.live || leaveIn(r.dep))}</em></div>`
       : '';
-    box.innerHTML = `${catchHtml}<div class="ot-nav-main" style="--c:${e(legColor(l))}">
+    // Before setting out: when to leave, so you can plan the time till then.
+    const wait = plan.dep - Date.now();
+    const leaveHtml = state.i === 0 && wait > 60_000 ? `<div class="ot-nav-leave">${icon('clock')}<span><b>${hm(plan.dep)} 出發</b><small>還有 ${e(minsText(Math.round(wait / 1000)))}・${hm(plan.arr)} 抵達</small></span></div>` : '';
+    box.innerHTML = `${leaveHtml}${catchHtml}<div class="ot-nav-main" style="--c:${e(legColor(l))}">
         <span class="ot-nav-i">${icon(l.mode)}</span>
         <div class="ot-nav-text"><b>${e(t.title)}</b><small>${e(extra)}</small></div>
       </div>

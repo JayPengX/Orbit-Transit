@@ -1022,7 +1022,7 @@ function plansHtml(c) {
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${p.tags.map(t => `<span class="ot-tag${t === 'YouBike' || t === '電輔車' ? ' bike' : t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
         <div class="ot-legs">${legChips(p.legs)}</div>${deps(lead, i)}
         <div class="ot-plan-sub">${[leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')].filter(Boolean).map(e).join(' · ')}</div>
-        ${p.miss || p.off || p.rivers?.length ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || `騎車過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
+        ${p.miss || p.off || p.rivers?.length ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
         ${i === c.sel ? stepsHtml(p, c) : ''}
       </button>`;
   // The routes' cards (a way set aside shows only when it's pinned).
