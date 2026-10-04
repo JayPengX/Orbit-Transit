@@ -12,7 +12,7 @@
 import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stationsNear, stopTimes, routeCity } from './bus.mjs';
 import { finish } from './plan.mjs';
-import { meters, walkSec, zh, tw } from './util.mjs';
+import { meters, walkSec, zh, tw, twAt } from './util.mjs';
 
 const MIN = 60_000;
 const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates';
@@ -59,6 +59,28 @@ const FIXED = new Set(['tra', 'hsr', 'metro', 'lightrail']);
 // One plan, its first two buses re-timed by what TDX says now. Only for
 // buses due within the next 90 minutes (further out, estimates mean
 // nothing). The plan comes back unchanged when TDX has nothing for it.
+// The three buses after one at a stop: TDX's own later estimates, else the
+// route's timetable there (its times, or its headway: every 15–20 minutes).
+export async function nextBuses(list, name, after, times = [], { schedule = routeSchedule } = {}) {
+  const out = times.filter(t => t.at > after + MIN).map(t => t.at);
+  if (out.length >= 3) return out.slice(0, 3);
+  const r = list.find(x => sameRoute(zh(x.RouteName), name) && x.StopUID);
+  if (!r) return out;
+  const sched = await schedule({ uid: r.RouteUID, name: zh(r.RouteName), city: routeCity(r.RouteUID) }).catch(() => []);
+  if (!sched.length) return out;
+  const d = tw(after);
+  const st = stopTimes(sched, { stopUID: r.StopUID, name: zh(r.StopName), dir: Number(r.Direction) }, d.date, d.dow);
+  const last = () => Math.max(after, ...out);
+  for (const hm of st.times) {
+    const t = twAt(d.date, hm.slice(0, 5));
+    if (out.length < 3 && t > last() + 2 * MIN) out.push(t);
+  }
+  const f = st.every.find(x => x.from <= d.hm && d.hm <= x.to);
+  const gap = f ? ((f.min || f.max) + (f.max || f.min)) / 2 : 0;
+  while (gap && out.length < 3) out.push(last() + gap * MIN);
+  return out.slice(0, 3);
+}
+
 export async function adjustPlan(plan, now = Date.now(), { near = etaNear } = {}) {
   let legs = plan.legs.map(l => ({ ...l }));
   let changed = false;
@@ -88,6 +110,8 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaNear } = {}
       continue;
     }
     l.live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
+    // The buses after it, for the route's other times (moreBuses).
+    if (i === first) l.next = await nextBuses(list, l.short || l.name, bus.at, times);
     const delta = bus.at - l.dep;
     if (Math.abs(delta) < 60_000) continue;
     changed = true;

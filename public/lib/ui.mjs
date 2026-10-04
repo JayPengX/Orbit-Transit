@@ -69,6 +69,17 @@ export function legLabel(l) {
   return l.short || l.name || MODE_NAME[l.mode];
 }
 // A plan's legs as a row of chips (walks under 3 minutes left out).
+// A route's departures as times to pick (its bus or train's own time; the
+// train's kind too when they differ, 區間 or 自強). `plans`: the list, `idx`:
+// which of it, `on`: the one shown; each carries data-* from `attrs(i)`.
+export function depChips(plans, idx, on, attrs) {
+  if (idx.length < 2) return '';
+  const ride = p => p.legs.find(l => l.mode !== 'walk' && l.mode !== 'bike');
+  const kind = p => (ride(p)?.train ? String(ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '') : '');
+  const mixed = new Set(idx.map(i => kind(plans[i]))).size > 1;
+  return `<div class="ot-plan-deps" role="group" aria-label="選班次">${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${mixed && kind(plans[i]) ? `<small>${e(kind(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;
+}
+
 export function legChips(legs) {
   return legs
     .filter((l, i) => !(l.mode === 'walk' && l.dur < 180 && i > 0 && i < legs.length - 1))

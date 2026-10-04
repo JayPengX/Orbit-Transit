@@ -864,6 +864,15 @@ main {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.ot-dep {
+  cursor: pointer;
+}
+.ot-dep small {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+}
 .ot-dep.on {
   border-color: transparent;
   background: var(--q-accent);
@@ -2303,9 +2312,19 @@ main {
 /* 交通: a trip's plan with its ☆. */
 .ot-go-plan-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   border-top: 1px solid var(--ot-line);
+}
+.ot-go-plan-row .ot-go-plan {
+  flex: 1;
+}
+/* 交通: the way's other departures under its row, lined up with its line chips. */
+.ot-plan-deps.ot-go-deps {
+  flex-basis: 100%;
+  margin: -4px 0 10px;
+  padding-left: 82px;
 }
 .ot-go-plan-row .ot-go-plan {
   border-top: 0;

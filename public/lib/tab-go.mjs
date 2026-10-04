@@ -21,7 +21,7 @@ import { planTrip } from './planner.mjs';
 import { pickSig } from './plan.mjs';
 import { canNav } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { icon, legChips } from './ui.mjs';
+import { icon, legChips, depChips } from './ui.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel } from './util.mjs';
 
 const $ = id => document.getElementById(id);
@@ -32,6 +32,7 @@ const S = {
   pinned: new Map(), // stopUID → eta
   trains: new Map(), // pin id → [{ dep, arr, label, delay }]
   trips: new Map(), // key → { at, plans, error, loading }
+  choice: new Map(), // `${trip}:${its card's plan}` → the departure picked from its times
   places: new Map(), // place id → { stops, bikes, at }
   open: new Set(), // places opened
   more: new Set(), // trips showing every plan
@@ -182,6 +183,7 @@ async function loadTrip(w, { force = false } = {}) {
     const from = w.from || (ctx.here ? { name: '目前位置', lat: ctx.here.lat, lon: ctx.here.lon } : null);
     if (!from) throw Object.assign(new Error('nohere'), { code: 'NO_HERE' });
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
+    for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
     S.trips.set(w.id, { at: Date.now(), from, plans: out.plans, error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
   } catch (err) {
     S.trips.set(w.id, { at: Date.now(), plans: old?.plans || [], error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
@@ -214,13 +216,14 @@ const busRow = (x, { pin = true, stopName = '' } = {}) => {
   return `<div class="ot-go-row"><button class="ot-go-main" type="button" data-route="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"><span class="ot-route-no">${e(x.route)}</span><span class="ot-go-what"><b>${e(stopName || x.stop || '')}</b><small>${x.dir ? '返程' : '去程'}</small></span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(t.sub)}</small></span></button>${pin ? `<button class="q-icon-btn${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="釘選" ${pinned ? 'disabled' : ''}>${icon('star')}</button>` : ''}</div>`;
 };
 
-// A trip's plans to show: the ways you pinned first (their next two
-// departures), then the recommendations, up to four; the rest behind 更多:
+// A trip's plans to show: the ways you pinned first (their next
+// departure), then the recommendations, up to four; the rest behind 更多:
 // one per route (its best departure), none set aside as no way to go.
 export function tripPlans(plans, picks = [], now = Date.now()) {
   const live = plans.filter(p => p.dep >= now - 2 * 60_000);
+  // A pinned way: its next departure (the others are its times to pick).
   const pinned = [];
-  for (const k of picks) pinned.push(...live.filter(p => pickSig(p) === k).sort((a, b) => a.dep - b.dep).slice(0, 2));
+  for (const k of picks) pinned.push(...live.filter(p => pickSig(p) === k).sort((a, b) => a.dep - b.dep).slice(0, 1));
   const first = [...pinned, ...live.filter(p => p.top && !pinned.includes(p))].slice(0, Math.max(4, pinned.length));
   return { first, rest: live.filter(p => !first.includes(p) && p.lead !== false && !p.weak && !picks.includes(pickSig(p))) };
 }
@@ -231,13 +234,18 @@ function tripCard({ t, w }) {
   if (!st) return `<section class="ot-go-card">${head}<button class="q-btn ot-wide" type="button" data-load-trip="${e(t.id)}">看接下來的班次</button></section>`;
   const all = st.plans || [];
   const { first, rest } = tripPlans(all, t.picks);
-  const row = p => {
-    const i = all.indexOf(p);
+  // One row per way: the departure picked from its times (the first shown at first), the leave and arrival times its own.
+  const row = lead => {
+    const at = all.indexOf(lead);
+    const i = S.choice.get(`${w.id}:${at}`) ?? at;
+    const p = all[i];
     const pin = t.picks.includes(pickSig(p));
+    const times = (lead.times || []).filter(j => all[j] && all[j].dep >= Date.now() - 2 * 60_000);
+    const deps = depChips(all, times, i, j => `data-go-dep="${e(w.id)}" data-lead="${at}" data-i="${j}"`).replace('ot-plan-deps', 'ot-plan-deps ot-go-deps');
     return `<div class="ot-go-plan-row"><button class="ot-go-plan" type="button" data-nav-trip="${e(w.id)}" data-i="${i}">
       <span class="ot-go-leave"><b>${e(leave(p.dep))}</b><small>${p.dep - Date.now() < 60 * 60_000 ? `${e(hm(p.dep))} 出發` : tw(p.dep).date !== tw().date ? `${e(dayLabel(tw(p.dep).date))}出發` : '建議出發'}</small></span>
       <span class="ot-go-legs"><span class="ot-legs">${legChips(p.legs)}</span><small>${p.live ? '預計 ' : ''}${e(hm(p.arr))} 抵達 · ${e(minsText(p.dur))}${p.transfers ? ` · 轉乘 ${p.transfers}` : ''}${p.fareText ? ` · ${e(p.fareText)}` : ''}${p.live ? ' · <i class="ot-livedot"></i>即時' : ''}</small>${p.miss || p.off ? `<small class="warn">${e(p.off || p.miss)}</small>` : ''}</span>
-      ${icon(canNav(p) ? 'route' : 'chevron')}</button><button class="q-icon-btn${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? '取消釘選這個方案' : '釘選這個方案'}">${icon('star')}</button></div>`;
+      ${icon(canNav(p) ? 'route' : 'chevron')}</button><button class="q-icon-btn${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? '取消釘選這個方案' : '釘選這個方案'}">${icon('star')}</button>${deps}</div>`;
   };
   const more = S.more.has(w.id);
   const plans = first.map(row).join('') + (rest.length ? (more ? rest.map(row).join('') : '') + `<button class="ot-go-link" type="button" data-more-trip="${e(w.id)}">${more ? '收起' : `更多方案（${rest.length}）`}</button>` : '');
@@ -349,6 +357,11 @@ function onClick(ev) {
   }
   const pb = ev.target.closest('[data-pinbus]');
   if (pb) return chooseGroup(JSON.parse(pb.dataset.pinbus), render);
+  const dep = ev.target.closest('[data-go-dep]');
+  if (dep) {
+    S.choice.set(`${dep.dataset.goDep}:${dep.dataset.lead}`, Number(dep.dataset.i));
+    return render();
+  }
   const nav = ev.target.closest('[data-nav-trip]');
   if (nav) {
     const st = S.trips.get(nav.dataset.navTrip);
