@@ -254,8 +254,16 @@ function pinnedHtml() {
     .sort((a, b) => etaRank(a.v) - etaRank(b.v))
     .map(({ it, r, v }) => {
       const t = etaText(v);
-      const what = r.off ? `<b>${e(r.stop)} <i class="ot-ride-arrow">→</i> ${e(r.off.stop)}</b><small>往 ${e(r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}${r.back ? ' · 回程' : ''}</small>` : `<b>${e(r.stop)}</b><small>往 ${e(r.headsign || '—')}</small>`;
-      return `<div class="ot-go-row"><button class="ot-go-main" type="button" data-route="${e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }))}"><span class="ot-route-no">${e(it.route)}</span><span class="ot-go-what">${what}</span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(t.sub)}</small></span></button>${it.back ? `<button class="q-icon-btn" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}</button>` : ''}<button class="q-icon-btn on" type="button" data-unpin-bus="${e(it.id)}" aria-label="取消釘選">${icon('star')}</button></div>`;
+      // Two lines, like a card in Maps: the line and which way, the time on
+      // the right; then where you get on → off, the whole width. ☆ to unpin
+      // is in the route's sheet (a tap away) and 我的.
+      const short = /分|進站/.test(t.main);
+      const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
+      return `<div class="ot-ride"><button class="ot-ride-main" type="button" data-route="${route}">
+        <span class="ot-ride-top"><span class="ot-ride-no">${e(it.route)}</span><small>往 ${e(r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}</small></span>
+        <span class="ot-ride-stops">${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}</span>
+        <span class="ot-ride-eta ${t.tone}${short ? '' : ' long'}"><b>${e(t.main)}</b>${t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>
+      </button>${it.back ? `<button class="ot-ride-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
