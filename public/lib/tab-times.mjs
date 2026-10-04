@@ -83,9 +83,9 @@ const openBus = r => {
 
 function busInit() {
   const box = $('times-bus');
-  box.innerHTML = `<div class="ot-wrap ot-bus">
+  box.innerHTML = `<div class="ot-wrap ot-bus"><div class="ot-bus-top">
     <div class="ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="路線號碼或站名，例如 藍1、快捷8、5608" autocomplete="off" enterkeyhint="search"></div>
-    <div class="q-chips ot-city-chips ot-scroll-chips" id="tb-city"></div>
+    <div class="q-chips ot-city-chips ot-scroll-chips" id="tb-city"></div></div>
     <div id="tb-list"></div></div>`;
   box.querySelector('#tb-q').addEventListener('input', busDraw);
   box.addEventListener('click', ev => {
@@ -169,7 +169,7 @@ function busDraw() {
     const around = bus.around || [];
     $('tb-list').innerHTML =
       (recent.length ? `<h3 class="ot-go-h">最近查看<button class="ot-res-clear" type="button" data-clear-routes="1">清除</button></h3><div class="ot-bus-group">${recent.slice(0, 5).map(row).join('')}</div>` : '') +
-      (around.length ? `<h3 class="ot-go-h">${icon('pin')} 你附近的站牌</h3>${around.map(nearStop).join('')}` : bus.around ? '' : '<p class="ot-note">找你附近的站牌…</p>') +
+      (around.length ? `<h3 class="ot-go-h">${icon('pin')} 你附近的站牌</h3><div class="ot-bus-near">${around.map(nearStop).join('')}</div>` : bus.around ? '' : '<p class="ot-note">找你附近的站牌…</p>') +
       (bus.failed && !bus.list.length ? `<p class="ot-note bad">${e(bus.failed)}</p>` : '');
     return;
   }
