@@ -10,7 +10,7 @@
 //   - by bike from the last station, instead of a bus or a long walk: there
 //     sooner.
 
-import { meters, walkSec } from './util.mjs';
+import { meters, walkSec, tw, hm, addDays } from './util.mjs';
 import { journeys, directs } from './rail.mjs';
 import { crossings, crossed } from './rivers.mjs';
 
@@ -124,6 +124,17 @@ export function finish(p) {
   return { ...p, dep, arr, dur: Math.round((arr - dep) / 1000), walk: legs.filter(l => l.mode === 'walk').reduce((a, l) => a + (l.dist || 0), 0), transfers: Math.max(0, rides.length - 1), bike: legs.some(l => l.mode === 'bike') };
 }
 const shift = (legs, ms) => legs.map(l => ({ ...l, dep: l.dep + ms, arr: l.arr + ms }));
+// A planner's plan whose walk (or ride) to a bus or train ends after it has
+// left (TDX's, by 2–3 minutes): that way there and all before it set out
+// earlier, so you're at the stop when it comes.
+export function tidy(p) {
+  let legs = p.legs;
+  for (let i = legs.length - 1; i > 0; i--) {
+    const late = legs[i - 1].arr - legs[i].dep;
+    if (late > 0 && (legs[i - 1].mode === 'walk' || legs[i - 1].mode === 'bike')) legs = [...shift(legs.slice(0, i), -late), ...legs.slice(i)];
+  }
+  return legs === p.legs ? p : finish({ ...p, legs });
+}
 
 // All the way by bike (and by 電輔車 when one is there and it's worth it).
 export function bikeOnly(o, d, bikes, now, { swap = false } = {}) {
@@ -210,7 +221,7 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
   const A = A0.filter(x => !B0.some(y => y.s.key === x.s.key && y.m < x.m));
   const B = B0.filter(x => !A.some(y => y.s.key === x.s.key));
   if (!A.length || !B.length) return [];
-  const starts = A.map(x => ({ key: x.s.key, at: at + x.a.sec * 1000 + 3 * 60_000 }));
+  const starts = A.map(x => ({ key: x.s.key, at: at + x.a.sec * 1000 + 3 * 60_000, pre: x.a.sec + 180 }));
   const ends = B.map(x => ({ key: x.s.key, extra: x.a.sec }));
   const reach = new Map([...A.map(x => [`a:${x.s.key}`, x]), ...B.map(x => [`b:${x.s.key}`, x])]);
   let found = [];
@@ -412,10 +423,12 @@ export const ridesSig = p =>
 // planner's names for things (快捷8號 / 快捷8, 竹北車站 / 竹北): the buses
 // and metro by their line, the trains by where you get on and off.
 const norm = x => String(x || '').replace(/\s+/g, '').replace(/[號线線]/g, '').replace(/[（(].*$/, '').replace(/^高鐵/, '').replace(/(火車站|車站|站)$/, '').replace(/台/g, '臺').toUpperCase();
+// A station however a source writes it: 竹北火車站, 臺鐵竹北車站 and 竹北 are one.
+const station = n => norm(n).replace(/^(臺鐵|高鐵)/, '').replace(/(火車站|車站|站)$/, '') || norm(n);
 export const pickSig = p =>
   p.legs
     .filter(l => l.mode !== 'walk' && l.mode !== 'bike')
-    .map(l => (l.mode === 'tra' || l.mode === 'hsr' ? `${l.mode}:${norm(l.from?.name)}>${norm(l.to?.name)}` : `${l.mode}:${norm(l.short || l.name)}`))
+    .map(l => (l.mode === 'tra' || l.mode === 'hsr' ? `${l.mode}:${station(l.from?.name)}>${station(l.to?.name)}` : `${l.mode}:${norm(l.short || l.name)}`))
     .join('|') || 'bike';
 
 // Two plans are one way when they ride the same buses and trains, whatever
@@ -461,6 +474,15 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     if (kept.length) plans = kept;
   }
   // (By an arrival time, `now` is that time: what's gone is what left before the clock's now.)
+  // A planner's plan set out a few minutes before the time asked, on the
+  // metro only (a train every few minutes): the same, a train later.
+  const FREQUENT = new Set(['metro', 'lightrail']);
+  if (by !== 'arrive')
+    plans = plans.map(p => {
+      if (!p?.legs?.length || p.dep >= now - 2 * 60_000 || p.dep < now - 15 * 60_000) return p;
+      const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
+      return rides.length && rides.every(l => FREQUENT.has(l.mode)) ? finish({ ...p, legs: shift(p.legs, now - p.dep) }) : p;
+    });
   const all = plans.filter(p => p && p.legs?.length && p.arr != null && (by === 'arrive' && deadline ? p.dep > clock - 2 * 60_000 : p.arr > now - 60_000));
   // Leaving before the time asked (a ride to the train worked out backwards
   // from it), or arriving after it, is no plan, unless it's all there is.
@@ -587,6 +609,14 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const riverBy = p => (p.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to)) ? '騎車' : '步行');
   const out = list.map(p => ({ ...p, rivers: rivers(p), riverBy: riverBy(p), score: Math.round(p.score), top: picked.has(p), lead: groups.get(pickSig(p))[0] === p, weak: weak.has(p), tags: [...new Set(label.get(p))] }));
   out.forEach((p, i) => (p.times = times.get(list[i]).map(q => list.indexOf(q))));
+  // Said on the plan: a wait overnight half way (nothing else gets there
+  // tonight), or setting out on another day than asked.
+  const today = tw(by === 'arrive' && deadline ? deadline : now).date;
+  for (const p of out) {
+    const k = p.legs.findIndex((l, i) => i > 0 && l.dep - p.legs[i - 1].arr > 90 * 60_000);
+    if (k > 0) p.late = `中途要在${p.legs[k].from?.name || '轉乘站'}等到 ${hm(p.legs[k].dep)}${tw(p.legs[k].dep).date !== today ? '（隔天）' : ''}`;
+    else if (tw(p.dep).date !== today) p.late = `${tw(p.dep).date === addDays(today, 1) ? '明天' : tw(p.dep).date.slice(5).replace('-', '/')} ${hm(p.dep)} 才有車`;
+  }
   return out;
 }
 
@@ -671,7 +701,8 @@ function withStations(p, bikes) {
       return { ...l, name: 'YouBike', rent, ret, from: rent ? { name: rent.name, lat: rent.lat, lon: rent.lon } : { ...l.from, name: l.from.name || '附近的 YouBike 站' }, to: ret ? { name: ret.name, lat: ret.lat, lon: ret.lon } : { ...l.to, name: l.to.name || '附近的 YouBike 站' } };
     });
   if (legs.some(l => l === null)) return null;
-  return finish({ ...p, legs: legs.flat() });
+  // (A ride to the stop turned into a walk takes longer: set out earlier.)
+  return tidy(finish({ ...p, legs: legs.flat() }));
 }
 
 // The points whose YouBike stations a set of plans needs: both ends, and
