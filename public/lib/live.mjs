@@ -109,7 +109,7 @@ export async function laterBuses(list, l, after, { now = Date.now(), stops = rou
   const r = list.find(x => sameRoute(zh(x.RouteName), name) && x.RouteUID);
   if (!r) return [];
   const route = { uid: r.RouteUID, name: zh(r.RouteName), city: routeCity(r.RouteUID) };
-  const [ways, sched] = await Promise.all([stops(route).catch(() => []), schedule(route).catch(() => [])]);
+  const [ways, sched] = await Promise.all([stops(route, l.from).catch(() => []), schedule(route, l.from).catch(() => [])]);
   const way = l.to?.lat != null ? wayOf(ways, l.from, l.to) : null;
   const live = liveTimes(list, name, now, { routeUID: r.RouteUID, ...(way ? { dir: way.w.dir } : {}) }).times.map(t => t.at).filter(t => t > after + MIN);
   const out = [...live];
@@ -244,11 +244,11 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     const route = { uid: c.uid, name: c.route, city: routeCity(c.uid) };
     let ways;
     try {
-      ways = await routeStops(route);
+      ways = await routeStops(route, a);
     } catch {
       return void trace?.why.push(`${c.route}: no stops`);
     }
-    const sched = await routeSchedule(route).catch(() => []);
+    const sched = await routeSchedule(route, a).catch(() => []);
     const boardUIDs = new Set(boards.flatMap(s => s.stops.filter(x => x.routeUID === c.uid).map(x => x.stopUID)));
     const alightUIDs = new Set(there.get(c.uid).map(x => x.stopUID));
     let best = null;

@@ -1,6 +1,7 @@
 // Buses: a city's routes, a route's stops each way, and when the next bus
 // comes to a stop (TDX's N1 estimates, refreshed by the proxy every 25 s).
 
+import { packRoute } from './packs.mjs';
 import { tdx, rows } from './api.mjs';
 import { zh, hm } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
@@ -42,7 +43,10 @@ export function findRoutes(list, text, n = 60) {
 
 // A route's stops each way: [{ dir, sub, subName, headsign, stops: [{ uid, id,
 // name, seq, lat, lon, station }] }], the main pattern of each direction first.
-export async function routeStops(route) {
+// `near`: a point on the route (a 公路客運's pack is the square it's in).
+export async function routeStops(route, near = null) {
+  const own = await packRoute(route, near).catch(() => null);
+  if (own?.stops.length) return parseStops(own.stops);
   const j = await tdx(`basic/v2/Bus/StopOfRoute/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}`, { fresh: 86_400_000, persist: true });
   return parseStops(j);
 }
@@ -63,7 +67,9 @@ export function parseStops(j) {
 
 // A route's timetable (TDX Schedule): per sub-route and direction, its trips'
 // times at every stop, or its headways. Kept 6 hours.
-export async function routeSchedule(route) {
+export async function routeSchedule(route, near = null) {
+  const own = await packRoute(route, near).catch(() => null);
+  if (own) return own.sched;
   const j = await tdx(`basic/v2/Bus/Schedule/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}`, { fresh: 6 * 3_600_000, persist: true });
   return rows(j);
 }

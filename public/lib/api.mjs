@@ -55,7 +55,7 @@ async function get(path, opts = {}) {
 
 const memory = new Map();
 const hasCaches = () => typeof caches !== 'undefined';
-async function kept(path) {
+export async function kept(path) {
   if (!hasCaches()) return null;
   try {
     const hit = await (await caches.open(DATA_CACHE)).match(`https://data.transit/${path}`);
@@ -64,7 +64,7 @@ async function kept(path) {
     return null;
   }
 }
-async function keep(path, data, at, max = Infinity) {
+export async function keep(path, data, at, max = Infinity) {
   if (!hasCaches()) return;
   try {
     const text = JSON.stringify(data);
