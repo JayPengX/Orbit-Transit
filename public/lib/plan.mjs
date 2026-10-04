@@ -518,10 +518,16 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // staying on to 新竹 and riding is sooner.
     const n = vehicles(p).length;
     const changes = n > 1 && list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && vehicles(q).length >= 1 && vehicles(q).length < n && q.score < p.score && q.arr <= p.arr + 5 * 60_000);
+    // A change for a hop: onto a bus or metro for a stop or two (a few
+    // minutes, under 1.5 km) that a walk or a bike from where you got off
+    // would do (新竹站, then 綠線 one stop, then a bike again).
+    const hop = n > 1 && vehicles(p).some(l => l !== m && ((l.stops != null && l.stops <= 2) || (l.dur || 0) <= 6 * 60 || (l.from?.lat != null && l.to?.lat != null && meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) < 1500)));
     const mostlyRidden = bikeAll != null && vehicles(p).length && rideM(p) >= Math.max(3000, bikeAll * 0.6);
     const far = p.score > best + Math.max(45, best);
-    if (beaten || changes || mostlyRidden || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    if (beaten || changes || hop || mostlyRidden || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
+  // Never nothing: the best way stays when every way was set aside.
+  if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
   // A route's other departures: the next few, within an hour and a half of its first.
   const times = new Map();
   for (const g of groups.values()) {

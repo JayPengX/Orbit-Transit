@@ -855,16 +855,26 @@ test('a route’s other departures: the next trains between the same stations, t
   assert.deepEqual(later.map(p => [p.dep, p.arr]), [[T('08:15'), T('08:45')], [T('08:30'), T('09:00')]]);
 });
 
-test('the buses after one: TDX’s later estimates, else the stop’s timetable, else its headway', async () => {
-  const { nextBuses } = await import('../public/lib/live.mjs');
-  const row = { RouteName: { Zh_tw: '182' }, RouteUID: 'HSZ182', StopUID: 'HSZ1', StopName: { Zh_tw: '縣體育場' }, Direction: 0 };
-  const at = twAt('2026-10-05', '08:06');
-  const sched = [{ Direction: 0, Timetables: ['07:46', '08:06', '08:26', '08:46', '09:06'].map(t => ({ StopTimes: [{ StopUID: 'HSZ1', DepartureTime: t }] })) }];
-  assert.deepEqual(await nextBuses([row], '182', at, [], { schedule: async () => sched }), ['08:26', '08:46', '09:06'].map(t => twAt('2026-10-05', t)));
+test('the buses after one: the way the ride goes, TDX’s later estimates, the stop’s timetable (or the first stop’s plus the ride), its headway', async () => {
+  const { laterBuses, departuresAt } = await import('../public/lib/live.mjs');
+  const A = { uid: 'A', name: 'A', lat: 24.80, lon: 121.00 }, B = { uid: 'B', name: 'B', lat: 24.81, lon: 121.00 }, C = { uid: 'C', name: 'C', lat: 24.83, lon: 121.00 };
+  const ways = [{ dir: 0, stops: [A, B, C] }, { dir: 1, stops: [C, B, A] }];
+  const row = d => ({ RouteName: { Zh_tw: '5620' }, RouteUID: 'THB5620', StopUID: 'B', Direction: d, StopStatus: 1 });
+  const leg = { mode: 'bus', short: '5620', from: B, to: C };
+  const day = t => twAt('2026-10-05', t);
+  const trips = (dir, rows) => ({ Direction: dir, Timetables: rows.map(st => ({ StopTimes: st.map(([uid, t]) => ({ StopUID: uid, DepartureTime: t })) })) });
+  // Times at the stop itself, the way B → C (dir 0), not the other way's.
+  const own = [trips(0, ['08:06', '08:26', '08:46', '09:06'].map(t => [['B', t]])), trips(1, [[['B', '08:10']], [['B', '08:15']]])];
+  const got = await laterBuses([row(1), row(0)], leg, day('08:06'), { now: day('07:00'), stops: async () => ways, schedule: async () => own });
+  assert.deepEqual(got, ['08:26', '08:46', '09:06'].map(day));
+  // 公路客運: every stop listed at the first stop's time: the first stop's plus the ride to B.
+  const flat = [trips(0, ['08:00', '08:40', '09:20'].map(t => [['A', t], ['B', t], ['C', t]]))];
+  const at = departuresAt(flat, ways[0], 1, day('08:00'));
+  assert.equal(at.length, 3);
+  assert.ok(at[0] > day('08:00') && at[0] < day('08:10'), 'leaves B a few minutes after A');
+  // Only a headway: every 15–25 minutes, on from the time asked.
   const freq = [{ Direction: 0, Frequencys: [{ StartTime: '06:00', EndTime: '22:00', MinHeadwayMins: 15, MaxHeadwayMins: 25 }] }];
-  assert.deepEqual(await nextBuses([row], '182', at, [], { schedule: async () => freq }), [20, 40, 60].map(m => at + m * 60_000));
-  const live = [{ at: at + 12 * 60_000 }, { at: at + 30 * 60_000 }, { at: at + 50 * 60_000 }];
-  assert.equal((await nextBuses([row], '182', at, live, { schedule: async () => { throw new Error('not asked'); } })).length, 3);
+  assert.deepEqual(departuresAt(freq, ways[0], 1, day('08:06'), 3), [20, 40, 60].map(m => day('08:06') + m * 60_000));
 });
 
 test('a ride over 頭前溪 counts against a plan and says so; one on this side doesn’t', async () => {

@@ -934,9 +934,10 @@ async function plan(from, to, opts = {}) {
   ctx.data.trips = remember(ctx.data.trips, { name: dest.name, lat: dest.lat, lon: dest.lon, t: Date.now() }, tripKey, 10);
   ctx.save();
   const c = card;
+  let out = null;
   try {
     const at = when.by === 'now' ? null : when.at;
-    const out = await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes });
+    out = await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes });
     c.plans = out.plans;
     c.choice = {};
     c.sources = out.sources;
@@ -951,6 +952,16 @@ async function plan(from, to, opts = {}) {
     if (c.plans.length) drawPlan(c.plans[0], { fit: false });
     if (opts.nav && c.plans[opts.index || 0]) navigate(c.plans[opts.index || 0]);
   }
+  // The direct buses and every bus's times come a moment later: the list
+  // ranked again, the plan open (if one is) kept open, unless a time was picked.
+  out?.later?.then(o => {
+    if (!o?.plans?.length || card !== c || navigating() || Object.keys(c.choice || {}).length) return;
+    const open = c.plans[c.sel];
+    c.plans = o.plans;
+    c.sel = open ? c.plans.findIndex(p => pickSig(p) === pickSig(open) && Math.abs(p.dep - open.dep) < 60_000) : -1;
+    renderCard();
+    if (c.sel < 0 && c.plans.length) drawPlan(c.plans[0], { fit: false });
+  });
 }
 
 // 出發時間 / 抵達時間: a day (today, tomorrow…) and a time; it stays until

@@ -59,31 +59,70 @@ const FIXED = new Set(['tra', 'hsr', 'metro', 'lightrail']);
 // One plan, its first two buses re-timed by what TDX says now. Only for
 // buses due within the next 90 minutes (further out, estimates mean
 // nothing). The plan comes back unchanged when TDX has nothing for it.
-// The three buses after one at a stop: TDX's own later estimates, else the
-// route's timetable there (its times, or its headway: every 15–20 minutes).
-export async function nextBuses(list, name, after, times = [], { schedule = routeSchedule } = {}) {
-  const out = times.filter(t => t.at > after + MIN).map(t => t.at);
-  if (out.length >= 3) return out.slice(0, 3);
-  const r = list.find(x => sameRoute(zh(x.RouteName), name) && x.StopUID);
-  if (!r) return out;
-  const sched = await schedule({ uid: r.RouteUID, name: zh(r.RouteName), city: routeCity(r.RouteUID) }).catch(() => []);
-  return laterAt(sched, { stopUID: r.StopUID, name: zh(r.StopName), dir: Number(r.Direction) }, after, out);
-}
-// `out` (the times known) topped up to three from a route's timetable at a stop, after `after`.
-function laterAt(sched, stop, after, out = []) {
-  out = [...out];
-  if (!sched?.length || out.length >= 3) return out.slice(0, 3);
+// A route's departures at the i-th stop of one way on a day, as moments:
+// the timetable's own times there, or (公路客運 often lists only when a bus
+// leaves its first stop, the same time at every stop) the first stop's plus
+// the ride from it; else its headway (every 15–20 minutes) from `after`.
+export function departuresAt(sched, w, i, after, n = 4) {
+  if (!sched?.length) return [];
   const d = tw(after);
-  const st = stopTimes(sched, stop, d.date, d.dow);
-  const last = () => Math.max(after, ...out);
-  for (const hm of st.times) {
-    const t = twAt(d.date, hm.slice(0, 5));
-    if (out.length < 3 && t > last() + 2 * MIN) out.push(t);
+  const at = k => stopTimes(sched, { stopUID: w.stops[k].uid, name: w.stops[k].name, dir: w.dir }, d.date, d.dow);
+  const here = at(i);
+  let times = here.times;
+  let shift = 0;
+  if (i > 0) {
+    const first = at(0).times;
+    if (!times.length || (first.length && first.join() === times.join())) {
+      times = first;
+      shift = rideTime(w, 0, i) * 1000;
+    }
   }
-  const f = st.every.find(x => x.from <= d.hm && d.hm <= x.to);
+  const out = times.map(hm => twAt(d.date, hm.slice(0, 5)) + shift).filter(t => t >= after).sort((x, y) => x - y);
+  const f = here.every.find(x => x.from <= d.hm && d.hm <= x.to);
   const gap = f ? ((f.min || f.max) + (f.max || f.min)) / 2 : 0;
-  while (gap && out.length < 3) out.push(last() + gap * MIN);
-  return out.slice(0, 3);
+  while (gap && out.length < n) out.push((out.at(-1) ?? after) + gap * MIN);
+  return out.slice(0, n);
+}
+
+// Which way of a route a ride is, and its stops: the way where the stop
+// nearest where you get on comes before the one nearest where you get off.
+export function wayOf(ways, from, to) {
+  let best = null;
+  for (const w of ways) {
+    const d = s => meters(s.lat, s.lon, from.lat, from.lon);
+    const i = w.stops.reduce((a, s, k) => (d(s) < d(w.stops[a]) ? k : a), 0);
+    const e = s => meters(s.lat, s.lon, to.lat, to.lon);
+    let j = -1;
+    for (let k = i + 1; k < w.stops.length; k++) if (j < 0 || e(w.stops[k]) < e(w.stops[j])) j = k;
+    if (j < 0) continue;
+    const cost = d(w.stops[i]) + e(w.stops[j]);
+    if (!best || cost < best.cost) best = { w, i, j, cost };
+  }
+  return best;
+}
+
+// A bus ride's later buses (its card's times): TDX's estimates for that
+// way at that stop, then its timetable there. `list`: the estimates near the
+// stop (etaNear). Three at most.
+export async function laterBuses(list, l, after, { now = Date.now(), stops = routeStops, schedule = routeSchedule } = {}) {
+  const name = l.short || l.name;
+  const r = list.find(x => sameRoute(zh(x.RouteName), name) && x.RouteUID);
+  if (!r) return [];
+  const route = { uid: r.RouteUID, name: zh(r.RouteName), city: routeCity(r.RouteUID) };
+  const [ways, sched] = await Promise.all([stops(route).catch(() => []), schedule(route).catch(() => [])]);
+  const way = l.to?.lat != null ? wayOf(ways, l.from, l.to) : null;
+  const live = liveTimes(list, name, now, { routeUID: r.RouteUID, ...(way ? { dir: way.w.dir } : {}) }).times.map(t => t.at).filter(t => t > after + MIN);
+  const out = [...live];
+  if (way) for (const t of departuresAt(sched, way.w, way.i, after + MIN, 4)) if (out.length < 3 && !out.some(x => Math.abs(x - t) < 3 * MIN)) out.push(t);
+  return out.sort((x, y) => x - y).slice(0, 3);
+}
+// A plan's first bus, its later buses, when TDX gave no estimate for it (a
+// trip later in the day; a planner's bus).
+export async function busTimes(plan, { near = etaNear, now = Date.now() } = {}) {
+  const l = plan.legs.find(x => x.mode !== 'walk' && x.mode !== 'bike');
+  if (!l || l.mode !== 'bus' || !l.from?.lat) return [];
+  const list = await near(l.from.lat, l.from.lon, 150).catch(() => []);
+  return laterBuses(list, l, l.dep, { now });
 }
 
 export async function adjustPlan(plan, now = Date.now(), { near = etaNear } = {}) {
@@ -117,7 +156,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaNear } = {}
     l.live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
     // The buses after it, for the route's other times (moreBuses).
     // (Not waited for here: the planner waits for them all at once, beside the bikes.)
-    if (i === first) l.nextP = nextBuses(list, l.short || l.name, bus.at, times);
+    if (i === first) l.nextP = laterBuses(list, l, bus.at, { now });
     const delta = bus.at - l.dep;
     if (Math.abs(delta) < 60_000) continue;
     changed = true;
@@ -240,15 +279,15 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
       dep = t.at;
       isLive = !t.planned;
     } else if (sched.length) {
-      const d = tw(ready);
-      const hm = stopTimes(sched, { stopUID: bs.uid, name: bs.name, dir: w.dir }, d.date, d.dow).times.find(x => x >= d.hm);
-      if (hm) dep = Date.parse(`${d.date}T${hm.length === 5 ? hm : hm.slice(0, 5)}:00+08:00`);
+      dep = departuresAt(sched, w, i, ready - 30_000, 1)[0] ?? null;
     }
     if (dep == null || dep - ready > 75 * MIN) return void trace?.why.push(`${c.route}: ${dep == null ? 'no bus now' : 'next in over 75 min'}`);
     const ride = rideTime(w, i, j, sched);
     const bus = { mode: 'bus', name: c.route, short: c.route, headsign: w.headsign, from: { name: bs.name, lat: bs.lat, lon: bs.lon }, to: { name: as.name, lat: as.lat, lon: as.lon }, dep, arr: dep + ride * 1000, dur: ride, stops: j - i, dist: Math.round(meters(bs.lat, bs.lon, as.lat, as.lon) * 1.3), agency: '', route: { uid: c.uid, city: route.city, dir: w.dir, stopUID: bs.uid }, ...(isLive ? { live: { at: dep } } : {}) };
     // The buses after it (its card's times): TDX's, else the timetable's, else its headway.
-    bus.next = laterAt(sched, { stopUID: bs.uid, name: bs.name, dir: w.dir }, dep, lt.times.filter(x => x.at > dep + MIN).map(x => x.at));
+    const later = lt.times.filter(x => x.at > dep + MIN).map(x => x.at);
+    for (const t of departuresAt(sched, w, i, dep + MIN, 4)) if (later.length < 3 && !later.some(x => Math.abs(x - t) < 3 * MIN)) later.push(t);
+    bus.next = later.sort((x, y) => x - y).slice(0, 3);
     const legs = [];
     if (w1.dist > 20) legs.push({ ...w1, dep: dep - 60_000 - w1.dur * 1000, arr: dep - 60_000 });
     legs.push(bus);
