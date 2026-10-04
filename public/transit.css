@@ -3087,3 +3087,283 @@ main {
   opacity: 0;
   font-size: 16px;
 }
+
+/* ---- 查時刻 · 公車, redone (2026-10-04) ---- */
+/* On a phone the tab's own controls stay at the top, solid, and what
+   scrolls goes under them, not under the app's two round buttons. */
+.q-touch body.tab-times .q-appbar {
+  position: static;
+}
+#times-seg {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  max-width: var(--ot-max);
+  margin: 0 auto;
+  padding: calc(var(--q-top, env(safe-area-inset-top)) + 8px) 16px 8px;
+  background: var(--q-page);
+  box-sizing: border-box;
+}
+#times-seg::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--q-top, env(safe-area-inset-top)) + 8px) 16px 8px;
+  z-index: -1;
+  border-radius: 11px;
+  background: rgba(118, 118, 128, 0.24);
+}
+#times-seg .q-chip {
+  justify-content: center;
+  min-height: 34px;
+  margin: 2px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--q-text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+#times-seg .q-chip[aria-pressed='true'] {
+  background: #636366;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+}
+.ot-bus-top {
+  position: sticky;
+  top: calc(var(--q-top, env(safe-area-inset-top)) + 58px);
+  z-index: 19;
+  margin: 0 -16px;
+  padding: 0 16px 2px;
+  background: var(--q-page);
+  border-bottom: 0.5px solid var(--ot-line);
+}
+.ot-bus-top .ot-search-in {
+  margin: 2px 0 8px;
+}
+.ot-bus-top .ot-search-in input {
+  min-height: 40px;
+  border: 0;
+  border-radius: 11px;
+  background-color: rgba(118, 118, 128, 0.24);
+  font-size: 16px;
+}
+.ot-bus-top .ot-city-chips {
+  margin: 0 -16px 8px;
+  padding: 0 16px;
+}
+.ot-bus-top .ot-city-chips .q-chip {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.ot-bus .ot-go-h {
+  margin: 20px 4px 8px;
+}
+/* The stops near you: an inset group, a row each, its buses as badges. */
+.ot-bus-stop {
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: var(--ot-card);
+}
+.ot-bus-stop + .ot-bus-stop {
+  border-top: 0.5px solid var(--ot-line);
+}
+.ot-bus-stop:first-child {
+  border-radius: 14px 14px 0 0;
+}
+.ot-bus-stop:last-child {
+  border-radius: 0 0 14px 14px;
+}
+.ot-bus-stop:first-child:last-child {
+  border-radius: 14px;
+}
+.ot-bus-stop-h b {
+  font-size: 16px;
+}
+.ot-bus-nos {
+  gap: 6px;
+  margin-top: 8px;
+}
+.ot-bus-chip {
+  min-width: 44px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  font: 700 15px/30px var(--q-font);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A route's sheet: its number like the sign on the bus, the way and the
+   view kept at the top, the stops on a line with the buses on it. */
+.ot-route-sheet {
+  padding-top: 0;
+}
+.ot-rt-top {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -18px;
+  padding: 0 18px 8px;
+  background: var(--q-sheet, var(--q-page));
+  border-bottom: 0.5px solid var(--ot-line);
+}
+.ot-rt-top .q-sheet-head {
+  position: static;
+  margin: 0;
+  padding: 12px 0 6px;
+  background: none;
+}
+.ot-rt-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ot-rt-id > div {
+  min-width: 0;
+}
+.ot-rt-id h2 {
+  overflow: hidden;
+  font-size: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-rt-no {
+  flex: none;
+  min-width: 52px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--q-accent);
+  color: var(--q-accent-ink);
+  font: 800 22px/1.15 var(--q-font);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  box-sizing: border-box;
+}
+.ot-rt-top .ot-segctl {
+  margin: 8px 0 0;
+  border-radius: 11px;
+  background: rgba(118, 118, 128, 0.24);
+}
+.ot-rt-top .ot-segctl button {
+  min-height: 32px;
+  border-radius: 9px;
+  color: var(--q-text-2);
+  font-size: 13.5px;
+}
+.ot-rt-top .ot-segctl button[aria-pressed='true'] {
+  background: #636366;
+  color: #fff;
+}
+.ot-route-sheet .ot-route-stops {
+  margin: 6px 0 0;
+}
+.ot-route-sheet .ot-route-stops li {
+  grid-template-columns: 76px 30px minmax(0, 1fr) 40px;
+  min-height: 54px;
+}
+.ot-route-sheet .ot-route-stops li::before {
+  left: 89px;
+  width: 4px;
+  border-radius: 2px;
+  background: rgba(34, 197, 94, 0.45);
+}
+.ot-rs-eta {
+  justify-self: end;
+  min-width: 0;
+  padding: 3px 8px;
+  border-radius: 8px;
+  color: var(--q-text);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ot-rs-eta.now {
+  background: var(--ot-bad);
+  color: #fff;
+}
+.ot-rs-eta.soon {
+  background: rgba(255, 181, 71, 0.18);
+  color: var(--ot-warn);
+}
+.ot-rs-eta.wait {
+  color: var(--q-text-2);
+}
+.ot-rs-eta.off {
+  color: var(--q-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ot-route-sheet .ot-rs-dot {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border: 3px solid #22c55e;
+  background: var(--q-sheet, #15171d);
+}
+.ot-route-sheet li.now .ot-rs-dot {
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  border: 0;
+  background: var(--ot-bad);
+  box-shadow: 0 0 0 4px rgba(255, 107, 102, 0.22);
+  color: #fff;
+}
+.ot-rs-dot .ot-i {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
+}
+.ot-route-sheet .ot-rs-name {
+  padding: 8px 4px 8px 6px;
+}
+.ot-route-sheet .ot-rs-name b {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-route-sheet .ot-rs-name small {
+  margin-top: 1px;
+  font-size: 12px;
+}
+.ot-route-sheet li.mine {
+  background: rgba(34, 197, 94, 0.1);
+}
+.ot-route-sheet li.mine .ot-rs-name b {
+  color: #4ade80;
+}
+.ot-rs-star {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--q-muted);
+  opacity: 0.6;
+}
+.ot-rs-star.on {
+  color: var(--ot-bike);
+  opacity: 1;
+}
+.ot-rs-star.on .ot-i {
+  fill: currentColor;
+}
+.ot-route-sheet .ot-tt-days {
+  margin-top: 12px;
+}

@@ -166,8 +166,12 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   };
   const draw = () => {
     const w = ways?.[way];
-    const head = sheetHead(`${e(route.name)}`, w ? `往 ${e(w.headsign)}${route.city === INTERCITY ? ' · 公路客運' : ` · ${e(cityShort(route.city))}`}` : '');
-    const tabs = ways && ways.length > 1 ? `<div class="ot-segctl ot-dir" role="group" aria-label="方向">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}${x.subName && x.subName !== route.name ? `<small>${e(x.subName)}</small>` : ''}</button>`).join('')}</div>` : '';
+    const keep = d.scrollTop;
+    // Like a stop's sign: the route's number big, where it's going beside it;
+    // the way and the view stay at the top while the stops scroll under.
+    const where = route.city === INTERCITY ? '公路客運' : cityShort(route.city);
+    const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${w ? `往 ${e(w.headsign)}` : '路線'}</h2><p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}</p></div></div><button class="q-close" type="button" data-act="close" aria-label="關閉">×</button></div>`;
+    const tabs = ways && ways.length > 1 ? `<div class="ot-segctl ot-dir" role="group" aria-label="方向">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}</button>`).join('')}</div>` : '';
     const views = `<div class="ot-segctl ot-view" role="group" aria-label="即時或時刻表"><button type="button" data-view="live" aria-pressed="${view === 'live'}">即時到站</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">時刻表</button></div>`;
     const stops = !ways
       ? '<p class="ot-note">載入站牌中…</p>'
@@ -180,13 +184,15 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
               const v = live.get(s.uid);
               let t = etaText(v);
               // 尚未發車 without a time: the timetable's.
-              if ((!v || (v.status === 1 && !v.next) || t.main === '—') && planned(w, s)) t = { main: `${planned(w, s)} 班`, sub: '時刻表', tone: 'wait' };
+              if ((!v || (v.status === 1 && !v.next) || t.main === '—') && planned(w, s)) t = { main: `${planned(w, s)}`, sub: '時刻表', tone: 'wait' };
               const mine = s.uid === stopUID;
               const inGroup = ctx.data.groups.some(g => g.items.some(x => x.stopUID === s.uid));
-              return `<li class="${t.tone}${mine ? ' mine' : ''}" data-stop="${e(s.uid)}"><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b></span><span class="ot-rs-dot"></span><button class="ot-rs-name" type="button" data-add="${e(s.uid)}"><b>${e(s.name)}</b>${inGroup ? `<small>${icon('star')} 已加入</small>` : '<small>＋ 加入群組</small>'}</button></li>`;
+              // A bus at the stop (進站中, 即將進站) rides on its dot.
+              return `<li class="${t.tone}${mine ? ' mine' : ''}" data-stop="${e(s.uid)}"><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span><span class="ot-rs-dot">${t.tone === 'now' ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${t.sub ? `<small>${e(t.sub)}</small>` : ''}</span><button class="ot-rs-star${inGroup ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${inGroup ? '已加入群組' : '加入群組'}">${icon('star')}</button></li>`;
             })
             .join('')}</ol>`;
-    d.querySelector('#rt').innerHTML = `${head}${tabs}${views}${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${add && view === 'live' ? '<p class="ot-note">點你上車的站牌，加入群組。</p>' : ''}${stops}${view === 'live' ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' ? `<p class="ot-note center">${e(ago(at))}・每 20 秒更新・☆ 加入群組</p>` : ''}`;
+    d.scrollTop = keep;
   };
   const refresh = async () => {
     try {
