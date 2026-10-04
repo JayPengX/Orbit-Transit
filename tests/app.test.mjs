@@ -886,6 +886,20 @@ test('the buses after one: the way the ride goes, TDX’s later estimates, the s
   assert.deepEqual(departuresAt(freq, ways[0], 1, day('08:06'), 3), [20, 40, 60].map(m => day('08:06') + m * 60_000));
 });
 
+test('a route sheet’s times: the nearest day it runs when not today; a live bus only when the timetable has one due about then', async () => {
+  const { nextRun, liveTrusted } = await import('../public/lib/live.mjs');
+  const A = { uid: 'A', name: 'A', lat: 24.80, lon: 121.00 }, B = { uid: 'B', name: 'B', lat: 24.81, lon: 121.00 };
+  const w = { dir: 0, stops: [A, B] };
+  const weekdays = { Sunday: 0, Monday: 1, Tuesday: 1, Wednesday: 1, Thursday: 1, Friday: 1, Saturday: 0 };
+  const sched = [{ Direction: 0, Timetables: ['08:00', '08:20'].map(t => ({ ServiceDay: weekdays, StopTimes: [{ StopUID: 'A', DepartureTime: t }, { StopUID: 'B', DepartureTime: t.replace(':00', ':06').replace(':20', ':26') }] })) }];
+  const at = (d, t) => twAt(d, t);
+  assert.deepEqual(nextRun(sched, w, 1, at('2026-10-05', '08:10')), { at: at('2026-10-05', '08:26'), day: 0 }, 'Monday: the next one today');
+  assert.deepEqual(nextRun(sched, w, 1, at('2026-10-10', '09:00')), { at: at('2026-10-12', '08:06'), day: 2 }, 'Saturday: Monday’s first');
+  assert.equal(liveTrusted(sched, w, 1, at('2026-10-05', '07:20')), false, 'a bus "coming" 45 minutes before any is due: resting');
+  assert.equal(liveTrusted(sched, w, 1, at('2026-10-05', '08:15')), true, 'the 08:06, 9 minutes late');
+  assert.equal(liveTrusted([], w, 1, at('2026-10-05', '07:20')), true, 'no timetable: as TDX says');
+});
+
 test('a ride over 頭前溪 counts against a plan and says so; one on this side doesn’t', async () => {
   const { crossings } = await import('../public/lib/rivers.mjs');
   const stadium = { lat: 24.8212, lon: 121.0176 };

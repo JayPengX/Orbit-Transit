@@ -12,7 +12,7 @@
 import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stationsNear, stopTimes, routeCity } from './bus.mjs';
 import { finish } from './plan.mjs';
-import { meters, walkSec, zh, tw, twAt } from './util.mjs';
+import { meters, walkSec, zh, tw, twAt, addDays } from './util.mjs';
 
 const MIN = 60_000;
 const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates';
@@ -86,6 +86,28 @@ export function departuresAt(sched, w, i, after, n = 4) {
   return out.slice(0, n);
 }
 
+// The next scheduled bus at the i-th stop of a way from `after`, today or
+// the nearest day it runs: { at, day } (day 0 today, 1 tomorrow…), or null
+// (no timetable for it this coming week).
+export function nextRun(sched, w, i, after, days = 7) {
+  if (!sched?.length) return null;
+  const d = tw(after).date;
+  for (let k = 0; k <= days; k++) {
+    const t = departuresAt(sched, w, i, k ? twAt(addDays(d, k), '00:00') : after, 1)[0];
+    if (t != null) return { at: t, day: k };
+  }
+  return null;
+}
+// Whether a live estimate (a bus due at the stop at `at`) is a bus in
+// service: one the timetable has due about then (25 minutes late at most, 10
+// early). A driver resting with the tracker on shows a bus 'coming' at the
+// terminal long before it leaves. No timetable for the way: taken as it is.
+export function liveTrusted(sched, w, i, at) {
+  if (!sched?.length || !nextRun(sched, w, 0, at - 86_400_000)) return true;
+  const t = departuresAt(sched, w, i, at - 25 * MIN, 1)[0];
+  return t != null && t <= at + 10 * MIN;
+}
+
 // Which way of a route a ride is, and its stops: the way where the stop
 // nearest where you get on comes before the one nearest where you get off.
 export function wayOf(ways, from, to) {
@@ -113,7 +135,9 @@ export async function laterBuses(list, l, after, { now = Date.now(), stops = rou
   const route = { uid: r.RouteUID, name: zh(r.RouteName), city: routeCity(r.RouteUID) };
   const [ways, sched] = await Promise.all([stops(route, l.from).catch(() => []), schedule(route, l.from).catch(() => [])]);
   const way = l.to?.lat != null ? wayOf(ways, l.from, l.to) : null;
-  const live = liveTimes(list, name, now, { routeUID: r.RouteUID, ...(way ? { dir: way.w.dir } : {}) }).times.map(t => t.at).filter(t => t > after + MIN);
+  const live = liveTimes(list, name, now, { routeUID: r.RouteUID, ...(way ? { dir: way.w.dir } : {}) })
+    .times.map(t => t.at)
+    .filter(t => t > after + MIN && (!way || liveTrusted(sched, way.w, way.i, t)));
   const out = [...live];
   if (way) for (const t of departuresAt(sched, way.w, way.i, after + MIN, 4)) if (out.length < 3 && !out.some(x => Math.abs(x - t) < 3 * MIN)) out.push(t);
   return out.sort((x, y) => x - y).slice(0, 3);
@@ -276,6 +300,8 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     let dep = null;
     let isLive = false;
     const lt = liveTimes(live, c.route, now, { dir: w.dir, routeUID: c.uid });
+    // (A bus 'coming' the timetable has nowhere near: resting with its tracker on.)
+    lt.times = lt.times.filter(x => liveTrusted(sched, w, i, x.at));
     const t = lt.times.find(x => x.at >= ready - 30_000);
     if (t) {
       dep = t.at;
