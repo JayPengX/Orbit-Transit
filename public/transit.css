@@ -3367,3 +3367,58 @@ main {
 .ot-route-sheet .ot-tt-days {
   margin-top: 12px;
 }
+
+/* Pinning a ride: on at one stop, then tap where you get off. */
+.ot-ride-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 8px 10px 14px;
+  border-radius: 14px;
+  background: rgba(34, 197, 94, 0.14);
+}
+.ot-ride-pick > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ot-ride-pick b {
+  overflow: hidden;
+  color: #4ade80;
+  font-size: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-ride-pick small {
+  color: var(--q-text-2);
+  font-size: 12.5px;
+}
+.ot-ride-pick .q-btn {
+  flex: none;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.ot-route-sheet li.before {
+  opacity: 0.35;
+}
+.ot-route-sheet li.can-off {
+  cursor: pointer;
+}
+.ot-route-sheet li.can-off:active {
+  background: rgba(34, 197, 94, 0.14);
+}
+.ot-route-sheet li.on-here {
+  background: rgba(34, 197, 94, 0.14);
+  border-radius: 12px;
+}
+.ot-route-sheet li.on-here .ot-rs-name small,
+.ot-route-sheet .ot-rs-name small .ot-i {
+  color: #4ade80;
+}
+.ot-ride-arrow {
+  color: var(--q-muted);
+  font-style: normal;
+  font-weight: 500;
+}

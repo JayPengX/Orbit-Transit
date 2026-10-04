@@ -740,3 +740,20 @@ test('a stop’s timetable an hour a row; any day of the coming week', async () 
   assert.deepEqual(stopTimes(sched, { stopUID: 'S1', dir: 0 }, '2026-10-04', 0).times, ['08:00'], 'a Sunday');
   assert.deepEqual(stopTimes(sched, { stopUID: 'S1', dir: 0 }, '2026-10-05', 1).times, ['06:00'], 'the Monday after');
 });
+
+test('a pinned ride: on and off, and the way back by itself from wherever you are nearer', async () => {
+  const { rideNow } = await import('../public/lib/tab-go.mjs');
+  const { cleanItem } = await import('../public/lib/store.mjs');
+  const it = cleanItem({ id: 'i1', city: 'Hsinchu', routeUID: 'HSZ0001', route: '藍1', dir: 0, stopUID: 'A0', stop: '新竹火車站', headsign: '竹北火車站', lat: 24.8016, lon: 120.9716, off: { stopUID: 'B0', stop: '竹北火車站', lat: 24.8395, lon: 121.0093 }, n: 12, back: { dir: 1, stopUID: 'B1', stop: '竹北火車站', headsign: '新竹火車站', lat: 24.8396, lon: 121.0094, off: { stopUID: 'A1', stop: '新竹火車站', lat: 24.8017, lon: 120.9717 } } });
+  assert.equal(it.off.stop, '竹北火車站');
+  assert.equal(it.back.off.stopUID, 'A1');
+  const home = { lat: 24.802, lon: 120.972 };
+  const work = { lat: 24.839, lon: 121.009 };
+  assert.equal(rideNow(it, home).stopUID, 'A0', 'near where you get on: that way');
+  const back = rideNow(it, work);
+  assert.deepEqual([back.stopUID, back.off.stop, back.back], ['B1', '新竹火車站', true], 'near where you got off: the way back');
+  assert.equal(rideNow(it, work, true).stopUID, 'A0', '⇄ turns it round');
+  const alone = cleanItem({ routeUID: 'HSZ0001', stopUID: 'A0', stop: '新竹火車站' });
+  assert.equal(rideNow(alone, work).stopUID, 'A0', 'a stop pinned alone stays');
+  assert.equal(alone.off, undefined);
+});
