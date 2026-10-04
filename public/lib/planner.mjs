@@ -105,13 +105,14 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // A train whose last station is far, on by bus; what the buses are doing
   // now (trips leaving now or soon), side by side.
   const t1 = performance.now();
+  let busTrace = null;
   const soon = by !== 'arrive' && t0 - now < 60 * 60_000 ? plans.filter(p => p.legs.some(l => l.mode === 'bus' && !l.live)).slice(0, 10) : [];
   // And every direct bus from around here to around there, by our own look
   // at the stops (the planners leave some out: 5615, 5614, 快捷9號 from
   // 竹北's 縣體育場 to 新竹車站); a stop a little farther is ridden to.
   const [linked, direct, done] = await Promise.all([
     modes.bus && by !== 'arrive' ? trainThenBus(trains, to, now) : [],
-    modes.bus && by !== 'arrive' && t0 - now < 60 * 60_000 ? busLink(from, to, t0, { fromM: 700, toM: 700, n: 6, routes: 10, now }).catch(() => []) : [],
+    modes.bus && by !== 'arrive' && t0 - now < 60 * 60_000 ? busLink(from, to, t0, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: (busTrace = {}) }).catch(err => ((busTrace.error = String(err?.message || err)), [])) : [],
     Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)))
   ]);
   plans = plans.map(p => done[soon.indexOf(p)] || p);
@@ -145,7 +146,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   lap('all', T0);
   // 除錯紀錄: everything the ranking was worked out from (scripts/replay.mjs runs it again), and what it said.
   rec('trip', {
-    now, t0, at, by, from, to, ms,
+    now, t0, at, by, from, to, ms, buses: busTrace,
     prefs: { modes, bike30: prefs.bike30, tpass: prefs.tpass },
     sources: res.sources || {},
     plans, bikes, cities,

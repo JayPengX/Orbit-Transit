@@ -40,6 +40,7 @@ for (const { data: t } of pick) {
     }
     console.log(`${p.weak ? '  ·' : p.top ? '  ★' : '   '} ${String(p.score).padStart(4)}  ${hm(p.dep)}→${hm(p.arr)}  ${p.legs.map(leg).join(' · ')}${times}${p.lead ? '' : ' (another time)'}${p.rivers?.length ? ` 過${p.rivers.join('、')}` : ''}`);
   }
+  if (t.buses) console.log(`  direct buses: near you ${t.buses.near?.join(' ')} | near there ${t.buses.there?.join(' ')} | both ${t.buses.both?.join(' ')} | kept ${t.buses.kept?.join(' ')}${t.buses.error ? ` | error ${t.buses.error}` : ''}`);
   if (t.ms) console.log(`  took (ms): ${Object.entries(t.ms).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
   if (t.shown) console.log(`  phone showed:\n${t.shown.map(x => `    ${x}`).join('\n')}`);
 }
