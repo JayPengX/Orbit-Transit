@@ -182,7 +182,7 @@ async function loadTrip(w, { force = false } = {}) {
     const from = w.from || (ctx.here ? { name: '目前位置', lat: ctx.here.lat, lon: ctx.here.lon } : null);
     if (!from) throw Object.assign(new Error('nohere'), { code: 'NO_HERE' });
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
-    S.trips.set(w.id, { at: Date.now(), from, plans: out.plans.slice(0, 12), error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
+    S.trips.set(w.id, { at: Date.now(), from, plans: out.plans, error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
   } catch (err) {
     S.trips.set(w.id, { at: Date.now(), plans: old?.plans || [], error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
   }
@@ -215,13 +215,14 @@ const busRow = (x, { pin = true, stopName = '' } = {}) => {
 };
 
 // A trip's plans to show: the ways you pinned first (their next two
-// departures), then the recommendations, up to four; the rest behind 更多.
+// departures), then the recommendations, up to four; the rest behind 更多:
+// one per route (its best departure), none set aside as no way to go.
 export function tripPlans(plans, picks = [], now = Date.now()) {
   const live = plans.filter(p => p.dep >= now - 2 * 60_000);
   const pinned = [];
   for (const k of picks) pinned.push(...live.filter(p => pickSig(p) === k).sort((a, b) => a.dep - b.dep).slice(0, 2));
   const first = [...pinned, ...live.filter(p => p.top && !pinned.includes(p))].slice(0, Math.max(4, pinned.length));
-  return { first, rest: live.filter(p => !first.includes(p)) };
+  return { first, rest: live.filter(p => !first.includes(p) && p.lead !== false && !p.weak && !picks.includes(pickSig(p))) };
 }
 
 function tripCard({ t, w }) {

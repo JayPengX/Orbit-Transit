@@ -843,6 +843,32 @@ main {
   color: var(--q-muted);
   font-size: 12.5px;
 }
+/* The same route's other departures: times to pick, the one shown filled. */
+.ot-plan-deps {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ot-plan-deps::-webkit-scrollbar {
+  display: none;
+}
+.ot-dep {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--ot-line);
+  border-radius: 999px;
+  color: var(--q-text-2);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ot-dep.on {
+  border-color: transparent;
+  background: var(--q-accent);
+  color: #fff;
+}
 .ot-steps {
   display: grid;
   gap: 0;

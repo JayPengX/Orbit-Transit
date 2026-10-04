@@ -617,7 +617,7 @@ test('a pinned recommendation: known by its lines (trains by their stations), sh
   const plans = [P('YouBike', '07:01', true), P('A', '07:02', true), P('B', '07:03', true), P('C', '07:04', true), P('5608', '07:30', false), P('5608', '07:10', false), P('5608', '07:50', false)];
   const { first, rest } = tripPlans(plans, [pickSig(P('5608'))], now);
   assert.deepEqual(first.map(p => `${p.legs[0].short} ${(p.dep - now) / 60_000}`), ['5608 10', '5608 30', 'YouBike 1', 'A 2']);
-  assert.equal(rest.length, 3);
+  assert.equal(rest.length, 2, 'the pinned way’s third departure isn’t another way');
   assert.equal(cleanSaved({ to: { name: 'x', lat: 24.8, lon: 121 }, picks: ['a', 'a', 5, 'b'] }).picks.join(), 'a,b');
 });
 
@@ -776,4 +776,24 @@ test('新竹縣體育場 → 新竹大遠百: by bike to 竹北 for the train, n
   assert.equal(list[0].legs.find(l => l.mode === 'tra').from.name, '竹北', list.map(p => `${p.score} ${p.legs.map(l => l.mode + ':' + (l.from?.name || '')).join(' ')}`).join('\n'));
   assert.equal(list.filter(p => p.legs.some(l => l.train?.no === '1187')).length, 1, 'the train 1187 once, by the best way onto it');
   assert.ok(list.filter(p => !p.legs.some(l => l.mode !== 'walk' && l.mode !== 'bike')).length <= 1, 'all the way by bike once (bike or 電輔車)');
+});
+
+test('a 15-minute walk to the bus loses to riding to the same bus; a route nobody would take is set aside; one card per route with its times', () => {
+  const o = { name: '家', lat: 24.8212, lon: 121.0176 };
+  const stop = { name: '站牌', lat: 24.8312, lon: 121.0176 }; // ~1.1 km
+  const d = { name: '那裡', lat: 24.80, lon: 120.96 };
+  const st = (uid, pt) => ({ uid, name: `${pt.name}站`, lat: pt.lat + 0.0002, lon: pt.lon, bikes: 1, ebike: 0, ret: 5, ok: true });
+  const bikes = [st('o', o), st('s', stop)];
+  const bus = (dep, arr) => ({ mode: 'bus', short: '81', from: stop, to: d, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000 });
+  const walk = (dep, arr) => ({ mode: 'walk', from: o, to: stop, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 1150 });
+  const walked = finish({ legs: [walk('08:05', '08:20'), bus('08:21', '08:45')] });
+  const later = finish({ legs: [walk('08:25', '08:40'), bus('08:41', '09:05')] });
+  const list = withBikes([walked, later], o, d, bikes, T('08:00'), { modes: { bus: true, bike: true } });
+  const lead = list.find(p => p.lead && !p.weak && p.legs.some(l => l.mode === 'bus'));
+  assert.equal(lead.legs[0].mode === 'walk' ? lead.legs[1].mode : lead.legs[0].mode, 'bike', 'ridden to the 81');
+  assert.ok(lead.times.length >= 2, 'the 81’s later one is a time on its card');
+  assert.equal(list.filter(p => p.lead && !p.weak && p.legs.some(l => l.short === '81')).length, 1);
+  // Without bikes, walking is the way.
+  const off = withBikes([walked, later], o, d, bikes, T('08:00'), { modes: { bus: true, bike: false } });
+  assert.equal(off[0].legs[0].mode, 'walk');
 });
