@@ -74,7 +74,10 @@ export function legLabel(l) {
 // which of it, `on`: the one shown; each carries data-* from `attrs(i)`.
 export function depChips(plans, idx, on, attrs) {
   if (idx.length < 2) return '';
-  const ride = p => p.legs.find(l => l.mode !== 'walk' && l.mode !== 'bike');
+  // The ride the times differ by (a bus to the station, then a choice of trains: the trains').
+  const rides = p => p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
+  const k = Math.max(0, rides(plans[idx[0]]).findIndex((l, j) => idx.some(i => rides(plans[i])[j]?.dep !== l.dep)));
+  const ride = p => rides(p)[k] || rides(p)[0];
   const kind = p => (ride(p)?.train ? String(ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '') : '');
   const mixed = new Set(idx.map(i => kind(plans[i]))).size > 1;
   return `<div class="ot-plan-deps" role="group" aria-label="選班次">${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${mixed && kind(plans[i]) ? `<small>${e(kind(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;

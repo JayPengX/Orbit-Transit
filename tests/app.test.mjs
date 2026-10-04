@@ -218,6 +218,12 @@ test('our own train plans: walk to a station near you, the trains, walk from the
   assert.deepEqual(railPlans(net, o, { lat: 23.5, lon: 120.5 }, T('08:10')), [], 'no station near there');
 });
 
+test('a station near both ends: no train-less "journey" (from 千甲 to 千甲) in place of the trains', () => {
+  assert.deepEqual(journeys(net, [{ key: 'tra:1210', at: T('08:00') }], [{ key: 'tra:1210', extra: 0 }], T('08:00')), []);
+  const j = journeys(net, [{ key: 'tra:1210', at: T('08:00') }], [{ key: 'tra:1000', extra: 0 }], T('08:00'));
+  assert.ok(j.length && j.every(x => x.legs.some(l => !l.walk)));
+});
+
 test('ranking: by what’s practical, every plan kept however late, the first few recommended, each labelled', () => {
   const list = withBikes([busPlan], O, D, BIKES, T('07:59'));
   assert.ok(list.length >= 2);

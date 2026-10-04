@@ -302,7 +302,7 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
   let at = Math.min(...starts.map(s => s.at));
   for (let guard = 0; guard < n * 3 && found.length < n * 2; guard++) {
     const j = earliest(net, starts.map(s => ({ ...s, at: Math.max(s.at, at) })), targets, { use });
-    if (!j) break;
+    if (!j || !j.legs?.some(l => !l.walk)) break;
     found.push(j);
     at = j.dep + 60_000;
   }

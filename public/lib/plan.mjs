@@ -186,18 +186,29 @@ export const RAIL_BIKE_M = 4500;
 const BIKE_OVER_M = 1200; // past this, a station is ridden to rather than walked
 // Getting to (or from) a station m metres away: { mode, sec }.
 const access = (m, bike) => (bike && m > BIKE_OVER_M ? { mode: 'bike', sec: rideSec(m) + 2 * DOCK_SEC + 120 } : { mode: 'walk', sec: walkSec(m) });
-export function railPlans(net, o, d, at, { n = 4, bike = false, use = () => true } = {}) {
+// Without YouBike, a bus does the same: from a station too far to walk on
+// to the place (or over the river). Its time a guess here (a bus at 20 km/h
+// and a wait) until the planner finds the real one (trainThenBus); a plan
+// whose bus isn't found is dropped (`bus: true` on its walk).
+const BUS_ACCESS = m => ({ mode: 'walk', bus: true, sec: Math.round((m * 1.3) / 330 * 60) + 8 * 60 });
+export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use = () => true } = {}) {
   if (!net || meters(o.lat, o.lon, d.lat, d.lon) < 3000) return [];
-  const near = pt => {
+  const near = (pt, end) => {
     const all = [...net.st.values()].map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m);
     // Walked to: on your side of the river only (the straight line over 頭前溪
     // is no footpath: the bridge is far round and made for cars).
     const walk = all.filter(x => x.m <= RAIL_WALK_M && !crossings(pt, x.s)).slice(0, 3);
-    const ride = bike ? all.filter(x => x.m > BIKE_OVER_M && x.m <= RAIL_BIKE_M && !walk.includes(x)).slice(0, 4) : [];
-    return [...walk, ...ride].map(x => ({ ...x, a: access(x.m, bike) }));
+    const far = x => (x.m > BIKE_OVER_M || crossings(pt, x.s)) && x.m <= RAIL_BIKE_M && !walk.includes(x);
+    const ride = bike ? all.filter(far).slice(0, 4) : [];
+    const byBus = !bike && bus && end ? all.filter(far).slice(0, 3) : [];
+    return [...walk.map(x => ({ ...x, a: access(x.m, bike) })), ...ride.map(x => ({ ...x, a: access(x.m, bike) })), ...byBus.map(x => ({ ...x, a: BUS_ACCESS(x.m) }))];
   };
-  const A = near(o);
-  const B = near(d);
+  // A station near both ends (千甲, 北新竹 between 竹北 and 巨城) is the
+  // nearer end's only: from it to itself is no train, and would be all found.
+  const A0 = near(o);
+  const B0 = near(d, true);
+  const A = A0.filter(x => !B0.some(y => y.s.key === x.s.key && y.m < x.m));
+  const B = B0.filter(x => !A.some(y => y.s.key === x.s.key));
   if (!A.length || !B.length) return [];
   const starts = A.map(x => ({ key: x.s.key, at: at + x.a.sec * 1000 + 3 * 60_000 }));
   const ends = B.map(x => ({ key: x.s.key, extra: x.a.sec }));
@@ -227,6 +238,7 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, use = () => true
     const b = reach.get(`b:${j.end}`)?.a;
     const w2 = walkLeg(pt(j.end), d, last.arr);
     if (b?.mode === 'bike') legs.push(placeholder(pt(j.end), d, last.arr, last.arr + b.sec * 1000, 'dep'));
+    else if (b?.bus) legs.push({ ...w2, bus: true, arr: last.arr + b.sec * 1000, dur: b.sec });
     else if (w2.dist > 20) legs.push(w2);
     return finish({ src: 'rail', legs });
   });
@@ -502,7 +514,8 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const groups = group();
   const leads = [...groups.values()].map(g => g[0]);
   const rideM = p => p.legs.reduce((a, l) => a + (l.mode === 'bike' ? l.dist || 0 : 0), 0);
-  const allBike = list.filter(p => p.bike && !vehicles(p).length).map(rideM);
+  // Riding it all, if that's a ride you'd take (not over 頭前溪's car bridge).
+  const allBike = list.filter(p => p.bike && !vehicles(p).length && !p.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to))).map(rideM);
   const bikeAll = allBike.length ? Math.min(...allBike) : null;
   const best = list[0].score;
   const weak = new Set();
