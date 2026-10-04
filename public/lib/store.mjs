@@ -47,8 +47,17 @@ export function cleanItem(x) {
     stopUID: str(x.stopUID, 40),
     stop: str(x.stop, 40),
     headsign: str(x.headsign, 40),
-    ...(coord(x.lat) != null && coord(x.lon) != null ? { lat: coord(x.lat), lon: coord(x.lon) } : {})
+    ...(coord(x.lat) != null && coord(x.lon) != null ? { lat: coord(x.lat), lon: coord(x.lon) } : {}),
+    // A ride: where you get off, how many stops, and the same ride back
+    // (the other way, on at where you got off), found when it was pinned.
+    ...(cleanStop(x.off) ? { off: cleanStop(x.off), n: Math.max(1, Math.min(200, Number(x.n) || 1)) } : {}),
+    ...(x.back && cleanStop(x.back) && cleanStop(x.back.off) ? { back: { ...cleanStop(x.back), dir: [0, 1, 2, 10, 255].includes(Number(x.back.dir)) ? Number(x.back.dir) : 1, headsign: str(x.back.headsign, 40), off: cleanStop(x.back.off) } } : {})
   };
+}
+// A stop of a ride: { stopUID, stop, lat, lon }.
+function cleanStop(x) {
+  if (!x || typeof x !== 'object' || !x.stopUID) return null;
+  return { stopUID: str(x.stopUID, 40), stop: str(x.stop, 40), ...(coord(x.lat) != null && coord(x.lon) != null ? { lat: coord(x.lat), lon: coord(x.lon) } : {}) };
 }
 export function cleanPlace(p) {
   const lat = coord(p?.lat);

@@ -34,8 +34,22 @@ const S = {
   trips: new Map(), // key → { at, plans, error, loading }
   places: new Map(), // place id → { stops, bikes, at }
   open: new Set(), // places opened
-  more: new Set() // trips showing every plan
+  more: new Set(), // trips showing every plan
+  flip: new Set() // rides turned round by hand (⇄)
 };
+
+// A pinned ride the way you'd take it now: from whichever of its two ends
+// you're nearer (at work: the way home), unless turned round by hand. A
+// stop pinned alone, or a ride with no way back, is as pinned.
+export function rideNow(it, here, flipped = false) {
+  const fwd = { dir: it.dir, stopUID: it.stopUID, stop: it.stop, headsign: it.headsign, lat: it.lat, lon: it.lon, off: it.off || null, back: false };
+  if (!it.back) return fwd;
+  const rev = { dir: it.back.dir, stopUID: it.back.stopUID, stop: it.back.stop, headsign: it.back.headsign, lat: it.back.lat, lon: it.back.lon, off: it.back.off, back: true };
+  let useBack = false;
+  if (here && it.lat != null && it.back.lat != null) useBack = meters(here.lat, here.lon, it.back.lat, it.back.lon) + 150 < meters(here.lat, here.lon, it.lat, it.lon);
+  return useBack !== flipped ? rev : fwd;
+}
+const sideOf = it => ({ ...it, ...rideNow(it, ctx.here, S.flip.has(it.id)) });
 
 export function init(c) {
   ctx = c;
@@ -118,7 +132,7 @@ async function refresh() {
   try {
     if (!ctx.here) await ctx.locate();
     const jobs = [];
-    const items = ctx.data.groups.flatMap(g => g.items);
+    const items = ctx.data.groups.flatMap(g => g.items).map(sideOf);
     if (items.length) jobs.push(stopsEta(items).then(m => (S.pinned = m)).catch(() => {}));
     jobs.push(trainPins());
     // The two trips that matter most get their plans at once (a planner call each, kept 4 minutes).
@@ -234,12 +248,14 @@ function pinnedHtml() {
   const items = ctx.data.groups.flatMap(g => g.items.map(it => ({ it, g })));
   const trains = ctx.data.pins;
   if (!items.length && !trains.length) return '';
+  // A ride: on → off, the way you'd go now (⇄ turns it round); a stop pinned alone: the stop.
   const buses = items
-    .map(({ it, g }) => ({ it, g, v: S.pinned.get(it.stopUID) }))
+    .map(({ it }) => ({ it, r: sideOf(it), v: S.pinned.get(sideOf(it).stopUID) }))
     .sort((a, b) => etaRank(a.v) - etaRank(b.v))
-    .map(({ it, g, v }) => {
+    .map(({ it, r, v }) => {
       const t = etaText(v);
-      return `<div class="ot-go-row"><button class="ot-go-main" type="button" data-route="${e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: it.stopUID, dir: it.dir }))}"><span class="ot-route-no">${e(it.route)}</span><span class="ot-go-what"><b>${e(it.stop)}</b><small>往 ${e(it.headsign || '—')} · ${e(g.name)}</small></span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(t.sub)}</small></span></button><button class="q-icon-btn on" type="button" data-unpin-bus="${e(it.id)}" aria-label="取消釘選">${icon('star')}</button></div>`;
+      const what = r.off ? `<b>${e(r.stop)} <i class="ot-ride-arrow">→</i> ${e(r.off.stop)}</b><small>往 ${e(r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}${r.back ? ' · 回程' : ''}</small>` : `<b>${e(r.stop)}</b><small>往 ${e(r.headsign || '—')}</small>`;
+      return `<div class="ot-go-row"><button class="ot-go-main" type="button" data-route="${e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }))}"><span class="ot-route-no">${e(it.route)}</span><span class="ot-go-what">${what}</span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(t.sub)}</small></span></button>${it.back ? `<button class="q-icon-btn" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}</button>` : ''}<button class="q-icon-btn on" type="button" data-unpin-bus="${e(it.id)}" aria-label="取消釘選">${icon('star')}</button></div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
@@ -300,12 +316,19 @@ function onClick(ev) {
     const x = JSON.parse(r.dataset.route);
     return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
   }
+  const fl = ev.target.closest('[data-flip]');
+  if (fl) {
+    const id = fl.dataset.flip;
+    S.flip.has(id) ? S.flip.delete(id) : S.flip.add(id);
+    render();
+    return refresh();
+  }
   const ub = ev.target.closest('[data-unpin-bus]');
   if (ub) {
     const id = ub.dataset.unpinBus;
     ctx.data.groups = ctx.data.groups.map(g => ({ ...g, items: g.items.filter(i => i.id !== id) }));
     ctx.save();
-    ctx.status('已取消釘選這個站牌');
+    ctx.status('已取消釘選');
     return render();
   }
   const ut = ev.target.closest('[data-unpin-train]');

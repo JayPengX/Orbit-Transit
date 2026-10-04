@@ -125,6 +125,8 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   let day = 0;
   let sched = null;
   let picked = stopUID;
+  // Pinning a ride: the stop you get on at, then the one you get off at.
+  let boarding = null;
   const d = sheet(`<div id="rt"></div>`, 'ot-tall-sheet ot-route-sheet');
   routeSchedule(route)
     .then(x => {
@@ -186,13 +188,49 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
               // 尚未發車 without a time: the timetable's.
               if ((!v || (v.status === 1 && !v.next) || t.main === '—') && planned(w, s)) t = { main: `${planned(w, s)}`, sub: '時刻表', tone: 'wait' };
               const mine = s.uid === stopUID;
-              const inGroup = ctx.data.groups.some(g => g.items.some(x => x.stopUID === s.uid));
+              const ride = pinnedAt(s.uid);
+              // Choosing where to get off: the stops after the one you get on at.
+              const at = boarding ? w.stops.findIndex(x => x.uid === boarding.uid) : -1;
+              const k = w.stops.indexOf(s);
+              const pick = boarding ? (k > at ? ' can-off' : k === at ? ' on-here' : ' before') : '';
               // A bus at the stop (進站中, 即將進站) rides on its dot.
-              return `<li class="${t.tone}${mine ? ' mine' : ''}" data-stop="${e(s.uid)}"><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span><span class="ot-rs-dot">${t.tone === 'now' ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${t.sub ? `<small>${e(t.sub)}</small>` : ''}</span><button class="ot-rs-star${inGroup ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${inGroup ? '已加入群組' : '加入群組'}">${icon('star')}</button></li>`;
+              return `<li class="${t.tone}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span><span class="ot-rs-dot">${t.tone === 'now' ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? '<small>上車</small>' : ride?.off ? `<small>${icon('star')} 到 ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? '取消釘選' : '從這站上車，釘選'}">${icon('star')}</button>`}</li>`;
             })
             .join('')}</ol>`;
-    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' ? `<p class="ot-note center">${e(ago(at))}・每 20 秒更新・☆ 加入群組</p>` : ''}`;
+    const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>從「${e(boarding.name)}」上車</b><small>點你下車的站，回程會自動對調</small></div><button class="q-btn" type="button" data-only="1">只釘這站</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="取消">${icon('x')}</button></div>` : '';
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding ? `<p class="ot-note center">${e(ago(at))}・每 20 秒更新・☆ 釘選你搭的這段</p>` : ''}`;
     d.scrollTop = keep;
+  };
+  // A ride pinned on at this stop, either way (the way back gets on where the ride gets off).
+  const rideAt = uid => x => x.routeUID === route.uid && (x.stopUID === uid || x.back?.stopUID === uid);
+  const pinnedAt = uid => {
+    const x = ctx.data.groups.flatMap(g => g.items).find(rideAt(uid));
+    return x && x.back?.stopUID === uid ? { ...x, off: x.back.off } : x;
+  };
+  // A ride pinned: on at `on`, off at `off` (null: just the stop), and the
+  // way back: the other direction, on where you got off, off where you got on.
+  const saveRide = (w, on, off) => {
+    const all = ctx.data.groups.flatMap(g => g.items);
+    if (all.length >= MAX_ITEMS * ctx.data.groups.length) return ctx.status('釘選的公車太多了，先刪掉一些');
+    const pt = s => ({ stopUID: s.uid, stop: s.name, lat: s.lat, lon: s.lon });
+    let back = null;
+    if (off) {
+      for (const o of ways.filter(x => x.dir !== w.dir)) {
+        const b = o.stops.findIndex(x => x.name === off.name);
+        const f = o.stops.findIndex((x, i) => i > b && x.name === on.name);
+        if (b >= 0 && f > b) {
+          back = { ...pt(o.stops[b]), dir: o.dir, headsign: o.headsign, off: pt(o.stops[f]) };
+          break;
+        }
+      }
+    }
+    const n = off ? w.stops.indexOf(off) - w.stops.indexOf(on) : 0;
+    const item = cleanItem({ id: 'i' + uid(), city: route.city, routeUID: route.uid, route: route.name, dir: w.dir, stopUID: on.uid, stop: on.name, headsign: w.headsign, lat: on.lat, lon: on.lon, ...(off ? { off: pt(off), n, back } : {}) });
+    const g = ctx.data.groups[0] || (ctx.data.groups[0] = { id: 'g' + uid(), name: '常用', items: [] });
+    g.items.push(item);
+    ctx.save();
+    ctx.refreshTabs?.();
+    ctx.status(off ? `已釘選 ${route.name}：${on.name} → ${off.name}${back ? '，回程自動對調' : ''}` : `已釘選 ${route.name} ${on.name}`);
   };
   const refresh = async () => {
     try {
@@ -233,6 +271,7 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
     const w = ev.target.closest('[data-way]');
     if (w) {
       way = Number(w.dataset.way);
+      boarding = null;
       return draw();
     }
     const v = ev.target.closest('[data-view]');
@@ -245,10 +284,39 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
       day = Number(dy.dataset.day);
       return draw();
     }
+    const cur = ways?.[way];
+    if (!cur) return;
+    if (ev.target.closest('[data-cancel-ride]')) {
+      boarding = null;
+      return draw();
+    }
+    if (ev.target.closest('[data-only]') && boarding) {
+      saveRide(cur, boarding, null);
+      boarding = null;
+      return draw();
+    }
+    const off = ev.target.closest('[data-off]');
+    if (off && boarding) {
+      saveRide(cur, boarding, cur.stops.find(x => x.uid === off.dataset.off));
+      boarding = null;
+      return draw();
+    }
     const a = ev.target.closest('[data-add]');
-    if (a && ways?.[way]) {
-      const s = ways[way].stops.find(x => x.uid === a.dataset.add);
-      if (s) chooseGroup({ city: route.city, routeUID: route.uid, route: route.name, dir: ways[way].dir, stopUID: s.uid, stop: s.name, headsign: ways[way].headsign, lat: s.lat, lon: s.lon }, draw);
+    if (a) {
+      const s = cur.stops.find(x => x.uid === a.dataset.add);
+      if (!s) return;
+      // Pinned already: ☆ again takes it off.
+      if (pinnedAt(s.uid)) {
+        ctx.data.groups = ctx.data.groups.map(g => ({ ...g, items: g.items.filter(x => !rideAt(s.uid)(x)) }));
+        ctx.save();
+        ctx.refreshTabs?.();
+        ctx.status('已取消釘選');
+        return draw();
+      }
+      boarding = s;
+      // Straight to where you'd get off.
+      draw();
+      d.querySelector('.on-here')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   });
 }
@@ -300,7 +368,7 @@ export function manageSheet() {
             <button class="q-icon-btn" type="button" data-gdel="${i}" aria-label="刪除群組" ${all.length > 1 ? '' : 'disabled'}>${icon('trash')}</button></div>
           ${g.items
             .map(
-              (it, k, list) => `<div class="ot-order-row"><span><b>${e(it.route)}</b> ${e(it.stop)}<small>往 ${e(it.headsign)}</small></span>
+              (it, k, list) => `<div class="ot-order-row"><span><b>${e(it.route)}</b> ${e(it.stop)}${it.off ? ` → ${e(it.off.stop)}` : ''}<small>往 ${e(it.headsign)}${it.back ? ' · 回程自動對調' : ''}</small></span>
               <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="-1" aria-label="上移" ${k ? '' : 'disabled'}>${icon('up')}</button>
               <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="1" aria-label="下移" ${k < list.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
               <button class="q-icon-btn" type="button" data-idel="${i}:${k}" aria-label="移除">${icon('trash')}</button></div>`
