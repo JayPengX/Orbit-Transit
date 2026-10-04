@@ -19,7 +19,8 @@ import { adjustPlan, busLink } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
-import { meters, tw } from './util.mjs';
+import { meters, tw, hm } from './util.mjs';
+import { rec } from '#kit/quadra.mjs';
 
 const RAIL = new Set(['tra', 'hsr']);
 
@@ -61,7 +62,10 @@ export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}
   const now = Date.now();
   const t0 = at || now;
   const useRail = modes.tra || modes.hsr;
-  const cityOf = await cityFinder();
+  const findCity = await cityFinder();
+  // Each point's city as it was looked up, for the 除錯紀錄 (a replay needs no township list).
+  const cities = {};
+  const cityOf = pt => (pt?.lat != null ? (cities[`${pt.lat.toFixed(3)},${pt.lon.toFixed(3)}`] = findCity(pt)) : findCity(pt));
   const pass = tpassOf(prefs.tpass);
   const passTrip = inPass(from, to, pass, cityOf);
   // Inside your TPASS's area, our router looks only at the trains the pass takes.
@@ -97,8 +101,16 @@ export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}
   const cost = p => fareOf(p, coverage(p, pass, cityOf)).cost;
   // Both ends inside your TPASS's area: only what the pass takes (no 高鐵, no 普悠瑪), unless there's nothing else.
   const keep = passTrip ? p => passOk(p, pass, cityOf) : null;
-  const ranked = withBikes(plans, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null, keep });
+  const ranked = withBikes(plans, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
   // Each plan's fare line (TPASS counted).
   for (const p of ranked) p.fareText = fareOf(p, coverage(p, pass, cityOf)).text;
+  // 除錯紀錄: everything the ranking was worked out from (scripts/replay.mjs runs it again), and what it said.
+  rec('trip', {
+    now, t0, at, by, from, to,
+    prefs: { modes, bike30: prefs.bike30, tpass: prefs.tpass },
+    sources: res.sources || {},
+    plans, bikes, cities,
+    shown: ranked.filter(p => p.lead && !p.weak).map(p => `${p.score} ${hm(p.dep)}→${hm(p.arr)} ${p.legs.map(l => (l.mode === 'walk' ? 'walk' : `${l.mode}${l.ebike ? '⚡' : ''}:${l.short || l.name || ''}`)).join(' ')}`)
+  });
   return { plans: ranked, sources: res.sources || {}, error: ranked.length ? null : res.err || null };
 }
