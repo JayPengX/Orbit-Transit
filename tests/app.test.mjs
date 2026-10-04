@@ -589,7 +589,7 @@ test('by a departure time: a plan that has you leave before it sinks out; riding
 
 test('YouBike fills gaps: two short rides around a train beat one long ride, even arriving 10 minutes later', () => {
   const o = { lat: 24.821, lon: 121.018 };
-  const d = { lat: 24.733, lon: 121.088 };
+  const d = { lat: 24.8392, lon: 121.0095 }; // (no river between: the rides are judged by their length alone)
   const leg = (mode, short, dep, arr, x = {}) => ({ mode, short, from: { name: short, ...o }, to: { name: short, ...d }, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0, ...x });
   const long = finish({ legs: [leg('bike', 'YouBike', '06:07', '06:35')] });
   const train = finish({ legs: [leg('bike', 'YouBike', '06:05', '06:13'), leg('tra', '區間 1234', '06:16', '06:35'), leg('bike', 'YouBike', '06:37', '06:45')] });
@@ -865,4 +865,14 @@ test('the buses after one: TDX’s later estimates, else the stop’s timetable,
   assert.deepEqual(await nextBuses([row], '182', at, [], { schedule: async () => freq }), [20, 40, 60].map(m => at + m * 60_000));
   const live = [{ at: at + 12 * 60_000 }, { at: at + 30 * 60_000 }, { at: at + 50 * 60_000 }];
   assert.equal((await nextBuses([row], '182', at, live, { schedule: async () => { throw new Error('not asked'); } })).length, 3);
+});
+
+test('a ride over 頭前溪 counts against a plan and says so; one on this side doesn’t', async () => {
+  const { crossings } = await import('../public/lib/rivers.mjs');
+  const stadium = { lat: 24.8212, lon: 121.0176 };
+  assert.equal(crossings(stadium, { lat: 24.7985, lon: 121.0045 }), 1, '千甲: over the river');
+  assert.equal(crossings(stadium, { lat: 24.8076, lon: 121.0402 }), 0, '六家: this side');
+  assert.equal(crossings(stadium, { lat: 24.8392, lon: 121.0095 }), 0, '竹北: this side');
+  const ride = to => finish({ legs: [{ mode: 'bike', from: stadium, to, dep: T('08:00'), arr: T('08:15'), dur: 900 }] });
+  assert.ok(score(ride({ lat: 24.7985, lon: 121.0045 }), { now: T('08:00') }) - score(ride({ lat: 24.8076, lon: 121.0402 }), { now: T('08:00') }) >= 20);
 });

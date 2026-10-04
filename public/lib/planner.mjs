@@ -106,12 +106,16 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // now (trips leaving now or soon), side by side.
   const t1 = performance.now();
   const soon = by !== 'arrive' && t0 - now < 60 * 60_000 ? plans.filter(p => p.legs.some(l => l.mode === 'bus' && !l.live)).slice(0, 10) : [];
-  const [linked, done] = await Promise.all([
+  // And every direct bus from around here to around there, by our own look
+  // at the stops (the planners leave some out: 5615, 5614, 快捷9號 from
+  // 竹北's 縣體育場 to 新竹車站); a stop a little farther is ridden to.
+  const [linked, direct, done] = await Promise.all([
     modes.bus && by !== 'arrive' ? trainThenBus(trains, to, now) : [],
+    modes.bus && by !== 'arrive' && t0 - now < 60 * 60_000 ? busLink(from, to, t0, { fromM: 700, toM: 700, n: 6, routes: 10, now }).catch(() => []) : [],
     Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)))
   ]);
   plans = plans.map(p => done[soon.indexOf(p)] || p);
-  plans.push(...linked.filter(p => allowed(p, { ...modes, bike: true })));
+  plans.push(...[...linked, ...direct].filter(p => allowed(p, { ...modes, bike: true })));
   // The buses after each first bus (TDX's times, else the timetable).
   await Promise.all(plans.flatMap(p => p.legs.filter(l => l.nextP).map(async l => {
     l.next = await l.nextP.catch(() => []);
@@ -127,7 +131,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   }
   let bikes = [];
   if (modes.bike) {
-    const near = [...(await bikesFirst), ...(await bikesAt(bikePoints(linked, from, to))).flat()];
+    const near = [...(await bikesFirst), ...(await bikesAt(bikePoints([...linked, ...direct], from, to))).flat()];
     bikes = [...new Map(near.map(s => [s.uid, s])).values()];
   }
   t = performance.now();
