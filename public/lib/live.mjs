@@ -180,7 +180,7 @@ const walkTo = (a, b, dep) => {
 // The buses from within `fromM` of a to within `toM` of b with no change,
 // leaving after `at`: up to `n` plans [walk, bus, walk], soonest there first.
 // Live times when the bus is due within 90 minutes, else the timetable's.
-export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n = 2, routes = 6, now = Date.now() } = {}) {
+export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n = 2, routes = 6, now = Date.now(), trace = null } = {}) {
   if (meters(a.lat, a.lon, b.lat, b.lon) < 800) return [];
   const [boardSt, alightSt] = await Promise.all([stationsNear(a.lat, a.lon), stationsNear(b.lat, b.lon)]);
   const boards = boardSt.filter(s => meters(a.lat, a.lon, s.lat, s.lon) <= fromM);
@@ -195,6 +195,8 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     }
   const cands = new Map();
   for (const s of boards) for (const x of s.stops) if (there.has(x.routeUID) && !cands.has(x.routeUID)) cands.set(x.routeUID, { route: x.route, uid: x.routeUID });
+  // What was found, for the 除錯紀錄: the lines near each end, and those at both.
+  if (trace) Object.assign(trace, { near: [...new Set(boards.flatMap(s => s.stops.map(x => x.route)))], there: [...new Set(alights.flatMap(s => s.stops.map(x => x.route)))], both: [...cands.values()].map(c => c.route), kept: [] });
   if (!cands.size) return [];
   const live = at - now < 90 * MIN ? await etaNear(a.lat, a.lon, fromM).catch(() => []) : [];
   const out = [];
@@ -252,6 +254,7 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     const w2 = walkTo(as, b, bus.arr);
     if (w2.dist > 20) legs.push(w2);
     out.push(finish({ src: 'bus', legs, live: isLive }));
+    trace?.kept.push(c.route);
   }
   return out.sort((x, y) => x.arr - y.arr).slice(0, n);
 }
