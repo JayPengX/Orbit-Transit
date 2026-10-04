@@ -128,7 +128,7 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   // Pinning a ride: the stop you get on at, then the one you get off at.
   let boarding = null;
   const d = sheet(`<div id="rt"></div>`, 'ot-tall-sheet ot-route-sheet');
-  routeSchedule(route)
+  routeSchedule(route, c?.here)
     .then(x => {
       sched = x;
       if (d.open) draw();
@@ -244,7 +244,7 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   };
   draw();
   try {
-    ways = await routeStops(route);
+    ways = await routeStops(route, c?.here);
     if (dir != null) {
       const i = ways.findIndex(w => w.dir === dir && (!stopUID || w.stops.some(s => s.uid === stopUID)));
       way = i >= 0 ? i : Math.max(0, ways.findIndex(w => w.stops.some(s => s.uid === stopUID)));

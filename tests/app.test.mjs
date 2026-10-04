@@ -886,3 +886,21 @@ test('a ride over 頭前溪 counts against a plan and says so; one on this side 
   const ride = to => finish({ legs: [{ mode: 'bike', from: stadium, to, dep: T('08:00'), arr: T('08:15'), dur: 900 }] });
   assert.ok(score(ride({ lat: 24.7985, lon: 121.0045 }), { now: T('08:00') }) - score(ride({ lat: 24.8076, lon: 121.0402 }), { now: T('08:00') }) >= 20);
 });
+
+test('a bus route from Transit-Data’s pack, in TDX’s own shapes: its stops each way, its times (or the first stop’s for every stop), its headways', async () => {
+  const { expand } = await import('../public/lib/packs.mjs');
+  const raw = { v: 1, city: 'Hsinchu', stops: { A: ['甲', 24.8, 121], B: ['乙', 24.81, 121], C: ['丙', 24.82, 121] }, routes: [{ uid: 'HSZ1', name: '1', ways: [['HSZ10', '1', 0, ['A', 'B', 'C']]], sched: [['HSZ10', 0, ['A', 'B', 'C'], [[62, [480, 484, -1]], [65, 500, [{ Dates: ['2026-10-10'], ServiceStatus: 0 }]]], [[127, '06:00', '22:00', 15, 20]]]] }] };
+  const p = { raw, byUid: new Map(raw.routes.map(r => [r.uid, r])) };
+  const r = expand(p, 'HSZ1');
+  const ways = parseStops(r.stops);
+  assert.deepEqual(ways[0].stops.map(s => s.name), ['甲', '乙', '丙']);
+  assert.equal(ways[0].headsign, '丙');
+  const [a, b] = r.sched[0].Timetables;
+  assert.deepEqual(a.StopTimes.map(s => s.DepartureTime), ['08:00', '08:04'], 'a stop without a time left out');
+  assert.equal(a.ServiceDay.Monday, 1);
+  assert.equal(a.ServiceDay.Sunday, 0);
+  assert.deepEqual(b.StopTimes.map(s => s.DepartureTime), ['08:20', '08:20', '08:20'], 'the first stop’s time at every stop, as TDX gives it');
+  assert.equal(b.SpecialDays[0].Dates[0], '2026-10-10');
+  assert.equal(r.sched[0].Frequencys[0].MinHeadwayMins, 15);
+  assert.equal(expand(p, 'nope'), null);
+});
