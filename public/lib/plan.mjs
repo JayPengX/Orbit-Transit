@@ -11,7 +11,7 @@
 //     sooner.
 
 import { meters, walkSec } from './util.mjs';
-import { journeys } from './rail.mjs';
+import { journeys, directs } from './rail.mjs';
 
 export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
@@ -219,25 +219,7 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, use = () => true
     const a = reach.get(`a:${first.from}`)?.a;
     if (a?.mode === 'bike') legs.push(placeholder(o, pt(first.from), ready - a.sec * 1000, ready, 'arr'));
     else if (w1.dist > 20) legs.push({ ...w1, dep: ready - w1.dur * 1000, arr: ready });
-    for (const l of j.legs) {
-      if (l.walk) legs.push({ ...walkLeg(pt(l.from), pt(l.to), l.dep), arr: l.arr });
-      else
-        legs.push({
-          mode: l.trip.sys,
-          name: l.trip.sys === 'hsr' ? '高鐵' : l.trip.typeFull || l.trip.type,
-          short: l.trip.sys === 'hsr' ? `${l.trip.no} 次` : `${l.trip.type} ${l.trip.no}`,
-          headsign: l.trip.headsign,
-          from: pt(l.from),
-          to: pt(l.to),
-          dep: l.dep,
-          arr: l.arr,
-          dur: Math.round((l.arr - l.dep) / 1000),
-          stops: l.stops,
-          agency: l.trip.sys === 'hsr' ? '台灣高鐵' : l.trip.typeFull || '台鐵',
-          dist: Math.round(meters(net.st.get(l.from).lat, net.st.get(l.from).lon, net.st.get(l.to).lat, net.st.get(l.to).lon)),
-          train: { sys: l.trip.sys, no: l.trip.no, code: l.trip.code }
-        });
-    }
+    for (const l of j.legs) legs.push(l.walk ? { ...walkLeg(pt(l.from), pt(l.to), l.dep), arr: l.arr } : trainLeg(net, l));
     const last = j.legs.filter(l => !l.walk).at(-1);
     const b = reach.get(`b:${j.end}`)?.a;
     const w2 = walkLeg(pt(j.end), d, last.arr);
@@ -246,6 +228,74 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, use = () => true
     return finish({ src: 'rail', legs });
   });
 }
+// A train of our router's as a plan's leg.
+function trainLeg(net, l) {
+  const pt = k => {
+    const s = net.st.get(k);
+    return { name: s.sys === 'hsr' ? `高鐵${s.name.replace(/^高鐵/, '')}` : s.name, lat: s.lat, lon: s.lon };
+  };
+  return {
+    mode: l.trip.sys,
+    name: l.trip.sys === 'hsr' ? '高鐵' : l.trip.typeFull || l.trip.type,
+    short: l.trip.sys === 'hsr' ? `${l.trip.no} 次` : `${l.trip.type} ${l.trip.no}`,
+    headsign: l.trip.headsign,
+    from: pt(l.from),
+    to: pt(l.to),
+    dep: l.dep,
+    arr: l.arr,
+    dur: Math.round((l.arr - l.dep) / 1000),
+    stops: l.stops,
+    agency: l.trip.sys === 'hsr' ? '台灣高鐵' : l.trip.typeFull || '台鐵',
+    dist: Math.round(meters(net.st.get(l.from).lat, net.st.get(l.from).lon, net.st.get(l.to).lat, net.st.get(l.to).lon)),
+    train: { sys: l.trip.sys, no: l.trip.no, code: l.trip.code }
+  };
+}
+
+// A route's other departures, so a card can offer its times: the plan with
+// its one bus or train swapped for another, the way there moved to meet it
+// (the same slack before it) and the way on moved with its arrival. Only for
+// plans with one bus or train (a change would need both re-timed); none you
+// would have to have left already for.
+export function retime(plan, k, ride, now = Date.now()) {
+  const old = plan.legs[k];
+  const before = ride.dep - old.dep;
+  const after = ride.arr - old.arr;
+  const legs = plan.legs.map((l, i) => (i < k ? { ...l, dep: l.dep + before, arr: l.arr + before } : i === k ? { ...l, ...ride, live: ride.live ?? null } : { ...l, dep: l.dep + after, arr: l.arr + after }));
+  if (legs[0].dep < now - 60_000) return null;
+  return finish({ ...plan, legs, live: legs.some(l => l.live) });
+}
+const onlyRide = p => {
+  const at = p.legs.map((l, i) => (l.mode !== 'walk' && l.mode !== 'bike' ? i : -1)).filter(i => i >= 0);
+  return at.length === 1 ? at[0] : -1;
+};
+// The next trains from the same station to the same one (our timetable).
+export function moreTrains(plan, net, now = Date.now(), { n = 4, use = () => true } = {}) {
+  const k = onlyRide(plan);
+  const l = plan.legs[k];
+  if (k < 0 || !net || (l.mode !== 'tra' && l.mode !== 'hsr') || !l.from?.lat || !l.to?.lat) return [];
+  const key = pt => [...net.st.entries()].filter(([, s]) => s.sys === l.mode).map(([key, s]) => ({ key, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m).find(x => x.m < 400)?.key;
+  const [a, b] = [key(l.from), key(l.to)];
+  if (!a || !b) return [];
+  const no = l.train?.no || String(l.short || '').match(/\d{2,}/)?.[0];
+  const reach = l.dep - plan.legs[0].dep; // from leaving to the train
+  return directs(net, a, b, now + reach - 60_000, { use, n: n + 2 })
+    .map(j => j.legs[0])
+    .filter(x => String(x.trip.no) !== String(no))
+    .slice(0, n)
+    .map(x => retime(plan, k, trainLeg(net, x), now))
+    .filter(Boolean);
+}
+// The next buses at the same stop: the times TDX gave for it (adjustPlan's `next`).
+export function moreBuses(plan, now = Date.now()) {
+  const k = onlyRide(plan);
+  const l = plan.legs[k];
+  if (k < 0 || l.mode !== 'bus' || !l.next?.length) return [];
+  return l.next
+    .filter(t => Math.abs(t - l.dep) > 2 * 60_000)
+    .map(t => retime(plan, k, { dep: t, arr: t + (l.arr - l.dep), live: { at: t } }, now))
+    .filter(Boolean);
+}
+
 const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: true, fix, name: 'YouBike', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dep, arr, dur: Math.round((arr - dep) / 1000), dist: Math.round(meters(from.lat, from.lon, to.lat, to.lon) * 1.25) });
 
 // What a plan costs you, in minutes: the time until you're there, and on
@@ -382,7 +432,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // last bus gone, the first train tomorrow), is no plan, unless it's all there is.
   const longWait = p => p.legs.some((l, i) => i > 0 && l.dep - p.legs[i - 1].arr > 90 * 60_000);
   const running = scored.filter(x => !x.p.off && !longWait(x.p));
-  const list = (running.length ? running : scored).slice(0, 40).map(x => ({ ...x.p, score: x.s }));
+  const list = (running.length ? running : scored).slice(0, 80).map(x => ({ ...x.p, score: x.s }));
   if (!list.length) return [];
   // One card per route (pickSig: the same lines, the trains by their
   // stations), its other departures the times to choose from: the best of
@@ -406,10 +456,21 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const bikeAll = allBike.length ? Math.min(...allBike) : null;
   const best = list[0].score;
   const weak = new Set();
+  // The ride a plan is for: its longest bus or train.
+  const main = p => vehicles(p).reduce((a, l) => (!a || (l.dur || 0) > (a.dur || 0) ? l : a), null);
+  const sameRide = (a, b) => {
+    const [n, k] = [trainNo(a), trainNo(b)];
+    if (n || k) return n === k;
+    return a.mode === b.mode && norm(a.short || a.name) === norm(b.short || b.name) && Math.abs((a.dep || 0) - (b.dep || 0)) <= 8 * 60_000;
+  };
   for (const p of leads) {
-    const beaten = list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && q.score < p.score && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000);
+    // Another way onto the same bus or train (a bike to it, not a walk and a
+    // bus): no earlier out of the door, no later there, less bother. Another
+    // line altogether is never this: it's a choice of its own.
+    const m = main(p);
+    const beaten = m && list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && q.score < p.score && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000 && vehicles(q).some(l => sameRide(l, m)));
     const mostlyRidden = bikeAll != null && vehicles(p).length && rideM(p) >= Math.max(3000, bikeAll * 0.6);
-    const far = p.score > best + Math.max(25, best * 0.5);
+    const far = p.score > best + Math.max(45, best);
     if (beaten || mostlyRidden || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // A route's other departures: the next few, within an hour and a half of its first.

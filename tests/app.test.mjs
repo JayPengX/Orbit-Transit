@@ -616,8 +616,8 @@ test('a pinned recommendation: known by its lines (trains by their stations), sh
   const P = (k, dep, top) => ({ legs: [{ mode: 'bus', short: k }], dep: T(dep), arr: T(dep) + 1, top });
   const plans = [P('YouBike', '07:01', true), P('A', '07:02', true), P('B', '07:03', true), P('C', '07:04', true), P('5608', '07:30', false), P('5608', '07:10', false), P('5608', '07:50', false)];
   const { first, rest } = tripPlans(plans, [pickSig(P('5608'))], now);
-  assert.deepEqual(first.map(p => `${p.legs[0].short} ${(p.dep - now) / 60_000}`), ['5608 10', '5608 30', 'YouBike 1', 'A 2']);
-  assert.equal(rest.length, 2, 'the pinned way’s third departure isn’t another way');
+  assert.deepEqual(first.map(p => `${p.legs[0].short} ${(p.dep - now) / 60_000}`), ['5608 10', 'YouBike 1', 'A 2', 'B 3'], 'the pinned way once: its other times are picked on its row');
+  assert.equal(rest.length, 1);
   assert.equal(cleanSaved({ to: { name: 'x', lat: 24.8, lon: 121 }, picks: ['a', 'a', 5, 'b'] }).picks.join(), 'a,b');
 });
 
@@ -796,4 +796,73 @@ test('a 15-minute walk to the bus loses to riding to the same bus; a route nobod
   // Without bikes, walking is the way.
   const off = withBikes([walked, later], o, d, bikes, T('08:00'), { modes: { bus: true, bike: false } });
   assert.equal(off[0].legs[0].mode, 'walk');
+});
+
+test('新竹縣體育場 → 新竹大遠百, every real choice shown: both train lines (竹北, 六家), the buses, and riding; the same line’s trains as times on one card', () => {
+  const o = { name: '新竹縣體育場', lat: 24.8212, lon: 121.0176 };
+  const d = { name: '新竹大遠百', lat: 24.8018, lon: 120.9653 };
+  const zhubei = { name: '竹北', lat: 24.8392, lon: 121.0095 };
+  const liujia = { name: '六家', lat: 24.8076, lon: 121.0402 };
+  const hsinchu = { name: '新竹', lat: 24.8016, lon: 120.9716 };
+  const stopO = { name: '縣體育場', lat: 24.8225, lon: 121.0165 };
+  const stopD = { name: '大遠百', lat: 24.8025, lon: 120.9660 };
+  const st = (uid, pt) => ({ uid, name: `${pt.name}站`, lat: pt.lat + 0.0003, lon: pt.lon + 0.0003, bikes: 8, ebike: 8, ret: 8, ok: true });
+  const bikes = [st('o', o), st('z', zhubei), st('l', liujia), st('h', hsinchu), st('d', d)];
+  const ph = (to, dep, arr) => ({ mode: 'bike', placeholder: true, fix: 'arr', from: o, to, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0 });
+  const train = (no, from, dep, arr) => ({ mode: 'tra', name: '區間', short: `區間 ${no}`, train: { sys: 'tra', no }, from, to: hsinchu, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000 });
+  const walkEnd = t => ({ mode: 'walk', from: hsinchu, to: d, dep: T(t), arr: T(t) + 540_000, dur: 540, dist: 700 });
+  const rail = (to, no, b0, b1, t0, t1) => finish({ src: 'rail', legs: [ph(to, b0, b1), train(no, to, t0, t1), walkEnd(t1)] });
+  const bus = (no, dep, arr) => finish({ src: 'tdx', legs: [{ mode: 'walk', from: o, to: stopO, dep: T(dep) - 240_000, arr: T(dep), dur: 240, dist: 250 }, { mode: 'bus', short: no, from: stopO, to: stopD, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000 }, { mode: 'walk', from: stopD, to: d, dep: T(arr), arr: T(arr) + 120_000, dur: 120, dist: 120 }] });
+  const plans = [
+    rail(zhubei, '1187', '08:02', '08:17', '08:20', '08:29'),
+    rail(zhubei, '1191', '08:22', '08:37', '08:40', '08:49'),
+    rail(liujia, '1305', '08:05', '08:19', '08:22', '08:42'),
+    bus('182', '08:06', '08:44'),
+    bus('5615', '08:12', '08:50'),
+    bus('5614', '08:20', '09:02')
+  ];
+  const list = withBikes(plans, o, d, bikes, T('08:00'));
+  const shown = list.filter(p => p.lead && !p.weak);
+  const has = f => shown.some(p => p.legs.some(f));
+  const why = list.map(p => `${p.score} ${p.lead ? 'L' : ' '}${p.weak ? 'W' : ' '} ${p.legs.map(l => l.mode + ':' + (l.short || l.from?.name || '')).join(' ')}`).join('\n');
+  assert.ok(has(l => l.mode === 'tra' && l.from.name === '竹北'), why);
+  assert.ok(has(l => l.mode === 'tra' && l.from.name === '六家'), why);
+  for (const no of ['182', '5615', '5614']) assert.ok(has(l => l.short === no), `${no}\n${why}`);
+  assert.ok(shown.some(p => p.bike && !p.legs.some(l => l.mode === 'tra' || l.mode === 'bus')), 'riding all the way');
+  const zb = shown.find(p => p.legs.some(l => l.mode === 'tra' && l.from.name === '竹北'));
+  assert.deepEqual(zb.times.map(i => list[i].legs.find(l => l.mode === 'tra').train.no), ['1187', '1191'], 'both trains on the 竹北 card');
+});
+
+test('a route’s other departures: the next trains between the same stations, the next buses at the stop, the way there moved to meet each', async () => {
+  const { moreTrains, moreBuses } = await import('../public/lib/plan.mjs');
+  const o = { name: '家', lat: 24.8030, lon: 120.9690 };
+  const d = { name: '公司', lat: 25.0500, lon: 121.5200 };
+  const base = railPlans(net, o, d, T('08:10')).find(p => p.legs.filter(l => l.mode === 'tra' || l.mode === 'hsr').length === 1);
+  assert.ok(base, 'a one-train plan');
+  const more = moreTrains(base, net, T('08:10'));
+  assert.ok(more.length >= 1, 'a later train');
+  const ride = p => p.legs.find(l => l.mode === 'tra' || l.mode === 'hsr');
+  for (const p of more) {
+    assert.equal(ride(p).from.name, ride(base).from.name);
+    assert.equal(ride(p).to.name, ride(base).to.name);
+    assert.notEqual(ride(p).train.no, ride(base).train.no);
+    assert.ok(p.dep >= T('08:10') - 60_000, 'not before now');
+    assert.equal(ride(p).dep - p.dep, ride(base).dep - base.dep, 'the same way there, moved');
+  }
+  const stop = { name: '站', lat: 24.81, lon: 120.97 };
+  const bus = finish({ legs: [{ mode: 'walk', from: o, to: stop, dep: T('08:00'), arr: T('08:05'), dur: 300, dist: 300 }, { mode: 'bus', short: '81', from: stop, to: d, dep: T('08:06'), arr: T('08:30'), dur: 1440, next: [T('08:21'), T('08:36')] }] });
+  const later = moreBuses(bus, T('08:00'));
+  assert.deepEqual(later.map(p => [p.dep, p.arr]), [[T('08:15'), T('08:45')], [T('08:30'), T('09:00')]]);
+});
+
+test('the buses after one: TDX’s later estimates, else the stop’s timetable, else its headway', async () => {
+  const { nextBuses } = await import('../public/lib/live.mjs');
+  const row = { RouteName: { Zh_tw: '182' }, RouteUID: 'HSZ182', StopUID: 'HSZ1', StopName: { Zh_tw: '縣體育場' }, Direction: 0 };
+  const at = twAt('2026-10-05', '08:06');
+  const sched = [{ Direction: 0, Timetables: ['07:46', '08:06', '08:26', '08:46', '09:06'].map(t => ({ StopTimes: [{ StopUID: 'HSZ1', DepartureTime: t }] })) }];
+  assert.deepEqual(await nextBuses([row], '182', at, [], { schedule: async () => sched }), ['08:26', '08:46', '09:06'].map(t => twAt('2026-10-05', t)));
+  const freq = [{ Direction: 0, Frequencys: [{ StartTime: '06:00', EndTime: '22:00', MinHeadwayMins: 15, MaxHeadwayMins: 25 }] }];
+  assert.deepEqual(await nextBuses([row], '182', at, [], { schedule: async () => freq }), [20, 40, 60].map(m => at + m * 60_000));
+  const live = [{ at: at + 12 * 60_000 }, { at: at + 30 * 60_000 }, { at: at + 50 * 60_000 }];
+  assert.equal((await nextBuses([row], '182', at, live, { schedule: async () => { throw new Error('not asked'); } })).length, 3);
 });

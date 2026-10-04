@@ -14,7 +14,7 @@
 import { routePlans, townships } from './api.mjs';
 import { bikesNear, cityBikes } from './bike.mjs';
 import { railNetwork } from './raildata.mjs';
-import { withBikes, bikePoints, railPlans, finish, allowed } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses } from './plan.mjs';
 import { adjustPlan, busLink } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -70,12 +70,13 @@ export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}
   const passTrip = inPass(from, to, pass, cityOf);
   // Inside your TPASS's area, our router looks only at the trains the pass takes.
   const useTrain = x => modes[x.sys] !== false && (!passTrip || (x.sys === 'tra' && !PREMIUM.has(String(x.code))));
+  let net = null;
   const [res, trains] = await Promise.all([
     routePlans(from, to, { at, by, modes: modeList(prefs) }).catch(err => ({ plans: [], sources: {}, err })),
     by === 'arrive' || !useRail
       ? []
       : railNetwork(tw(t0).date, { next: tw(t0).min >= 21 * 60 })
-          .then(net => railPlans(net, from, to, t0, { bike: modes.bike, use: useTrain }))
+          .then(n => railPlans((net = n), from, to, t0, { bike: modes.bike, use: useTrain }))
           .catch(() => [])
   ]);
   if (res.err && !trains.length) return { plans: [], sources: res.sources || {}, error: res.err };
@@ -87,6 +88,13 @@ export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}
     const soon = plans.filter(p => p.legs.some(l => l.mode === 'bus' && !l.live)).slice(0, 10);
     const done = await Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)));
     plans = plans.map(p => done[soon.indexOf(p)] || p);
+  }
+  // Each route's next departures (the times its card offers): the trains
+  // after it from our timetable, the buses after it from TDX's times.
+  if (by !== 'arrive') {
+    const more = [];
+    for (const p of plans) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
+    plans.push(...more);
   }
   // YouBike near both ends and the stations the plans use.
   let bikes = [];
