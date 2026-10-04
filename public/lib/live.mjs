@@ -196,17 +196,18 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
   const cands = new Map();
   for (const s of boards) for (const x of s.stops) if (there.has(x.routeUID) && !cands.has(x.routeUID)) cands.set(x.routeUID, { route: x.route, uid: x.routeUID });
   // What was found, for the 除錯紀錄: the lines near each end, and those at both.
-  if (trace) Object.assign(trace, { near: [...new Set(boards.flatMap(s => s.stops.map(x => x.route)))], there: [...new Set(alights.flatMap(s => s.stops.map(x => x.route)))], both: [...cands.values()].map(c => c.route), kept: [] });
+  if (trace) Object.assign(trace, { near: [...new Set(boards.flatMap(s => s.stops.map(x => x.route)))], there: [...new Set(alights.flatMap(s => s.stops.map(x => x.route)))], both: [...cands.values()].map(c => c.route), kept: [], why: [] });
   if (!cands.size) return [];
   const live = at - now < 90 * MIN ? await etaNear(a.lat, a.lon, fromM).catch(() => []) : [];
   const out = [];
-  for (const c of [...cands.values()].slice(0, routes)) {
+  // Each line looked at side by side (its stops and timetable are asks of their own).
+  await Promise.all([...cands.values()].slice(0, routes).map(async c => {
     const route = { uid: c.uid, name: c.route, city: routeCity(c.uid) };
     let ways;
     try {
       ways = await routeStops(route);
     } catch {
-      continue;
+      return void trace?.why.push(`${c.route}: no stops`);
     }
     const sched = await routeSchedule(route).catch(() => []);
     const boardUIDs = new Set(boards.flatMap(s => s.stops.filter(x => x.routeUID === c.uid).map(x => x.stopUID)));
@@ -224,7 +225,7 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
           if (!best || cost < best.cost) best = { w, i, j, cost };
         }
     }
-    if (!best) continue;
+    if (!best) return void trace?.why.push(`${c.route}: not this way round`);
     const { w, i, j } = best;
     const bs = w.stops[i];
     const as = w.stops[j];
@@ -243,7 +244,7 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
       const hm = stopTimes(sched, { stopUID: bs.uid, name: bs.name, dir: w.dir }, d.date, d.dow).times.find(x => x >= d.hm);
       if (hm) dep = Date.parse(`${d.date}T${hm.length === 5 ? hm : hm.slice(0, 5)}:00+08:00`);
     }
-    if (dep == null || dep - ready > 75 * MIN) continue;
+    if (dep == null || dep - ready > 75 * MIN) return void trace?.why.push(`${c.route}: ${dep == null ? 'no bus now' : 'next in over 75 min'}`);
     const ride = rideTime(w, i, j, sched);
     const bus = { mode: 'bus', name: c.route, short: c.route, headsign: w.headsign, from: { name: bs.name, lat: bs.lat, lon: bs.lon }, to: { name: as.name, lat: as.lat, lon: as.lon }, dep, arr: dep + ride * 1000, dur: ride, stops: j - i, dist: Math.round(meters(bs.lat, bs.lon, as.lat, as.lon) * 1.3), agency: '', route: { uid: c.uid, city: route.city, dir: w.dir, stopUID: bs.uid }, ...(isLive ? { live: { at: dep } } : {}) };
     // The buses after it (its card's times): TDX's, else the timetable's, else its headway.
@@ -255,6 +256,6 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     if (w2.dist > 20) legs.push(w2);
     out.push(finish({ src: 'bus', legs, live: isLive }));
     trace?.kept.push(c.route);
-  }
+    }));
   return out.sort((x, y) => x.arr - y.arr).slice(0, n);
 }

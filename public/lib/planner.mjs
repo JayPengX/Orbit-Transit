@@ -112,7 +112,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // 竹北's 縣體育場 to 新竹車站); a stop a little farther is ridden to.
   const [linked, direct, done] = await Promise.all([
     modes.bus && by !== 'arrive' ? trainThenBus(trains, to, now) : [],
-    modes.bus && by !== 'arrive' && t0 - now < 60 * 60_000 ? busLink(from, to, t0, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: (busTrace = {}) }).catch(err => ((busTrace.error = String(err?.message || err)), [])) : [],
+    modes.bus && by !== 'arrive' ? busLink(from, to, t0, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: (busTrace = {}) }).catch(err => ((busTrace.error = String(err?.message || err)), [])) : [],
     Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)))
   ]);
   plans = plans.map(p => done[soon.indexOf(p)] || p);
