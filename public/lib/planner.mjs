@@ -15,7 +15,7 @@ import { routePlans, townships } from './api.mjs';
 import { bikesNear, cityBikes } from './bike.mjs';
 import { railNetwork } from './raildata.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses } from './plan.mjs';
-import { adjustPlan, busLink } from './live.mjs';
+import { adjustPlan, busLink, busTimes } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
@@ -107,50 +107,83 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const t1 = performance.now();
   let busTrace = null;
   const soon = by !== 'arrive' && t0 - now < 60 * 60_000 ? plans.filter(p => p.legs.some(l => l.mode === 'bus' && !l.live)).slice(0, 10) : [];
-  // And every direct bus from around here to around there, by our own look
-  // at the stops (the planners leave some out: 5615, 5614, 快捷9號 from
-  // 竹北's 縣體育場 to 新竹車站); a stop a little farther is ridden to.
-  const [linked, direct, done] = await Promise.all([
+  // Two goes, so the plans show at once and their bus times follow:
+  //   1. the planners' and our trains' plans, the buses now (TDX's
+  //      estimates), YouBike: ranked and shown;
+  //   2. every direct bus from around here to around there by our own look
+  //      at the stops (the planners leave some out: 5615, 5614, 快捷9號 from
+  //      竹北's 縣體育場 to 新竹車站), and each bus's later times (the card's
+  //      times) from the stops' timetables: ranked again, shown when ready
+  //      (`later`). Asking TDX for every line's stops and timetable is the
+  //      slow part (the proxy lets 4 asks a second through).
+  const [linked, done] = await Promise.all([
     modes.bus && by !== 'arrive' ? trainThenBus(trains, to, now) : [],
-    modes.bus && by !== 'arrive' ? busLink(from, to, t0, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: (busTrace = {}) }).catch(err => ((busTrace.error = String(err?.message || err)), [])) : [],
     Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)))
   ]);
   plans = plans.map(p => done[soon.indexOf(p)] || p);
-  plans.push(...[...linked, ...direct].filter(p => allowed(p, { ...modes, bike: true })));
-  // The buses after each first bus (TDX's times, else the timetable).
-  await Promise.all(plans.flatMap(p => p.legs.filter(l => l.nextP).map(async l => {
-    l.next = await l.nextP.catch(() => []);
-    delete l.nextP;
-  })));
+  plans.push(...linked.filter(p => allowed(p, { ...modes, bike: true })));
   lap('buses', t1);
-  // Each route's next departures (the times its card offers): the trains
-  // after it from our timetable, the buses after it.
-  if (by !== 'arrive') {
-    const more = [];
-    for (const p of plans) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
-    plans.push(...more);
-  }
-  let bikes = [];
-  if (modes.bike) {
-    const near = [...(await bikesFirst), ...(await bikesAt(bikePoints([...linked, ...direct], from, to))).flat()];
-    bikes = [...new Map(near.map(s => [s.uid, s])).values()];
-  }
-  t = performance.now();
+  let bikesNow = modes.bike ? bikesFirst.then(async first => [...new Map([...first, ...(await bikesAt(bikePoints(linked, from, to))).flat()].map(s => [s.uid, s])).values()]) : Promise.resolve([]);
   const cost = p => fareOf(p, coverage(p, pass, cityOf)).cost;
   // Both ends inside your TPASS's area: only what the pass takes (no 高鐵, no 普悠瑪), unless there's nothing else.
   const keep = passTrip ? p => passOk(p, pass, cityOf) : null;
-  const ranked = withBikes(plans, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
-  // Each plan's fare line (TPASS counted).
-  for (const p of ranked) p.fareText = fareOf(p, coverage(p, pass, cityOf)).text;
-  lap('rank', t);
-  lap('all', T0);
-  // 除錯紀錄: everything the ranking was worked out from (scripts/replay.mjs runs it again), and what it said.
-  rec('trip', {
-    now, t0, at, by, from, to, ms, buses: busTrace,
-    prefs: { modes, bike30: prefs.bike30, tpass: prefs.tpass },
-    sources: res.sources || {},
-    plans, bikes, cities,
-    shown: ranked.filter(p => p.lead && !p.weak).map(p => `${p.score} ${hm(p.dep)}→${hm(p.arr)} ${p.legs.map(l => (l.mode === 'walk' ? 'walk' : `${l.mode}${l.ebike ? '⚡' : ''}:${l.short || l.name || ''}`)).join(' ')}`)
-  });
-  return { plans: ranked, sources: res.sources || {}, error: ranked.length ? null : res.err || null };
+  const finishOff = async (list, stage) => {
+    // Each route's next departures (the times its card offers): the trains
+    // after it from our timetable, the buses after it.
+    if (by !== 'arrive') {
+      const more = [];
+      for (const p of list) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
+      list = [...list, ...more];
+    }
+    const bikes = await bikesNow;
+    const t2 = performance.now();
+    const ranked = withBikes(list, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
+    // Each plan's fare line (TPASS counted).
+    for (const p of ranked) p.fareText = fareOf(p, coverage(p, pass, cityOf)).text;
+    lap(`rank${stage}`, t2);
+    lap(`all${stage}`, T0);
+    // 除錯紀錄: everything the ranking was worked out from (scripts/replay.mjs runs it again), and what it said.
+    rec('trip', {
+      now, t0, at, by, from, to, ms: { ...ms }, stage, buses: busTrace,
+      prefs: { modes, bike30: prefs.bike30, tpass: prefs.tpass },
+      sources: res.sources || {},
+      plans: list, bikes, cities,
+      shown: ranked.filter(p => p.lead && !p.weak).map(p => `${p.score} ${hm(p.dep)}→${hm(p.arr)} ${p.legs.map(l => (l.mode === 'walk' ? 'walk' : `${l.mode}${l.ebike ? '⚡' : ''}:${l.short || l.name || ''}`)).join(' ')}`)
+    });
+    return ranked;
+  };
+  // 1. Now (the later buses TDX's estimates gave are waited for in 2).
+  const strip = list => list.map(p => (p.legs.some(l => l.nextP) ? { ...p, legs: p.legs.map(({ nextP, ...l }) => l) } : p));
+  const first = await finishOff(strip(plans), 1);
+  // 2. The direct buses and every bus's later times.
+  const later =
+    by === 'arrive' || !modes.bus
+      ? null
+      : (async () => {
+          const t3 = performance.now();
+          const direct = await busLink(from, to, t0, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: (busTrace = {}) }).catch(err => ((busTrace.error = String(err?.message || err)), []));
+          let list = [...plans, ...direct.filter(p => allowed(p, { ...modes, bike: true }))];
+          // (Once a line and stop: many plans board the same bus at the same stop.)
+          const once = new Map();
+          const key = p => {
+            const l = p.legs.find(x => x.mode !== 'walk' && x.mode !== 'bike');
+            return l?.mode === 'bus' && !l.next && !l.nextP && l.from?.lat ? `${l.short || l.name}|${l.from.lat.toFixed(3)},${l.from.lon.toFixed(3)}|${Math.round(l.dep / 600_000)}` : null;
+          };
+          list = list.map(p => {
+            const k = key(p);
+            if (!k) return p;
+            if (!once.has(k)) once.set(k, busTimes(p, { now }).catch(() => []));
+            const l0 = p.legs.find(x => x.mode !== 'walk' && x.mode !== 'bike');
+            return { ...p, legs: p.legs.map(l => (l === l0 ? { ...l, nextP: once.get(k) } : l)) };
+          });
+          list = await Promise.all(list.map(async p => (p.legs.some(l => l.nextP) ? { ...p, legs: await Promise.all(p.legs.map(async ({ nextP, ...l }) => (nextP ? { ...l, next: await nextP.catch(() => []) } : l))) } : p)));
+          if (direct.length) {
+            const more = (await bikesAt(bikePoints(direct, from, to))).flat();
+            const all = await bikesNow;
+            bikesNow = Promise.resolve([...new Map([...all, ...more].map(s => [s.uid, s])).values()]);
+          }
+          lap('later', t3);
+          return { plans: await finishOff(list, 2), sources: res.sources || {}, error: null };
+        })().catch(() => null);
+  return { plans: first, sources: res.sources || {}, error: first.length ? null : res.err || null, later };
 }

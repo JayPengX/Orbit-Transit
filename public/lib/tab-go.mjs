@@ -185,6 +185,13 @@ async function loadTrip(w, { force = false } = {}) {
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
     for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
     S.trips.set(w.id, { at: Date.now(), from, plans: out.plans, error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
+    // The direct buses and every bus's times, a moment later (unless a time was picked meanwhile).
+    out.later?.then(o => {
+      const cur = S.trips.get(w.id);
+      if (!o?.plans?.length || cur?.plans !== out.plans || [...S.choice.keys()].some(k => k.startsWith(`${w.id}:`))) return;
+      S.trips.set(w.id, { ...cur, plans: o.plans, error: '' });
+      render();
+    });
   } catch (err) {
     S.trips.set(w.id, { at: Date.now(), plans: old?.plans || [], error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
   }
