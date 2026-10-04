@@ -178,11 +178,11 @@ export function etaText(v, now = Date.now()) {
 }
 
 // Bus stops near a point (the map), on a ~1 km grid so the proxy shares them.
-// (Asked around the point rounded to 0.005°, shared by everyone near, so
-// 1500 m around it is still at least 1100 m around the point itself.)
+// (Asked around the point rounded to 0.002°, shared by everyone near: TDX
+// searches 1000 m at most, so that's still about 900 m around the point.)
 export async function stationsNear(lat, lon) {
-  const g = v => (Math.round(v * 200) / 200).toFixed(3);
-  const j = await tdx(`advanced/v2/Bus/Station/NearBy?$spatialFilter=nearby(${g(lat)},${g(lon)},1500)&$top=500&$select=StationUID,StationID,StationName,StationPosition,Stops,LocationCityCode,Bearing`, { fresh: 86_400_000, persist: true });
+  const g = v => (Math.round(v * 500) / 500).toFixed(3);
+  const j = await tdx(`advanced/v2/Bus/Station/NearBy?$spatialFilter=nearby(${g(lat)},${g(lon)},1000)&$top=500&$select=StationUID,StationID,StationName,StationPosition,Stops,LocationCityCode,Bearing`, { fresh: 86_400_000, persist: true });
   return rows(j)
     .map(s => ({
       uid: s.StationUID,

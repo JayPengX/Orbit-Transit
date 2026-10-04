@@ -155,7 +155,7 @@ export function bikeToRail(plan, o, bikes, { anyRide = false, at = -1 } = {}) {
   if (!ride) return null;
   const took = ride.at(-1).arr; // from 0
   const leave = board.dep - 2 * 60_000 - took;
-  if (at < 0 && leave <= plan.dep + 60_000) return null; // not later than the plan already leaves
+  if (at < 0 && leave < plan.dep - 60_000) return null; // no earlier than the plan already leaves (the score decides between them)
   return finish({ src: 'bike+', base: plan.src, legs: [...shift(ride, leave), ...plan.legs.slice(k)] });
 }
 
@@ -172,8 +172,8 @@ export function bikeFromRail(plan, d, bikes, { anyRide = false, at = -1 } = {}) 
   const ride = bikeTrip(off.to, d, bikes, off.arr + 60_000);
   if (!ride) return null;
   const legs = [...plan.legs.slice(0, k + 1), ...ride];
-  // Sooner; or, with a change gone, not much later.
-  if (legs.at(-1).arr >= plan.arr - (at >= 0 ? -10 * 60_000 : 60_000)) return null;
+  // No later (the score decides between riding and walking); or, with a change gone, not much later.
+  if (legs.at(-1).arr > plan.arr + (at >= 0 ? 10 : 1) * 60_000) return null;
   return finish({ src: 'bike+', base: plan.src, legs });
 }
 
