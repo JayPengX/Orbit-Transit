@@ -587,6 +587,23 @@ test('by a departure time: a plan that has you leave before it sinks out; riding
   assert.equal(rank([ride, bus], { now: T('06:00'), o, d })[0].legs[0].short, '5608');
 });
 
+test('YouBike fills gaps: two short rides around a train beat one long ride, even arriving 10 minutes later', () => {
+  const o = { lat: 24.821, lon: 121.018 };
+  const d = { lat: 24.733, lon: 121.088 };
+  const leg = (mode, short, dep, arr, x = {}) => ({ mode, short, from: { name: short, ...o }, to: { name: short, ...d }, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0, ...x });
+  const long = finish({ legs: [leg('bike', 'YouBike', '06:07', '06:35')] });
+  const train = finish({ legs: [leg('bike', 'YouBike', '06:05', '06:13'), leg('tra', '區間 1234', '06:16', '06:35'), leg('bike', 'YouBike', '06:37', '06:45')] });
+  assert.equal(rank([long, train], { now: T('06:00') })[0].legs[1]?.mode, 'tra');
+  // A ride cut at 30 minutes (to stay free) is still one long ride.
+  const cut = finish({ legs: [leg('bike', 'YouBike', '06:05', '06:30'), leg('bike', 'YouBike', '06:31', '06:44', { swap: true })] });
+  const two = finish({ legs: [leg('bike', 'YouBike', '06:05', '06:25'), leg('tra', '區間', '06:27', '06:30'), leg('bike', 'YouBike', '06:31', '06:44')] });
+  assert.ok(score(cut, { now: T('06:00') }) > score(two, { now: T('06:00') }));
+  // A short ride still beats a bus with a change.
+  const short = finish({ legs: [leg('bike', 'YouBike', '06:02', '06:14')] });
+  const buses = finish({ legs: [leg('bus', '1', '06:03', '06:08'), leg('bus', '2', '06:10', '06:13')] });
+  assert.equal(rank([buses, short], { now: T('06:00') })[0].legs[0].mode, 'bike');
+});
+
 test('a pinned recommendation: known by its lines (trains by their stations), shown first in 交通', async () => {
   const { pickSig } = await import('../public/lib/plan.mjs');
   const { tripPlans } = await import('../public/lib/tab-go.mjs');
