@@ -508,6 +508,15 @@ async function cardClick(ev) {
   }
   const planBtn = ev.target.closest('[data-plan]');
   if (planBtn) return selectPlan(Number(planBtn.dataset.plan));
+  // A way of moving on or off for this search (never all of them), and plan again.
+  const mode = ev.target.closest('[data-mode]');
+  if (mode && card?.kind === 'plans') {
+    const next = { ...modesNow(), [mode.dataset.mode]: modesNow()[mode.dataset.mode] === false };
+    if (!Object.values(next).some(Boolean)) return;
+    const same = Object.keys(MODE_CHIP).every(k => next[k] === (ctx.data.prefs.modes[k] !== false));
+    tripModes = same ? null : next;
+    return plan(card.fromHere ? null : card.from, card.to);
+  }
   const when = ev.target.closest('[data-when]');
   if (when) return setWhen(when.dataset.when);
   if (!act || !card) return;
@@ -895,6 +904,10 @@ function layersSheet() {
 // ---- Plans: from here (or a chosen start) to a place --------------------------------------------------
 
 let when = { by: 'now', at: null };
+// This search's ways of moving (the chips under the time; 我的 → 交通偏好 is
+// only where they start): null until one is changed, kept for the next search.
+let tripModes = null;
+const modesNow = () => ({ ...ctx.data.prefs.modes, ...(tripModes || {}) });
 // A trip from `from` (null: where you are) to `to`. `opts.swapHere`: the
 // trip turned round, ending where you are.
 async function plan(from, to, opts = {}) {
@@ -923,7 +936,7 @@ async function plan(from, to, opts = {}) {
   const c = card;
   try {
     const at = when.by === 'now' ? null : when.at;
-    const out = await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart' });
+    const out = await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes });
     c.plans = out.plans;
     c.choice = {};
     c.sources = out.sources;
@@ -977,18 +990,18 @@ const whenDay = at => {
   const n = Math.round((twAt(tw(at).date, '12:00') - twAt(tw().date, '12:00')) / 86_400_000);
   return n === 0 ? '' : n === 1 ? '明天 ' : n === 2 ? '後天 ' : `${tw(at).date.slice(5).replace('-', '/')} `;
 };
-const MODE_OFF = { bus: '公車', tra: '台鐵', hsr: '高鐵', metro: '捷運', bike: 'YouBike' };
+const MODE_CHIP = { bus: '公車', tra: '台鐵', hsr: '高鐵', metro: '捷運', bike: 'YouBike' };
 function plansHtml(c) {
   const whenText = when.by === 'now' ? '現在出發' : `${when.by === 'arrive' ? '抵達' : '出發'} ${hm(when.at)}`;
   const saved = Boolean(tripOf(c));
-  const off = Object.entries(ctx.data.prefs.modes).filter(([, v]) => !v).map(([k]) => MODE_OFF[k]);
   const top = `<div class="ot-card-grip" data-card="grow"></div>
     <div class="ot-card-head"><button class="q-icon-btn" type="button" data-card="back" aria-label="返回">${icon('back')}</button>
       <div class="ot-card-title ot-od"><button type="button" data-card="edit-from" aria-label="改出發地"><i class="ot-dot from"></i><span>${e(c.from.name)}</span></button><button type="button" data-card="edit-to" aria-label="改目的地"><i class="ot-dot to"></i><b>${e(c.to.name || '目的地')}</b></button></div>
       <button class="q-icon-btn" type="button" data-card="swap" aria-label="對調起訖">${icon('swap')}</button>
       <button class="q-icon-btn${saved ? ' on' : ''}" type="button" data-card="save-trip" aria-label="釘選這個行程">${icon('star')}</button>
       <button class="q-close" type="button" data-card="close" aria-label="關閉">×</button></div>
-    <div class="q-chips ot-when"><button class="q-chip" type="button" data-when="now" aria-pressed="${when.by === 'now'}">現在出發</button><button class="q-chip" type="button" data-when="depart" aria-pressed="${when.by === 'depart'}">${when.by === 'depart' ? `${e(whenDay(when.at))}${hm(when.at)} 出發` : '出發時間'}</button><button class="q-chip" type="button" data-when="arrive" aria-pressed="${when.by === 'arrive'}">${when.by === 'arrive' ? `${e(whenDay(when.at))}${hm(when.at)} 抵達` : '抵達時間'}</button>${off.length ? `<span class="ot-off">不搭 ${e(off.join('、'))}</span>` : ''}</div>`;
+    <div class="q-chips ot-when"><button class="q-chip" type="button" data-when="now" aria-pressed="${when.by === 'now'}">現在出發</button><button class="q-chip" type="button" data-when="depart" aria-pressed="${when.by === 'depart'}">${when.by === 'depart' ? `${e(whenDay(when.at))}${hm(when.at)} 出發` : '出發時間'}</button><button class="q-chip" type="button" data-when="arrive" aria-pressed="${when.by === 'arrive'}">${when.by === 'arrive' ? `${e(whenDay(when.at))}${hm(when.at)} 抵達` : '抵達時間'}</button></div>
+    <div class="q-chips ot-modes" role="group" aria-label="這次搭什麼">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="q-chip ot-mode" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}">${icon(k)}${e(v)}</button>`).join('')}</div>`;
   if (!c.plans) return `${top}<p class="ot-note">${e(whenText)}：比較公車、火車、捷運和 YouBike，看公車現在的位置…</p>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : '<p class="ot-note">找不到大眾運輸方案。</p>'}${sourcesNote(c.sources)}`;
   // One row per route: the departure chosen (its best at first), the route's other departures as times to pick.
@@ -998,7 +1011,7 @@ function plansHtml(c) {
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${p.tags.map(t => `<span class="ot-tag${t === 'YouBike' || t === '電輔車' ? ' bike' : t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
         <div class="ot-legs">${legChips(p.legs)}</div>${deps(lead, i)}
         <div class="ot-plan-sub">${[leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')].filter(Boolean).map(e).join(' · ')}</div>
-        ${p.miss || p.off ? `<div class="ot-plan-sub warn">${e(p.off || p.miss)}</div>` : ''}
+        ${p.miss || p.off || p.rivers?.length ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || `騎車過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
         ${i === c.sel ? stepsHtml(p, c) : ''}
       </button>`;
   // The routes' cards (a way set aside shows only when it's pinned).
