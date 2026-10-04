@@ -249,19 +249,43 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, use = () => true
 const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: true, fix, name: 'YouBike', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dep, arr, dur: Math.round((arr - dep) / 1000), dist: Math.round(meters(from.lat, from.lon, to.lat, to.lon) * 1.25) });
 
 // What a plan costs you, in minutes: the time until you're there, and on
-// top of it each change (a bus to a bus is the riskiest: neither keeps
-// time), walking past a few minutes, riding, a trip that goes the long way
-// round (into 新竹市 and back out, when the place is the other way), what
-// it costs in money, and a train it would now miss.
+// top of it what a person who rides YouBike to fill the gaps the buses and
+// trains leave actually minds:
+//   - each change: onto a train or metro is easy (it keeps time), onto a bus
+//     is a gamble, a bus to a bus the worst (neither keeps time);
+//   - time on a bus, a little (it's late, it's early, it's full);
+//   - walking past a few minutes;
+//   - each ride on a bike by its own length, not the total: 10 minutes to the
+//     station is nothing, 20 is a workout, 30 in work clothes is not how
+//     anyone goes every day. Two short rides beat one long one. (A ride cut
+//     at 30 minutes to stay free is still one ride.) 電輔車 is easier going;
+//     a bike at a station with only one or two left may be gone;
+//   - a trip that goes the long way round (into 新竹市 and back out, when the
+//     place is the other way), what it costs in money, and a train it would
+//     now miss.
+export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 10) * 0.6 + Math.max(min - 20, 0) * 1.5;
 export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0 } = {}) {
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   let s = by === 'arrive' && deadline ? (deadline - p.dep) / 60_000 : (p.arr - now) / 60_000;
-  for (let i = 1; i < rides.length; i++) s += rides[i - 1].mode === 'bus' && rides[i].mode === 'bus' ? 14 : 9;
+  for (let i = 1; i < rides.length; i++) {
+    const [a, b] = [rides[i - 1].mode, rides[i].mode];
+    s += a === 'bus' && b === 'bus' ? 14 : b === 'bus' ? 10 : 7;
+  }
+  s += rides.filter(l => l.mode === 'bus').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.08;
   s += Math.max(0, (p.walk || 0) / 75 - 6) * 0.5;
-  // Riding: a few minutes to a station is nothing; riding most of the way
-  // (50–70 minutes on a YouBike) is not how anyone goes every day.
-  const ride = p.legs.filter(l => l.mode === 'bike').reduce((a, l) => a + (l.dur || 0) / 60, 0);
-  s += Math.min(ride, 15) * 0.15 + Math.max(0, ride - 15) * 0.6;
+  // The bike rides, one swapped bike to the next counted as one ride.
+  let ride = null;
+  const bikes = [];
+  for (const l of p.legs) {
+    if (l.mode !== 'bike') { ride = null; continue; }
+    if (ride && l.swap) ride.min += (l.dur || 0) / 60;
+    else bikes.push((ride = { min: (l.dur || 0) / 60, ebike: !!l.ebike, rent: l.rent }));
+  }
+  for (const r of bikes) {
+    s += 1.5 + rideEffort(r.ebike ? r.min * 0.7 : r.min);
+    const left = r.rent ? (r.ebike ? r.rent.ebike : r.rent.bikes) : null;
+    if (left != null && left < 3) s += 3;
+  }
   if (o && d) {
     const direct = Math.max(1000, meters(o.lat, o.lon, d.lat, d.lon));
     const path = p.legs.reduce((a, l) => a + (l.from?.lat != null && l.to?.lat != null ? meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) : 0), 0);
