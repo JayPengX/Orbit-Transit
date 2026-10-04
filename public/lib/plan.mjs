@@ -254,7 +254,8 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //   - each change: onto a train or metro is easy (it keeps time), onto a bus
 //     is a gamble, a bus to a bus the worst (neither keeps time);
 //   - time on a bus, a little (it's late, it's early, it's full);
-//   - walking past a few minutes;
+//   - the minutes out of the door (leaving later for the same train is
+//     better), and walking past a few minutes;
 //   - each ride on a bike by its own length, not the total: 10 minutes to the
 //     station is nothing, 18 is a workout, past that every minute counts
 //     three times the minute it saves (28 minutes across town in work clothes
@@ -277,7 +278,10 @@ export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = nul
     s += a === 'bus' && b === 'bus' ? 14 : b === 'bus' ? 10 : 7;
   }
   s += rides.filter(l => l.mode === 'bus').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.08;
-  s += Math.max(0, (p.walk || 0) / 75 - 6) * 0.5;
+  // Out of the door: the same bus or train reached by bike leaves you at home
+  // longer than walking to it; and walking past 5 minutes is slow going.
+  s += Math.max(0, (p.arr - p.dep) / 60_000) * 0.2;
+  s += Math.max(0, (p.walk || 0) / 75 - 5) * 0.6;
   // The bike rides, one swapped bike to the next counted as one ride.
   let ride = null;
   const bikes = [];
@@ -378,38 +382,78 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // last bus gone, the first train tomorrow), is no plan, unless it's all there is.
   const longWait = p => p.legs.some((l, i) => i > 0 && l.dep - p.legs[i - 1].arr > 90 * 60_000);
   const running = scored.filter(x => !x.p.off && !longWait(x.p));
-  const list = (running.length ? running : scored).slice(0, 24).map(x => ({ ...x.p, score: Math.round(x.s) }));
+  const list = (running.length ? running : scored).slice(0, 40).map(x => ({ ...x.p, score: x.s }));
   if (!list.length) return [];
+  // One card per route (pickSig: the same lines, the trains by their
+  // stations), its other departures the times to choose from: the best of
+  // them leads it. Then a route nobody would take is set aside (`weak`):
+  //   - another way is no worse in every way: leaves no earlier, there no
+  //     later, less bother (walking 10 minutes to a bus to the train, when a
+  //     bike gets you to the same train or a later one);
+  //   - it rides most of what riding all the way would (a bus north, then 25
+  //     minutes on a bike: then ride it all);
+  //   - it's far behind the best.
+  // Only when bikes are allowed do bike plans exist to set others aside.
+  const groups = new Map();
+  for (const p of list) {
+    const k = `${pickSig(p)}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(p);
+  }
+  const leads = [...groups.values()].map(g => g[0]);
+  const rideM = p => p.legs.reduce((a, l) => a + (l.mode === 'bike' ? l.dist || 0 : 0), 0);
+  const allBike = list.filter(p => p.bike && !vehicles(p).length).map(rideM);
+  const bikeAll = allBike.length ? Math.min(...allBike) : null;
+  const best = list[0].score;
+  const weak = new Set();
+  for (const p of leads) {
+    const beaten = list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && q.score < p.score && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000);
+    const mostlyRidden = bikeAll != null && vehicles(p).length && rideM(p) >= Math.max(3000, bikeAll * 0.6);
+    const far = p.score > best + Math.max(25, best * 0.5);
+    if (beaten || mostlyRidden || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+  }
+  // A route's other departures: the next few, within an hour and a half of its first.
+  const times = new Map();
+  for (const g of groups.values()) {
+    const by = [...g].sort((a, b) => a.dep - b.dep).filter(q => q === g[0] || Math.abs(q.dep - g[0].dep) <= 90 * 60_000).slice(0, 6);
+    for (const q of g) times.set(q, by);
+  }
   // Different ways first: each recommendation rides a different main line
   // (its longest ride); then, if there are fewer, different rides at all.
   const picked = new Set();
   const mains = new Set();
   const lines = new Set();
-  for (const p of list) {
+  const shown = leads.filter(p => !weak.has(p));
+  for (const p of shown) {
     if (picked.size >= top) break;
     if (mains.has(mainLine(p))) continue;
     mains.add(mainLine(p));
     lines.add(ridesSig(p));
     picked.add(p);
   }
-  for (const p of list) {
+  for (const p of shown) {
     if (picked.size >= top) break;
     if (picked.has(p) || lines.has(ridesSig(p))) continue;
     lines.add(ridesSig(p));
     picked.add(p);
   }
   const label = new Map(list.map(p => [p, []]));
+  const pool = shown.length ? shown : leads;
   const by_ = (f, name) => {
-    const best = list.reduce((a, b) => (f(b) < f(a) ? b : a));
-    if (list.filter(p => f(p) === f(best)).length < list.length) label.get(best).push(name);
+    const best = pool.reduce((a, b) => (f(b) < f(a) ? b : a));
+    if (pool.filter(p => f(p) === f(best)).length < pool.length) label.get(best).push(name);
   };
-  label.get(list[0]).push('推薦');
+  label.get(pool[0]).push('推薦');
   by_(p => p.arr, '最快抵達');
   by_(p => p.transfers, '最少轉乘');
   by_(p => p.walk, '最少步行');
   for (const p of list) if (p.bike) label.get(p).push(p.legs.some(l => l.ebike) ? '電輔車' : 'YouBike');
   for (const p of list) if (p.live) label.get(p).push('即時');
-  return list.map(p => ({ ...p, top: picked.has(p), tags: [...new Set(label.get(p))] }));
+  // Each plan: `lead` (its route's card), `weak` (set aside), `times` (its
+  // route's departures, as indexes into the list returned).
+  const out = list.map(p => ({ ...p, score: Math.round(p.score), top: picked.has(p), lead: groups.get(pickSig(p))[0] === p, weak: weak.has(p), tags: [...new Set(label.get(p))] }));
+  out.forEach((p, i) => (p.times = times.get(list[i]).map(q => list.indexOf(q))));
+  return out;
 }
 
 // Our plans added to the proxy's, from the bikes near both ends and the
@@ -426,8 +470,9 @@ export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
     .map(p => (swap && p.legs.some(l => l.mode === 'bike' && l.dur > SWAP_SEC) ? finish({ ...p, legs: swapRides(p.legs, bikes) }) : p));
   if (bikes.length && bike) {
     out.push(...bikeOnly(o, d, bikes, now, { swap }));
-    for (const p of plans) {
-      if (p.bike) continue;
+    // (From the plans with their stations: a train reached by bike can still end by bike.)
+    for (const p of out.slice()) {
+      if (p.legs.some(l => l.placeholder) || (p.bike && !p.legs.some(l => l.mode !== 'walk' && l.mode !== 'bike'))) continue;
       // By bike to the train (instead of the bus to it), and to the first
       // bus too (instead of a long walk to it); the same from the end.
       for (const anyRide of [false, true]) {

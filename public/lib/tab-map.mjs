@@ -115,7 +115,7 @@ export async function init(c) {
 }
 let pendingTrip = null;
 function showPlan(p, from, to) {
-  card = { kind: 'plans', from: { name: from?.name || '目前位置', lat: from?.lat, lon: from?.lon }, fromHere: !from || from.name === '目前位置', to, lat: to.lat, lon: to.lon, plans: [{ ...p, top: true }], sel: 0, more: false, sources: {} };
+  card = { kind: 'plans', from: { name: from?.name || '目前位置', lat: from?.lat, lon: from?.lon }, fromHere: !from || from.name === '目前位置', to, lat: to.lat, lon: to.lon, plans: [{ ...p, top: true, lead: true, weak: false, times: [] }], sel: 0, more: false, sources: {} };
   document.body.classList.add('ot-planning');
   if (canNav(p)) {
     renderCard();
@@ -498,6 +498,14 @@ async function cardClick(ev) {
   // 開始導航 sits inside its plan's button: it goes first.
   if (act === 'nav' && card) return canNav(card.plans?.[card.sel]) && navigate(card.plans[card.sel]);
   if (act === 'pick' && card) return togglePick(card, card.plans?.[card.sel]);
+  // Another departure of the same route: that one shown (and opened) on its card.
+  const dep = ev.target.closest('[data-dep]');
+  if (dep && card?.plans) {
+    const j = Number(dep.dataset.dep);
+    card.choice = { ...(card.choice || {}), [dep.dataset.lead]: j };
+    card.sel = -1;
+    return selectPlan(j);
+  }
   const planBtn = ev.target.closest('[data-plan]');
   if (planBtn) return selectPlan(Number(planBtn.dataset.plan));
   const when = ev.target.closest('[data-when]');
@@ -917,6 +925,7 @@ async function plan(from, to, opts = {}) {
     const at = when.by === 'now' ? null : when.at;
     const out = await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart' });
     c.plans = out.plans;
+    c.choice = {};
     c.sources = out.sources;
     if (out.error && !out.plans.length) c.error = errorText(out.error);
   } catch (err) {
@@ -982,17 +991,26 @@ function plansHtml(c) {
     <div class="q-chips ot-when"><button class="q-chip" type="button" data-when="now" aria-pressed="${when.by === 'now'}">現在出發</button><button class="q-chip" type="button" data-when="depart" aria-pressed="${when.by === 'depart'}">${when.by === 'depart' ? `${e(whenDay(when.at))}${hm(when.at)} 出發` : '出發時間'}</button><button class="q-chip" type="button" data-when="arrive" aria-pressed="${when.by === 'arrive'}">${when.by === 'arrive' ? `${e(whenDay(when.at))}${hm(when.at)} 抵達` : '抵達時間'}</button>${off.length ? `<span class="ot-off">不搭 ${e(off.join('、'))}</span>` : ''}</div>`;
   if (!c.plans) return `${top}<p class="ot-note">${e(whenText)}：比較公車、火車、捷運和 YouBike，看公車現在的位置…</p>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : '<p class="ot-note">找不到大眾運輸方案。</p>'}${sourcesNote(c.sources)}`;
-  const row = (p, i) => `<button class="ot-plan${i === c.sel ? ' on' : ''}" type="button" data-plan="${i}">
+  // One row per route: the departure chosen (its best at first), the route's other departures as times to pick.
+  const shownAt = i => c.choice?.[i] ?? i;
+  const deps = (lead, i) => {
+    const t = c.plans[lead].times || [];
+    return t.length > 1 ? `<div class="ot-plan-deps" role="group" aria-label="其他班次">${t.map(j => `<span class="ot-dep${j === i ? ' on' : ''}" role="button" data-dep="${j}" data-lead="${lead}">${e(hm(c.plans[j].dep))}</span>`).join('')}</div>` : '';
+  };
+  const row = (p, i, lead = i) => `<button class="ot-plan${i === c.sel ? ' on' : ''}" type="button" data-plan="${i}">
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${p.tags.map(t => `<span class="ot-tag${t === 'YouBike' || t === '電輔車' ? ' bike' : t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
-        <div class="ot-legs">${legChips(p.legs)}</div>
+        <div class="ot-legs">${legChips(p.legs)}</div>${deps(lead, i)}
         <div class="ot-plan-sub">${[leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')].filter(Boolean).map(e).join(' · ')}</div>
         ${p.miss || p.off ? `<div class="ot-plan-sub warn">${e(p.off || p.miss)}</div>` : ''}
         ${i === c.sel ? stepsHtml(p, c) : ''}
       </button>`;
-  const tops = c.plans.map((p, i) => [p, i]).filter(([p]) => p.top);
-  const rest = c.plans.map((p, i) => [p, i]).filter(([p]) => !p.top);
-  return `${top}<div class="ot-plans">${tops.map(([p, i]) => row(p, i)).join('')}</div>
-    ${rest.length ? `<button class="q-btn ot-wide ot-more" type="button" data-card="more">${c.more ? '收起其他方案' : `其他 ${rest.length} 個方案`}</button>${c.more ? `<div class="ot-plans">${rest.map(([p, i]) => row(p, i)).join('')}</div>` : ''}` : ''}`;
+  // The routes' cards (a way set aside shows only when it's pinned).
+  const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.weak || picked(c, p)));
+  const card_ = ([p, i]) => row(c.plans[shownAt(i)], shownAt(i), i);
+  const tops = leads.filter(([p]) => p.top || picked(c, p));
+  const rest = leads.filter(([p]) => !p.top && !picked(c, p));
+  return `${top}<div class="ot-plans">${tops.map(card_).join('')}</div>
+    ${rest.length ? `<button class="q-btn ot-wide ot-more" type="button" data-card="more">${c.more ? '收起其他方案' : `其他 ${rest.length} 個方案`}</button>${c.more ? `<div class="ot-plans">${rest.map(card_).join('')}</div>` : ''}` : ''}`;
 }
 // When to leave: 「12 分後出發」 soon, else 「建議 06:05 出發」; and when you're there.
 function leaveText(p) {
