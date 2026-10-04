@@ -343,7 +343,7 @@ export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = nul
     else bikes.push((ride = { min: (l.dur || 0) / 60, ebike: !!l.ebike, rent: l.rent }));
   }
   // A ride over a river's car bridge (頭前溪): a long climb in the traffic.
-  for (const l of p.legs) if (l.mode === 'bike') s += 8 * crossings(l.from, l.to);
+  for (const l of p.legs) if (l.mode === 'bike') s += 25 * crossings(l.from, l.to);
   for (const r of bikes) {
     s += 1.5 + rideEffort(r.ebike ? r.min * 0.9 : r.min);
     const left = r.rent ? (r.ebike ? r.rent.ebike : r.rent.bikes) : null;
@@ -456,12 +456,31 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   //     minutes on a bike: then ride it all);
   //   - it's far behind the best.
   // Only when bikes are allowed do bike plans exist to set others aside.
-  const groups = new Map();
-  for (const p of list) {
-    const k = `${pickSig(p)}`;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(p);
+  const group = () => {
+    const g = new Map();
+    for (const p of list) {
+      const k = pickSig(p);
+      if (!g.has(k)) g.set(k, []);
+      g.get(k).push(p);
+    }
+    return g;
+  };
+  // A route that comes often forgives a missed one (the next is minutes
+  // away); one every half hour doesn't: the wait to its next departure
+  // counts a little (the train every 10 minutes over the bus every 30, when
+  // they're otherwise close).
+  const rideOf = p => vehicles(p).reduce((a, l) => (!a || (l.dur || 0) > (a.dur || 0) ? l : a), null);
+  for (const g of group().values()) {
+    const byDep = [...g].sort((a, b) => a.dep - b.dep);
+    byDep.forEach((q, i) => {
+      const r = rideOf(q);
+      if (!r) return;
+      const next = byDep[i + 1] ? rideOf(byDep[i + 1])?.dep : r.next?.find(t => t > r.dep + 60_000);
+      if (next) q.score += Math.min((next - r.dep) / 60_000, 40) * 0.12;
+    });
   }
+  list.sort((a, b) => a.score - b.score || a.arr - b.arr);
+  const groups = group();
   const leads = [...groups.values()].map(g => g[0]);
   const rideM = p => p.legs.reduce((a, l) => a + (l.mode === 'bike' ? l.dist || 0 : 0), 0);
   const allBike = list.filter(p => p.bike && !vehicles(p).length).map(rideM);
