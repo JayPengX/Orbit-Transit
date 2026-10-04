@@ -30,7 +30,8 @@ for (const { data: t } of pick) {
   for (const p of ranked) {
     if (!all && (!p.lead || p.weak)) continue;
     const times = p.times?.length > 1 ? ` [${p.times.map(i => hm(ranked[i].dep)).join(' ')}]` : '';
-    console.log(`${p.weak ? '  ·' : p.top ? '  ★' : '   '} ${String(p.score).padStart(4)}  ${hm(p.dep)}→${hm(p.arr)}  ${p.legs.map(leg).join(' · ')}${times}${p.lead ? '' : ' (another time)'}`);
+    console.log(`${p.weak ? '  ·' : p.top ? '  ★' : '   '} ${String(p.score).padStart(4)}  ${hm(p.dep)}→${hm(p.arr)}  ${p.legs.map(leg).join(' · ')}${times}${p.lead ? '' : ' (another time)'}${p.rivers?.length ? ` 過${p.rivers.join('、')}` : ''}`);
   }
+  if (t.ms) console.log(`  took (ms): ${Object.entries(t.ms).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
   if (t.shown) console.log(`  phone showed:\n${t.shown.map(x => `    ${x}`).join('\n')}`);
 }

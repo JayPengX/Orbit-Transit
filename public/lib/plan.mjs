@@ -12,6 +12,7 @@
 
 import { meters, walkSec } from './util.mjs';
 import { journeys, directs } from './rail.mjs';
+import { crossings, crossed } from './rivers.mjs';
 
 export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
@@ -312,7 +313,8 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //     is not how anyone goes every day). Two short rides beat one long one.
 //     (A ride cut at 30 minutes to stay free is still one ride.) 電輔車 is a
 //     little easier going, not a free pass; a bike at a station with only one
-//     or two left may be gone;
+//     or two left may be gone; one over a river's car bridge (頭前溪) is
+//     a ride few take;
 //   - a trip whose buses or trains go the long way round (into 新竹市 and back
 //     out, when the place is the other way), or change farther from the place
 //     than you started. Getting to the first one is not the long way round:
@@ -340,6 +342,8 @@ export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = nul
     if (ride && l.swap) ride.min += (l.dur || 0) / 60;
     else bikes.push((ride = { min: (l.dur || 0) / 60, ebike: !!l.ebike, rent: l.rent }));
   }
+  // A ride over a river's car bridge (頭前溪): a long climb in the traffic.
+  for (const l of p.legs) if (l.mode === 'bike') s += 8 * crossings(l.from, l.to);
   for (const r of bikes) {
     s += 1.5 + rideEffort(r.ebike ? r.min * 0.9 : r.min);
     const left = r.rent ? (r.ebike ? r.rent.ebike : r.rent.bikes) : null;
@@ -396,10 +400,18 @@ export function sameWay(a, b) {
   return x.every((l, i) => {
     const m = y[i];
     if (l.mode !== m.mode) return false;
-    const [n, k] = [trainNo(l), trainNo(m)];
-    if (n || k) return n === k;
-    return norm(l.short || l.name) === norm(m.short || m.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 8 * 60_000;
+    return sameVehicle(l, m);
   });
+}
+// One bus or train, whatever each planner calls it: a train by its number,
+// or (a planner that gives none, Google's 六家-新竹) by where and when it
+// leaves; a bus or metro by its line and when it leaves.
+function sameVehicle(l, m) {
+  if (l.mode !== m.mode) return false;
+  const [n, k] = [trainNo(l), trainNo(m)];
+  if (n && k) return n === k;
+  if (n || k) return norm(l.from?.name) === norm(m.from?.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 2 * 60_000;
+  return norm(l.short || l.name) === norm(m.short || m.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 8 * 60_000;
 }
 
 const mainLine = p => {
@@ -458,20 +470,21 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const weak = new Set();
   // The ride a plan is for: its longest bus or train.
   const main = p => vehicles(p).reduce((a, l) => (!a || (l.dur || 0) > (a.dur || 0) ? l : a), null);
-  const sameRide = (a, b) => {
-    const [n, k] = [trainNo(a), trainNo(b)];
-    if (n || k) return n === k;
-    return a.mode === b.mode && norm(a.short || a.name) === norm(b.short || b.name) && Math.abs((a.dep || 0) - (b.dep || 0)) <= 8 * 60_000;
-  };
+  const sameRide = sameVehicle;
   for (const p of leads) {
     // Another way onto the same bus or train (a bike to it, not a walk and a
     // bus): no earlier out of the door, no later there, less bother. Another
     // line altogether is never this: it's a choice of its own.
     const m = main(p);
     const beaten = m && list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && q.score < p.score && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000 && vehicles(q).some(l => sameRide(l, m)));
+    // More changes than another bus-or-train way that's no later (within 5
+    // minutes) and less bother: off the train at 北新竹 for the 5608, when
+    // staying on to 新竹 and riding is sooner.
+    const n = vehicles(p).length;
+    const changes = n > 1 && list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && vehicles(q).length >= 1 && vehicles(q).length < n && q.score < p.score && q.arr <= p.arr + 5 * 60_000);
     const mostlyRidden = bikeAll != null && vehicles(p).length && rideM(p) >= Math.max(3000, bikeAll * 0.6);
     const far = p.score > best + Math.max(45, best);
-    if (beaten || mostlyRidden || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    if (beaten || changes || mostlyRidden || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // A route's other departures: the next few, within an hour and a half of its first.
   const times = new Map();
@@ -512,7 +525,9 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   for (const p of list) if (p.live) label.get(p).push('即時');
   // Each plan: `lead` (its route's card), `weak` (set aside), `times` (its
   // route's departures, as indexes into the list returned).
-  const out = list.map(p => ({ ...p, score: Math.round(p.score), top: picked.has(p), lead: groups.get(pickSig(p))[0] === p, weak: weak.has(p), tags: [...new Set(label.get(p))] }));
+  // The rivers a plan's rides cross (shown on it: 騎車過頭前溪).
+  const rivers = p => [...new Set(p.legs.filter(l => l.mode === 'bike').flatMap(l => crossed(l.from, l.to)))];
+  const out = list.map(p => ({ ...p, rivers: rivers(p), score: Math.round(p.score), top: picked.has(p), lead: groups.get(pickSig(p))[0] === p, weak: weak.has(p), tags: [...new Set(label.get(p))] }));
   out.forEach((p, i) => (p.times = times.get(list[i]).map(q => list.indexOf(q))));
   return out;
 }

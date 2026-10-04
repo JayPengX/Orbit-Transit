@@ -56,11 +56,17 @@ async function trainThenBus(plans, to, now) {
 }
 
 // → { plans (ranked), sources, error }.
-export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}) {
-  const prefs = data.prefs;
+// `modes`: this search's own ways of moving (the chips on the plans card),
+// else the person's 交通偏好.
+export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null } = {}) {
+  const prefs = only ? { ...data.prefs, modes: { ...data.prefs.modes, ...only } } : data.prefs;
   const modes = prefs.modes;
   const now = Date.now();
   const t0 = at || now;
+  // How long each step took, for the 除錯紀錄 (a slow search, explained).
+  const ms = {};
+  const lap = (k, since) => (ms[k] = Math.round(performance.now() - since));
+  const T0 = performance.now();
   const useRail = modes.tra || modes.hsr;
   const findCity = await cityFinder();
   // Each point's city as it was looked up, for the 除錯紀錄 (a replay needs no township list).
@@ -71,50 +77,71 @@ export async function planTrip(data, from, to, { at = null, by = 'depart' } = {}
   // Inside your TPASS's area, our router looks only at the trains the pass takes.
   const useTrain = x => modes[x.sys] !== false && (!passTrip || (x.sys === 'tra' && !PREMIUM.has(String(x.code))));
   let net = null;
+  let t = performance.now();
   const [res, trains] = await Promise.all([
-    routePlans(from, to, { at, by, modes: modeList(prefs) }).catch(err => ({ plans: [], sources: {}, err })),
+    routePlans(from, to, { at, by, modes: modeList(prefs) }).catch(err => ({ plans: [], sources: {}, err })).finally(() => lap('planners', t)),
     by === 'arrive' || !useRail
       ? []
       : railNetwork(tw(t0).date, { next: tw(t0).min >= 21 * 60 })
           .then(n => railPlans((net = n), from, to, t0, { bike: modes.bike, use: useTrain }))
           .catch(() => [])
+          .finally(() => lap('trains', t))
   ]);
   if (res.err && !trains.length) return { plans: [], sources: res.sources || {}, error: res.err };
-  let plans = [...res.plans, ...trains];
-  if (modes.bus && by !== 'arrive') plans.push(...(await trainThenBus(trains, to, now)));
-  plans = plans.filter(p => allowed(p, { ...modes, bike: true }));
-  // What the buses are doing now (only for trips leaving now or soon).
-  if (by !== 'arrive' && t0 - now < 60 * 60_000) {
-    const soon = plans.filter(p => p.legs.some(l => l.mode === 'bus' && !l.live)).slice(0, 10);
-    const done = await Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)));
-    plans = plans.map(p => done[soon.indexOf(p)] || p);
-  }
+  let plans = [...res.plans, ...trains].filter(p => allowed(p, { ...modes, bike: true }));
+  // YouBike near both ends and the stations, asked now, while the buses are
+  // looked at (it doesn't wait for them; a train-then-bus's stop is asked after).
+  const bikeCities = modes.bike && prefs.bike30 ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
+  const asked = [];
+  const bikesAt = pts => {
+    const fresh = pts.filter(p => !asked.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400));
+    asked.push(...fresh);
+    return Promise.all(fresh.map(p => bikesNear(p.lat, p.lon).catch(() => [])));
+  };
+  t = performance.now();
+  const bikesFirst = modes.bike
+    ? Promise.all([bikesAt(bikePoints(plans, from, to)), ...bikeCities.map(c => cityBikes(c).catch(() => []))]).then(x => x.flat(2)).finally(() => lap('bikes', t))
+    : Promise.resolve([]);
+  // A train whose last station is far, on by bus; what the buses are doing
+  // now (trips leaving now or soon), side by side.
+  const t1 = performance.now();
+  const soon = by !== 'arrive' && t0 - now < 60 * 60_000 ? plans.filter(p => p.legs.some(l => l.mode === 'bus' && !l.live)).slice(0, 10) : [];
+  const [linked, done] = await Promise.all([
+    modes.bus && by !== 'arrive' ? trainThenBus(trains, to, now) : [],
+    Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)))
+  ]);
+  plans = plans.map(p => done[soon.indexOf(p)] || p);
+  plans.push(...linked.filter(p => allowed(p, { ...modes, bike: true })));
+  // The buses after each first bus (TDX's times, else the timetable).
+  await Promise.all(plans.flatMap(p => p.legs.filter(l => l.nextP).map(async l => {
+    l.next = await l.nextP.catch(() => []);
+    delete l.nextP;
+  })));
+  lap('buses', t1);
   // Each route's next departures (the times its card offers): the trains
-  // after it from our timetable, the buses after it from TDX's times.
+  // after it from our timetable, the buses after it.
   if (by !== 'arrive') {
     const more = [];
     for (const p of plans) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
     plans.push(...more);
   }
-  // YouBike near both ends and the stations the plans use.
   let bikes = [];
   if (modes.bike) {
-    const pts = bikePoints(plans, from, to);
-    // 每 30 分鐘換車: every station of the cities at both ends (the map's
-    // list, kept), so a long ride can be cut wherever it passes one.
-    const cities = prefs.bike30 ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
-    const near = (await Promise.all([...pts.map(p => bikesNear(p.lat, p.lon).catch(() => [])), ...cities.map(c => cityBikes(c).catch(() => []))])).flat();
+    const near = [...(await bikesFirst), ...(await bikesAt(bikePoints(linked, from, to))).flat()];
     bikes = [...new Map(near.map(s => [s.uid, s])).values()];
   }
+  t = performance.now();
   const cost = p => fareOf(p, coverage(p, pass, cityOf)).cost;
   // Both ends inside your TPASS's area: only what the pass takes (no 高鐵, no 普悠瑪), unless there's nothing else.
   const keep = passTrip ? p => passOk(p, pass, cityOf) : null;
   const ranked = withBikes(plans, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
   // Each plan's fare line (TPASS counted).
   for (const p of ranked) p.fareText = fareOf(p, coverage(p, pass, cityOf)).text;
+  lap('rank', t);
+  lap('all', T0);
   // 除錯紀錄: everything the ranking was worked out from (scripts/replay.mjs runs it again), and what it said.
   rec('trip', {
-    now, t0, at, by, from, to,
+    now, t0, at, by, from, to, ms,
     prefs: { modes, bike30: prefs.bike30, tpass: prefs.tpass },
     sources: res.sources || {},
     plans, bikes, cities,

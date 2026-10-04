@@ -111,7 +111,8 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaNear } = {}
     }
     l.live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
     // The buses after it, for the route's other times (moreBuses).
-    if (i === first) l.next = await nextBuses(list, l.short || l.name, bus.at, times);
+    // (Not waited for here: the planner waits for them all at once, beside the bikes.)
+    if (i === first) l.nextP = nextBuses(list, l.short || l.name, bus.at, times);
     const delta = bus.at - l.dep;
     if (Math.abs(delta) < 60_000) continue;
     changed = true;

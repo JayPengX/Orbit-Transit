@@ -757,6 +757,36 @@ main {
 .ot-when {
   margin: 10px 0 4px;
 }
+/* This search's ways of moving: small, on ones plain, off ones faded and struck through. */
+.q-chips.ot-modes {
+  flex-wrap: nowrap;
+  margin: 2px 0 4px;
+  gap: 5px;
+}
+.q-chips.ot-modes .q-chip.ot-mode {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.q-chip.ot-mode .ot-i {
+  width: 15px;
+  height: 15px;
+}
+.q-chips.ot-modes .q-chip.ot-mode[aria-pressed='true'] {
+  border-color: var(--ot-line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--q-text);
+}
+.q-chips.ot-modes .q-chip.ot-mode[aria-pressed='false'] {
+  background: none;
+  color: var(--q-muted);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
 .ot-plans {
   display: grid;
   gap: 8px;
