@@ -299,8 +299,8 @@ export function moreBuses(plan, now = Date.now()) {
 
 const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: true, fix, name: 'YouBike', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dep, arr, dur: Math.round((arr - dep) / 1000), dist: Math.round(meters(from.lat, from.lon, to.lat, to.lon) * 1.25) });
 
-// What a plan costs you, in minutes: the time until you're there, and on
-// top of it what a person who rides YouBike to fill the gaps the buses and
+// What a plan costs you, in minutes: the time from your door to there (the
+// wait before leaving only a third: it's spent at home), and on top of it what a person who rides YouBike to fill the gaps the buses and
 // trains leave actually minds:
 //   - each change: onto a train or metro is easy (it keeps time), onto a bus
 //     is a gamble, a bus to a bus the worst (neither keeps time);
@@ -311,7 +311,9 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //     station is nothing, 18 is a workout, past that every minute counts
 //     three times the minute it saves (28 minutes across town in work clothes
 //     is not how anyone goes every day). Two short rides beat one long one.
-//     (A ride cut at 30 minutes to stay free is still one ride.) 電輔車 is a
+//     (A ride cut at 30 minutes to stay free is still one ride.) And the
+//     riding in all: 15 minutes to a train and 6 from it is nearly the ride
+//     the whole way. 電輔車 is a
 //     little easier going, not a free pass; a bike at a station with only one
 //     or two left may be gone; one over a river's car bridge (頭前溪) is
 //     a ride few take;
@@ -322,18 +324,30 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //     its ride, nothing more;
 //   - what it costs in money, and a train it would now miss.
 export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.max(min - 18, 0) * 3;
-export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0 } = {}) {
+export function score(p, opts = {}) {
+  const parts = scoreParts(p, opts);
+  return Object.values(parts).reduce((a, b) => a + b, 0);
+}
+// The score's parts, by name (scripts/replay.mjs --why shows them).
+export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0 } = {}) {
+  const out = {};
+  const add = (k, v) => v && (out[k] = (out[k] || 0) + v);
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
-  let s = by === 'arrive' && deadline ? (deadline - p.dep) / 60_000 : (p.arr - now) / 60_000;
+  // Time: door to door in full; the wait before leaving (at home, at your
+  // desk) only a third: a train in 25 minutes isn't 25 minutes lost, it's
+  // when you leave. By an arrival time: how early you must leave.
+  if (by === 'arrive' && deadline) add('time', (deadline - p.dep) / 60_000);
+  else {
+    add('time', (p.arr - p.dep) / 60_000);
+    add('wait', Math.max(0, (p.dep - now) / 60_000) * 0.35);
+  }
   for (let i = 1; i < rides.length; i++) {
     const [a, b] = [rides[i - 1].mode, rides[i].mode];
-    s += a === 'bus' && b === 'bus' ? 14 : b === 'bus' ? 10 : 7;
+    add('changes', a === 'bus' && b === 'bus' ? 14 : b === 'bus' ? 10 : 7);
   }
-  s += rides.filter(l => l.mode === 'bus').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.08;
-  // Out of the door: the same bus or train reached by bike leaves you at home
-  // longer than walking to it; and walking past 5 minutes is slow going.
-  s += Math.max(0, (p.arr - p.dep) / 60_000) * 0.2;
-  s += Math.max(0, (p.walk || 0) / 75 - 5) * 0.6;
+  add('bus', rides.filter(l => l.mode === 'bus').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.08);
+  // Walking past 5 minutes is slow going.
+  add('walk', Math.max(0, (p.walk || 0) / 75 - 5) * 0.6);
   // The bike rides, one swapped bike to the next counted as one ride.
   let ride = null;
   const bikes = [];
@@ -343,30 +357,33 @@ export function score(p, { o, d, now = Date.now(), by = 'depart', deadline = nul
     else bikes.push((ride = { min: (l.dur || 0) / 60, ebike: !!l.ebike, rent: l.rent }));
   }
   // A ride over a river's car bridge (頭前溪): a long climb in the traffic.
-  for (const l of p.legs) if (l.mode === 'bike') s += 25 * crossings(l.from, l.to);
+  for (const l of p.legs) if (l.mode === 'bike') add('river', 35 * crossings(l.from, l.to));
   for (const r of bikes) {
-    s += 1.5 + rideEffort(r.ebike ? r.min * 0.9 : r.min);
+    add('bike', 1.5 + rideEffort(r.ebike ? r.min * 0.9 : r.min));
     const left = r.rent ? (r.ebike ? r.rent.ebike : r.rent.bikes) : null;
-    if (left != null && left < 3) s += 3;
+    if (left != null && left < 3) add('fewBikes', 3);
   }
+  // And riding in all: 15 minutes to the train and 6 from it is 21 on a bike,
+  // nearly what riding the whole way takes; the train saves little.
+  const rideAll = bikes.reduce((a, r) => a + r.min, 0);
+  if (rides.length) add('bike', Math.max(0, rideAll - 12) * 0.5);
   const placed = rides.filter(l => l.from?.lat != null && l.to?.lat != null);
   if (placed.length) {
     // The rides' own way against the straight line from the first stop to the last.
     const [a, b] = [placed[0].from, placed.at(-1).to];
     const span = Math.max(1000, meters(a.lat, a.lon, b.lat, b.lon));
     const path = placed.reduce((x, l) => x + meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon), 0);
-    s += Math.max(0, path / span - 1.2) * 45;
+    add('detour', Math.max(0, path / span - 1.2) * 45);
   }
   if (o && d) {
     // Heading away: a change made farther from the place than where you started.
     const direct = Math.max(1000, meters(o.lat, o.lon, d.lat, d.lon));
-    const away = rides.slice(0, -1).some(l => l.to?.lat != null && meters(l.to.lat, l.to.lon, d.lat, d.lon) > direct + 1500);
-    if (away) s += 8;
+    if (rides.slice(0, -1).some(l => l.to?.lat != null && meters(l.to.lat, l.to.lon, d.lat, d.lon) > direct + 1500)) add('away', 8);
   }
-  s += fare / 12;
-  if (p.miss) s += 25;
-  if (p.off) s += 120;
-  return s;
+  add('fare', fare / 12);
+  if (p.miss) add('miss', 25);
+  if (p.off) add('off', 120);
+  return out;
 }
 
 // The same rides (the lines, where you get on and off), whatever the walks
