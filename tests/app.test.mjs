@@ -530,6 +530,8 @@ test('the buses now: names matched loosely, the bus you’d catch, the trip move
   const rows = [{ RouteName: { Zh_tw: '5608' }, StopStatus: 0, EstimateTime: 900, Estimates: [{ EstimateTime: 900 }, { EstimateTime: 2400 }] }];
   assert.deepEqual(liveTimes(rows, '5608', now).times.map(t => (t.at - now) / 60_000), [15, 40]);
   assert.equal(liveTimes([{ RouteName: { Zh_tw: '5608' }, StopStatus: 3 }], '5608', now).off, 3);
+  // 182 at 文興嘉興路口, 22:10: the way to 高鐵 is done for the day, the way to 北大橋 still has its 22:30.
+  assert.equal(liveTimes([{ RouteName: { Zh_tw: '182' }, Direction: 0, StopStatus: 3 }, { RouteName: { Zh_tw: '182' }, Direction: 1, StopStatus: 1 }], '182', now).off, 0);
   const p = finish({ legs: [
     { mode: 'walk', dur: 300, dist: 300, dep: T('08:00'), arr: T('08:05'), from: { lat: 24.8, lon: 121 }, to: { lat: 24.801, lon: 121 } },
     { mode: 'bus', short: '5608', dur: 1200, dist: 9000, dep: T('08:06'), arr: T('08:26'), from: { name: '東關東', lat: 24.801, lon: 121 }, to: { name: '竹東高中', lat: 24.733, lon: 121.088 } }
@@ -628,11 +630,12 @@ test('the day’s trains kept compact: the same trips back', async () => {
   assert.deepEqual(back, trips);
 });
 
-test('navigation only for a plan leaving soon; its ride said the way the sign says it', async () => {
+test('navigation for any plan not yet over (a later one says when to leave); its ride said the way the sign says it', async () => {
   const { canNav, rideName } = await import('../public/lib/nav.mjs');
   const now = T('07:00');
   assert.ok(canNav({ dep: T('07:15'), arr: T('08:00') }, now));
-  assert.ok(!canNav({ dep: T('07:40'), arr: T('08:00') }, now));
+  assert.ok(canNav({ dep: T('07:40'), arr: T('08:00') }, now), 'leaving later');
+  assert.ok(!canNav({ dep: T('06:00'), arr: T('06:40') }, now), 'over');
   assert.ok(canNav({ dep: T('06:50'), arr: T('08:00') }, now), 'already on the way');
   assert.equal(rideName({ mode: 'tra', short: '區間 1234', train: { no: '1234' } }), '台鐵 區間 1234 次');
   assert.equal(rideName({ mode: 'tra', short: '區間車' }), '台鐵 區間車');

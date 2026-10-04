@@ -190,7 +190,9 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, use = () => true
   if (!net || meters(o.lat, o.lon, d.lat, d.lon) < 3000) return [];
   const near = pt => {
     const all = [...net.st.values()].map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m);
-    const walk = all.filter(x => x.m <= RAIL_WALK_M).slice(0, 3);
+    // Walked to: on your side of the river only (the straight line over 頭前溪
+    // is no footpath: the bridge is far round and made for cars).
+    const walk = all.filter(x => x.m <= RAIL_WALK_M && !crossings(pt, x.s)).slice(0, 3);
     const ride = bike ? all.filter(x => x.m > BIKE_OVER_M && x.m <= RAIL_BIKE_M && !walk.includes(x)).slice(0, 4) : [];
     return [...walk, ...ride].map(x => ({ ...x, a: access(x.m, bike) }));
   };
@@ -357,7 +359,7 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
     else bikes.push((ride = { min: (l.dur || 0) / 60, ebike: !!l.ebike, rent: l.rent }));
   }
   // A ride over a river's car bridge (頭前溪): a long climb in the traffic.
-  for (const l of p.legs) if (l.mode === 'bike') add('river', 35 * crossings(l.from, l.to));
+  for (const l of p.legs) if (l.mode === 'bike' || l.mode === 'walk') add('river', 35 * crossings(l.from, l.to));
   for (const r of bikes) {
     add('bike', 1.5 + rideEffort(r.ebike ? r.min * 0.9 : r.min));
     const left = r.rent ? (r.ebike ? r.rent.ebike : r.rent.bikes) : null;
@@ -567,9 +569,10 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   for (const p of list) if (p.live) label.get(p).push('即時');
   // Each plan: `lead` (its route's card), `weak` (set aside), `times` (its
   // route's departures, as indexes into the list returned).
-  // The rivers a plan's rides cross (shown on it: 騎車過頭前溪).
-  const rivers = p => [...new Set(p.legs.filter(l => l.mode === 'bike').flatMap(l => crossed(l.from, l.to)))];
-  const out = list.map(p => ({ ...p, rivers: rivers(p), score: Math.round(p.score), top: picked.has(p), lead: groups.get(pickSig(p))[0] === p, weak: weak.has(p), tags: [...new Set(label.get(p))] }));
+  // The rivers a plan's rides and walks cross (shown on it: 騎車過頭前溪).
+  const rivers = p => [...new Set(p.legs.filter(l => l.mode === 'bike' || l.mode === 'walk').flatMap(l => crossed(l.from, l.to)))];
+  const riverBy = p => (p.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to)) ? '騎車' : '步行');
+  const out = list.map(p => ({ ...p, rivers: rivers(p), riverBy: riverBy(p), score: Math.round(p.score), top: picked.has(p), lead: groups.get(pickSig(p))[0] === p, weak: weak.has(p), tags: [...new Set(label.get(p))] }));
   out.forEach((p, i) => (p.times = times.get(list[i]).map(q => list.indexOf(q))));
   return out;
 }
