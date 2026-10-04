@@ -3640,3 +3640,8 @@ main {
   height: 18px;
   color: var(--q-text-2);
 }
+.ot-note.ot-off-note {
+  margin: 4px 0 8px;
+  color: var(--q-accent);
+  font-weight: 600;
+}

@@ -9,7 +9,8 @@ import { errorText, tdx, rows } from './api.mjs';
 import { CITIES, CITY_CODES, cityName, cityShort, NEAR_CITIES } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
-import { e, uid, meters, tw, zh, addDays } from './util.mjs';
+import { e, uid, meters, tw, twAt, zh, addDays, hm } from './util.mjs';
+import { nextRun, liveTrusted } from './live.mjs';
 
 const WEEK = '日一二三四五六';
 // 'HH:MM' times as a stop's sign has them: an hour a row, its minutes beside it.
@@ -123,6 +124,8 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   // today, or any day of the coming week, since weekends run their own).
   let view = 'live';
   let day = 0;
+  let dayPicked = false;
+  let moved = '';
   let sched = null;
   let picked = stopUID;
   // Pinning a ride: the stop you get on at, then the one you get off at.
@@ -135,17 +138,38 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
     })
     .catch(() => (sched = []));
   const today = () => tw();
-  // A bus not yet out with no time from TDX: the timetable's next one at the stop.
-  const planned = (w, s) => {
-    if (!sched?.length) return '';
-    const { date, dow, hm: now } = today();
-    const next = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, date, dow).times.find(t => t >= now);
-    return next || '';
+  // The timetable's next bus at each stop (公路客運's first-stop times plus
+  // the ride there), today or the nearest day the route runs.
+  const planned = (w, k) => (sched?.length ? nextRun(sched, w, k, Date.now()) : null);
+  const dayName = n => {
+    const t = today();
+    return n === 1 ? `明天（週${WEEK[(t.dow + 1) % 7]}）` : `週${WEEK[(t.dow + n) % 7]}`;
+  };
+  // The route not running again today: which day the stops' times are of.
+  const offNote = w => {
+    const first = planned(w, 0);
+    if (!first || first.day === 0) return '';
+    const ranToday = nextRun(sched, w, 0, twAt(today().date, '00:00'), 0);
+    return `${ranToday ? '今天已收班' : '今天不行駛'}，以下是${dayName(first.day)}的時刻`;
   };
   const tableHtml = w => {
     if (!sched) return '<p class="ot-note">載入時刻表…</p>';
     const s = w.stops.find(x => x.uid === picked) || w.stops[0];
     const t0 = today();
+    // Not running today at this stop (a weekday route on Sunday): the nearest day it does, said so.
+    if (!dayPicked) {
+      day = 0;
+      moved = '';
+      const has = n => {
+        const x = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, addDays(t0.date, n), (t0.dow + n) % 7);
+        return x.times.length || x.every.length;
+      };
+      const n = has(0) ? 0 : [1, 2, 3, 4, 5, 6].find(has);
+      if (n) {
+        day = n;
+        moved = `今天不行駛，顯示${dayName(n)}的時刻`;
+      }
+    }
     const date = addDays(t0.date, day);
     const dow = (t0.dow + day) % 7;
     // Today's past times greyed and its next one marked; another day's all alike.
@@ -164,10 +188,13 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
       : every.length
         ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? `每 ${f.min}–${f.max} 分` : `每 ${f.min || f.max} 分`}</b></div>`).join('')}</div>`
         : `<p class="ot-note">${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。</p>`;
-    return `${days}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${times.length} 班${day ? '' : next ? `・下一班 ${e(next)}` : '・已收班'}` : ''}</small></div>${body}`;
+    return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${times.length} 班${day ? '' : next ? `・下一班 ${e(next)}` : '・已收班'}` : ''}</small></div>${body}`;
   };
+  let offDay = 0;
   const draw = () => {
     const w = ways?.[way];
+    const off = w && sched?.length ? offNote(w) : '';
+    offDay = off ? planned(w, 0).day : 0;
     const keep = d.scrollTop;
     // Like a stop's sign: the route's number big, where it's going beside it;
     // the way and the view stay at the top while the stops scroll under.
@@ -181,17 +208,22 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
         ? '<p class="ot-note">這條路線沒有站牌資料。</p>'
         : view === 'table'
           ? tableHtml(w)
-          : `<ol class="ot-route-stops">${w.stops
+          : `${off ? `<p class="ot-note ot-off-note">${e(off)}</p>` : ''}<ol class="ot-route-stops">${w.stops
             .map(s => {
-              const v = live.get(s.uid);
+              const k = w.stops.indexOf(s);
+              let v = live.get(s.uid);
+              // A bus 'coming' that the timetable has nowhere near (resting
+              // with its tracker on): not taken; the timetable's time instead.
+              if (v?.status === 0 && v.sec != null && !liveTrusted(sched, w, k, Date.now() + v.sec * 1000)) v = null;
               let t = etaText(v);
-              // 尚未發車 without a time: the timetable's.
-              if ((!v || (v.status === 1 && !v.next) || t.main === '—') && planned(w, s)) t = { main: `${planned(w, s)}`, sub: '時刻表', tone: 'wait' };
+              // No bus on its way to it (尚未發車, 末班已過 the other way…): the timetable's next.
+              const p = !v || v.status !== 0 || v.sec == null ? planned(w, k) : null;
+              // (Another day's said once above the stops, when it's every stop's.)
+              if (p) t = { main: hm(p.at), sub: p.day && p.day !== offDay ? `${dayName(p.day)}・時刻表` : '時刻表', tone: 'wait' };
               const mine = s.uid === stopUID;
               const ride = pinnedAt(s.uid);
               // Choosing where to get off: the stops after the one you get on at.
               const at = boarding ? w.stops.findIndex(x => x.uid === boarding.uid) : -1;
-              const k = w.stops.indexOf(s);
               const pick = boarding ? (k > at ? ' can-off' : k === at ? ' on-here' : ' before') : '';
               // A bus at the stop (進站中, 即將進站) rides on its dot.
               return `<li class="${t.tone}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span><span class="ot-rs-dot">${t.tone === 'now' ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? '<small>上車</small>' : ride?.off ? `<small>${icon('star')} 到 ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? '取消釘選' : '從這站上車，釘選'}">${icon('star')}</button>`}</li>`;
@@ -282,6 +314,8 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
     const dy = ev.target.closest('[data-day]');
     if (dy) {
       day = Number(dy.dataset.day);
+      dayPicked = true;
+      moved = '';
       return draw();
     }
     const cur = ways?.[way];
