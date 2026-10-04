@@ -14,7 +14,7 @@
 import { routePlans, townships } from './api.mjs';
 import { bikesNear, cityBikes } from './bike.mjs';
 import { railNetwork } from './raildata.mjs';
-import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy } from './plan.mjs';
 import { adjustPlan, busLink, busTimes } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -115,7 +115,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           .finally(() => lap('trains', t))
   ]);
   if (res.err && !trains.length) return { plans: [], sources: res.sources || {}, error: res.err };
-  let plans = [...res.plans, ...trains].filter(p => allowed(p, { ...modes, bike: true }));
+  let plans = [...res.plans.map(tidy), ...trains].filter(p => allowed(p, { ...modes, bike: true }));
   // YouBike near both ends and the stations, asked now, while the buses are
   // looked at (it doesn't wait for them; a train-then-bus's stop is asked after).
   const bikeCities = modes.bike && prefs.bike30 ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];

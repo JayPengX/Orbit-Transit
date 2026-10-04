@@ -311,8 +311,13 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
   const seen = new Set();
   const uniq = found.filter(j => !seen.has(sig(j)) && seen.add(sig(j)));
   const fin = j => j.arr + j.extra * 1000;
-  const kept = uniq.filter(a => !uniq.some(b => b !== a && b.dep >= a.dep && fin(b) <= fin(a) && b.transfers <= a.transfers && (b.dep > a.dep || fin(b) < fin(a) || b.transfers < a.transfers)));
-  return kept.sort((a, b) => fin(a) - fin(b) || a.dep - b.dep).slice(0, n * 2).sort((a, b) => a.dep - b.dep);
+  // When you set out for it: its first train less the way to that station
+  // (`pre`, seconds), so boarding the same train a station further up isn't
+  // 'leaving later' (a 28-minute walk to 榮華 for the train that stopped at 竹東).
+  const pre = new Map(starts.map(s => [s.key, (s.pre || 0) * 1000]));
+  const go = j => j.dep - (pre.get(j.legs[0]?.from) || 0);
+  const kept = uniq.filter(a => !uniq.some(b => b !== a && go(b) >= go(a) && fin(b) <= fin(a) && b.transfers <= a.transfers && (go(b) > go(a) || fin(b) < fin(a) || b.transfers < a.transfers)));
+  return kept.sort((a, b) => fin(a) - fin(b) || go(b) - go(a)).slice(0, n * 2).sort((a, b) => a.dep - b.dep);
 }
 
 // Labels for a list of options: the fastest, the earliest there, the fewest changes.

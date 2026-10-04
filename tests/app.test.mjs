@@ -218,6 +218,31 @@ test('our own train plans: walk to a station near you, the trains, walk from the
   assert.deepEqual(railPlans(net, o, { lat: 23.5, lon: 120.5 }, T('08:10')), [], 'no station near there');
 });
 
+test('a planner’s walk that ends after its bus has left: set out earlier', async () => {
+  const { tidy } = await import('../public/lib/plan.mjs');
+  const p = finish({ legs: [{ mode: 'walk', dep: T('07:59'), arr: T('08:03'), dur: 240 }, { mode: 'bus', dep: T('08:01'), arr: T('08:15'), dur: 840 }, { mode: 'walk', dep: T('08:15'), arr: T('08:20'), dur: 300 }] });
+  const t = tidy(p);
+  assert.equal(t.legs[0].arr, T('08:01'));
+  assert.equal(t.dep, T('07:57'));
+  assert.equal(tidy(t), t, 'in order: as it is');
+});
+
+test('a plan that waits overnight half way, or leaves tomorrow, says so', () => {
+  const p = finish({ legs: [{ mode: 'tra', name: '區間車', from: { name: '六家' }, to: { name: '北新竹' }, dep: T('23:09'), arr: T('23:25'), dur: 960 }, { mode: 'bus', short: '72', from: { name: '北新竹後站' }, to: { name: '富群街口' }, dep: T('23:25') + 7.5 * 3600e3, arr: T('23:25') + 8 * 3600e3, dur: 1800 }] });
+  const [r] = rank([p], { now: T('22:00') });
+  assert.match(r.late, /北新竹後站等到 06:55（隔天）/);
+  const q = finish({ legs: [{ mode: 'bus', short: '5621', from: { name: '街尾' }, to: { name: '前溪' }, dep: T('22:00') + 8 * 3600e3, arr: T('22:00') + 8.5 * 3600e3, dur: 1800 }] });
+  assert.match(rank([q], { now: T('22:00') })[0].late, /^明天 06:00 才有車/);
+});
+
+test('a planner’s plan leaving minutes before the time asked: on the metro, the same a train later; by bus, gone', () => {
+  const m = finish({ legs: [{ mode: 'walk', dep: T('07:55'), arr: T('07:58'), dur: 180 }, { mode: 'metro', short: '淡水信義線', dep: T('07:58'), arr: T('08:49'), dur: 3060 }] });
+  const b = finish({ legs: [{ mode: 'walk', dep: T('07:52'), arr: T('07:57'), dur: 300 }, { mode: 'bus', short: '756', dep: T('07:57'), arr: T('08:45'), dur: 2880 }] });
+  const out = rank([m, b], { now: T('08:00') });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].dep, T('08:00'));
+});
+
 test('a station near both ends: no train-less "journey" (from 千甲 to 千甲) in place of the trains', () => {
   assert.deepEqual(journeys(net, [{ key: 'tra:1210', at: T('08:00') }], [{ key: 'tra:1210', extra: 0 }], T('08:00')), []);
   const j = journeys(net, [{ key: 'tra:1210', at: T('08:00') }], [{ key: 'tra:1000', extra: 0 }], T('08:00'));
@@ -619,6 +644,8 @@ test('a pinned recommendation: known by its lines (trains by their stations), sh
   const b = { mode: 'tra', short: '區間 1250', from: { name: '竹北' }, to: { name: '竹東站' } };
   assert.equal(pickSig({ legs: [a] }), pickSig({ legs: [b] }), 'another day’s train, another planner’s names');
   assert.equal(pickSig({ legs: [{ mode: 'bus', short: '快捷8號' }] }), pickSig({ legs: [{ mode: 'bus', name: '快捷8' }] }));
+  // 區間車 by one planner, 自強 by another, the station written two ways: one card, its times to pick.
+  assert.equal(pickSig({ legs: [{ mode: 'tra', name: '區間車', from: { name: '竹北火車站' }, to: { name: '新竹' } }] }), pickSig({ legs: [{ mode: 'tra', name: '自強', short: '自強 123', from: { name: '竹北' }, to: { name: '臺鐵新竹車站' } }] }));
   assert.equal(pickSig({ legs: [{ mode: 'bike' }] }), 'bike');
   const now = T('07:00');
   const P = (k, dep, top) => ({ legs: [{ mode: 'bus', short: k }], dep: T(dep), arr: T(dep) + 1, top });
