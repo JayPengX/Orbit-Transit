@@ -3,9 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass } from '../public/lib/tpass.mjs';
-import { sameRoute, liveTimes, adjustPlan, rideTime } from '../public/lib/live.mjs';
+import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList } from '../public/lib/store.mjs';
@@ -965,4 +965,38 @@ test('a bus route from Transit-Data’s pack, in TDX’s own shapes: its stops e
   assert.equal(b.SpecialDays[0].Dates[0], '2026-10-10');
   assert.equal(r.sched[0].Frequencys[0].MinHeadwayMins, 15);
   assert.equal(expand(p, 'nope'), null);
+});
+
+test('journeys from several stations: each station keeps its own soonest train, leaving as late as gets in then', () => {
+  // 新竹 (in time for the 08:00) and 北新竹 (only for the 08:44): both are choices.
+  const list = journeys(net, [{ key: 'tra:1210', at: T('07:50'), pre: 600 }, { key: 'tra:1193', at: T('08:30'), pre: 300 }], [{ key: 'tra:1195', extra: 0 }], T('07:50'));
+  assert.ok(list.some(j => j.legs[0].from === 'tra:1210' && j.legs[0].trip.no === '1801'));
+  assert.ok(list.some(j => j.legs[0].from === 'tra:1193' && j.legs[0].trip.no === '1803'));
+});
+
+test("Google's names for a bus are the official route's: numerals, and the branch by the stops it really runs", async () => {
+  assert.ok(sameRoute('快捷8號', '快捷八號經中正大橋'));
+  assert.ok(!sameRoute('快捷8號支', '快捷八號經興隆大橋'), 'by name alone it is not');
+  assert.ok(sameRoute('20', '二十'));
+  const st = (uid, lat, lon) => ({ uid, name: uid, lat, lon });
+  // 快捷8號 crosses one bridge (its stops), 快捷8號支 the other; both stop at 縣政府 and 新竹站.
+  const main = [{ dir: 0, headsign: '新竹站', stops: [st('A', 24.827, 121.013), st('M1', 24.82, 121.0), st('M2', 24.81, 120.985), st('Z', 24.8016, 120.9716)] }];
+  const branch = [{ dir: 0, headsign: '新竹站', stops: [st('A2', 24.827, 121.013), st('B1', 24.815, 121.02), st('B2', 24.805, 121.0), st('B3', 24.80, 120.985), st('B4', 24.80, 120.978), st('Z2', 24.8016, 120.9716)] }];
+  const near = async () => [{ lat: 24.827, lon: 121.013, stops: [{ routeUID: 'HSQ0747', route: '快捷8號', stopUID: 'A' }, { routeUID: 'HSQ0748', route: '快捷8號支', stopUID: 'A2' }, { routeUID: 'HSQ5608', route: '5608', stopUID: 'X' }] }];
+  const stops = async r => (r.uid === 'HSQ0747' ? main : r.uid === 'HSQ0748' ? branch : []);
+  const leg = (name, n) => ({ mode: 'bus', name, short: name, stops: n, from: { name: '縣政府', lat: 24.827, lon: 121.013 }, to: { name: '新竹站', lat: 24.8016, lon: 120.9716 }, dep: T('09:00'), arr: T('09:30') });
+  const a = await officialLeg(leg('快捷八號經中正大橋', 3), { near, stops });
+  assert.equal(a.short, '快捷8號');
+  assert.equal(a.route.uid, 'HSQ0747');
+  const b = await officialLeg(leg('快捷八號經興隆大橋', 5), { near, stops });
+  assert.equal(b.short, '快捷8號支');
+  assert.equal(b.said, '快捷八號經興隆大橋');
+  // Nothing like it there: as it was.
+  assert.equal((await officialLeg(leg('182', 4), { near, stops })).short, '182');
+});
+
+test('a plan whose bus leaves before the walk to it is over is never shown', () => {
+  const p = finish({ src: 'tdx', legs: [{ mode: 'tra', name: '區間', dep: T('09:42'), arr: T('10:00') }, { mode: 'walk', dep: T('10:00'), arr: T('10:04'), dur: 240 }, { mode: 'bus', name: '世博5號', dep: T('09:55'), arr: T('10:04'), dur: 540 }] });
+  assert.equal(inOrder(p), false);
+  assert.equal(inOrder({ legs: p.legs.map((l, i) => (i === 2 ? { ...l, dep: T('10:05'), arr: T('10:14') } : l)) }), true);
 });

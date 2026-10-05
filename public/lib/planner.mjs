@@ -16,7 +16,7 @@ import { bikesNear, cityBikes } from './bike.mjs';
 import { railNetwork } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy } from './plan.mjs';
-import { adjustPlan, busLink, busTimes } from './live.mjs';
+import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
@@ -136,6 +136,9 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // now (trips leaving now or soon), side by side.
   const t1 = performance.now();
   let busTrace = null;
+  // The planners' buses as the official routes (their names, ids, timetables).
+  plans = await Promise.all(plans.map(p => (/^(google|tdx)/.test(p.src || '') ? officialPlan(p, now).catch(() => p) : p)));
+  lap('official', t1);
   const soon = by !== 'arrive' && t0 - now < 60 * 60_000 ? plans.filter(p => p.legs.some(l => l.mode === 'bus' && !l.live)).slice(0, 10) : [];
   // Two goes, so the plans show at once and their bus times follow:
   //   1. the planners' and our trains' plans, the buses now (TDX's

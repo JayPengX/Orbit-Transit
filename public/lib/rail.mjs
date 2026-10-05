@@ -307,17 +307,37 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
     at = j.dep + 60_000;
   }
   if (starts.length === 1 && targets.length === 1) found.push(...directs(net, starts[0].key, targets[0].key, starts[0].at, { use }));
+  // Each station set out from is a choice of its own (六家 for the 六家線,
+  // over riding across 頭前溪 to 千甲 for a train an hour sooner): its own
+  // soonest journey too, however much later it gets in (the ranking weighs it).
+  const own = new Set();
+  if (starts.length > 1)
+    for (const s of starts) {
+      let j = earliest(net, [s], targets, { use });
+      // Leaving as late as still gets in then (the 11:29 from 六家, not a
+      // 10:29 that waits an hour at 竹中 for the same train on).
+      for (let k = 0; j && k < 4; k++) {
+        const later = earliest(net, [{ ...s, at: j.dep + 60_000 }], targets, { use });
+        if (!later?.legs?.some(l => !l.walk) || later.arr > j.arr) break;
+        j = later;
+      }
+      if (j?.legs?.some(l => !l.walk) && !j.legs[0].walk && j.legs[0]?.from === s.key && j.arr - Math.min(...found.map(f => f.arr)) < 90 * 60_000) (found.push(j), own.add(j));
+    }
   const sig = j => j.legs.map(l => (l.walk ? `w:${l.to}` : `${l.trip.id}:${l.from}`)).join('|');
   const seen = new Set();
   const uniq = found.filter(j => !seen.has(sig(j)) && seen.add(sig(j)));
+  // (A station's own journey also found by the search above: kept as its own.)
+  const ownSig = new Set([...own].map(sig));
+  for (const j of uniq) if (ownSig.has(sig(j))) own.add(j);
   const fin = j => j.arr + j.extra * 1000;
   // When you set out for it: its first train less the way to that station
   // (`pre`, seconds), so boarding the same train a station further up isn't
   // 'leaving later' (a 28-minute walk to 榮華 for the train that stopped at 竹東).
   const pre = new Map(starts.map(s => [s.key, (s.pre || 0) * 1000]));
   const go = j => j.dep - (pre.get(j.legs[0]?.from) || 0);
-  const kept = uniq.filter(a => !uniq.some(b => b !== a && go(b) >= go(a) && fin(b) <= fin(a) && b.transfers <= a.transfers && (go(b) > go(a) || fin(b) < fin(a) || b.transfers < a.transfers)));
-  return kept.sort((a, b) => fin(a) - fin(b) || go(b) - go(a)).slice(0, n * 2).sort((a, b) => a.dep - b.dep);
+  const kept = uniq.filter(a => own.has(a) || !uniq.some(b => b !== a && go(b) >= go(a) && fin(b) <= fin(a) && b.transfers <= a.transfers && (go(b) > go(a) || fin(b) < fin(a) || b.transfers < a.transfers)));
+  const top = kept.filter(j => !own.has(j)).sort((a, b) => fin(a) - fin(b) || go(b) - go(a)).slice(0, n * 2);
+  return [...top, ...kept.filter(j => own.has(j))].sort((a, b) => a.dep - b.dep);
 }
 
 // Labels for a list of options: the fastest, the earliest there, the fewest changes.
