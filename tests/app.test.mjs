@@ -9,7 +9,7 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList } from '../public/lib/store.mjs';
-import { navNotices } from '../public/lib/nav.mjs';
+import { navNotices, navTimes, paceOf } from '../public/lib/nav.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
 import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
@@ -1108,4 +1108,37 @@ test('what’s near a point from the packs: the cells say which packs, a 公路�
   await etaStops([{ uid: 'S1', scope: 'HsinchuCounty' }], { ask });
   assert.equal(asked.length, 2, 'kept 20 seconds');
   await assert.rejects(etaStops([{ uid: 'X9', scope: 'Hsinchu' }], { ask: async () => { throw new Error('down'); } }), 'a failed read is a failure, not no buses');
+});
+
+test('navigating, live: when you’ll be at the train from where you are (early, only just, late), when you’re there; a bus by when it really comes', () => {
+  const t0 = Date.UTC(2026, 9, 5, 12);
+  const at = m => t0 + m * 60_000;
+  const plan = finish({ src: 't', legs: [
+    { mode: 'walk', dur: 300, dep: at(0), arr: at(5), from: { lat: 24.8212, lon: 121.0176 }, to: { name: '竹北', lat: 24.8392, lon: 121.0093 } },
+    { mode: 'tra', short: '區間 1247', dur: 600, dep: at(10), arr: at(20), from: { name: '竹北', lat: 24.8392, lon: 121.0093 }, to: { name: '新竹', lat: 24.8016, lon: 120.9716 } },
+    { mode: 'walk', dur: 120, dep: at(20), arr: at(22), from: { lat: 24.8016, lon: 120.9716 }, to: { lat: 24.8018, lon: 120.9653 } }
+  ] });
+  // 400 m from the station, two minutes in: there in ~7, the train in 8.
+  const near = { lat: 24.8392 - 0.0036, lon: 121.0093 };
+  const a = navTimes(plan, 0, 'before', near, new Map(), at(2));
+  assert.ok(a.ready.get(1) > at(7) && a.ready.get(1) < at(10));
+  assert.equal(a.eta, at(22));
+  assert.equal(paceOf(plan, 0, 'before', a, new Map(), at(2)).tone, 'warn');
+  // Right outside: minutes to spare.
+  const b = navTimes(plan, 0, 'before', { lat: 24.8390, lon: 121.0093 }, new Map(), at(2));
+  assert.equal(paceOf(plan, 0, 'before', b, new Map(), at(2)).tone, 'good');
+  // A kilometre and a half away: late, and the trip after it later too.
+  const far = { lat: 24.8257, lon: 121.0093 };
+  const c = navTimes(plan, 0, 'before', far, new Map(), at(2));
+  assert.equal(paceOf(plan, 0, 'before', c, new Map(), at(2)).tone, 'bad');
+  assert.match(paceOf(plan, 0, 'before', c, new Map(), at(2)).text, /晚了/);
+  // A train 4 minutes late (its live time): you make it, and you're there later.
+  const late = new Map([[1, at(14)]]);
+  const d = navTimes(plan, 0, 'before', near, late, at(2));
+  assert.equal(paceOf(plan, 0, 'before', d, late, at(2)).tone, 'good');
+  assert.equal(d.eta, at(26));
+  // Before setting out: when to.
+  assert.match(paceOf(plan, 0, 'before', navTimes(plan, 0, 'before', null, new Map(), at(-10)), new Map(), at(-10)).text, /出發・還有 10 分/);
+  // On the train: its arrival at your stop.
+  assert.match(paceOf(plan, 1, 'on', navTimes(plan, 1, 'on', null, new Map(), at(12)), new Map(), at(12)).text, /到 新竹/);
 });

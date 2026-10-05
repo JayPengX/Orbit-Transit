@@ -1836,82 +1836,7 @@ main {
   justify-content: flex-end;
 }
 
-/* ---- Navigation ---- */
-.ot-nav {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  top: calc(10px + env(safe-area-inset-top));
-  z-index: 45;
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 12px 12px 10px;
-  border: 1px solid var(--ot-line);
-  border-radius: 22px;
-  background: var(--ot-card);
-  box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.9);
-}
-.ot-nav[hidden] {
-  display: none;
-}
-.ot-nav-main {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.ot-nav-i {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: var(--c);
-  color: #fff;
-}
-.ot-nav-i .ot-i {
-  width: 26px;
-  height: 26px;
-}
-.ot-nav-text {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.ot-nav-text b {
-  font-size: 17px;
-  line-height: 1.3;
-}
-.ot-nav-text small {
-  color: var(--q-text-2);
-  font-size: 13.5px;
-}
-.ot-nav-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-.ot-nav-step {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--q-muted);
-  font-size: 12.5px;
-  text-align: center;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.ot-nav-acts {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  margin-top: 8px;
-}
-.ot-nav-acts .q-btn {
-  justify-content: center;
-  text-decoration: none;
-}
+/* ---- Navigation: see the end of the file ---- */
 
 /* ---- 查時刻 ---- */
 .ot-seg {
@@ -2386,71 +2311,6 @@ main {
   font-size: 12.5px;
 }
 
-/* 導航: the bus or train to catch, always on top. */
-.ot-nav-catch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: -2px 0 10px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--c) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
-}
-.ot-nav-leave {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: -2px 0 8px;
-  padding: 2px 4px 8px;
-  border-bottom: 1px solid var(--ot-line);
-}
-.ot-nav-leave > .ot-i {
-  color: var(--q-accent);
-  flex: none;
-}
-.ot-nav-leave span {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.ot-nav-leave b {
-  font-size: 15px;
-}
-.ot-nav-leave small {
-  color: var(--q-text-2);
-  font-size: 12.5px;
-}
-.ot-nav-catch > .ot-i {
-  color: var(--c);
-  flex: none;
-}
-.ot-nav-catch span {
-  display: grid;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-.ot-nav-catch b {
-  font-size: 15px;
-}
-.ot-nav-catch small {
-  overflow: hidden;
-  color: var(--q-text-2);
-  font-size: 12.5px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.ot-nav-catch em {
-  flex: none;
-  max-width: 44%;
-  color: var(--q-accent);
-  font-size: 12.5px;
-  font-style: normal;
-  font-weight: 700;
-  text-align: right;
-}
 
 /* Fields: one look for text, time, date and choices. */
 .ot-field > span {
@@ -3652,4 +3512,220 @@ main {
   margin: 4px 0 8px;
   color: var(--q-accent);
   font-weight: 600;
+}
+
+/* ---- Navigation: like a phone's own maps ----
+   The map the whole screen; on top, the step you're on (what to do, the
+   big number left of it) and how you're doing for the bus or train to catch;
+   at the bottom, when you'll be there and every step, tap one to see it. */
+.ot-nav {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+}
+.ot-nav[hidden] {
+  display: none;
+}
+.ot-nav-top,
+.ot-nav-bottom {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  max-width: 560px;
+  margin: 0 auto;
+  pointer-events: auto;
+  border: 1px solid var(--ot-line);
+  background: var(--ot-card);
+  box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.9);
+}
+.ot-nav-top {
+  top: calc(8px + env(safe-area-inset-top));
+  overflow: hidden;
+  border-radius: 22px;
+}
+.ot-nav-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 10px 12px;
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+}
+.ot-nav-i {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: var(--c);
+  color: #fff;
+}
+.ot-nav-i .ot-i {
+  width: 26px;
+  height: 26px;
+}
+.ot-nav-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.ot-nav-text b {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 19px;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.ot-nav-text small {
+  overflow: hidden;
+  color: var(--q-text-2);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-nav-big {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  line-height: 1;
+}
+.ot-nav-big b {
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.ot-nav-big small {
+  margin-top: 3px;
+  color: var(--q-text-2);
+  font-size: 12px;
+}
+.ot-nav-pace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--ot-line);
+  color: var(--q-text-2);
+  font-size: 13.5px;
+}
+.ot-nav-pace span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-nav-pace .ot-i {
+  flex: none;
+  width: 17px;
+  height: 17px;
+}
+.ot-nav-pace.good {
+  color: var(--ot-good);
+}
+.ot-nav-pace.warn {
+  color: var(--ot-warn);
+}
+.ot-nav-pace.bad {
+  color: var(--ot-bad);
+}
+.ot-nav-bikes {
+  display: flex;
+  gap: 14px;
+  padding: 0 14px 10px;
+  color: var(--q-text-2);
+  font-size: 12.5px;
+}
+.ot-nav-bikes span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.ot-nav-bikes span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ot-nav-bikes .ot-i {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--ot-bike);
+}
+.ot-nav-bikes .bad {
+  color: var(--ot-bad);
+}
+.ot-nav-bottom {
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  padding: 10px 10px 10px;
+  border-radius: 22px;
+}
+.ot-nav-eta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 0 6px;
+}
+.ot-nav-eta span {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.ot-nav-eta b {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ot-nav-eta small {
+  overflow: hidden;
+  color: var(--q-text-2);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-nav-end {
+  flex: none;
+}
+.ot-nav-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ot-nav-chips::-webkit-scrollbar {
+  display: none;
+}
+.ot-nav-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px 6px 8px;
+  border: 1px solid var(--ot-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--q-text-2);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ot-nav-chip .ot-i {
+  width: 16px;
+  height: 16px;
+  color: var(--c);
+}
+.ot-nav-chip.done {
+  opacity: 0.45;
+}
+.ot-nav-chip.on {
+  border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  color: var(--q-text);
+  font-weight: 700;
 }
