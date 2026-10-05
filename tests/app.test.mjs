@@ -1057,3 +1057,55 @@ test('a long bike ride weighs more than the minutes it saves: 27 minutes on 電�
   const train = finish({ src: 't', legs: [ride(0, 16), { mode: 'tra', dur: 20 * 60, dep: at(20), arr: at(40) }, ride(41, 5)] });
   assert.ok(score(ebikeAll, { now: t0 }) > score(train, { now: t0 }));
 });
+
+test('1–2 km: a YouBike there when you are beats a bus a minute sooner on paper (its time is a guess); a train keeps its time', () => {
+  const t0 = Date.UTC(2026, 9, 5, 8);
+  const at = m => t0 + m * 60_000;
+  const leg = (mode, from, min, extra = {}) => ({ mode, dur: min * 60, dep: at(from), arr: at(from + min), ...extra });
+  const bike = finish({ src: 'bike', legs: [leg('walk', 0, 2, { dist: 150 }), leg('bike', 2, 9), leg('walk', 11, 2, { dist: 150 })] });
+  const bus = finish({ src: 't', legs: [leg('walk', 0, 4, { dist: 300 }), leg('bus', 4, 6), leg('walk', 10, 2, { dist: 150 })] });
+  assert.ok(bus.arr < bike.arr);
+  assert.ok(score(bike, { now: t0 }) < score(bus, { now: t0 }));
+  const train = finish({ src: 't', legs: [leg('walk', 0, 4, { dist: 300 }), leg('tra', 4, 6), leg('walk', 10, 2, { dist: 150 })] });
+  assert.ok(score(train, { now: t0 }) < score(bus, { now: t0 }));
+});
+
+test('riding or walking all the way: a card of its own, with no times to pick (you leave when you like)', () => {
+  const t0 = Date.UTC(2026, 9, 5, 8);
+  const at = m => t0 + m * 60_000;
+  const leg = (mode, from, min, extra = {}) => ({ mode, dur: min * 60, dep: at(from), arr: at(from + min), from: { lat: 24.8, lon: 121 }, to: { lat: 24.81, lon: 121 }, ...extra });
+  const ride = finish({ src: 'bike', legs: [leg('walk', 0, 2, { dist: 150 }), leg('bike', 2, 8), leg('walk', 10, 1, { dist: 60 })] });
+  const walk = finish({ src: 'g', legs: [leg('walk', 0, 15, { dist: 1100 })] });
+  const out = rank([ride, walk], { now: t0 });
+  const r = out.find(p => p.bike);
+  const w = out.find(p => !p.bike);
+  assert.ok(r && w);
+  assert.ok(r.lead && w.lead, 'each its own card');
+  assert.deepEqual(r.times.length, 1);
+  assert.deepEqual(w.times.length, 1);
+});
+
+test('what’s near a point from the packs: the cells say which packs, a 公路客運 square’s stops found once; the buses due at them asked together, one ask a city', async () => {
+  const { namesAround, packStops, stopsAround, etaStops, useWhere } = await import('../public/lib/near.mjs');
+  const cell = (lat, lon) => `${Math.floor(lat / 0.02)}_${Math.floor(lon / 0.02)}`;
+  const w = { cell: 0.02, packs: ['HsinchuCounty', 'InterCity/24.75_121.00', 'bike:HsinchuCounty', 'Taipei'], cells: { [cell(24.821, 121.017)]: [0, 1, 2], [cell(25.05, 121.5)]: [3] } };
+  assert.deepEqual(namesAround(w, 24.821, 121.017, 500).sort(), ['HsinchuCounty', 'InterCity/24.75_121.00', 'bike:HsinchuCounty']);
+  const county = { raw: { stops: { S1: ['縣體育場', 24.8212, 121.0176], S2: ['遠', 24.9, 121.1] }, routes: [{ uid: 'HSQ1', name: '5615', ways: [['', '', 0, ['S1', 'S2']]], sched: [] }, { uid: 'HSQ2', name: '5619', ways: [['', '', 0, ['S1']]], sched: [] }] } };
+  const inter = { raw: { stops: { T1: ['縣體育場', 24.8213, 121.0177] }, routes: [{ uid: 'THB1', name: '1820', ways: [['', '', 1, ['T1']]], sched: [] }] } };
+  assert.deepEqual(packStops(county).find(s => s.uid === 'S1').routes.map(r => r.name), ['5615', '5619']);
+  useWhere(w);
+  const packs = { HsinchuCounty: county, 'InterCity/24.75_121.00': inter };
+  const list = await stopsAround(24.8212, 121.0176, 900, { packFn: async n => packs[n] });
+  assert.deepEqual(list.map(s => `${s.uid}:${s.scope}`), ['S1:HsinchuCounty', 'T1:InterCity']);
+  assert.equal(await stopsAround(24.8212, 121.0176, 900, { packFn: async n => (n === 'HsinchuCounty' ? null : packs[n]) }), null, 'a pack not had: TDX is asked instead');
+  const asked = [];
+  const ask = async path => (asked.push(path), path.includes('InterCity') ? [{ StopUID: 'T1', RouteName: { Zh_tw: '1820' }, EstimateTime: 300 }] : [{ StopUID: 'S1', RouteName: { Zh_tw: '5615' }, EstimateTime: 120 }]);
+  const [a, b] = await Promise.all([etaStops([{ uid: 'S1', scope: 'HsinchuCounty' }], { ask }), etaStops([{ uid: 'T1', scope: 'InterCity' }, { uid: 'S1', scope: 'HsinchuCounty' }], { ask })]);
+  assert.equal(asked.length, 2, 'one ask a city, both trips together');
+  assert.ok(asked.some(p => p.startsWith('basic/v2/Bus/EstimatedTimeOfArrival/City/HsinchuCounty?$filter=StopUID eq \'S1\'')));
+  assert.equal(a.length, 1);
+  assert.equal(b.length, 2);
+  await etaStops([{ uid: 'S1', scope: 'HsinchuCounty' }], { ask });
+  assert.equal(asked.length, 2, 'kept 20 seconds');
+  await assert.rejects(etaStops([{ uid: 'X9', scope: 'Hsinchu' }], { ask: async () => { throw new Error('down'); } }), 'a failed read is a failure, not no buses');
+});

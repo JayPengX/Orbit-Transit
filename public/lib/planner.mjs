@@ -12,7 +12,8 @@
 // Only the ways of moving the person allows (我的 → 交通偏好) are used.
 
 import { routePlans, townships } from './api.mjs';
-import { bikesNear, cityBikes } from './bike.mjs';
+import { cityBikes } from './bike.mjs';
+import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy } from './plan.mjs';
@@ -104,6 +105,15 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const passTrip = inPass(from, to, pass, cityOf);
   // Inside your TPASS's area, our router looks only at the trains the pass takes.
   const useTrain = x => modes[x.sys] !== false && (!passTrip || (x.sys === 'tra' && !PREMIUM.has(String(x.code))));
+  // While the planners think (a second or two): the packs and bikes near
+  // both ends, and the buses due at the stops near you, so what comes after
+  // finds them here.
+  const soonish = by !== 'arrive' && t0 - now < 90 * 60_000;
+  if (modes.bike) for (const p of [from, to]) bikesAround(p.lat, p.lon).catch(() => {});
+  if (modes.bus) {
+    stopsAround(to.lat, to.lon, 1100).catch(() => {});
+    if (soonish) stopsAround(from.lat, from.lon, 900).then(list => list?.length && etaStops(list.map(s => ({ uid: s.uid, scope: s.scope })))).catch(() => {});
+  }
   let net = null;
   let t = performance.now();
   const [res, trains, metros] = await Promise.all([
@@ -126,7 +136,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const bikesAt = pts => {
     const fresh = pts.filter(p => !asked.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400));
     asked.push(...fresh);
-    return Promise.all(fresh.map(p => bikesNear(p.lat, p.lon).catch(() => [])));
+    return Promise.all(fresh.map(p => bikesAround(p.lat, p.lon).catch(() => [])));
   };
   t = performance.now();
   const bikesFirst = modes.bike

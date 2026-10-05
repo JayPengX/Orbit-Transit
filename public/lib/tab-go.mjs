@@ -14,7 +14,7 @@
 import { errorText } from './api.mjs';
 import { stopsEta, etaText } from './bus.mjs';
 import { nearStops, etaRank, openRoute, chooseGroup, useBusCtx } from './bus-ui.mjs';
-import { bikesNear } from './bike.mjs';
+import { bikesAround } from './near.mjs';
 import { railNetwork, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
@@ -255,7 +255,7 @@ async function loadPlace(id) {
   const old = S.places.get(id);
   if (old && Date.now() - old.at < 25_000) return;
   try {
-    const [stops, bikes] = await Promise.all([nearStops(p, { n: 2, r: 400 }), bikesNear(p.lat, p.lon).catch(() => [])]);
+    const [stops, bikes] = await Promise.all([nearStops(p, { n: 2, r: 400 }), bikesAround(p.lat, p.lon).catch(() => [])]);
     S.places.set(id, { at: Date.now(), stops, bikes: bikes.map(s => ({ ...s, d: meters(p.lat, p.lon, s.lat, s.lon) })).filter(s => s.d <= 500).sort((a, b) => a.d - b.d).slice(0, 2) });
   } catch (err) {
     S.places.set(id, { at: Date.now(), error: errorText(err), stops: old?.stops || [], bikes: old?.bikes || [] });
