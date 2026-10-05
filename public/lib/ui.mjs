@@ -68,7 +68,7 @@ export function legLabel(l) {
   if (l.mode === 'hsr') return '高鐵';
   return l.short || l.name || MODE_NAME[l.mode];
 }
-// A plan's legs as a row of chips (walks under 3 minutes left out).
+// A plan's legs as a row of chips (the short walks left out).
 // A route's departures as times to pick (its bus or train's own time; the
 // train's kind too when they differ, 區間 or 自強). `plans`: the list, `idx`:
 // which of it, `on`: the one shown; each carries data-* from `attrs(i)`.
@@ -89,10 +89,15 @@ export function depChips(plans, idx, on, attrs) {
 
 export function legChips(legs) {
   return legs
-    .filter((l, i) => !(l.mode === 'walk' && l.dur < 180 && i > 0 && i < legs.length - 1))
+    // (A walk under 2 minutes anywhere, or under 3 between rides, is just getting on and off.)
+    .filter((l, i) => !(l.mode === 'walk' && legs.length > 1 && (l.dur < 120 || (l.dur < 180 && i > 0 && i < legs.length - 1))))
     .map(l => {
       const c = legColor(l);
-      return l.mode === 'walk' ? `<span class="ot-leg walk">${icon('walk')}${e(legLabel(l))}</span>` : `<span class="ot-leg" style="--c:${e(c)}">${icon(l.mode)}<b>${e(legLabel(l))}</b></span>`;
+      // A walk or a ride of your own: its minutes (the plan's tags say YouBike); a bus or train: its line.
+      const mins = `${Math.max(1, Math.round((l.dur || 0) / 60))}′`;
+      if (l.mode === 'walk') return `<span class="ot-leg walk" aria-label="步行 ${mins}">${icon('walk')}${mins}</span>`;
+      if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? '電輔車' : 'YouBike'} ${mins}">${icon(l.ebike ? 'bolt' : 'bike')}<b>${mins}</b></span>`;
+      return `<span class="ot-leg" style="--c:${e(c)}">${icon(l.mode)}<b>${e(legLabel(l))}</b></span>`;
     })
     .join('<span class="ot-leg-sep">›</span>');
 }

@@ -75,16 +75,17 @@ function rememberRoute(r) {
     localStorage.setItem(RECENT, JSON.stringify([{ uid: r.uid, name: r.name, city: r.city, from: r.from || '', to: r.to || '' }, ...recentRoutes().filter(x => x.uid !== r.uid)].slice(0, 8)));
   } catch {}
 }
-const openBus = r => {
+// (From a stop near you: the route at that stop, scrolled to it.)
+const openBus = (r, stopUID = '', stopName = '') => {
   rememberRoute(r);
-  openRoute(ctx, r, { add: true });
+  openRoute(ctx, r, { add: true, stopUID, stopName });
   setTimeout(busDraw, 300);
 };
 
 function busInit() {
   const box = $('times-bus');
   box.innerHTML = `<div class="ot-wrap ot-bus"><div class="ot-bus-top">
-    <div class="ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="路線號碼或站名，例如 藍1、快捷8、5608" autocomplete="off" enterkeyhint="search"></div>
+    <div class="ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、5608" autocomplete="off" enterkeyhint="search"></div>
     <div class="q-chips ot-city-chips ot-scroll-chips" id="tb-city"></div></div>
     <div id="tb-list"></div></div>`;
   box.querySelector('#tb-q').addEventListener('input', busDraw);
@@ -98,7 +99,7 @@ function busInit() {
     if (r) {
       const [city, uid] = r.dataset.r.split('|');
       const route = bus.list.find(x => x.uid === uid) || recentRoutes().find(x => x.uid === uid) || bus.around?.flatMap(x => x.routes).find(x => x.uid === uid) || { uid, city, name: r.dataset.name || '' };
-      return openBus(route);
+      return openBus(route, r.dataset.stop || '', r.closest('.ot-bus-stop')?.querySelector('.ot-bus-stop-h b')?.textContent || '');
     }
     if (ev.target.closest('[data-clear-routes]')) {
       try {
@@ -127,7 +128,7 @@ async function aroundRoutes() {
       if (dist > 400) continue;
       const stop = byName.get(s.name) || { name: s.name, dist, routes: new Map() };
       stop.dist = Math.min(stop.dist, dist);
-      for (const x of s.stops) if (!stop.routes.has(x.routeUID)) stop.routes.set(x.routeUID, { uid: x.routeUID, name: x.route, city: routeCity(x.routeUID) });
+      for (const x of s.stops) if (!stop.routes.has(x.routeUID)) stop.routes.set(x.routeUID, { uid: x.routeUID, name: x.route, city: routeCity(x.routeUID), stopUID: x.stopUID });
       byName.set(s.name, stop);
     }
     const byNo = (a, b) => a.name.localeCompare(b.name, 'zh-Hant', { numeric: true });
@@ -157,7 +158,7 @@ const onPass = r => Boolean(tpassOf(ctx.data.prefs.tpass)?.cities.includes(r.cit
 // A route as a row: its number, then where it runs.
 const row = r => `<button class="ot-bus-row" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"><span class="ot-bus-no">${e(r.name)}</span><span class="ot-bus-ends">${r.from && r.to ? `<b>${e(r.from)}</b><i>↔</i><b>${e(r.to)}</b>` : `<b>${e(r.to ? `往 ${r.to}` : where(r))}</b>`}<small>${e(where(r))}${onPass(r) ? ' · <em>TPASS</em>' : ''}</small></span>${icon('chevron')}</button>`;
 // A stop near you: its name and distance, its routes as numbers to tap.
-const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${Math.round(s.dist / 10) * 10} 公尺</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}">${e(r.name)}</button>`).join('')}</div></div>`;
+const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${Math.round(s.dist / 10) * 10} 公尺</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
 function busDraw() {
   const home = ctx.city || 'Taipei';
   $('tb-city').innerHTML = [[NEAR, `${cityShort(home)}附近`], [INTERCITY, '公路客運'], ...CITIES.map(([k]) => [k, cityShort(k)])]

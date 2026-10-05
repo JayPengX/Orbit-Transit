@@ -329,7 +329,8 @@ export function moreBuses(plan, now = Date.now()) {
 const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: true, fix, name: 'YouBike', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dep, arr, dur: Math.round((arr - dep) / 1000), dist: Math.round(meters(from.lat, from.lon, to.lat, to.lon) * 1.25) });
 
 // What a plan costs you, in minutes: the time from your door to there (the
-// wait before leaving only a third: it's spent at home), and on top of it what a person who rides YouBike to fill the gaps the buses and
+// wait before leaving only a third while it's short: it's spent at home;
+// past 15 minutes, more), and on top of it what a person who rides YouBike to fill the gaps the buses and
 // trains leave actually minds:
 //   - each change: onto a train or metro is easy (it keeps time), onto a bus
 //     is a gamble, a bus to a bus barely a plan at all: Taiwan's buses don't
@@ -371,7 +372,10 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   if (by === 'arrive' && deadline) add('time', (deadline - p.dep) / 60_000);
   else {
     add('time', (p.arr - p.dep) / 60_000);
-    add('wait', Math.max(0, (p.dep - now) / 60_000) * 0.35);
+    // (A short wait is when you leave; past a quarter of an hour it's time
+    // lost, there that much later: a bus in 55 minutes is no bargain.)
+    const w = Math.max(0, (p.dep - now) / 60_000);
+    add('wait', Math.min(w, 15) * 0.35 + Math.max(w - 15, 0) * 0.7);
   }
   for (let i = 1; i < rides.length; i++) {
     const [a, b] = [rides[i - 1].mode, rides[i].mode];
