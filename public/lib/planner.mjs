@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -58,28 +58,31 @@ async function trainThenBus(plans, to, now) {
   return out;
 }
 
-// Without YouBike, a bus to the station instead: to each station near you
-// too far to walk to (or over the river) and on the way there, the direct
+// A bus to the station where a bike won't do: without YouBike, to each
+// station near you too far to walk to (or over the river); with it, to one
+// too far to ride to (北埔 → 竹東's station, 7 km). On the way there, the direct
 // buses (busLink), then our trains from it when that bus gets in. Several
 // stations side by side; `trace` says what was found, for the 除錯紀錄.
-async function busToRail(net, from, to, at, { use, now, trace }) {
+async function busToRail(net, from, to, at, { use, now, trace, bike = false }) {
   const whole = meters(from.lat, from.lon, to.lat, to.lon);
   const pt = s => ({ name: s.sys === 'hsr' ? `高鐵${s.name.replace(/^高鐵/, '')}` : s.name, lat: s.lat, lon: s.lon });
+  const far = x => (bike ? x.m > RAIL_BIKE_M : x.m > 1000 || crossings(from, x.s));
   const stations = [...net.st.values()]
     .map(s => ({ s, m: meters(from.lat, from.lon, s.lat, s.lon) }))
-    .filter(x => (x.m > 1000 || crossings(from, x.s)) && x.m <= 8000 && x.m + meters(x.s.lat, x.s.lon, to.lat, to.lon) <= whole * 1.6)
+    .filter(x => far(x) && x.m <= 12_000 && x.m + meters(x.s.lat, x.s.lon, to.lat, to.lon) <= whole * 1.6)
     .sort((a, b) => a.m - b.m)
     .slice(0, 4);
   const out = [];
   await Promise.all(stations.map(async ({ s }) => {
     const st = pt(s);
-    const buses = await busLink(from, st, at, { fromM: 900, toM: 450, n: 1, routes: 8, now }).catch(() => []);
+    const buses = await busLink(from, st, at, { fromM: 900, toM: 800, n: 2, routes: 8, now }).catch(() => []);
     if (!buses.length) return void trace.push(`${st.name}: no bus`);
-    const b = buses[0];
-    const trains = railPlans(net, st, to, b.arr + 60_000, { n: 2, bus: true, use });
-    if (!trains.length) return void trace.push(`${st.name}: no train`);
-    trace.push(`${st.name}: ${b.legs.find(l => l.mode === 'bus').short} ${hm(b.arr)}`);
-    for (const r of trains) out.push(finish({ src: 'bus+rail', legs: [...b.legs, ...r.legs.filter((l, i) => !(i === 0 && l.mode === 'walk' && l.dist < 150))], live: b.live }));
+    // Each bus there (the soonest two), with the trains after it gets in.
+    for (const b of buses) {
+      const trains = railPlans(net, st, to, b.arr + 60_000, { n: 2, bus: true, use });
+      trace.push(`${st.name}: ${b.legs.find(l => l.mode === 'bus').short} ${hm(b.arr)}${trains.length ? '' : ' (no train)'}`);
+      for (const r of trains) out.push(finish({ src: 'bus+rail', legs: [...b.legs, ...r.legs.filter((l, i) => !(i === 0 && l.mode === 'walk' && l.dist < 150))], live: b.live }));
+    }
   }));
   return out;
 }
@@ -209,9 +212,9 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           const t3 = performance.now();
           const direct = await busLink(from, to, t0, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: (busTrace = {}) }).catch(err => ((busTrace.error = String(err?.message || err)), []));
           let list = [...plans, ...direct.filter(p => allowed(p, { ...modes, bike: true }))];
-          // No YouBike: buses to the stations too far to walk to, and on from the last one.
-          if (!modes.bike && useRail && net) {
-            const toRail = await busToRail(net, from, to, t0, { use: useTrain, now, trace: (busTrace.rail = []) }).catch(() => []);
+          // Buses to the stations too far to walk (or, with YouBike, ride) to, and on from the last one.
+          if (useRail && net) {
+            const toRail = await busToRail(net, from, to, t0, { use: useTrain, now, bike: modes.bike, trace: (busTrace.rail = []) }).catch(() => []);
             const on = await trainThenBus(toRail, to, now).catch(() => []);
             list.push(...[...toRail, ...on].filter(bused).filter(p => allowed(p, { ...modes, bike: true })));
           }

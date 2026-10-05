@@ -1142,3 +1142,28 @@ test('navigating, live: when you’ll be at the train from where you are (early,
   // On the train: its arrival at your stop.
   assert.match(paceOf(plan, 1, 'on', navTimes(plan, 1, 'on', null, new Map(), at(12)), new Map(), at(12)).text, /到 新竹/);
 });
+
+test('a train journey ending with the walk over to the other railway (六家 → 高鐵新竹): the walk on from there comes after it', () => {
+  const o = { name: '家', lat: 24.8030, lon: 120.9690 };
+  const d = { name: '高鐵新竹站', lat: 24.8081, lon: 121.0403 };
+  const list = railPlans(net, o, d, T('07:50'));
+  assert.ok(list.length >= 1);
+  for (const p of list) for (let i = 1; i < p.legs.length; i++) assert.ok(p.legs[i].dep >= p.legs[i - 1].arr - 1000, `legs in order: ${p.legs.map(l => l.mode).join(' ')}`);
+});
+
+test('a change onto the metro for 3 km is no hop: two lines that are the quickest way stay shown', () => {
+  const t0 = Date.UTC(2026, 9, 6, 5);
+  const at = m => t0 + m * 60_000;
+  const metro = finish({ src: 'tdx', legs: [
+    { mode: 'metro', short: '松山新店線', dur: 300, dep: at(0), arr: at(5), from: { name: '公館', lat: 25.0145, lon: 121.5343 }, to: { name: '中正紀念堂', lat: 25.0352, lon: 121.5199 } },
+    { mode: 'metro', short: '淡水信義線', dur: 720, dep: at(8), arr: at(20), from: { name: '中正紀念堂', lat: 25.0352, lon: 121.5199 }, to: { name: '劍潭', lat: 25.0846, lon: 121.5250 } },
+    { mode: 'walk', dur: 360, dist: 450, dep: at(20), arr: at(26), from: { lat: 25.0846, lon: 121.5250 }, to: { lat: 25.0880, lon: 121.5241 } }
+  ] });
+  const bus = finish({ src: 'tdx', legs: [
+    { mode: 'bus', short: '280', dur: 2100, dep: at(7), arr: at(42), from: { name: '公館', lat: 25.0145, lon: 121.5343 }, to: { name: '圓山', lat: 25.0700, lon: 121.5200 } },
+    { mode: 'walk', dur: 300, dist: 400, dep: at(42), arr: at(47), from: { lat: 25.07, lon: 121.52 }, to: { lat: 25.0880, lon: 121.5241 } }
+  ] });
+  const out = rank([metro, bus], { now: t0 });
+  const m = out.find(p => p.legs[0].mode === 'metro');
+  assert.ok(m.lead && !m.weak && out[0] === m);
+});
