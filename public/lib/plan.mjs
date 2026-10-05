@@ -331,13 +331,15 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 // wait before leaving only a third: it's spent at home), and on top of it what a person who rides YouBike to fill the gaps the buses and
 // trains leave actually minds:
 //   - each change: onto a train or metro is easy (it keeps time), onto a bus
-//     is a gamble, a bus to a bus the worst (neither keeps time);
+//     is a gamble, a bus to a bus barely a plan at all: Taiwan's buses don't
+//     keep their times, so the second one is as likely missed as caught (a
+//     bus with a train either side of it is fine);
 //   - time on a bus, a little (it's late, it's early, it's full);
 //   - the minutes out of the door (leaving later for the same train is
 //     better), and walking past a few minutes;
 //   - each ride on a bike by its own length, not the total: 10 minutes to the
 //     station is nothing, 18 is a workout, past that every minute counts
-//     three times the minute it saves (28 minutes across town in work clothes
+//     four and a half times the minute it saves (28 minutes across town in work clothes
 //     is not how anyone goes every day). Two short rides beat one long one.
 //     (A ride cut at 30 minutes to stay free is still one ride.) And the
 //     riding in all: 15 minutes to a train and 6 from it is nearly the ride
@@ -351,7 +353,7 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //     riding north to 竹北's station for a train south costs its minutes and
 //     its ride, nothing more;
 //   - what it costs in money, and a train it would now miss.
-export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.max(min - 18, 0) * 3;
+export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.max(min - 18, 0) * 4.5;
 export function score(p, opts = {}) {
   const parts = scoreParts(p, opts);
   return Object.values(parts).reduce((a, b) => a + b, 0);
@@ -371,7 +373,7 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   }
   for (let i = 1; i < rides.length; i++) {
     const [a, b] = [rides[i - 1].mode, rides[i].mode];
-    add('changes', a === 'bus' && b === 'bus' ? 14 : b === 'bus' ? 10 : 7);
+    add('changes', a === 'bus' && b === 'bus' ? 35 : b === 'bus' ? 10 : 7);
   }
   add('bus', rides.filter(l => l.mode === 'bus').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.08);
   // Walking past 5 minutes is slow going.
@@ -388,7 +390,7 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   // a small one), and the way round to it.
   for (const l of p.legs) if (l.mode === 'bike' || l.mode === 'walk') add('river', crossingCost(l.from, l.to, l.mode, l.bridged));
   for (const r of bikes) {
-    add('bike', 1.5 + rideEffort(r.ebike ? r.min * 0.9 : r.min));
+    add('bike', 1.5 + rideEffort(r.ebike ? r.min * 0.95 : r.min));
     const left = r.rent ? (r.ebike ? r.rent.ebike : r.rent.bikes) : null;
     if (left != null && left < 3) add('fewBikes', 3);
   }

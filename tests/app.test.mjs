@@ -1039,3 +1039,21 @@ test('navigation tells the lock screen: set out, the bus by its live times, a tr
   // On the train already: only what's left.
   assert.deepEqual(navNotices(plan, 2, info, T('08:05')).map(x => x.tag), ['nav:off:2']);
 });
+
+test("a change from one bus to another is barely a plan (Taiwan's buses don't keep time); a bus with a train is fine", () => {
+  const t0 = Date.UTC(2026, 9, 5, 8);
+  const leg = (mode, from, min) => ({ mode, dur: min * 60, dep: t0 + from * 60_000, arr: t0 + (from + min) * 60_000 });
+  const plan = legs => finish({ src: 't', legs });
+  const busBus = plan([leg('bus', 0, 25), leg('walk', 25, 5), leg('bus', 30, 25)]);
+  const busTrain = plan([leg('bus', 0, 25), leg('walk', 25, 5), leg('tra', 30, 30)]);
+  assert.ok(score(busBus, { now: t0 }) > score(busTrain, { now: t0 }) + 20);
+});
+
+test('a long bike ride weighs more than the minutes it saves: 27 minutes on 電輔車 below a train with short rides', () => {
+  const t0 = Date.UTC(2026, 9, 5, 12);
+  const at = m => t0 + m * 60_000;
+  const ride = (from, min, ebike = false) => ({ mode: 'bike', ebike, dur: min * 60, dep: at(from), arr: at(from + min) });
+  const ebikeAll = finish({ src: 'bike', legs: [ride(0, 27, true)] });
+  const train = finish({ src: 't', legs: [ride(0, 16), { mode: 'tra', dur: 20 * 60, dep: at(20), arr: at(40) }, ride(41, 5)] });
+  assert.ok(score(ebikeAll, { now: t0 }) > score(train, { now: t0 }));
+});
