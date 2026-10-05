@@ -223,6 +223,11 @@ async function drawLayers() {
   const z = map.zoom();
   const c = map.center();
   const L = ctx.data.layers;
+  // Navigating: only the way (its stops and stations are on it); the rest is in the way.
+  if (navigating()) {
+    for (const k of ['bike', 'bus', 'rail', 'metro']) map.layer(k).set([]);
+    return;
+  }
   const city = await ctx.cityOf(c.lat, c.lon);
   if (run !== drawing) return;
   // YouBike: the city's stations, the 200 nearest the middle.
@@ -1202,7 +1207,7 @@ function navigate(p, resume = null) {
       const l = plan.legs[i];
       const pts = [l.from, l.to].filter(x => x?.lat != null);
       if (ctx.here) pts.push(ctx.here);
-      if (pts.length) map.fit(pts, { top: 190, bottom: 60, left: 40, right: 40 });
+      if (pts.length) map.fit(pts, { top: 170, bottom: 150, left: 40, right: 40 });
     },
     follow: pos => {
       ctx.here = { ...pos, at: Date.now() };
@@ -1212,12 +1217,15 @@ function navigate(p, resume = null) {
       $('nav').hidden = true;
       document.body.classList.remove('ot-navigating');
       map?.resize();
+      drawLayers();
       if (card === c && c) {
         $('card').hidden = false;
         renderCard();
       }
     }
   });
+  // (Only the way on the map now.)
+  drawLayers();
 }
 
 // ---- Saving a trip (釘選行程): a name, an optional time, maybe every weekday ------------------------------
