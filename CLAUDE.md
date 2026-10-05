@@ -1,5 +1,10 @@
 # Working on Quadra
 
+**Read `Shared-Proxy/docs/TRUTH.md` first**: the owner's standing rules for
+every app (working, security, the shared kit, data and caching, opening
+without movement, iPhone Safari, each app's yardsticks). They win over
+anything else here.
+
 - **Push every change to `main` directly, always** (the owner's standing
   instruction). `main` deploys on push (GitHub Pages for the apps, Cloudflare
   for Shared-Proxy's Workers). Work on any branch the session gives you, then
