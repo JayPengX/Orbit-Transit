@@ -22,11 +22,11 @@ let metroOpen = false;
 
 // Where to buy tickets: the operators' booking sites (a train found in
 // 查時刻 or a plan opens them with its details copied: tickets.mjs), and
-// their apps' store pages.
+// their apps (台鐵e訂通 by railway.gov.tw's app link, which opens it, or offers it when it's not on the phone; T Express by its store page, whose 打開 opens it).
 const ios = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const TICKETS = [
   { id: 'hsr', name: '高鐵 T Express', sub: '台灣高鐵行動購票', app: { ios: 'https://apps.apple.com/tw/app/id468963664', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E7%81%A3%E9%AB%98%E9%90%B5%20T%20Express&c=apps' }, web: 'https://irs.thsrc.com.tw/IMINT/?locale=tw' },
-  { id: 'tra', name: '台鐵 e訂通', sub: '台鐵訂票、電子票證', app: { ios: 'https://apps.apple.com/tw/app/id1441617748', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E9%90%B5e%E8%A8%82%E9%80%9A&c=apps' }, web: 'https://tip.railway.gov.tw/tra-tip-web/tip' }
+  { id: 'tra', name: '台鐵 e訂通', sub: '台鐵訂票、電子票證', app: { ios: 'https://www.railway.gov.tw/tra-tip-web/tip/applink', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E9%90%B5e%E8%A8%82%E9%80%9A&c=apps' }, web: 'https://tip.railway.gov.tw/tra-tip-web/tip' }
 ];
 
 export function init(c) {
