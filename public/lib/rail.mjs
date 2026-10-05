@@ -310,18 +310,30 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
   // Each station set out from is a choice of its own (六家 for the 六家線,
   // over riding across 頭前溪 to 千甲 for a train an hour sooner): its own
   // soonest journey too, however much later it gets in (the ranking weighs it).
+  // The same for each station arrived at (the 六家線 on to 六家, or off at
+  // 竹中, over a train sooner to 千甲 across 頭前溪 from home).
   const own = new Set();
+  const best = () => Math.min(...found.map(f => f.arr));
+  const soonest = (ss, ts) => {
+    let j = earliest(net, ss, ts, { use });
+    // Leaving as late as still gets in then (the 11:29 from 六家, not a
+    // 10:29 that waits an hour at 竹中 for the same train on).
+    for (let k = 0; j && k < 4; k++) {
+      const later = earliest(net, ss.map(s => ({ ...s, at: Math.max(s.at, j.dep + 60_000) })), ts, { use });
+      if (!later?.legs?.some(l => !l.walk) || later.arr > j.arr) break;
+      j = later;
+    }
+    return j?.legs?.some(l => !l.walk) && !j.legs[0].walk && j.arr - best() < 90 * 60_000 ? j : null;
+  };
   if (starts.length > 1)
     for (const s of starts) {
-      let j = earliest(net, [s], targets, { use });
-      // Leaving as late as still gets in then (the 11:29 from 六家, not a
-      // 10:29 that waits an hour at 竹中 for the same train on).
-      for (let k = 0; j && k < 4; k++) {
-        const later = earliest(net, [{ ...s, at: j.dep + 60_000 }], targets, { use });
-        if (!later?.legs?.some(l => !l.walk) || later.arr > j.arr) break;
-        j = later;
-      }
-      if (j?.legs?.some(l => !l.walk) && !j.legs[0].walk && j.legs[0]?.from === s.key && j.arr - Math.min(...found.map(f => f.arr)) < 90 * 60_000) (found.push(j), own.add(j));
+      const j = soonest([s], targets);
+      if (j && j.legs[0].from === s.key) (found.push(j), own.add(j));
+    }
+  if (targets.length > 1)
+    for (const tg of targets) {
+      const j = soonest(starts, [tg]);
+      if (j && j.end === tg.key) (found.push(j), own.add(j));
     }
   const sig = j => j.legs.map(l => (l.walk ? `w:${l.to}` : `${l.trip.id}:${l.from}`)).join('|');
   const seen = new Set();

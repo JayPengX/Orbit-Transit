@@ -210,7 +210,9 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
     // is no footpath: the bridge is far round and made for cars).
     const walk = all.filter(x => x.m <= RAIL_WALK_M && !crossings(pt, x.s)).slice(0, 3);
     const far = x => (x.m > BIKE_OVER_M || crossings(pt, x.s)) && x.m <= RAIL_BIKE_M && !walk.includes(x);
-    const ride = bike ? all.filter(far).slice(0, 4) : [];
+    // Every station a ride away, not the nearest few: one a little further
+    // on the line you're on (竹中, for 竹東's trains) can be the one to take.
+    const ride = bike ? all.filter(far).slice(0, 8) : [];
     const byBus = !bike && bus && end ? all.filter(far).slice(0, 3) : [];
     return [...walk.map(x => ({ ...x, a: access(x.m, bike) })), ...ride.map(x => ({ ...x, a: access(x.m, bike) })), ...byBus.map(x => ({ ...x, a: BUS_ACCESS(x.m) }))];
   };

@@ -270,8 +270,8 @@ test('ranking: by what’s practical, every plan kept however late, the first fe
   assert.ok(list[0].top);
   assert.ok(list.some(p => p.tags.includes('YouBike')));
   const later = { ...busPlan, arr: busPlan.arr + 1_800_000, dur: busPlan.dur + 1800, legs: busPlan.legs.map(l => ({ ...l, dep: l.dep + 1_800_000, arr: l.arr + 1_800_000 })) };
-  assert.equal(rank([busPlan, later]).length, 2, 'a later bus is still shown');
-  assert.equal(rank([busPlan, { ...busPlan }]).length, 1, 'the same ride once');
+  assert.equal(rank([busPlan, later], { now: T('07:59'), clock: T('07:59') }).length, 2, 'a later bus is still shown');
+  assert.equal(rank([busPlan, { ...busPlan }], { now: T('07:59'), clock: T('07:59') }).length, 1, 'the same ride once');
   assert.ok(bikePoints([busPlan], O, D).length <= 8);
 });
 
@@ -973,6 +973,14 @@ test('journeys from several stations: each station keeps its own soonest train, 
   const list = journeys(net, [{ key: 'tra:1210', at: T('07:50'), pre: 600 }, { key: 'tra:1193', at: T('08:30'), pre: 300 }], [{ key: 'tra:1195', extra: 0 }], T('07:50'));
   assert.ok(list.some(j => j.legs[0].from === 'tra:1210' && j.legs[0].trip.no === '1801'));
   assert.ok(list.some(j => j.legs[0].from === 'tra:1193' && j.legs[0].trip.no === '1803'));
+});
+
+test('journeys to several stations: each station keeps its own too (on to 六家 by the 六家線, over off sooner at 北新竹)', () => {
+  // From 上員: the 1701 is at 北新竹 first; 六家 is a change at 竹中 to the 1801.
+  const list = journeys(net, [{ key: 'tra:1201', at: T('07:50') }], [{ key: 'tra:1193', extra: 0 }, { key: 'tra:1195', extra: 0 }], T('07:50'));
+  assert.ok(list.some(j => j.end === 'tra:1193'));
+  const six = list.find(j => j.end === 'tra:1195');
+  assert.deepEqual(six?.legs.filter(l => !l.walk).map(l => l.trip.no), ['1701', '1801']);
 });
 
 test("Google's names for a bus are the official route's: numerals, and the branch by the stops it really runs", async () => {
