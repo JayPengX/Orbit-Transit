@@ -248,7 +248,8 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
     if (a?.mode === 'bike') legs.push(placeholder(o, pt(first.from), ready - a.sec * 1000, ready, 'arr'));
     else if (w1.dist > 20) legs.push({ ...w1, dep: ready - w1.dur * 1000, arr: ready });
     for (const l of j.legs) legs.push(l.walk ? { ...walkLeg(pt(l.from), pt(l.to), l.dep), arr: l.arr } : trainLeg(net, l));
-    const last = j.legs.filter(l => !l.walk).at(-1);
+    // (From the end of the journey: its last leg may be the walk over to the other railway.)
+    const last = j.legs.at(-1);
     const b = reach.get(`b:${j.end}`)?.a;
     const w2 = walkLeg(pt(j.end), d, last.arr);
     if (b?.mode === 'bike') legs.push(placeholder(pt(j.end), d, last.arr, last.arr + b.sec * 1000, 'dep'));
@@ -589,7 +590,9 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // A change for a hop: onto a bus or metro for a stop or two (a few
     // minutes, under 1.5 km) that a walk or a bike from where you got off
     // would do (新竹站, then 綠線 one stop, then a bike again).
-    const hop = n > 1 && vehicles(p).some(l => l !== m && ((l.stops != null && l.stops <= 2) || (l.dur || 0) <= 6 * 60 || (l.from?.lat != null && l.to?.lat != null && meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) < 1500)));
+    // (Short by its distance: 5 minutes of metro across 3 km is no hop.)
+    const short = l => (l.from?.lat != null && l.to?.lat != null ? meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) < 1500 : (l.stops != null && l.stops <= 2) || (l.dur || 0) <= 6 * 60);
+    const hop = n > 1 && vehicles(p).some(l => l !== m && short(l));
     const mostlyRidden = bikeAll != null && vehicles(p).length && rideM(p) >= Math.max(3000, bikeAll * 0.6);
     // Far behind the best, unless it gets there sooner than ways ahead of
     // it (off at 竹中 and ride, over the change to the 六家線: more riding, but
