@@ -62,7 +62,7 @@ export function searchSheet() {
   let list = [];
   let failed = '';
   const d = sheet(`${sheetHead('搜尋公車路線')}
-    <div class="ot-search-in"><input id="r-q" type="search" inputmode="search" placeholder="路線號碼或站名，例如 藍1、快捷8、新竹車站" autocomplete="off" enterkeyhint="search"></div>
+    <div class="ot-search-in"><input id="r-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、新竹車站" autocomplete="off" enterkeyhint="search"></div>
     <div class="q-chips ot-city-chips" id="r-city"></div>
     <div id="r-list" class="ot-list"></div>`, 'ot-tall-sheet');
   const cities = () =>
@@ -113,7 +113,7 @@ export function searchSheet() {
 
 // ---- A route: its stops each way, the buses on them ----------------------------------------------------
 
-export async function openRoute(c, route, { stopUID = '', dir = null, add = false } = {}) {
+export async function openRoute(c, route, { stopUID = '', stopName = '', dir = null, add = false } = {}) {
   ctx ||= c;
   let ways = null;
   let way = 0;
@@ -219,7 +219,8 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
               // No bus on its way to it (尚未發車, 末班已過 the other way…): the timetable's next.
               const p = !v || v.status !== 0 || v.sec == null ? planned(w, k) : null;
               // (Another day's said once above the stops, when it's every stop's.)
-              if (p) t = { main: hm(p.at), sub: p.day && p.day !== offDay ? `${dayName(p.day)}・時刻表` : '時刻表', tone: 'wait' };
+              // (Said once above the stops that it's the timetable; another day's only when it's this stop's own.)
+              if (p) t = { main: hm(p.at), sub: p.day && p.day !== offDay ? dayName(p.day) : '', tone: 'wait' };
               const mine = s.uid === stopUID;
               const ride = pinnedAt(s.uid);
               // Choosing where to get off: the stops after the one you get on at.
@@ -277,9 +278,16 @@ export async function openRoute(c, route, { stopUID = '', dir = null, add = fals
   draw();
   try {
     ways = await routeStops(route, c?.here);
-    if (dir != null) {
-      const i = ways.findIndex(w => w.dir === dir && (!stopUID || w.stops.some(s => s.uid === stopUID)));
-      way = i >= 0 ? i : Math.max(0, ways.findIndex(w => w.stops.some(s => s.uid === stopUID)));
+    // The stop asked for: by its id, else by its name (a stop's two sides of
+    // the road have ids of their own: the side this route's way stops at).
+    const has = (w, f) => w.stops.some(f);
+    if (stopUID && stopName && !ways.some(w => has(w, s => s.uid === stopUID))) {
+      const w = ways.find(x => (dir == null || x.dir === dir) && has(x, s => s.name === stopName)) || ways.find(x => has(x, s => s.name === stopName));
+      if (w) picked = stopUID = w.stops.find(s => s.name === stopName).uid;
+    }
+    if (dir != null || stopUID) {
+      const i = ways.findIndex(w => (dir == null || w.dir === dir) && (!stopUID || has(w, s => s.uid === stopUID)));
+      way = i >= 0 ? i : Math.max(0, ways.findIndex(w => has(w, s => s.uid === stopUID)));
     }
     // A sub-route the main pattern already covers is one tab less.
     ways = ways.filter((w, i) => i === way || !ways.some((o, j) => j < i && o.dir === w.dir && w.stops.every(s => o.stops.some(x => x.uid === s.uid))));

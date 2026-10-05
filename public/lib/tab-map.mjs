@@ -406,7 +406,7 @@ function actions(c, { pin = true } = {}) {
   const pinned = ctx.data.places.find(p => meters(p.lat, p.lon, c.lat, c.lon) < 30);
   return `<div class="ot-card-acts">
     <button class="q-btn primary" type="button" data-card="go">${icon('route')} 路線</button>
-    ${pin ? (pinned ? `<button class="q-btn on" type="button" data-card="edit-pin" data-id="${e(pinned.id)}">${icon('star')} ${e(pinned.name)} · 編輯</button>` : `<button class="q-btn" type="button" data-card="pin">${icon('star')} 釘選</button>`) : ''}
+    ${pin ? (pinned ? `<button class="q-btn on" type="button" data-card="edit-pin" data-id="${e(pinned.id)}">${icon('star')} 已釘選</button>` : `<button class="q-btn" type="button" data-card="pin">${icon('star')} 釘選</button>`) : ''}
   </div>`;
 }
 function head(title, sub, badge = '') {
@@ -981,6 +981,17 @@ function setWhen(kind) {
     when = { by: 'now', at: null };
     return replan();
   }
+  // The one chip: which of the three.
+  if (kind === 'menu') {
+    const m = sheet(`${sheetHead('什麼時候')}<div class="ot-when-menu">${[['now', '現在出發'], ['depart', '指定出發時間'], ['arrive', '指定抵達時間']].map(([k, t]) => `<button class="q-btn${(when.by === k) ? ' primary' : ''}" type="button" data-pick-when="${k}">${t}</button>`).join('')}</div>`);
+    m.addEventListener('click', ev => {
+      const b = ev.target.closest('[data-pick-when]');
+      if (!b) return;
+      m.close();
+      setWhen(b.dataset.pickWhen);
+    });
+    return;
+  }
   const base = when.at && when.at > Date.now() ? when.at : Date.now() + 15 * 60_000;
   const today = tw().date;
   const dayChips = [0, 1, 2].map(n => [addDays(today, n), ['今天', '明天', '後天'][n]]);
@@ -1020,15 +1031,15 @@ function plansHtml(c) {
       <button class="q-icon-btn" type="button" data-card="swap" aria-label="對調起訖">${icon('swap')}</button>
       <button class="q-icon-btn${saved ? ' on' : ''}" type="button" data-card="save-trip" aria-label="釘選這個行程">${icon('star')}</button>
       <button class="q-close" type="button" data-card="close" aria-label="關閉">×</button></div>
-    <div class="q-chips ot-when"><button class="q-chip" type="button" data-when="now" aria-pressed="${when.by === 'now'}">現在出發</button><button class="q-chip" type="button" data-when="depart" aria-pressed="${when.by === 'depart'}">${when.by === 'depart' ? `${e(whenDay(when.at))}${hm(when.at)} 出發` : '出發時間'}</button><button class="q-chip" type="button" data-when="arrive" aria-pressed="${when.by === 'arrive'}">${when.by === 'arrive' ? `${e(whenDay(when.at))}${hm(when.at)} 抵達` : '抵達時間'}</button></div>
-    <div class="q-chips ot-modes" role="group" aria-label="這次搭什麼">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="q-chip ot-mode" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}">${icon(k)}${e(v)}</button>`).join('')}</div>`;
+    <div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${icon('clock')}${e(when.by === 'now' ? '現在出發' : `${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`)}${icon('down', 'ot-caret')}</button>
+      <div class="ot-mtogs" role="group" aria-label="這次搭什麼">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}</div></div>`;
   if (!c.plans) return `${top}<p class="ot-note">${e(whenText)}：比較公車、火車、捷運和 YouBike，看公車現在的位置…</p>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : '<p class="ot-note">找不到大眾運輸方案。</p>'}${sourcesNote(c.sources)}`;
   // One row per route: the departure chosen (its best at first), the route's other departures as times to pick.
   const shownAt = i => c.choice?.[i] ?? i;
   const deps = (lead, i) => depChips(c.plans, c.plans[lead].times || [], i, j => `data-dep="${j}" data-lead="${lead}"`);
   const row = (p, i, lead = i) => `<button class="ot-plan${i === c.sel ? ' on' : ''}" type="button" data-plan="${i}">
-        <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${p.tags.map(t => `<span class="ot-tag${t === 'YouBike' || t === '電輔車' ? ' bike' : t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
+        <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
         <div class="ot-legs">${legChips(p.legs)}</div>${deps(lead, i)}
         <div class="ot-plan-sub">${[leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')].filter(Boolean).map(e).join(' · ')}</div>
         ${p.miss || p.off || p.late || p.rivers?.length ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
@@ -1101,7 +1112,7 @@ function stepsHtml(p, c = card) {
         l.mode === 'walk'
           ? `步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(l.to.name)}` : ''}`
           : l.mode === 'bike'
-            ? `${l.swap ? '<b>換車</b>（每 30 分鐘內）・' : ''}${l.ebike ? 'YouBike 電輔車' : 'YouBike'}：在 <b>${e(l.from.name)}</b> 借車${l.rent ? `（${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}・電輔 ${l.rent.ebike || 0}`} 台）` : ''}，騎 ${e(distText(l.dist))} 到 <b>${e(l.to.name)}</b> 還車${l.ret ? `（空位 ${l.ret.ret}）` : ''}`
+            ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b><small class="ot-step-line">借　${e(l.from.name)}${l.rent ? `・${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}・電輔 ${l.rent.ebike || 0}`} 台` : ''}</small><small class="ot-step-line">還　${e(l.to.name)}${l.ret ? `・空位 ${l.ret.ret}` : ''}</small>`
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${l.headsign ? ` 往 ${e(String(l.headsign).replace(/^往\s*/, ''))}` : ''}<br><small>${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}${l.agency ? ` · ${e(l.agency)}` : ''}</small>${ticketBtn(l)}<span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })

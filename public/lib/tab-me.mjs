@@ -14,7 +14,7 @@ import { manageSheet, useBusCtx } from './bus-ui.mjs';
 import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf } from './tpass.mjs';
 import { sheet, sheetHead, icon } from './ui.mjs';
-import { e } from './util.mjs';
+import { e, distText, meters } from './util.mjs';
 
 const $ = id => document.getElementById(id);
 let ctx = null;
@@ -64,7 +64,7 @@ function render() {
   const platform = ios() ? 'ios' : 'android';
   $('me-main').innerHTML = `<div class="ot-wrap ot-mine">
     <h3 class="ot-go-h">地點</h3>
-    <section class="ot-go-card">${D.places.map((p, i) => `<div class="ot-order-row"><button class="ot-place-name" type="button" data-place-edit="${e(p.id)}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span><b>${e(p.name)}</b><small>${e(p.address || '點一下改名稱或圖示')}</small></span>${icon('edit')}</button><button class="q-icon-btn" type="button" data-place-up="${i}" aria-label="上移" ${i ? '' : 'disabled'}>${icon('up')}</button><button class="q-icon-btn" type="button" data-place-del="${e(p.id)}" aria-label="刪除">${icon('trash')}</button></div>`).join('') || '<p class="ot-note">還沒有釘選地點：在地圖上點一個地方，按「釘選」。</p>'}
+    <section class="ot-go-card">${D.places.map((p, i) => `<div class="ot-order-row"><button class="ot-place-name" type="button" data-place-edit="${e(p.id)}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span><b>${e(p.name)}</b>${p.address || ctx.here ? `<small>${e(p.address || `距離 ${distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon))}`)}</small>` : ''}</span>${icon('edit')}</button><button class="q-icon-btn" type="button" data-place-up="${i}" aria-label="上移" ${i ? '' : 'disabled'}>${icon('up')}</button><button class="q-icon-btn" type="button" data-place-del="${e(p.id)}" aria-label="刪除">${icon('trash')}</button></div>`).join('') || '<p class="ot-note">還沒有釘選地點：在地圖上點一個地方，按「釘選」。</p>'}
       <button class="q-btn ot-wide" type="button" data-act="add-place">${icon('plus')} 在地圖上找地點釘選</button></section>
 
     <h3 class="ot-go-h">行程</h3>
