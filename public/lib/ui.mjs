@@ -80,7 +80,11 @@ export function depChips(plans, idx, on, attrs) {
   const ride = p => rides(p)[k] || rides(p)[0];
   const kind = p => (ride(p)?.train ? String(ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '') : '');
   const mixed = new Set(idx.map(i => kind(plans[i]))).size > 1;
-  return `<div class="ot-plan-deps" role="group" aria-label="選班次">${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${mixed && kind(plans[i]) ? `<small>${e(kind(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;
+  // Some straight through, some changing trains (竹東 → 新竹, or via 竹中): which is which.
+  const via = p => (rides(p).length > 1 ? `${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}轉` : '直達');
+  const changing = new Set(idx.map(i => rides(plans[i]).length)).size > 1;
+  const tag = p => [mixed ? kind(p) : '', changing ? via(p) : ''].filter(Boolean).join('・');
+  return `<div class="ot-plan-deps" role="group" aria-label="選班次">${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${tag(plans[i]) ? `<small>${e(tag(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;
 }
 
 export function legChips(legs) {
