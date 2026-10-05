@@ -38,11 +38,17 @@ export function mergeBikes(stations, live) {
     .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon));
 }
 
+const merged = new WeakMap();
 // A whole city's stations (the map), live counts refreshed each minute.
 export async function cityBikes(city) {
   if (!BIKE_CITIES.has(city)) return [];
   const [st, live] = await Promise.all([tdx(`basic/v2/Bike/Station/City/${city}?${STATION_FIELDS}`, { fresh: 86_400_000, persist: true }), tdx(`basic/v2/Bike/Availability/City/${city}?${LIVE_FIELDS}`, { fresh: 50_000 })]);
-  return mergeBikes(st, live);
+  // (Merged once a copy: a trip asks for its city's bikes at a dozen points.)
+  const m = merged.get(live);
+  if (m?.st === st) return m.list;
+  const list = mergeBikes(st, live);
+  if (live && typeof live === 'object') merged.set(live, { st, list });
+  return list;
 }
 
 // Stations within about a kilometre of a point (the planner), on a ~500 m

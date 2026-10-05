@@ -334,7 +334,8 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //     is a gamble, a bus to a bus barely a plan at all: Taiwan's buses don't
 //     keep their times, so the second one is as likely missed as caught (a
 //     bus with a train either side of it is fine);
-//   - time on a bus, a little (it's late, it's early, it's full);
+//   - each bus caught, a few minutes (you're at the stop early, it's late
+//     anyway), and time on it a little (it's late, it's early, it's full);
 //   - the minutes out of the door (leaving later for the same train is
 //     better), and walking past a few minutes;
 //   - each ride on a bike by its own length, not the total: 10 minutes to the
@@ -376,6 +377,11 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
     add('changes', a === 'bus' && b === 'bus' ? 35 : b === 'bus' ? 10 : 7);
   }
   add('bus', rides.filter(l => l.mode === 'bus').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.08);
+  // Each bus caught: its time is a guess (early as often as late), so you're
+  // at the stop early and it may still be late: a few minutes that on a short
+  // trip are most of it (1–2 km: a YouBike, there when you are, over the bus
+  // a minute sooner on paper). A train or the metro keeps its time.
+  add('board', rides.filter(l => l.mode === 'bus').length * 4);
   // Walking past 5 minutes is slow going.
   add('walk', Math.max(0, (p.walk || 0) / 75 - 5) * 0.6);
   // The bike rides, one swapped bike to the next counted as one ride.
@@ -417,13 +423,15 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   return out;
 }
 
+// No bus or train at all: by bike (電輔車 or not), or on foot.
+const ownWay = p => (p.legs.some(l => l.mode === 'bike') ? `bike:${p.legs.some(l => l.ebike)}` : 'walk');
 // The same rides (the lines, where you get on and off), whatever the walks
 // and bikes around them: also what a pinned recommendation is known by.
 export const ridesSig = p =>
   p.legs
     .filter(l => l.mode !== 'walk' && l.mode !== 'bike')
     .map(l => `${l.mode}:${l.short || l.name || ''}:${l.from?.name || ''}`)
-    .join('|') || `bike:${p.legs.some(l => l.ebike)}`;
+    .join('|') || ownWay(p);
 
 // A pinned recommendation's way, whatever the day's train numbers and each
 // planner's names for things (快捷8號 / 快捷8, 竹北車站 / 竹北): the buses
@@ -447,7 +455,7 @@ export const segs = p => {
 export const pickSig = p =>
   segs(p)
     .map(x => (x.mode === 'tra' || x.mode === 'hsr' ? `${x.mode}:${station(x.from)}>${station(x.to)}` : `${x.mode}:${norm(x.name)}`))
-    .join('|') || 'bike';
+    .join('|') || (p.legs.some(l => l.mode === 'bike') ? 'bike' : 'walk');
 
 // Two plans are one way when they ride the same buses and trains, whatever
 // gets you on and off them: each train by its number, each bus or metro by its
@@ -458,7 +466,7 @@ const trainNo = l => l.train?.no || (RAIL.has(l.mode) && l.mode !== 'metro' && S
 export function sameWay(a, b) {
   const [x, y] = [vehicles(a), vehicles(b)];
   if (x.length !== y.length) return false;
-  if (!x.length) return a.legs.some(l => l.mode === 'bike') === b.legs.some(l => l.mode === 'bike');
+  if (!x.length) return !y.length && a.legs.some(l => l.mode === 'bike') === b.legs.some(l => l.mode === 'bike');
   return x.every((l, i) => {
     const m = y[i];
     if (l.mode !== m.mode) return false;
@@ -479,7 +487,7 @@ function sameVehicle(l, m) {
 const mainLine = p => {
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   const m = rides.reduce((a, l) => (!a || (l.dur || 0) > (a.dur || 0) ? l : a), null);
-  return m ? `${m.mode}:${m.short || m.name || ''}` : `bike:${p.legs.some(l => l.ebike)}`;
+  return m ? `${m.mode}:${m.short || m.name || ''}` : ownWay(p);
 };
 
 // Everything, ranked by what's practical (score). The first few that ride
@@ -595,6 +603,11 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // A route's other departures: the next few, within an hour and a half of its first.
   const times = new Map();
   for (const g of groups.values()) {
+    // (A ride or a walk of your own has no times: you leave when you like.)
+    if (!vehicles(g[0]).length) {
+      for (const q of g) times.set(q, [q]);
+      continue;
+    }
     const by = [...g].sort((a, b) => a.dep - b.dep).filter(q => q === g[0] || Math.abs(q.dep - g[0].dep) <= 90 * 60_000).slice(0, 6);
     for (const q of g) times.set(q, by);
   }

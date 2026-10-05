@@ -10,7 +10,8 @@
 //               place: 竹中 → 5608 → 竹東高中)
 
 import { tdx, rows } from './api.mjs';
-import { routeStops, routeSchedule, stationsNear, stopTimes, routeCity } from './bus.mjs';
+import { routeStops, routeSchedule, stopTimes, routeCity } from './bus.mjs';
+import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish } from './plan.mjs';
 import { meters, walkSec, zh, tw, twAt, addDays } from './util.mjs';
 
@@ -68,7 +69,7 @@ const FIXED = new Set(['tra', 'hsr', 'metro', 'lightrail']);
 // ones. The routes at the stop it boards whose name is like it, and of those
 // the one that really runs from there to where it gets off (its stops):
 // the leg gets that route's name, its id (for its live times) and which way.
-export async function officialLeg(l, { near = stationsNear, stops = routeStops } = {}) {
+export async function officialLeg(l, { near = stationsAround, stops = routeStops } = {}) {
   if (l.mode !== 'bus' || l.route?.uid || !l.from?.lat || !l.to?.lat) return l;
   const name = l.short || l.name;
   const sts = (await near(l.from.lat, l.from.lon)).filter(s => meters(s.lat, s.lon, l.from.lat, l.from.lon) <= 250);
@@ -215,14 +216,14 @@ export async function laterBuses(list, l, after, { now = Date.now(), stops = rou
 }
 // A plan's first bus, its later buses, when TDX gave no estimate for it (a
 // trip later in the day; a planner's bus).
-export async function busTimes(plan, { near = etaNear, now = Date.now() } = {}) {
+export async function busTimes(plan, { near = etaAround, now = Date.now() } = {}) {
   const l = plan.legs.find(x => x.mode !== 'walk' && x.mode !== 'bike');
   if (!l || l.mode !== 'bus' || !l.from?.lat) return [];
   const list = await near(l.from.lat, l.from.lon, 150).catch(() => []);
   return laterBuses(list, l, l.dep, { now });
 }
 
-export async function adjustPlan(plan, now = Date.now(), { near = etaNear } = {}) {
+export async function adjustPlan(plan, now = Date.now(), { near = etaAround } = {}) {
   let legs = plan.legs.map(l => ({ ...l }));
   let changed = false;
   let miss = '';
@@ -318,7 +319,7 @@ const walkTo = (a, b, dep) => {
 // Live times when the bus is due within 90 minutes, else the timetable's.
 export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n = 2, routes = 6, now = Date.now(), trace = null } = {}) {
   if (meters(a.lat, a.lon, b.lat, b.lon) < 800) return [];
-  const [boardSt, alightSt] = await Promise.all([stationsNear(a.lat, a.lon), stationsNear(b.lat, b.lon)]);
+  const [boardSt, alightSt] = await Promise.all([stationsAround(a.lat, a.lon), stationsAround(b.lat, b.lon)]);
   const boards = boardSt.filter(s => meters(a.lat, a.lon, s.lat, s.lon) <= fromM);
   const alights = alightSt.filter(s => meters(b.lat, b.lon, s.lat, s.lon) <= toM);
   if (!boards.length || !alights.length) return [];
@@ -334,7 +335,9 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
   // What was found, for the 除錯紀錄: the lines near each end, and those at both.
   if (trace) Object.assign(trace, { near: [...new Set(boards.flatMap(s => s.stops.map(x => x.route)))], there: [...new Set(alights.flatMap(s => s.stops.map(x => x.route)))], both: [...cands.values()].map(c => c.route), kept: [], why: [] });
   if (!cands.size) return [];
-  const live = at - now < 90 * MIN ? await etaNear(a.lat, a.lon, fromM).catch(() => []) : [];
+  // The buses due at the stops you'd board (from the packs: those stops, one ask; else around you).
+  const boardStops = boards.flatMap(s => s.stops.filter(x => cands.has(x.routeUID) && x.scope).map(x => ({ uid: x.stopUID, scope: x.scope })));
+  const live = at - now >= 90 * MIN ? [] : await (boardStops.length ? etaStops([...new Map(boardStops.map(x => [x.uid, x])).values()]) : etaNear(a.lat, a.lon, fromM)).catch(() => []);
   const out = [];
   // Each line looked at side by side (its stops and timetable are asks of their own).
   await Promise.all([...cands.values()].slice(0, routes).map(async c => {
