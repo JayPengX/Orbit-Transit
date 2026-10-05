@@ -950,7 +950,18 @@ test('a ride over 頭前溪 counts against a plan and says so; one on this side 
   assert.ok(score(ride({ lat: 24.7985, lon: 121.0045 }), { now: T('08:00') }) - score(ride({ lat: 24.8076, lon: 121.0402 }), { now: T('08:00') }) >= 20);
 });
 
-test('a bus route from Transit-Data’s pack, in TDX’s own shapes: its stops each way, its times (or the first stop’s for every stop), its headways', async () => {
+test('over 頭前溪 by the bridge a ride would take: from 千甲 經國大橋 in the traffic, from 竹中 a small bridge (more riding, home sooner, a real choice)', async () => {
+  const { bridgesFor, crossingCost } = await import('../public/lib/rivers.mjs');
+  const school = { lat: 24.8189, lon: 121.0172 };
+  const chiencha = { lat: 24.7985, lon: 121.0045 };
+  const chuchung = { lat: 24.7836, lon: 121.0372 };
+  assert.equal(bridgesFor(chiencha, school, 'bike', { direct: true })[0].name, '經國大橋', "a planner's ride from 千甲 goes over 經國大橋");
+  assert.equal(bridgesFor(chuchung, school)[0].kind, 'small');
+  assert.ok(crossingCost(chiencha, school, 'bike') > 3 * crossingCost(chuchung, school, 'bike', true));
+  assert.ok(bridgesFor(chiencha, school)[0].extra > 1000, 'our own ride round to a bike path is longer (its time says so)');
+});
+
+test('a bus route from Shared-Data’s pack, in TDX’s own shapes: its stops each way, its times (or the first stop’s for every stop), its headways', async () => {
   const { expand } = await import('../public/lib/packs.mjs');
   const raw = { v: 1, city: 'Hsinchu', stops: { A: ['甲', 24.8, 121], B: ['乙', 24.81, 121], C: ['丙', 24.82, 121] }, routes: [{ uid: 'HSZ1', name: '1', ways: [['HSZ10', '1', 0, ['A', 'B', 'C']]], sched: [['HSZ10', 0, ['A', 'B', 'C'], [[62, [480, 484, -1]], [65, 500, [{ Dates: ['2026-10-10'], ServiceStatus: 0 }]]], [[127, '06:00', '22:00', 15, 20]]]] }] };
   const p = { raw, byUid: new Map(raw.routes.map(r => [r.uid, r])) };

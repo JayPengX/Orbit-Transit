@@ -1,5 +1,5 @@
-// Taiwan's bus routes and timetables, built each night by Transit-Data
-// (github.com/JayPengX/Transit-Data) and kept on the phone a day: a city's
+// Taiwan's bus routes and timetables, built each night by Shared-Data
+// (github.com/JayPengX/Shared-Data) and kept on the phone a day: a city's
 // routes in one pack (新竹市, 新竹縣…), the 公路客運 in squares of 0.25°
 // (only the squares a trip is in). A route's stops and timetable come from
 // here, in TDX's own shape, so nothing else changes; a route not in its pack
@@ -7,7 +7,7 @@
 
 import { kept, keep } from './api.mjs';
 
-export const PACKS = 'https://jaypengx.github.io/Transit-Data/bus/';
+export const PACKS = 'https://jaypengx.github.io/Shared-Data/bus/';
 const SQUARE = 0.25;
 export const squareOf = (lat, lon) => `${(Math.floor(lat / SQUARE) * SQUARE).toFixed(2)}_${(Math.floor(lon / SQUARE) * SQUARE).toFixed(2)}`;
 const FRESH = 20 * 3_600_000;
