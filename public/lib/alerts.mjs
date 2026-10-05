@@ -31,7 +31,7 @@ function keep() {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {}
   listeners.forEach(f => f());
-  push?.schedule(list.map(pushItem));
+  push?.schedule([...list.map(pushItem), ...navItems]);
   if (list.length && !timer) timer = setInterval(check, 20_000);
   if (!list.length && timer) {
     clearInterval(timer);
@@ -50,6 +50,14 @@ export const pushItem = a => ({
   kind: 'bus',
   check: { bus: { path: stationEtaAsk(a.station), route: a.routeUID, dir: Number(a.dir), min: a.min } }
 });
+
+// The navigation's notices (nav.mjs navNotices), sent with the alerts: the
+// Worker takes one list for the app.
+let navItems = [];
+export function setNavPush(items) {
+  navItems = items || [];
+  keep();
+}
 
 export const alerts = () => list;
 export const onAlerts = f => listeners.add(f);

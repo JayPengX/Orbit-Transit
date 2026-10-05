@@ -18,6 +18,7 @@ import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
 import { warmRail } from './lib/raildata.mjs';
 import { startAlerts } from './lib/alerts.mjs';
+import { savedNav } from './lib/nav.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
@@ -151,7 +152,8 @@ async function boot() {
   if (changed && theirs == null && merged.t && q.active) q.write({ payload: local.data }).catch(() => {});
   ctx.cfg = await config().catch(() => ({ map: { provider: 'nlsc' }, search: 'osm' }));
   $('loading').hidden = true;
-  const want = /^#(map|go|times|me|bus|train|metro)/.exec(location.hash)?.[1] || 'map';
+  // A ride being navigated when the app was swiped away: the map, on with it.
+  const want = savedNav() ? 'map' : /^#(map|go|times|me|bus|train|metro)/.exec(location.hash)?.[1] || 'map';
   mapTab.register(ctx);
   select(OLD[want] || want);
   if (want === 'metro') ctx.openMetro?.();

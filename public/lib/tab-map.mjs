@@ -15,7 +15,8 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav } from './nav.mjs';
+import { setNavPush } from './alerts.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { buyTicket } from './tickets.mjs';
@@ -111,16 +112,19 @@ export async function init(c) {
     if (s) arrive({ kind: 'bike', item: s, lat: s.lat, lon: s.lon });
   });
   idle();
+  // A ride being followed when the app was swiped away: on with it.
+  const was = savedNav();
+  if (was) pendingTrip = { nav: was.plan, from: was.plan.legs[0].from, to: was.plan.legs.at(-1).to, resume: { i: was.i, phase: was.phase } };
   if (pendingTrip) show();
 }
 let pendingTrip = null;
-function showPlan(p, from, to) {
+function showPlan(p, from, to, resume = null) {
   card = { kind: 'plans', from: { name: from?.name || '目前位置', lat: from?.lat, lon: from?.lon }, fromHere: !from || from.name === '目前位置', to, lat: to.lat, lon: to.lon, plans: [{ ...p, top: true, lead: true, weak: false, times: [] }], sel: 0, more: false, sources: {} };
   document.body.classList.add('ot-planning');
   if (canNav(p)) {
     renderCard();
     drawPlan(p, { fit: false });
-    return navigate(card.plans[0]);
+    return navigate(card.plans[0], resume);
   }
   card.sel = 0;
   renderCard();
@@ -132,7 +136,7 @@ export function show() {
   if (pendingTrip && map) {
     const t = pendingTrip;
     pendingTrip = null;
-    return t.nav ? showPlan(t.nav, t.from, t.to) : plan(t.from, t.to, t.opts);
+    return t.nav ? showPlan(t.nav, t.from, t.to, t.resume) : plan(t.from, t.to, t.opts);
   }
   // A station sent from another tab (捷運's 在地圖上看).
   if (map && ctx.mapFocus) {
@@ -1178,17 +1182,21 @@ async function liveLegs(p) {
 
 // ---- Navigation ---------------------------------------------------------------------------------------
 
-function navigate(p) {
+function navigate(p, resume = null) {
   if (!p) return;
   const c = card;
   $('card').hidden = true;
   document.body.classList.add('ot-navigating');
+  // (The map now fills the screen: its tiles for the new size.)
+  map?.resize();
   following = true;
   stopWatch();
   roadLegs(p);
   startNav(p, {
     box: $('nav'),
     here: ctx.here,
+    resume,
+    push: setNavPush,
     draw: (plan, i) => {
       drawPlan(plan, { fit: false, lit: i });
       const l = plan.legs[i];
@@ -1203,6 +1211,7 @@ function navigate(p) {
     onEnd: () => {
       $('nav').hidden = true;
       document.body.classList.remove('ot-navigating');
+      map?.resize();
       if (card === c && c) {
         $('card').hidden = false;
         renderCard();

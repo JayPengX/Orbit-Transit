@@ -1749,6 +1749,14 @@ main {
 .tab-map.ot-navigating .q-appbar {
   display: none;
 }
+/* Navigating: the map the whole screen, like a phone's own maps (no band
+   left where the tab bar was). */
+.tab-map.ot-navigating #tabs {
+  display: none;
+}
+.tab-map.ot-navigating .ot-map-panel {
+  bottom: 0;
+}
 .ot-card-head .q-icon-btn.on,
 .q-icon-btn.on {
   color: var(--ot-bike);

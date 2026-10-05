@@ -9,6 +9,7 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList } from '../public/lib/store.mjs';
+import { navNotices } from '../public/lib/nav.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
 import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
@@ -999,4 +1000,23 @@ test('a plan whose bus leaves before the walk to it is over is never shown', () 
   const p = finish({ src: 'tdx', legs: [{ mode: 'tra', name: '區間', dep: T('09:42'), arr: T('10:00') }, { mode: 'walk', dep: T('10:00'), arr: T('10:04'), dur: 240 }, { mode: 'bus', name: '世博5號', dep: T('09:55'), arr: T('10:04'), dur: 540 }] });
   assert.equal(inOrder(p), false);
   assert.equal(inOrder({ legs: p.legs.map((l, i) => (i === 2 ? { ...l, dep: T('10:05'), arr: T('10:14') } : l)) }), true);
+});
+
+test('navigation tells the lock screen: set out, the bus by its live times, a train about to leave, the stop coming up', () => {
+  const now = T('07:00');
+  const plan = finish({ legs: [
+    { mode: 'walk', from: { name: '家', lat: 24.82, lon: 121.017 }, to: { name: '縣體育場', lat: 24.821, lon: 121.018 }, dep: T('07:20'), arr: T('07:25'), dur: 300 },
+    { mode: 'bus', name: '5615', short: '5615', from: { name: '縣體育場', lat: 24.821, lon: 121.018 }, to: { name: '新竹車站', lat: 24.8016, lon: 120.9716 }, dep: T('07:26'), arr: T('07:50'), dur: 1440 },
+    { mode: 'tra', name: '區間', short: '區間 1141', train: { no: '1141' }, from: { name: '新竹', lat: 24.8016, lon: 120.9716 }, to: { name: '竹東', lat: 24.736, lon: 121.092 }, dep: T('08:00'), arr: T('08:30'), dur: 1800 }
+  ] });
+  const info = new Map([[1, { leg: { ...plan.legs[1], route: { uid: 'HSQ5615', dir: 0 } }, station: { uid: 'HSQ1', id: '1', cityCode: 'HSQ', name: '縣體育場' } }]]);
+  const n = navNotices(plan, 0, info, now);
+  const tag = t => n.find(x => x.tag === t);
+  assert.equal(tag('nav:leave').at, T('07:18'));
+  assert.deepEqual(tag('nav:bus:1').check.bus.route, 'HSQ5615');
+  assert.ok(tag('nav:bus:1').body.includes('{result}'));
+  assert.equal(tag('nav:train:2').at, T('07:55'));
+  assert.equal(tag('nav:off:2').at, T('08:27'));
+  // On the train already: only what's left.
+  assert.deepEqual(navNotices(plan, 2, info, T('08:05')).map(x => x.tag), ['nav:off:2']);
 });
