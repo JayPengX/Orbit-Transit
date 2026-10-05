@@ -479,12 +479,17 @@ const mainLine = p => {
 // Everything, ranked by what's practical (score). The first few that ride
 // different lines are the recommendations (`top`); the rest stay, later.
 // Each gets its labels. `cost(p)` adds what a plan costs you in money.
+// Each ride leaves after what comes before it is over (2 minutes' grace).
+export const inOrder = p => p.legs.every((l, i) => i === 0 || l.mode === 'walk' || l.mode === 'bike' || l.dep == null || p.legs[i - 1].arr == null || l.dep >= p.legs[i - 1].arr - 2 * 60_000);
 export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now(), keep = null } = {}) {
   // Only what `keep` allows (inside your TPASS's area: what the pass takes), unless that's nothing.
   if (keep) {
     const kept = plans.filter(p => p?.legs?.length && keep(p));
     if (kept.length) plans = kept;
   }
+  // A plan that can't be done as written (a planner's bus leaving before the
+  // walk to it is over, two minutes or more): never shown.
+  plans = plans.filter(p => !p?.legs || inOrder(p));
   // (By an arrival time, `now` is that time: what's gone is what left before the clock's now.)
   // A planner's plan set out a few minutes before the time asked, on the
   // metro only (a train every few minutes): the same, a train later.
@@ -721,10 +726,14 @@ function withStations(p, bikes) {
 // where each plan first boards and last leaves a train or metro.
 export function bikePoints(plans, o, d) {
   const pts = [o, d];
+  // The stations of trains first (a ride to one has no plan without their
+  // docks: the cut below once dropped 六家's), then the rest.
   for (const p of plans) {
     const rail = p.legs.filter(l => RAIL.has(l.mode));
     if (rail[0]?.from?.lat) pts.push(rail[0].from);
     if (rail.at(-1)?.to?.lat) pts.push(rail.at(-1).to);
+  }
+  for (const p of plans) {
     // The first and last stops of any ride, and a planner's own bike legs' ends.
     const rides = p.legs.filter(l => l.mode !== 'walk');
     if (rides[0]?.from?.lat) pts.push(rides[0].from);
@@ -736,5 +745,5 @@ export function bikePoints(plans, o, d) {
   // One per ~400 m.
   const out = [];
   for (const p of pts) if (!out.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400)) out.push({ lat: p.lat, lon: p.lon });
-  return out.slice(0, 12);
+  return out.slice(0, 16);
 }

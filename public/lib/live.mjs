@@ -26,7 +26,11 @@ export async function etaNear(lat, lon, r = 150) {
 
 // Google's and TDX's names for one route differ (快捷8經興隆大橋, 快捷8號;
 // 藍1區間車, 藍1): the same when one is the other plus words, never 5 and 5608.
-export const routeNorm = s => String(s || '').replace(/\s+/g, '').replace(/[號线線]/g, '').replace(/[（(].*$/, '').replace(/台/g, '臺').toUpperCase();
+// Chinese numerals as digits too (Google's 快捷八號 is TDX's 快捷8號).
+const NUM = { 〇: 0, 零: 0, 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+const digits = s =>
+  s.replace(/([一二三四五六七八九]?)十([一二三四五六七八九]?)/g, (_, a, b) => `${a ? NUM[a] : 1}${b ? NUM[b] : 0}`).replace(/[〇零一二兩三四五六七八九](?=[號号路線线支區]|$)/g, c => NUM[c]);
+export const routeNorm = s => digits(String(s || '').replace(/\s+/g, '')).replace(/[號号线線]/g, '').replace(/[（(].*$/, '').replace(/台/g, '臺').toUpperCase();
 export function sameRoute(a, b) {
   const x = routeNorm(a);
   const y = routeNorm(b);
@@ -57,6 +61,73 @@ export function liveTimes(list, name, now = Date.now(), { dir = null, routeUID =
 }
 
 const FIXED = new Set(['tra', 'hsr', 'metro', 'lightrail']);
+
+// A planner's bus leg as the official route: Google names routes its own
+// way (快捷八號經中正大橋 is 快捷8號, 快捷八號經興隆大橋 快捷8號支), which
+// made a second card for the same bus, with Google's times and no live
+// ones. The routes at the stop it boards whose name is like it, and of those
+// the one that really runs from there to where it gets off (its stops):
+// the leg gets that route's name, its id (for its live times) and which way.
+export async function officialLeg(l, { near = stationsNear, stops = routeStops } = {}) {
+  if (l.mode !== 'bus' || l.route?.uid || !l.from?.lat || !l.to?.lat) return l;
+  const name = l.short || l.name;
+  const sts = (await near(l.from.lat, l.from.lon)).filter(s => meters(s.lat, s.lon, l.from.lat, l.from.lon) <= 250);
+  const cands = new Map();
+  // Like it by name, or the same line by its number (快捷8號支 for 快捷八號經興隆大橋).
+  const stem = x => /^\D*\d+/.exec(routeNorm(x))?.[0] || '';
+  const like = x => sameRoute(x, name) || sameRoute(x, l.name) || (stem(name) && /\d/.test(stem(name)) && stem(x) === stem(name));
+  for (const s of sts) for (const x of s.stops) if (like(x.route)) cands.set(x.routeUID, x.route);
+  if (!cands.size) return l;
+  let best = null;
+  await Promise.all(
+    [...cands].slice(0, 5).map(async ([uid, route]) => {
+      const ways = await stops({ uid, name: route, city: routeCity(uid) }, l.from).catch(() => []);
+      const way = wayOf(ways, l.from, l.to);
+      if (!way) return;
+      const off = meters(way.w.stops[way.j].lat, way.w.stops[way.j].lon, l.to.lat, l.to.lon);
+      const on = meters(way.w.stops[way.i].lat, way.w.stops[way.i].lon, l.from.lat, l.from.lon);
+      // Gets off where the leg does (a route that turns off before it doesn't).
+      if (off > 300 || on > 250) return;
+      // The same name first (快捷8號 over 快捷8號支 for 快捷八號), then the closest stops.
+      // And as many stops between as the planner said (the branch that crosses
+      // the other bridge has its own count).
+      const cost = on + off + (routeNorm(route) === routeNorm(name) ? 0 : 150) + (Number(l.stops) > 0 ? Math.abs(way.j - way.i - Number(l.stops)) * 60 : 0);
+      if (!best || cost < best.cost) best = { cost, uid, route, way };
+    })
+  );
+  if (!best) return l;
+  const bs = best.way.w.stops[best.way.i];
+  return { ...l, name: best.route, short: best.route, said: name !== best.route ? name : undefined, headsign: l.headsign || best.way.w.headsign, route: { uid: best.uid, city: routeCity(best.uid), dir: best.way.w.dir, stopUID: bs.uid } };
+}
+// Every bus of a planner's plan as its official route, and when it isn't
+// due within the hour and a half live times cover, the timetable's bus at
+// that stop instead of the planner's guess (the rest of the trip moved with it).
+export async function officialPlan(plan, now = Date.now(), opts = {}) {
+  if (!plan.legs.some(l => l.mode === 'bus' && !l.route?.uid)) return plan;
+  const legs = await Promise.all(plan.legs.map(l => officialLeg(l, opts).catch(() => l)));
+  if (legs.every((l, i) => l === plan.legs[i])) return plan;
+  const schedule = opts.schedule || routeSchedule;
+  for (let i = 0; i < legs.length; i++) {
+    const l = legs[i];
+    if (l.mode !== 'bus' || !l.route?.uid || l === plan.legs[i] || l.dep <= now + 90 * MIN) continue;
+    const sched = await schedule({ uid: l.route.uid, name: l.short, city: l.route.city }, l.from).catch(() => []);
+    const ways = await (opts.stops || routeStops)({ uid: l.route.uid, name: l.short, city: l.route.city }, l.from).catch(() => []);
+    const w = ways.find(x => x.dir === l.route.dir);
+    const k = w ? w.stops.findIndex(x => x.uid === l.route.stopUID) : -1;
+    if (k < 0) continue;
+    const ready = (legs[i - 1]?.arr ?? l.dep) - 30_000;
+    const t = departuresAt(sched, w, k, ready, 1)[0];
+    if (t == null || Math.abs(t - l.dep) < MIN || t - l.dep > 45 * MIN) continue;
+    const delta = t - l.dep;
+    for (let a = i; a < legs.length; a++) {
+      if (a > i && FIXED.has(legs[a].mode)) break;
+      legs[a] = { ...legs[a], dep: legs[a].dep + delta, arr: legs[a].arr + delta };
+    }
+    // The way to the first ride: leave so as to be there a minute before it.
+    if (legs.slice(0, i).every(x => x.mode === 'walk' || x.mode === 'bike')) for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + delta, arr: legs[a].arr + delta };
+  }
+  return finish({ ...plan, legs });
+}
 
 // One plan, its first two buses re-timed by what TDX says now. Only for
 // buses due within the next 90 minutes (further out, estimates mean
@@ -168,7 +239,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaNear } = {}
     } catch {
       continue;
     }
-    const { found, times, off: stopped } = liveTimes(list, l.short || l.name, now);
+    const { found, times, off: stopped } = liveTimes(list, l.short || l.name, now, l.route?.uid ? { routeUID: l.route.uid, dir: l.route.dir } : {});
     if (!found) continue;
     const first = legs.findIndex(x => x.mode !== 'walk' && x.mode !== 'bike');
     const before = legs.slice(0, i).reduce((a, x) => a + (x.dur || 0) * 1000, 0);
