@@ -425,10 +425,22 @@ export const ridesSig = p =>
 const norm = x => String(x || '').replace(/\s+/g, '').replace(/[號线線]/g, '').replace(/[（(].*$/, '').replace(/^高鐵/, '').replace(/(火車站|車站|站)$/, '').replace(/台/g, '臺').toUpperCase();
 // A station however a source writes it: 竹北火車站, 臺鐵竹北車站 and 竹北 are one.
 const station = n => norm(n).replace(/^(臺鐵|高鐵)/, '').replace(/(火車站|車站|站)$/, '') || norm(n);
+// A plan's rides, a train changed for another train one ride (竹東 → 新竹
+// straight through, or changing at 竹中: the train either way), from where
+// you board the first to where you leave the last.
+export const segs = p => {
+  const out = [];
+  for (const l of p.legs) {
+    if (l.mode === 'walk' || l.mode === 'bike') continue;
+    const last = out.at(-1);
+    if (last && last.mode === l.mode && (l.mode === 'tra' || l.mode === 'hsr') && last.to === l.from?.name) out[out.length - 1] = { ...last, to: l.to?.name, arr: l.arr, legs: [...last.legs, l] };
+    else out.push({ mode: l.mode, from: l.from?.name, to: l.to?.name, name: l.short || l.name, dep: l.dep, arr: l.arr, legs: [l] });
+  }
+  return out;
+};
 export const pickSig = p =>
-  p.legs
-    .filter(l => l.mode !== 'walk' && l.mode !== 'bike')
-    .map(l => (l.mode === 'tra' || l.mode === 'hsr' ? `${l.mode}:${station(l.from?.name)}>${station(l.to?.name)}` : `${l.mode}:${norm(l.short || l.name)}`))
+  segs(p)
+    .map(x => (x.mode === 'tra' || x.mode === 'hsr' ? `${x.mode}:${station(x.from)}>${station(x.to)}` : `${x.mode}:${norm(x.name)}`))
     .join('|') || 'bike';
 
 // Two plans are one way when they ride the same buses and trains, whatever
@@ -553,8 +565,8 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // More changes than another bus-or-train way that's no later (within 5
     // minutes) and less bother: off the train at 北新竹 for the 5608, when
     // staying on to 新竹 and riding is sooner.
-    const n = vehicles(p).length;
-    const changes = n > 1 && list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && vehicles(q).length >= 1 && vehicles(q).length < n && q.score < p.score && q.arr <= p.arr + 5 * 60_000);
+    const n = segs(p).length;
+    const changes = n > 1 && list.some(q => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && segs(q).length >= 1 && segs(q).length < n && q.score < p.score && q.arr <= p.arr + 5 * 60_000);
     // A change for a hop: onto a bus or metro for a stop or two (a few
     // minutes, under 1.5 km) that a walk or a bike from where you got off
     // would do (新竹站, then 綠線 one stop, then a bike again).

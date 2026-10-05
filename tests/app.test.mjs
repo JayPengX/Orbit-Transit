@@ -243,6 +243,18 @@ test('a planner’s plan leaving minutes before the time asked: on the metro, th
   assert.equal(out[0].dep, T('08:00'));
 });
 
+test('竹東 → 新竹 by train, straight through or changing at 竹中: one card, its times saying which', async () => {
+  const { pickSig } = await import('../public/lib/plan.mjs');
+  const { depChips } = await import('../public/lib/ui.mjs');
+  const st = n => ({ name: n, lat: 24.8, lon: 121 });
+  const direct = finish({ legs: [{ mode: 'tra', short: '區間 1817', from: st('竹東'), to: st('新竹'), dep: T('09:12'), arr: T('09:50'), dur: 2280 }] });
+  const change = finish({ legs: [{ mode: 'tra', short: '區間 1805', from: st('竹東'), to: st('竹中'), dep: T('08:12'), arr: T('08:20'), dur: 480 }, { mode: 'tra', short: '區間 1789', from: st('竹中'), to: st('新竹'), dep: T('08:25'), arr: T('08:45'), dur: 1200 }] });
+  assert.equal(pickSig(direct), pickSig(change));
+  const html = depChips([change, direct], [0, 1], 0, i => `data-i="${i}"`);
+  assert.match(html, /08:12<small>竹中轉<\/small>/);
+  assert.match(html, /09:12<small>直達<\/small>/);
+});
+
 test('a station near both ends: no train-less "journey" (from 千甲 to 千甲) in place of the trains', () => {
   assert.deepEqual(journeys(net, [{ key: 'tra:1210', at: T('08:00') }], [{ key: 'tra:1210', extra: 0 }], T('08:00')), []);
   const j = journeys(net, [{ key: 'tra:1210', at: T('08:00') }], [{ key: 'tra:1000', extra: 0 }], T('08:00'));

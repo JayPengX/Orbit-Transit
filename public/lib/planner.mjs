@@ -14,6 +14,7 @@
 import { routePlans, townships } from './api.mjs';
 import { bikesNear, cityBikes } from './bike.mjs';
 import { railNetwork } from './raildata.mjs';
+import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy } from './plan.mjs';
 import { adjustPlan, busLink, busTimes } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
@@ -105,17 +106,19 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const useTrain = x => modes[x.sys] !== false && (!passTrip || (x.sys === 'tra' && !PREMIUM.has(String(x.code))));
   let net = null;
   let t = performance.now();
-  const [res, trains] = await Promise.all([
+  const [res, trains, metros] = await Promise.all([
     routePlans(from, to, { at, by, modes: modeList(prefs) }).catch(err => ({ plans: [], sources: {}, err })).finally(() => lap('planners', t)),
     by === 'arrive' || !useRail
       ? []
       : railNetwork(tw(t0).date, { next: tw(t0).min >= 21 * 60 })
           .then(n => railPlans((net = n), from, to, t0, { bike: modes.bike, bus: modes.bus, use: useTrain }))
           .catch(() => [])
-          .finally(() => lap('trains', t))
+          .finally(() => lap('trains', t)),
+    // Our metro rides (板南線 then 文湖線, which the planners may leave out).
+    by === 'arrive' || modes.metro === false ? [] : metroPlans(from, to, t0).catch(() => []).finally(() => lap('metro', t))
   ]);
-  if (res.err && !trains.length) return { plans: [], sources: res.sources || {}, error: res.err };
-  let plans = [...res.plans.map(tidy), ...trains].filter(p => allowed(p, { ...modes, bike: true }));
+  if (res.err && !trains.length && !metros.length) return { plans: [], sources: res.sources || {}, error: res.err };
+  let plans = [...res.plans.map(tidy), ...trains, ...metros].filter(p => allowed(p, { ...modes, bike: true }));
   // YouBike near both ends and the stations, asked now, while the buses are
   // looked at (it doesn't wait for them; a train-then-bus's stop is asked after).
   const bikeCities = modes.bike && prefs.bike30 ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
