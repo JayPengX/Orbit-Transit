@@ -174,9 +174,58 @@ async function trainPins() {
   } catch {}
 }
 
+// A trip's plans kept on the phone: opening the app again soon (from about
+// the same place, the same version, the same settings) shows them at once
+// with the buses' times read again, instead of planning it all anew. Planned
+// again after TRIP_KEEP_MS, or when too few of its ways are still to come.
+const TRIP_CACHE = 'ot.trips.v1';
+const TRIP_KEEP_MS = 30 * 60_000;
+const buildOf = () => document.querySelector('meta[name="build-version"]')?.content || 'dev';
+const tripKey = (w, from) => JSON.stringify([w.id, w.at || 0, w.by || '', Math.round(from.lat * 300), Math.round(from.lon * 300), buildOf(), JSON.stringify(ctx.data.prefs || {})]);
+function readTrips() {
+  try {
+    return JSON.parse(localStorage.getItem(TRIP_CACHE) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+function keepTrip(key, plans) {
+  try {
+    const all = readTrips();
+    const now = Date.now();
+    for (const k of Object.keys(all)) if (now - all[k].at > TRIP_KEEP_MS) delete all[k];
+    // (Promises, the later buses on their way, aren't kept.)
+    all[key] = { at: now, plans: JSON.parse(JSON.stringify(plans, (k, v) => (v instanceof Promise ? undefined : v))) };
+    localStorage.setItem(TRIP_CACHE, JSON.stringify(all));
+  } catch {}
+}
+async function keptTrip(key, w) {
+  const hit = readTrips()[key];
+  const now = Date.now();
+  if (!hit || now - hit.at > TRIP_KEEP_MS) return null;
+  // Every way shown still to come (by an arrival time, as it was); else planned again.
+  // (The list stays whole: a card's times point into it.)
+  const plans = hit.plans;
+  const shown = plans.filter(p => p.lead && !p.weak);
+  if (!shown.length || (w.by !== 'arrive' && shown.some(p => p.dep < now - 60_000))) return null;
+  // The buses due soon: their times now.
+  const { adjustPlan } = await import('./live.mjs');
+  return Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000) ? adjustPlan(p, now).catch(() => p) : p)));
+}
+
 async function loadTrip(w, { force = false } = {}) {
   const old = S.trips.get(w.id);
   if (!force && old && (old.loading || Date.now() - old.at < 4 * 60_000)) return;
+  // Opened again soon after: the plans kept on the phone.
+  const here0 = w.from || (ctx.here ? { lat: ctx.here.lat, lon: ctx.here.lon } : null);
+  if (!force && !old && here0) {
+    const key = tripKey(w, here0);
+    const kept = await keptTrip(key, w).catch(() => null);
+    if (kept) {
+      S.trips.set(w.id, { at: Date.now(), from: w.from || { name: '目前位置', ...here0 }, plans: kept, error: '', kept: true });
+      return render();
+    }
+  }
   S.trips.set(w.id, { ...(old || {}), loading: true, at: Date.now() });
   render();
   try {
@@ -185,11 +234,13 @@ async function loadTrip(w, { force = false } = {}) {
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
     for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
     S.trips.set(w.id, { at: Date.now(), from, plans: out.plans, error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
+    if (out.plans.length) keepTrip(tripKey(w, from), out.plans);
     // The direct buses and every bus's times, a moment later (unless a time was picked meanwhile).
     out.later?.then(o => {
       const cur = S.trips.get(w.id);
       if (!o?.plans?.length || cur?.plans !== out.plans || [...S.choice.keys()].some(k => k.startsWith(`${w.id}:`))) return;
       S.trips.set(w.id, { ...cur, plans: o.plans, error: '' });
+      keepTrip(tripKey(w, from), o.plans);
       render();
     });
   } catch (err) {
