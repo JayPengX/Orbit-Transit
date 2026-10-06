@@ -314,14 +314,23 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
   // 竹中, over a train sooner to 千甲 across 頭前溪 from home).
   const own = new Set();
   const best = () => Math.min(...found.map(f => f.arr));
+  // When you set out for it: its first train less the way to that station
+  // (`pre`, seconds), so boarding the same train a station further up isn't
+  // 'leaving later' (a 28-minute walk to 榮華 for the train that stopped at 竹東).
+  const pre = new Map(starts.map(s => [s.key, (s.pre || 0) * 1000]));
+  const go = j => j.dep - (pre.get(j.legs[0]?.from) || 0);
   const soonest = (ss, ts) => {
     let j = earliest(net, ss, ts, { use });
     // Leaving as late as still gets in then (the 11:29 from 六家, not a
-    // 10:29 that waits an hour at 竹中 for the same train on).
+    // 10:29 that waits an hour at 竹中 for the same train on); by when you
+    // set out, not when the train leaves: the 1813 at 榮華 four minutes
+    // after 竹東 is no later for someone at 竹東 who'd ride 11 minutes to it.
+    let t = j?.dep;
     for (let k = 0; j && k < 4; k++) {
-      const later = earliest(net, ss.map(s => ({ ...s, at: Math.max(s.at, j.dep + 60_000) })), ts, { use });
+      const later = earliest(net, ss.map(s => ({ ...s, at: Math.max(s.at, t + 60_000) })), ts, { use });
       if (!later?.legs?.some(l => !l.walk) || later.arr > j.arr) break;
-      j = later;
+      t = later.dep;
+      if (go(later) > go(j)) j = later;
     }
     return j?.legs?.some(l => !l.walk) && !j.legs[0].walk && j.arr - best() < 90 * 60_000 ? j : null;
   };
@@ -335,18 +344,14 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
       const j = soonest(starts, [tg]);
       if (j && j.end === tg.key) (found.push(j), own.add(j));
     }
-  const sig = j => j.legs.map(l => (l.walk ? `w:${l.to}` : `${l.trip.id}:${l.from}`)).join('|');
+  // (Where it ends too: the same train on to 六家 is not the one off at 竹中.)
+  const sig = j => `${j.legs.map(l => (l.walk ? `w:${l.to}` : `${l.trip.id}:${l.from}`)).join('|')}>${j.end}`;
   const seen = new Set();
   const uniq = found.filter(j => !seen.has(sig(j)) && seen.add(sig(j)));
   // (A station's own journey also found by the search above: kept as its own.)
   const ownSig = new Set([...own].map(sig));
   for (const j of uniq) if (ownSig.has(sig(j))) own.add(j);
   const fin = j => j.arr + j.extra * 1000;
-  // When you set out for it: its first train less the way to that station
-  // (`pre`, seconds), so boarding the same train a station further up isn't
-  // 'leaving later' (a 28-minute walk to 榮華 for the train that stopped at 竹東).
-  const pre = new Map(starts.map(s => [s.key, (s.pre || 0) * 1000]));
-  const go = j => j.dep - (pre.get(j.legs[0]?.from) || 0);
   const kept = uniq.filter(a => own.has(a) || !uniq.some(b => b !== a && go(b) >= go(a) && fin(b) <= fin(a) && b.transfers <= a.transfers && (go(b) > go(a) || fin(b) < fin(a) || b.transfers < a.transfers)));
   const top = kept.filter(j => !own.has(j)).sort((a, b) => fin(a) - fin(b) || go(b) - go(a)).slice(0, n * 2);
   return [...top, ...kept.filter(j => own.has(j))].sort((a, b) => a.dep - b.dep);
