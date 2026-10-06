@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
@@ -991,6 +991,39 @@ test('journeys to a station: the same train a station further up is no later a w
   const list = journeys(net, [{ key: 'tra:1210', at: T('07:53'), pre: 180 }, { key: 'tra:1193', at: T('08:03'), pre: 900 }], [{ key: 'tra:1194', extra: 0 }, { key: 'tra:1195', extra: 0 }], T('07:50'));
   const six = list.filter(j => j.end === 'tra:1195' && j.legs[0].trip?.no === '1801');
   assert.ok(six.some(j => j.legs[0].from === 'tra:1210'), 'on to 六家, boarded where you are');
+});
+
+test('railPlans: a station in walking distance is timed by the bike when that is quicker (no riding on to the next station for the train that stops here)', () => {
+  // 900 m from 新竹: a 16-minute walk misses the 08:00, a 9-minute ride makes it;
+  // 北新竹 is a 16-minute ride, for the same 1801 at 08:04.
+  const o = { name: '家', lat: 24.7935, lon: 120.9716 };
+  const d = { name: '六家', lat: 24.808, lon: 121.04 };
+  const plans = railPlans(net, o, d, T('07:45'), { bike: true });
+  const first = p => p.legs.find(l => l.mode === 'tra');
+  const on = plans.filter(p => first(p)?.train.no === '1801');
+  assert.ok(on.some(p => first(p).from.name === '新竹'), 'the 1801 from 新竹, where you are');
+});
+
+test('journeys: the same trains boarded a station further up stay beside the nearer boarding, for the ranking to weigh', () => {
+  // 新竹 a 10-minute walk, 北新竹 a 5-minute ride: by the clock the 1801 at 北新竹 lets you leave later.
+  const list = journeys(net, [{ key: 'tra:1210', at: T('07:50'), pre: 600 }, { key: 'tra:1193', at: T('07:55'), pre: 300 }], [{ key: 'tra:1194', extra: 0 }, { key: 'tra:1195', extra: 0 }], T('07:40'));
+  const six = list.filter(j => j.end === 'tra:1195' && j.legs[0].trip?.no === '1801');
+  assert.ok(six.some(j => j.legs[0].from === 'tra:1210'), 'boarded at 新竹 too');
+  assert.ok(six.some(j => j.legs[0].from === 'tra:1193'), 'and at 北新竹');
+});
+
+test('score: chasing your own train to the next station costs more than boarding it where it stopped nearer you', () => {
+  const o = { lat: 24.8, lon: 120.97 };
+  const d = { lat: 24.808, lon: 121.04 };
+  const ride = (from, prev) => ({ mode: 'tra', short: '區間 1801', from, to: { name: '六家', lat: 24.808, lon: 121.04 }, prev, dep: T('08:04'), arr: T('08:17'), train: { no: '1801' } });
+  const hsinchu = { name: '新竹', lat: 24.8016, lon: 120.9716 };
+  const north = { name: '北新竹', lat: 24.809, lon: 120.985 };
+  const chased = finish({ legs: [ride(north, hsinchu)] });
+  const there = finish({ legs: [ride(hsinchu, null)] });
+  assert.ok(score(chased, { o, d, now: T('07:40') }) - score(there, { o, d, now: T('07:40') }) >= 5);
+  // A planner's same train with no number, boarded at the stop before: one train.
+  const google = finish({ legs: [{ ...ride(hsinchu, null), short: '六家-新竹', train: null, dep: T('08:00') }] });
+  assert.ok(sameWay(finish({ legs: [ride(north, { ...hsinchu, dep: T('08:00') })] }), google));
 });
 
 test('journeys to several stations: each station keeps its own too (on to 六家 by the 六家線, over off sooner at 北新竹)', () => {
