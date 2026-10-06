@@ -3,8 +3,10 @@
 // navigation for that step with one tap: free, no billed call); a bus or
 // train step counts down to it to the second and shows where it is now (how
 // many stops away; TDX, every 20 s); on board, the stops still to go with
-// when it's at each, and a buzz with the card turned round when yours is
-// next; off it, what's next. Each step moves on by itself when you get there.
+// when it's at each (TDX's estimates, and your own pace from where the phone
+// has been for every stop they don't cover), and a buzz with the card turned
+// round when yours is next; off it, what's next. Each step moves on by itself
+// when you get there.
 
 import { watchPosition } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
@@ -13,7 +15,7 @@ import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEt
 import { etaAround, bikesAround } from './near.mjs';
 import { rideSec, DOCK_SEC } from './plan.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
-import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor } from './navlive.mjs';
+import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel } from './ui.mjs';
 import { e, hm, minsText, distText, meters, walkSec, tw } from './util.mjs';
 
@@ -98,7 +100,7 @@ export function navNotices(plan, i, info = new Map(), now = Date.now()) {
       const st = x?.station;
       if (st && x.leg.route?.uid && l.dep > now - 5 * 60_000) out.push({ at: Math.max(now, l.dep - 25 * 60_000), until: l.dep + 30 * 60_000, title: `${rideName(x.leg)} 快到了`, body: `{result}（${st.name}）`, tag: `nav:bus:${k}`, kind: 'nav', hash: 'nav', check: { bus: { path: stationEtaAsk(st), route: x.leg.route.uid, dir: Number(x.leg.route.dir), min: 5 } } });
     }
-    if ((l.mode === 'tra' || l.mode === 'hsr') && l.dep - 5 * 60_000 > now) out.push({ at: l.dep - 5 * 60_000, title: `${rideName(l)} ${hm(l.dep)} 開`, body: `在 ${l.from?.name || ''}${l.train?.platform ? ` ${l.train.platform} 月台` : ''}${l.headsign ? `・往 ${toward(l.headsign)}` : ''}`, tag: `nav:train:${k}`, kind: 'nav', hash: 'nav' });
+    if ((l.mode === 'tra' || l.mode === 'hsr') && l.dep - 5 * 60_000 > now) out.push({ at: l.dep - 5 * 60_000, title: `${rideName(l)} ${hm(l.dep)} 開`, body: `在 ${l.from?.name || ''}${l.train?.platform ? ` ${l.train.platform} 月台` : ''}${wayText(l) ? `・${wayText(l)}` : ''}`, tag: `nav:train:${k}`, kind: 'nav', hash: 'nav' });
     if (RIDE(l) && l.arr - 3 * 60_000 > now) out.push({ at: l.arr - 3 * 60_000, title: `快到 ${l.to?.name || ''} 了`, body: `準備下車${plan.legs[k + 1] ? `，接著${stepText(plan, k + 1, 'before').title}` : ''}`, tag: `nav:off:${k}`, kind: 'nav', hash: 'nav' });
   });
   return out;
@@ -145,6 +147,13 @@ export function rideName(l) {
 }
 // A sign's way, without the 往 a source may have put on it already.
 const toward = h => String(h || '').replace(/^往\s*/, '');
+// Which way, as said on the card: the sign's way, unless it names where you
+// board (a loop, 藍線1區 「往 火車站」 at 火車站): then where you're going.
+export const wayText = l => {
+  const h = toward(l.headsign);
+  if (!h) return '';
+  return `往 ${h === String(l.from?.name || '').trim() && l.to?.name ? l.to.name : h}`;
+};
 // What to do on a leg, before (or while) doing it: one short line, and what's said under it.
 function stepText(plan, i, phase) {
   const l = plan.legs[i];
@@ -155,8 +164,8 @@ function stepText(plan, i, phase) {
     return { title: `走到 ${last && !l.to?.name ? '目的地' : where}`, sub: next?.mode === 'bike' ? `在這裡借 ${next.ebike ? '電輔車' : 'YouBike'}` : RIDE(next) ? `搭 ${rideName(next)}` : '' };
   }
   if (l.mode === 'bike') return { title: `騎到 ${l.to.name}`, sub: l.swap ? '還車再借一台（每 30 分鐘換一次車）' : `${l.ebike ? '電輔車' : 'YouBike'}・在 ${l.from.name} 借車` };
-  if (phase === 'on') return { title: `坐到 ${l.to.name} 下車`, sub: `${rideName(l)}${l.headsign ? ` 往 ${toward(l.headsign)}` : ''}` };
-  return { title: `搭 ${rideName(l)}`, sub: `${l.from.name}${l.headsign ? `・往 ${toward(l.headsign)}` : ''}${l.train?.platform ? `・${l.train.platform} 月台` : ''}` };
+  if (phase === 'on') return { title: `坐到 ${l.to.name} 下車`, sub: `${rideName(l)}${wayText(l) ? ` ${wayText(l)}` : ''}` };
+  return { title: `搭 ${rideName(l)}`, sub: `${l.from.name}${wayText(l) ? `・${wayText(l)}` : ''}${l.train?.platform ? `・${l.train.platform} 月台` : ''}` };
 }
 // The ride this step leads to (the bus or train you're on your way to catch), or this step's own.
 const rideOf = (plan, i) => plan.legs.slice(i).findIndex(RIDE) + i;
@@ -193,7 +202,8 @@ export function navTimes(plan, i, phase, pos = null, liveAt = new Map(), now = D
 // (there with minutes to spare, only just, or late), when to set out, or
 // when you'll be there. → { text, tone: 'good' | 'warn' | 'bad' | '' }.
 export function paceOf(plan, i, phase, times, liveAt = new Map(), now = Date.now(), live = '') {
-  if (i === 0 && phase !== 'on' && plan.dep - now > 60_000) return { text: `${hm(plan.dep)} 出發・還有 ${minsText(Math.round((plan.dep - now) / 1000))}`, tone: '' };
+  // (A plan starting with the ride itself: its own line below, with what's live.)
+  if (i === 0 && phase !== 'on' && !RIDE(plan.legs[0]) && plan.dep - now > 60_000) return { text: `${hm(plan.dep)} 出發・還有 ${minsText(Math.round((plan.dep - now) / 1000))}`, tone: '' };
   const ri = rideOf(plan, i);
   const r = ri >= i ? plan.legs[ri] : null;
   // On board: when you're at your stop (the bottom says when you're there); nothing to catch: nothing to say.
@@ -263,8 +273,13 @@ export function trackHtml(rs, w, l) {
 
 // On board: the stops still to go, the next one first and yours last (the
 // middle of a long ride as how many), each with when it's there.
-export function boardHtml(rs, next, ahead, delay) {
-  const at = k => ahead?.get(k) ?? (rs.stops[k].at != null ? rs.stops[k].at + delay * 60_000 : null);
+// Each stop's time, in order of trust: TDX's estimate (a bus); a train's
+// timetable with its live delay; your own pace on it (`paced`, from where the
+// phone has been); the timetable as it stands; and for yours, `end` (when
+// you'll be there by the plan).
+export function boardHtml(rs, next, ahead, delay, end = null, paced = null, delayLive = false) {
+  const tt = k => (rs.stops[k].at != null ? rs.stops[k].at + delay * 60_000 : null);
+  const at = k => ahead?.get(k) ?? (delayLive ? tt(k) : null) ?? paced?.get(k) ?? tt(k) ?? (k === rs.j ? end : null);
   const ks = [];
   for (let k = next; k <= rs.j; k++) ks.push(k);
   const show = ks.length > 4 ? [ks[0], ks[1], null, ks.at(-1)] : ks;
@@ -285,7 +300,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
   primeBuzz();
   stopNav();
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
-  const state = { plan, i: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0 };
+  const state = { plan, i: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
   const notices = () => nav === state && push?.(navNotices(plan, state.i, state.info));
@@ -303,7 +318,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
     const on = ride && state.phase === 'on';
     const rs = ride ? state.ride.get(state.i) : null;
     const t = stepText(plan, state.i, state.phase);
-    const times = navTimes(plan, state.i, state.phase, state.pos, state.liveAt, now, on ? state.arrAt : null);
+    const times = navTimes(plan, state.i, state.phase, state.pos, state.liveAt, now, on ? (state.arrAt ?? (rs ? state.paced?.get(rs.j) : null) ?? null) : null);
     const pace = state.done ? { text: `${hm(now)} 抵達`, tone: 'good' } : paceOf(plan, state.i, state.phase, times, state.liveAt, now, state.live);
     const left = state.pos && l.to?.lat ? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon) : null;
     let title = state.done ? `已抵達 ${plan.legs.at(-1).to?.name || '目的地'}` : t.title;
@@ -319,7 +334,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
     const coming = Boolean(w && w.away === 0 && (l.mode === 'bus' ? w.in <= 60 : w.at));
     if (coming) {
       title = l.mode === 'bus' ? `${rideName(l)} 進站了` : `${rideName(l)} 在月台上`;
-      sub = l.mode === 'bus' ? `招手上車${l.headsign ? `・往 ${toward(l.headsign)}` : ''}` : t.sub;
+      sub = l.mode === 'bus' ? `招手上車${wayText(l) ? `・${wayText(l)}` : ''}` : t.sub;
     }
     // The big number on the right: what's left of a walk or ride; on board, the stops to go; else the countdown to the bus or train.
     let big = '';
@@ -335,8 +350,10 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
       big = countBig(at - now, what);
     }
     // Where the bus or train is (coming to you), or the stops to go (on it).
-    const track = w && rs && !coming ? trackHtml(rs, w, l) : '';
-    const board = on && rs && state.next != null && !state.done ? boardHtml(rs, state.next, state.ahead, state.delay) : '';
+    // Your stop the first of its way (藍線1區 at 火車站): no bus on its way to show; it sets out from here.
+    const origin = ride && !on && !state.done && !coming && !w && rs && rs.i === 0 ? `<div class="ot-track"><div class="ot-track-say"><span>${l.mode === 'bus' ? '起點站：公車從這裡發車' : '起點站：列車從這裡發車'}</span></div></div>` : '';
+    const track = w && rs && !coming ? trackHtml(rs, w, l) : origin;
+    const board = on && rs && state.next != null && !state.done ? boardHtml(rs, state.next, state.ahead, state.delay, times.end[state.i], state.paced, state.delayLive) : '';
     // YouBike where you take it and leave it, now: bikes (or none, and the nearest that has some), docks.
     const bikeLine = state.done ? '' : bikesText(state.bikes, plan, state.i, state.pos);
     // A walk or a ride of your own: Google Maps' turn-by-turn for it, from where you are.
@@ -391,6 +408,9 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
     state.delay = 0;
     state.fresh = 0;
     state.offAt = off ? Date.now() : 0;
+    state.track = [];
+    state.paced = null;
+    state.delayLive = false;
     state.done = false;
     saveNav(state);
     draw(plan, state.i);
@@ -414,8 +434,13 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
       if (l?.mode === 'bus' && l.from?.lat && !state.info.has(ri)) state.info.set(ri, await busInfo(l).catch(() => ({ leg: l })));
       if (l && !state.ride.has(ri)) {
         const had = l.train?.no;
-        state.ride.set(ri, await rideStops(l, state.info.get(ri)).catch(() => null));
-        if (!had && l.train?.no) saveNav(state);
+        const rs = await rideStops(l, state.info.get(ri)).catch(() => null);
+        state.ride.set(ri, rs);
+        // A ride the planner gave no shape: drawn through its stops (not a straight line across town).
+        const noShape = rs && !l.poly && !l.path;
+        if (noShape) l.path = rs.stops.slice(rs.i, rs.j + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]);
+        if ((!had && l.train?.no) || noShape) saveNav(state);
+        if (noShape && nav === state) draw(plan, state.i);
       }
       const rs = l ? state.ride.get(ri) : null;
       // On it already (opened again on board): the next stop from where you were last seen, not only on the next move.
@@ -429,7 +454,8 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
           if (state.i === at) {
             state.ahead = ahead;
             state.arrAt = ahead?.get(rs.j) ?? null;
-            state.fresh = ahead?.size ? Date.now() : 0;
+            // (Your own pace on it counts as live too.)
+            state.fresh = ahead?.size ? Date.now() : state.paced ? state.fresh : 0;
           }
         } else {
           // Its official route and way (a planner's name, both ways and every
@@ -460,6 +486,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
         if (lv) {
           state.liveAt.set(ri, l.dep + d * 60_000);
           state.delay = d;
+          state.delayLive = true;
           state.fresh = Date.now();
           if (on) state.arrAt = l.arr + d * 60_000;
         }
@@ -511,6 +538,18 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
         const rs = state.phase === 'on' ? state.ride.get(state.i) : null;
         const knew = state.next != null;
         if (rs) state.next = nextStop(rs.stops, rs.i, rs.j, p);
+        // Where you are along it, kept for 10 minutes: your own pace says when you're at each stop ahead.
+        if (rs) {
+          rs.cum ||= routeCum(rs.stops);
+          const a = alongRoute(rs.stops, p, rs.cum, Math.max(0, rs.i - 1));
+          const t = Date.now();
+          if (a && a.off < 150) {
+            state.track = [...state.track.filter(x => x.t > t - 10 * 60_000), { d: a.d, t }];
+            const pace = ridePace(state.track, t);
+            state.paced = pace ? aheadByPace(rs.cum, state.next, rs.j, a.d, pace, t) : null;
+            if (state.paced) state.fresh = t;
+          }
+        }
         // The stop you're coming to known for the first time: the times at the stops ahead now, not at the next 20 s.
         if (rs && !knew) refreshLive();
         // Yours next: a buzz, once.

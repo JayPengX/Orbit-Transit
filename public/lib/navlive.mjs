@@ -106,3 +106,54 @@ export function trainFor(trips, stations, l, slack = 3 * 60_000) {
   }
   return best ? { no: String(best.t.no), type: best.t.type || '', code: best.t.code ?? '' } : null;
 }
+
+// ---- On board, from where the phone has been: the ride's own pace ----
+// The phone is on the bus or train, so where it's been seen is where the
+// ride has been: how far along its stops it is now, and how fast it has come
+// over the last few minutes (stops and lights included), says when it'll be
+// at each stop ahead, with nothing from TDX. A second source beside TDX's
+// estimates: theirs where they have one (they know the traffic ahead), this
+// for every stop they don't (a line's last stop, 高鐵, a gap in the feed).
+
+// Metres from the first stop to each stop, along the line through them.
+export function routeCum(stops) {
+  const cum = [0];
+  for (let k = 1; k < stops.length; k++) cum.push(cum[k - 1] + meters(stops[k - 1].lat, stops[k - 1].lon, stops[k].lat, stops[k].lon));
+  return cum;
+}
+// How far along the stops a point is (metres from the first, on the nearest
+// stretch between two stops, from stop `from` on), and how far off that line.
+export function alongRoute(stops, pt, cum = routeCum(stops), from = 0) {
+  const cos = Math.cos((pt.lat * Math.PI) / 180);
+  const xy = s => [(s.lon - pt.lon) * 111_320 * cos, (s.lat - pt.lat) * 110_540];
+  let best = null;
+  for (let k = Math.max(0, from); k + 1 < stops.length; k++) {
+    const [ax, ay] = xy(stops[k]);
+    const [bx, by] = xy(stops[k + 1]);
+    const [dx, dy] = [bx - ax, by - ay];
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
+    const off = Math.hypot(ax + t * dx, ay + t * dy);
+    if (!best || off < best.off) best = { d: cum[k] + t * (cum[k + 1] - cum[k]), off };
+  }
+  return best;
+}
+// The pace over the last few minutes of `track` ([{ d, t }], oldest first):
+// metres a second, once there's a minute and 100 m of it; a stretch stood
+// still counts (it's part of the ride), backwards doesn't (a bad fix).
+export function ridePace(track, now = Date.now(), window = 5 * 60_000) {
+  const xs = track.filter(x => x.t >= now - window);
+  if (xs.length < 2) return null;
+  const [a, b] = [xs[0], xs.at(-1)];
+  const dt = (b.t - a.t) / 1000;
+  const dd = b.d - a.d;
+  if (dt < 60 || dd < 100) return null;
+  return Math.min(25, Math.max(1.5, dd / dt));
+}
+// When you'll be at each stop from `from` to `to`, at that pace from `d` (now).
+export function aheadByPace(cum, from, to, d, pace, now = Date.now()) {
+  const out = new Map();
+  if (!pace) return out;
+  for (let k = from; k <= to; k++) out.set(k, now + (Math.max(0, cum[k] - d) / pace) * 1000);
+  return out;
+}
