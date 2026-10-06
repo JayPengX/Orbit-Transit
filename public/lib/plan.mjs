@@ -224,8 +224,13 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
   const A = A0.filter(x => !B0.some(y => y.s.key === x.s.key && y.m < x.m));
   const B = B0.filter(x => !A.some(y => y.s.key === x.s.key));
   if (!A.length || !B.length) return [];
-  const starts = A.map(x => ({ key: x.s.key, at: at + x.a.sec * 1000 + 3 * 60_000, pre: x.a.sec + 180 }));
-  const ends = B.map(x => ({ key: x.s.key, extra: x.a.sec }));
+  // Each station timed by the quickest way you allow to it, whatever the
+  // way drawn (a walk under BIKE_OVER_M, ridden instead by withBikes when a
+  // bike is quicker): 竹東's station a 15-minute walk or a 7-minute ride is
+  // the 7, else riding 11 to 榮華 for the same train looks like leaving later.
+  const quick = x => (bike && !x.a.bus && x.m > 600 ? Math.min(x.a.sec, rideSec(x.m) + 2 * DOCK_SEC + 120) : x.a.sec);
+  const starts = A.map(x => ({ key: x.s.key, at: at + quick(x) * 1000 + 3 * 60_000, pre: quick(x) + 180 }));
+  const ends = B.map(x => ({ key: x.s.key, extra: quick(x) }));
   const reach = new Map([...A.map(x => [`a:${x.s.key}`, x]), ...B.map(x => [`b:${x.s.key}`, x])]);
   let found = [];
   try {
@@ -277,6 +282,8 @@ function trainLeg(net, l) {
     stops: l.stops,
     agency: l.trip.sys === 'hsr' ? '台灣高鐵' : l.trip.typeFull || '台鐵',
     dist: Math.round(meters(net.st.get(l.from).lat, net.st.get(l.from).lon, net.st.get(l.to).lat, net.st.get(l.to).lon)),
+    // The station it called at before you board (chasing it: see score).
+    prev: l.fromK > 0 && net.st.has(l.trip.stops[l.fromK - 1]?.st) ? { ...pt(l.trip.stops[l.fromK - 1].st), dep: l.trip.stops[l.fromK - 1].dep } : null,
     train: { sys: l.trip.sys, no: l.trip.no, code: l.trip.code }
   };
 }
@@ -422,6 +429,11 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
     const direct = Math.max(1000, meters(o.lat, o.lon, d.lat, d.lon));
     if (rides.slice(0, -1).some(l => l.to?.lat != null && meters(l.to.lat, l.to.lon, d.lat, d.lon) > direct + 1500)) add('away', 8);
   }
+  // Chasing your own train: riding (or walking) on past a station it stops
+  // at, nearer to you, to board it at the next (竹東's train caught at 榮華).
+  // A race you can lose, for a few minutes more at home.
+  const first = rides[0];
+  if (o && first?.prev?.lat != null && first.from?.lat != null && meters(o.lat, o.lon, first.prev.lat, first.prev.lon) < meters(o.lat, o.lon, first.from.lat, first.from.lon)) add('chase', 6);
   add('fare', fare / 12);
   if (p.miss) add('miss', 25);
   if (p.off) add('off', 120);
@@ -485,7 +497,9 @@ function sameVehicle(l, m) {
   if (l.mode !== m.mode) return false;
   const [n, k] = [trainNo(l), trainNo(m)];
   if (n && k) return n === k;
-  if (n || k) return norm(l.from?.name) === norm(m.from?.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 2 * 60_000;
+  // (Or boarded a stop apart: the train ours left 竹東 on is TDX's from 竹東.)
+  const at = (x, y) => norm(x?.name) === norm(y.from?.name) && Math.abs((x.dep || 0) - (y.dep || 0)) <= 2 * 60_000;
+  if (n || k) return at(l.from && { ...l.from, dep: l.dep }, m) || (l.prev && at(l.prev, m)) || (m.prev && at(m.prev, l));
   return norm(l.short || l.name) === norm(m.short || m.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 8 * 60_000;
 }
 

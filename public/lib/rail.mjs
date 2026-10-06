@@ -292,6 +292,12 @@ export function directs(net, a, b, t, { use = () => true, n = 8 } = {}) {
   return out.sort((x, y) => x.dep - y.dep).slice(0, n);
 }
 
+// Two journeys on the same trains, wherever they're boarded and left.
+const sameTrains = (a, b) => {
+  const [x, y] = [a, b].map(j => j.legs.filter(l => !l.walk).map(l => l.trip.id).join('|'));
+  return x === y;
+};
+
 // The options from a to b leaving after t: the fastest ways in order of
 // departure, each the latest way to leave for its arrival, plus the direct
 // trains; none another option beats on departure, arrival and changes.
@@ -325,25 +331,27 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
     // 10:29 that waits an hour at 竹中 for the same train on); by when you
     // set out, not when the train leaves: the 1813 at 榮華 four minutes
     // after 竹東 is no later for someone at 竹東 who'd ride 11 minutes to it.
+    // The same trains boarded elsewhere is no later way of its own: both
+    // are kept, and the ranking weighs the walk against the ride.
     let t = j?.dep;
+    const also = [];
     for (let k = 0; j && k < 4; k++) {
       const later = earliest(net, ss.map(s => ({ ...s, at: Math.max(s.at, t + 60_000) })), ts, { use });
       if (!later?.legs?.some(l => !l.walk) || later.arr > j.arr) break;
       t = later.dep;
-      if (go(later) > go(j)) j = later;
+      if (go(later) <= go(j)) continue;
+      if (sameTrains(later, j)) also.push(j);
+      j = later;
     }
-    return j?.legs?.some(l => !l.walk) && !j.legs[0].walk && j.arr - best() < 90 * 60_000 ? j : null;
+    const ok = x => x?.legs?.some(l => !l.walk) && !x.legs[0].walk && x.arr - best() < 90 * 60_000;
+    return ok(j) ? [j, ...also.filter(ok)] : [];
   };
   if (starts.length > 1)
-    for (const s of starts) {
-      const j = soonest([s], targets);
-      if (j && j.legs[0].from === s.key) (found.push(j), own.add(j));
-    }
+    for (const s of starts)
+      for (const j of soonest([s], targets)) if (j.legs[0].from === s.key) (found.push(j), own.add(j));
   if (targets.length > 1)
-    for (const tg of targets) {
-      const j = soonest(starts, [tg]);
-      if (j && j.end === tg.key) (found.push(j), own.add(j));
-    }
+    for (const tg of targets)
+      for (const j of soonest(starts, [tg])) if (j.end === tg.key) (found.push(j), own.add(j));
   // (Where it ends too: the same train on to 六家 is not the one off at 竹中.)
   const sig = j => `${j.legs.map(l => (l.walk ? `w:${l.to}` : `${l.trip.id}:${l.from}`)).join('|')}>${j.end}`;
   const seen = new Set();
@@ -352,7 +360,7 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
   const ownSig = new Set([...own].map(sig));
   for (const j of uniq) if (ownSig.has(sig(j))) own.add(j);
   const fin = j => j.arr + j.extra * 1000;
-  const kept = uniq.filter(a => own.has(a) || !uniq.some(b => b !== a && go(b) >= go(a) && fin(b) <= fin(a) && b.transfers <= a.transfers && (go(b) > go(a) || fin(b) < fin(a) || b.transfers < a.transfers)));
+  const kept = uniq.filter(a => own.has(a) || !uniq.some(b => b !== a && !sameTrains(a, b) && go(b) >= go(a) && fin(b) <= fin(a) && b.transfers <= a.transfers && (go(b) > go(a) || fin(b) < fin(a) || b.transfers < a.transfers)));
   const top = kept.filter(j => !own.has(j)).sort((a, b) => fin(a) - fin(b) || go(b) - go(a)).slice(0, n * 2);
   return [...top, ...kept.filter(j => own.has(j))].sort((a, b) => a.dep - b.dep);
 }
