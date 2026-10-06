@@ -15,7 +15,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
@@ -1139,9 +1139,15 @@ function selectPlan(i) {
 // walks a line; our own legs are straight until this), then drawn again.
 async function roadLegs(p, { lit = -1 } = {}) {
   const todo = p.legs.filter(l => (l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
-  if (!todo.length) return;
-  await Promise.all(
-    todo.map(async l => {
+  // A bus the planner gave no shape: through its stops (not a straight line across town).
+  const buses = p.legs.filter(l => l.mode === 'bus' && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
+  if (!todo.length && !buses.length) return;
+  await Promise.all([
+    ...buses.map(async l => {
+      const path = await busPath(l).catch(() => null);
+      if (path?.length > 1) l.path = path;
+    }),
+    ...todo.map(async l => {
       const r = await roadPath(l.mode, l.from, l.to);
       if (!r) return;
       l.road = true;
@@ -1149,7 +1155,7 @@ async function roadLegs(p, { lit = -1 } = {}) {
       l.fmt = '';
       if (l.mode === 'bike') l.dist = r.dist;
     })
-  );
+  ]);
   if (card?.plans?.includes(p) && (card.plans[card.sel] === p || navigating())) {
     drawPlan(p, { fit: false, lit });
     if (!navigating()) renderCard();

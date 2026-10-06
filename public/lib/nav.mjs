@@ -58,6 +58,20 @@ async function busInfo(l) {
   return { leg: o, route, way, sched, station: st || null };
 }
 
+// A bus leg the planner gave no shape: the line through its stops, from its
+// route's way (the bus packs first: no proxy read), for the map. → [[lat, lon]…] or null.
+export async function busPath(l) {
+  if (l.mode !== 'bus' || l.poly || l.path) return null;
+  const o = await officialLeg(l).catch(() => l);
+  if (!o.route?.uid) return null;
+  const ways = await routeStops({ uid: o.route.uid, name: o.short || o.name, city: o.route.city || routeCity(o.route.uid) }, o.from).catch(() => []);
+  const w = ways.find(x => x.dir === o.route.dir && x.stops.some(y => y.uid === o.route.stopUID));
+  const way = w ? { w, i: w.stops.findIndex(y => y.uid === o.route.stopUID) } : wayOf(ways, o.from, o.to);
+  if (!way?.w) return null;
+  const j = nearestStop(way.w.stops, l.to, way.i + 1);
+  return j > way.i ? way.w.stops.slice(way.i, j + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]) : null;
+}
+
 // A ride's stops, from where you get on (i) to where you get off (j), with
 // their times where they're known: a bus's way; a train's run today.
 async function rideStops(l, info) {
