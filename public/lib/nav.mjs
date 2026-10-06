@@ -258,6 +258,8 @@ function bikesText(bk, plan, i, pos) {
   return out.join('');
 }
 
+// How long till you're there, short enough to sit beside the time and its drift: 45 分, 1時29分.
+export const leftText = m => (m < 60 ? `${m} 分` : `${Math.floor(m / 60)}時${String(m % 60).padStart(2, '0')}分`);
 // What's left of a walk or ride, big: metres under a kilometre.
 const distBig = m => (m < 1000 ? `<b>${Math.round(m / 10) * 10}</b><small>公尺</small>` : `<b>${(m / 1000).toFixed(1)}</b><small>公里</small>`);
 // The countdown to a bus or train, big: to the second under ten minutes.
@@ -403,7 +405,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
       </div>
       <div class="ot-nav-bottom">
         <div class="ot-nav-eta">
-          <span><b>${e(hm(state.done ? now : times.eta))}</b>${driftText}<small>${state.done ? '已抵達' : `${driftText ? '' : '抵達・'}還要 ${minsLeft < 60 ? `${minsLeft} 分` : e(minsText(minsLeft * 60))}`}</small></span>
+          <span><b>${e(hm(state.done ? now : times.eta))}</b>${driftText}<small>${state.done ? '已抵達' : `${driftText ? '剩 ' : '抵達・還要 '}${leftText(minsLeft)}`}</small></span>
           <a class="q-icon-btn" href="${e(gmapsLink(legEnd(plan, last), 'transit'))}" target="_blank" rel="noopener" aria-label="用 Google 地圖導航到目的地">${icon('route')}</a>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">結束</button>
         </div>
