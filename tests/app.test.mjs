@@ -986,6 +986,13 @@ test('journeys from several stations: each station keeps its own soonest train, 
   assert.ok(list.some(j => j.legs[0].from === 'tra:1193' && j.legs[0].trip.no === '1803'));
 });
 
+test('journeys to a station: the same train a station further up is no later a way to leave (竹東 → 榮華 by bike for the train that stopped at 竹東)', () => {
+  // At 新竹 (here) in time for the 1801; 北新竹 a 15-minute ride away, where the same 1801 calls 4 minutes later.
+  const list = journeys(net, [{ key: 'tra:1210', at: T('07:53'), pre: 180 }, { key: 'tra:1193', at: T('08:03'), pre: 900 }], [{ key: 'tra:1194', extra: 0 }, { key: 'tra:1195', extra: 0 }], T('07:50'));
+  const six = list.filter(j => j.end === 'tra:1195' && j.legs[0].trip?.no === '1801');
+  assert.ok(six.some(j => j.legs[0].from === 'tra:1210'), 'on to 六家, boarded where you are');
+});
+
 test('journeys to several stations: each station keeps its own too (on to 六家 by the 六家線, over off sooner at 北新竹)', () => {
   // From 上員: the 1701 is at 北新竹 first; 六家 is a change at 竹中 to the 1801.
   const list = journeys(net, [{ key: 'tra:1201', at: T('07:50') }], [{ key: 'tra:1193', extra: 0 }, { key: 'tra:1195', extra: 0 }], T('07:50'));
