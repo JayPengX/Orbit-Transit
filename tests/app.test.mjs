@@ -9,7 +9,7 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml } from '../public/lib/nav.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText } from '../public/lib/nav.mjs';
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
@@ -1394,4 +1394,10 @@ test("boardHtml: TDX's time first, your own pace where TDX has none, the timetab
   // A train on the live board (delay known): its timetable plus the delay comes before your pace.
   const tr = boardHtml(rs, 1, null, 2, null, new Map([[2, T(25)]]), true);
   assert.match(tr, /<span>C<\/span><time>20:22<\/time>/);
+});
+
+test("leftText: how long till you're there, short beside the arrival time and its drift (「還要 1 小時…」 was cut)", () => {
+  assert.equal(leftText(45), '45 分');
+  assert.equal(leftText(89), '1時29分');
+  assert.equal(leftText(125), '2時05分');
 });

@@ -4367,3 +4367,17 @@ main {
   background: #3a3a3c;
   box-shadow: 0 0 0 4px var(--ot-card);
 }
+/* A narrow phone (375): the bottom row's gaps and 結束 a little tighter, so
+   the time, its drift and what's left still fit on one line. */
+@media (max-width: 380px) {
+  .ot-nav-eta,
+  .ot-nav-eta span {
+    gap: 5px;
+  }
+  .ot-nav-eta em {
+    padding: 2px 6px;
+  }
+  .ot-nav-end {
+    padding-inline: 14px;
+  }
+}
