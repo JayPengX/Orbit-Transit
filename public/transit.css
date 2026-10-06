@@ -3738,14 +3738,24 @@ main {
   transform: scale(0.96);
 }
 /* Later or sooner than the plan said. */
+/* (A tag beside the time, never cut: only the minutes left give way.) */
 .ot-nav-eta em {
+  flex: none;
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--q-fill, rgba(120, 120, 128, 0.24));
+  font-size: 12.5px;
   font-style: normal;
   font-weight: 700;
+  white-space: nowrap;
 }
 .ot-nav-eta em.good {
+  background: color-mix(in srgb, var(--ot-good) 18%, transparent);
   color: var(--ot-good);
 }
 .ot-nav-eta em.bad {
+  background: color-mix(in srgb, var(--ot-bad) 18%, transparent);
   color: var(--ot-bad);
 }
 

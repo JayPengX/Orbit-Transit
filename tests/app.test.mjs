@@ -9,8 +9,8 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd } from '../public/lib/nav.mjs';
-import { busWhere, busAhead, trainWhere, nextStop, countText } from '../public/lib/navlive.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName } from '../public/lib/nav.mjs';
+import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
 import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
@@ -1308,4 +1308,28 @@ test("paceOf: walking to the stop, the line doesn't say the stop's name again (t
   assert.match(p.text, /早 \d+ 分/);
   // Waiting at the stop itself, it still says where.
   assert.ok(paceOf(plan, 1, 'before', navTimes(plan, 1, 'before', null, new Map(), now), new Map(), now).text.startsWith('新竹車站'));
+});
+
+test("trainFor: a train leg with only its line (TDX's 新竹-六家) gets its number from the day's timetable: leaving where you board at the time given, stopping where you get off", () => {
+  const at = m => Date.UTC(2026, 9, 6, 12) + m * 60_000;
+  const stations = [
+    { key: 'tra:1210', sys: 'tra', lat: 24.8016, lon: 120.9716 },
+    { key: 'tra:1194', sys: 'tra', lat: 24.7836, lon: 121.0372 },
+    { key: 'tra:1195', sys: 'tra', lat: 24.808, lon: 121.04 },
+    { key: 'hsr:1040', sys: 'hsr', lat: 24.8081, lon: 121.0403 }
+  ];
+  const trip = (no, a, stops) => ({ sys: 'tra', no, type: '區間', code: '6', stops: stops.map(([st, m]) => ({ st, arr: at(a + m), dep: at(a + m) })) });
+  const trips = [
+    trip('1771', 0, [['tra:1210', 0], ['tra:1194', 10], ['tra:1195', 18]]),
+    trip('1773', 30, [['tra:1210', 0], ['tra:1194', 10], ['tra:1195', 18]]),
+    // Leaves 新竹 at the time, but never gets to 六家.
+    trip('1251', 31, [['tra:1210', 0], ['tra:1194', 10]]),
+    { sys: 'hsr', no: '611', stops: [{ st: 'hsr:1040', arr: at(30), dep: at(30) }] }
+  ];
+  const leg = { mode: 'tra', dep: at(31), from: { lat: 24.8016, lon: 120.9716 }, to: { lat: 24.8077, lon: 121.0394 } };
+  assert.deepEqual(trainFor(trips, stations, leg), { no: '1773', type: '區間', code: '6' });
+  // Said as the sign says it: its kind and number, not the planner's line.
+  assert.equal(rideName({ mode: 'tra', short: '新竹-六家', train: trainFor(trips, stations, leg) }), '台鐵 區間 1773 次');
+  // Nothing near the time: no guess.
+  assert.equal(trainFor(trips, stations, { ...leg, dep: at(15) }), null);
 });
