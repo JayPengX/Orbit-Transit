@@ -130,10 +130,16 @@ export async function traBoard(id) {
     .sort((a, b) => (a.sched || 0) - (b.sched || 0));
 }
 
+// Every train now (TRA), by train number: its delay, and the station it's
+// at or last left (`st`, as the network's keys; `status` 0 arriving, 1 at
+// it, 2 left it).
+export async function traLive() {
+  const j = await tdx('basic/v3/Rail/TRA/TrainLiveBoard', { fresh: 60_000 });
+  return new Map(rows(j).map(r => [r.TrainNo, { delay: Number(r.DelayTime) || 0, st: r.StationID ? `tra:${r.StationID}` : '', name: zh(r.StationName), status: Number(r.TrainStationStatus) || 0 }]));
+}
 // Every train's delay now (TRA), by train number.
 export async function traDelays() {
-  const j = await tdx('basic/v3/Rail/TRA/TrainLiveBoard', { fresh: 60_000 });
-  return new Map(rows(j).map(r => [r.TrainNo, Number(r.DelayTime) || 0]));
+  return new Map([...(await traLive())].map(([no, x]) => [no, x.delay]));
 }
 
 // The next trains at an HSR station today, from the day's timetable.

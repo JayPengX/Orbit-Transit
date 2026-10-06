@@ -424,7 +424,8 @@ function onClick(ev) {
   if (nav) {
     const st = S.trips.get(nav.dataset.navTrip);
     const p = st?.plans?.[Number(nav.dataset.i)];
-    if (p) return ctx.navPlan(p, st.from, p.legs.at(-1).to);
+    // (The trip's own end, Google's place for its navigation, when it's where the plan ends.)
+    if (p) return ctx.navPlan(p, st.from, ctx.data.saved.find(x => x.id === nav.dataset.navTrip)?.to || p.legs.at(-1).to);
   }
   const pk = ev.target.closest('[data-pick-trip]');
   if (pk) {
@@ -467,7 +468,7 @@ function onClick(ev) {
   const gp = ev.target.closest('[data-go-place]');
   if (gp) {
     const p = ctx.data.places.find(x => x.id === gp.dataset.goPlace);
-    if (p) return ctx.openTrip(null, { name: p.name, lat: p.lat, lon: p.lon });
+    if (p) return ctx.openTrip(null, { name: p.name, lat: p.lat, lon: p.lon, ...(p.gid ? { gid: p.gid } : {}) });
   }
   const tm = ev.target.closest('[data-times]');
   if (tm) {

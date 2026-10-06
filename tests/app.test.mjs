@@ -8,8 +8,9 @@ import { coverage, fareOf, tpassOf, passOk, inPass } from '../public/lib/tpass.m
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
-import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf } from '../public/lib/nav.mjs';
+import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd } from '../public/lib/nav.mjs';
+import { busWhere, busAhead, trainWhere, nextStop, countText } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
 import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
@@ -1206,4 +1207,105 @@ test('a change onto the metro for 3 km is no hop: two lines that are the quickes
   const out = rank([metro, bus], { now: t0 });
   const m = out.find(p => p.legs[0].mode === 'metro');
   assert.ok(m.lead && !m.weak && out[0] === m);
+});
+
+// ---- Live navigation: where the bus or train is, the stops to go, Google Maps' links -------------
+// Ten stops along a road, ~110 m apart.
+const NSTOPS = Array.from({ length: 10 }, (_, k) => ({ uid: `s${k}`, id: `tra:${k}`, name: `站${k}`, lat: 24.8, lon: 121 + k * 0.0011 }));
+const etaOfSecs = o => new Map(Object.entries(o).map(([k, sec]) => [k, { sec, status: 0 }]));
+
+test('busWhere: walking back from your stop while the estimates fall; the first that rises is the bus behind', () => {
+  const eta = etaOfSecs({ s8: 300, s7: 240, s6: 180, s5: 120, s4: 600, s3: 540 });
+  assert.deepEqual(busWhere(NSTOPS, 8, eta), { k: 5, away: 3, sec: 300, in: 120, far: false });
+  // No estimate at your stop: nothing to say.
+  assert.equal(busWhere(NSTOPS, 9, eta), null);
+  // A stop with no estimate on the way back stops the walk there.
+  const gap = etaOfSecs({ s8: 300, s7: 240, s5: 120 });
+  assert.equal(busWhere(NSTOPS, 8, gap).k, 7);
+  // Further back than we look: far.
+  const w = busWhere(NSTOPS, 8, eta, 2);
+  assert.equal(w.far, true);
+  assert.equal(w.away, 2);
+});
+
+test('busAhead: the times at the stops still to go, until an estimate falls (the bus after yours)', () => {
+  const eta = etaOfSecs({ s3: 60, s4: 120, s5: 180, s6: 30, s7: 90 });
+  const out = busAhead(NSTOPS, 3, 8, eta, 0);
+  assert.deepEqual([...out.keys()], [3, 4, 5]);
+  assert.equal(out.get(5), 180_000);
+});
+
+test('trainWhere: from the live board; left a station is heading to the next; past you is nothing', () => {
+  assert.deepEqual(trainWhere(NSTOPS, 3, { st: 'tra:1', status: 2 }), { k: 2, away: 1, at: false, far: false });
+  assert.deepEqual(trainWhere(NSTOPS, 3, { st: 'tra:1', status: 1 }), { k: 1, away: 2, at: true, far: false });
+  assert.equal(trainWhere(NSTOPS, 3, { st: 'tra:3', status: 2 }), null);
+  assert.equal(trainWhere(NSTOPS, 3, { st: 'tra:5', status: 0 }), null);
+  assert.equal(trainWhere(NSTOPS, 3, null), null);
+});
+
+test('nextStop: on board, the stop you come to next from where you are', () => {
+  assert.equal(nextStop(NSTOPS, 1, 6, null), 2);
+  // Stopped at 站3: the next is 站4.
+  assert.equal(nextStop(NSTOPS, 1, 6, { lat: 24.8, lon: NSTOPS[3].lon }), 4);
+  // A little past 站3 towards 站4.
+  assert.equal(nextStop(NSTOPS, 1, 6, { lat: 24.8, lon: NSTOPS[3].lon + 0.0004 }), 4);
+  // Never past yours.
+  assert.equal(nextStop(NSTOPS, 1, 6, { lat: 24.8, lon: NSTOPS[6].lon }), 6);
+});
+
+test('countText: m:ss under ten minutes, minutes after', () => {
+  assert.equal(countText(245_000), '4:05');
+  assert.equal(countText(-5_000), '0:00');
+  assert.equal(countText(600_000), '10');
+  assert.equal(countText(1_500_000), '25');
+});
+
+test("gmapsLink: from Google's own 你的位置; to Google's place when there's its id, else the point", () => {
+  const gid = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+  const a = new URL(gmapsLink({ name: '巨城', lat: 24.81, lon: 120.97, gid }, 'bicycling')).searchParams;
+  assert.equal(a.has('origin'), false);
+  assert.equal(a.get('destination'), '巨城');
+  assert.equal(a.get('destination_place_id'), gid);
+  assert.equal(a.get('travelmode'), 'bicycling');
+  assert.equal(a.get('dir_action'), 'navigate');
+  const b = new URL(gmapsLink({ name: '路邊', lat: 24.81, lon: 120.97 }, 'transit')).searchParams;
+  assert.equal(b.has('origin'), false);
+  assert.equal(b.get('destination'), '24.81,120.97');
+  assert.equal(b.has('destination_place_id'), false);
+  assert.equal(b.has('dir_action'), false);
+  // A bad id is never sent.
+  assert.equal(new URL(gmapsLink({ name: 'x', lat: 24.81, lon: 120.97, gid: 'no good!' }, 'walking')).searchParams.has('destination_place_id'), false);
+});
+
+test("cleanEnd and cleanPlace keep a Google place id that looks like one, and drop one that doesn't", () => {
+  const gid = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+  assert.equal(cleanEnd({ name: '巨城', lat: 24.81, lon: 120.97, gid }).gid, gid);
+  assert.equal('gid' in cleanEnd({ name: '巨城', lat: 24.81, lon: 120.97, gid: '<script>' }), false);
+  assert.equal(cleanPlace({ name: '巨城', lat: 24.81, lon: 120.97, gid }).gid, gid);
+  assert.equal('gid' in cleanPlace({ name: '巨城', lat: 24.81, lon: 120.97, gid: 42 }), false);
+});
+
+test("legEnd: the last leg ends at the trip's own place when it's within 300 m, else where the leg ends", () => {
+  const to = { name: '路口', lat: 24.8, lon: 121 };
+  const legs = [{ mode: 'bus', to: { name: '站', lat: 24.79, lon: 121 } }, { mode: 'walk', to }];
+  const near = { name: '巨城', lat: 24.801, lon: 121, gid: 'ChIJN1t_tDeuEmsRUsoyG83frY4' };
+  assert.equal(legEnd({ legs, dest: near }, 1), near);
+  assert.equal(legEnd({ legs, dest: { name: '遠', lat: 24.81, lon: 121 } }, 1), to);
+  assert.equal(legEnd({ legs, dest: near }, 0), legs[0].to);
+  assert.equal(legEnd({ legs }, 1), to);
+});
+
+test("paceOf: walking to the stop, the line doesn't say the stop's name again (the title does), so the minutes to spare fit beside Google's link", () => {
+  const now = Date.UTC(2026, 9, 6, 12);
+  const stopPt = { name: '新竹車站(中正路)', lat: 24.8026, lon: 120.9702 };
+  const plan = { dep: now, arr: now + 40 * 60_000, legs: [
+    { mode: 'walk', from: { lat: 24.80, lon: 120.968 }, to: stopPt, dep: now, arr: now + 5 * 60_000, dur: 300 },
+    { mode: 'bus', short: '5608', from: stopPt, to: { name: '竹東站', lat: 24.736, lon: 121.092 }, dep: now + 10 * 60_000, arr: now + 40 * 60_000 }
+  ] };
+  const times = navTimes(plan, 0, 'before', null, new Map(), now);
+  const p = paceOf(plan, 0, 'before', times, new Map(), now);
+  assert.ok(!p.text.includes('新竹車站'), p.text);
+  assert.match(p.text, /早 \d+ 分/);
+  // Waiting at the stop itself, it still says where.
+  assert.ok(paceOf(plan, 1, 'before', navTimes(plan, 1, 'before', null, new Map(), now), new Map(), now).text.startsWith('新竹車站'));
 });

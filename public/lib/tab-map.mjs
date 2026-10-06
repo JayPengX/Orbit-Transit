@@ -15,7 +15,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
@@ -372,7 +372,8 @@ function refreshCard() {
   if (card && card.kind !== 'plans' && card.kind !== 'place' && card.kind !== 'point') cardTimer = setInterval(load, 20_000);
 }
 
-const placeOf = c => ({ name: c.item.name || '', lat: c.item.lat ?? c.lat, lon: c.item.lon ?? c.lon });
+// A card's place as a trip's end; one of Google's carries its id (Google Maps' own navigation goes to the place itself).
+const placeOf = c => ({ name: c.item.name || '', lat: c.item.lat ?? c.lat, lon: c.item.lon ?? c.lon, ...(c.kind === 'place' && (c.item.gid || GOOGLE_ID.test(c.item.id || '')) ? { gid: c.item.gid || c.item.id } : {}) });
 // To a stop (or a bike station) on foot or by YouBike only, navigated at once.
 function goThere(c, { bike = true } = {}) {
   const h = ctx.here;
@@ -494,6 +495,9 @@ export function metroBoardHtml(live) {
 }
 
 async function cardClick(ev) {
+  // A step's Google Maps link sits inside its plan's button: it opens Google, never selects the plan.
+  const gm = ev.target.closest('[data-gmaps]');
+  if (gm) return void window.open(gm.dataset.gmaps, '_blank', 'noopener');
   const act = ev.target.closest('[data-card]')?.dataset.card;
   const tk = ev.target.closest('[data-ticket]');
   if (tk) return buyTicket(JSON.parse(tk.dataset.ticket), t => ctx.status(t));
@@ -670,10 +674,10 @@ function wireSearch() {
       const places = ctx.data.places;
       const recent = ctx.data.trips.slice(0, 8);
       box.innerHTML =
-        (places.length ? `<h4 class="ot-res-h">釘選地點</h4><div class="ot-res-places">${places.map(p => `<button class="ot-res-place" type="button" data-res="${e(JSON.stringify({ kind: 'place', icon: p.icon, name: p.name, sub: p.address || '我的地點', lat: p.lat, lon: p.lon }))}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span>${e(p.name)}</span></button>`).join('')}</div>` : '') +
+        (places.length ? `<h4 class="ot-res-h">釘選地點</h4><div class="ot-res-places">${places.map(p => `<button class="ot-res-place" type="button" data-res="${e(JSON.stringify({ kind: 'place', icon: p.icon, name: p.name, sub: p.address || '我的地點', lat: p.lat, lon: p.lon, gid: p.gid }))}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span>${e(p.name)}</span></button>`).join('')}</div>` : '') +
         (recent.length
           ? `<h4 class="ot-res-h">最近<button class="ot-res-clear" type="button" data-clear-recent="1">全部清除</button></h4>${recent
-              .map(x => `<div class="ot-res-w">${resultRow({ kind: 'trip', name: x.name || '地圖上的位置', sub: ctx.here ? distText(meters(ctx.here.lat, ctx.here.lon, x.lat, x.lon)) : '', lat: x.lat, lon: x.lon })}<button class="q-icon-btn ot-res-del" type="button" data-del-recent="${e(tripKey(x))}" aria-label="刪除這筆">${icon('x')}</button></div>`)
+              .map(x => `<div class="ot-res-w">${resultRow({ kind: 'trip', name: x.name || '地圖上的位置', sub: ctx.here ? distText(meters(ctx.here.lat, ctx.here.lon, x.lat, x.lon)) : '', lat: x.lat, lon: x.lon, gid: x.gid })}<button class="q-icon-btn ot-res-del" type="button" data-del-recent="${e(tripKey(x))}" aria-label="刪除這筆">${icon('x')}</button></div>`)
               .join('')}`
           : '') || '<p class="ot-note">搜尋地點、地址、車站。找過的地方會留在這裡。</p>';
       return;
@@ -755,12 +759,12 @@ export function pickPoint(title, { here = false, onMap = true } = {}) {
       if (r.kind === 'google') {
         try {
           const p = await placeDetails(r.id, { session });
-          return finish({ name: r.name, lat: p.lat, lon: p.lon });
+          return finish({ name: r.name, lat: p.lat, lon: p.lon, gid: r.id });
         } catch (err) {
           return (box.innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`);
         }
       }
-      if (Number.isFinite(r.lat)) finish({ name: r.name, lat: r.lat, lon: r.lon });
+      if (Number.isFinite(r.lat)) finish({ name: r.name, lat: r.lat, lon: r.lon, ...(r.gid ? { gid: r.gid } : {}) });
     });
     draw();
     setTimeout(() => input.focus(), 50);
@@ -771,8 +775,8 @@ export function pickPoint(title, { here = false, onMap = true } = {}) {
 async function localMatches(t) {
   const norm = s => String(s || '').replace(/台/g, '臺');
   const T = norm(t);
-  const places = ctx.data.places.filter(p => !T || norm(p.name).includes(T)).map(p => ({ kind: 'place', icon: p.icon, name: p.name, sub: p.address || '我的地點', lat: p.lat, lon: p.lon }));
-  const trips = T ? [] : ctx.data.trips.slice(0, 5).map(x => ({ kind: 'trip', name: x.name || '最近的目的地', sub: '最近', lat: x.lat, lon: x.lon }));
+  const places = ctx.data.places.filter(p => !T || norm(p.name).includes(T)).map(p => ({ kind: 'place', icon: p.icon, name: p.name, sub: p.address || '我的地點', lat: p.lat, lon: p.lon, gid: p.gid }));
+  const trips = T ? [] : ctx.data.trips.slice(0, 5).map(x => ({ kind: 'trip', name: x.name || '最近的目的地', sub: '最近', lat: x.lat, lon: x.lon, gid: x.gid }));
   let stations = [];
   if (T) {
     const rail = await railStations().catch(() => []);
@@ -795,7 +799,7 @@ async function localMatches(t) {
 async function chooseResult(r) {
   closeResults();
   const known = p => {
-    ctx.data.trips = remember(ctx.data.trips, { name: p.name, lat: p.lat, lon: p.lon, t: Date.now() }, tripKey, 10);
+    ctx.data.trips = remember(ctx.data.trips, { name: p.name, lat: p.lat, lon: p.lon, t: Date.now(), ...(p.gid ? { gid: p.gid } : {}) }, tripKey, 10);
     ctx.save();
   };
   if (Number.isFinite(r.lat) && r.kind !== 'place') known(r);
@@ -805,7 +809,7 @@ async function chooseResult(r) {
     try {
       const d = await placeDetails(r.id, { session: searchSession });
       searchSession = '';
-      known({ name: r.name, lat: d.lat, lon: d.lon });
+      known({ name: r.name, lat: d.lat, lon: d.lon, gid: r.id });
       return arrive({ kind: 'place', item: { id: r.id, name: r.name, sub: r.sub || d.address, lat: d.lat, lon: d.lon }, lat: d.lat, lon: d.lon });
     } catch (err) {
       return ctx.status(errorText(err));
@@ -816,7 +820,7 @@ async function chooseResult(r) {
     const st = rail.find(s => s.key === r.key);
     if (st) return arrive({ kind: st.sys, item: st, lat: st.lat, lon: st.lon });
   }
-  arrive({ kind: 'place', item: { name: r.name, sub: r.sub, lat: r.lat, lon: r.lon }, lat: r.lat, lon: r.lon });
+  arrive({ kind: 'place', item: { name: r.name, sub: r.sub, lat: r.lat, lon: r.lon, gid: r.gid }, lat: r.lat, lon: r.lon });
 }
 function arrive(c) {
   map.setView(c.lat, c.lon, Math.max(map.zoom(), 16));
@@ -833,7 +837,7 @@ function drawChips() {
     const pl = ev.target.closest('[data-place]');
     if (pl) {
       const p = ctx.data.places.find(x => x.id === pl.dataset.place);
-      if (p) arrive({ kind: 'place', item: { name: p.name, sub: p.address, lat: p.lat, lon: p.lon, pin: p.id }, lat: p.lat, lon: p.lon });
+      if (p) arrive({ kind: 'place', item: { name: p.name, sub: p.address, lat: p.lat, lon: p.lon, pin: p.id, gid: p.gid }, lat: p.lat, lon: p.lon });
       return;
     }
     const layer = ev.target.closest('[data-layer]')?.dataset.layer;
@@ -940,7 +944,7 @@ async function plan(from, to, opts = {}) {
     return renderCard();
   }
   map.fit([fromPt, dest], { top: 110, bottom: Math.round(innerHeight * 0.48), left: 40, right: 40 });
-  ctx.data.trips = remember(ctx.data.trips, { name: dest.name, lat: dest.lat, lon: dest.lon, t: Date.now() }, tripKey, 10);
+  ctx.data.trips = remember(ctx.data.trips, { name: dest.name, lat: dest.lat, lon: dest.lon, t: Date.now(), ...(dest.gid ? { gid: dest.gid } : {}) }, tripKey, 10);
   ctx.save();
   const c = card;
   let out = null;
@@ -1112,7 +1116,7 @@ function stepsHtml(p, c = card) {
         l.mode === 'walk'
           ? `步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(l.to.name)}` : ''}`
           : l.mode === 'bike'
-            ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b><small class="ot-step-line">借　${e(l.from.name)}${l.rent ? `・${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}・電輔 ${l.rent.ebike || 0}`} 台` : ''}</small><small class="ot-step-line">還　${e(l.to.name)}${l.ret ? `・空位 ${l.ret.ret}` : ''}</small>`
+            ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-gmaps="${e(gmapsLink(l.to, 'bicycling'))}">${icon('route')}Google 地圖</span>` : ''}<small class="ot-step-line">借　${e(l.from.name)}${l.rent ? `・${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}・電輔 ${l.rent.ebike || 0}`} 台` : ''}</small><small class="ot-step-line">還　${e(l.to.name)}${l.ret ? `・空位 ${l.ret.ret}` : ''}</small>`
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${l.headsign ? ` 往 ${e(String(l.headsign).replace(/^往\s*/, ''))}` : ''}<br><small>${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}${l.agency ? ` · ${e(l.agency)}` : ''}</small>${ticketBtn(l)}<span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
@@ -1211,6 +1215,7 @@ function navigate(p, resume = null) {
   startNav(p, {
     box: $('nav'),
     here: ctx.here,
+    dest: c?.to,
     resume,
     push: setNavPush,
     draw: (plan, i) => {
