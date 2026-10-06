@@ -13,7 +13,7 @@ import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEt
 import { etaAround, bikesAround } from './near.mjs';
 import { rideSec, DOCK_SEC } from './plan.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
-import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText } from './navlive.mjs';
+import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel } from './ui.mjs';
 import { e, hm, minsText, distText, meters, walkSec, tw } from './util.mjs';
 
@@ -66,7 +66,13 @@ async function rideStops(l, info) {
     const j = nearestStop(stops, l.to, w.i + 1);
     return j > w.i ? { stops, i: w.i, j } : null;
   }
-  if ((l.mode === 'tra' || l.mode === 'hsr') && l.train?.no) {
+  if (l.mode === 'tra' || l.mode === 'hsr') {
+    // Its number from the day's timetable when the planner gave only the line (the live board and its stops go by it).
+    if (!l.train?.no && l.dep && l.from?.lat != null && l.to?.lat != null) {
+      const t = trainFor(await dayTrips(tw(l.dep).date), await railStations(), l);
+      if (t) l.train = { ...(l.train || {}), ...t };
+    }
+    if (!l.train?.no) return null;
     const trip = (await dayTrips(tw(l.dep).date)).find(t => t.sys === l.mode && String(t.no) === String(l.train.no));
     if (!trip) return null;
     const sts = new Map((await railStations()).map(s => [s.key, s]));
@@ -127,7 +133,9 @@ export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat
 const RIDE = l => l && l.mode !== 'walk' && l.mode !== 'bike';
 // The ride itself, said the way its sign says it: 公車 5608 往 竹東, 區間 1234 次 往 新竹.
 export function rideName(l) {
-  const s = String(l.short || l.name || '').trim();
+  let s = String(l.short || l.name || '').trim();
+  // A planner's line (新竹-六家) isn't what the sign says: the train's kind, from the timetable, is.
+  if (l.mode === 'tra' && l.train?.type && /-/.test(s)) s = l.train.type;
   if (l.mode === 'tra') {
     const t = `${s}${l.train?.no && !s.includes(l.train.no) ? ` ${l.train.no}` : ''}`;
     return `台鐵 ${t}${/\d$/.test(t) ? ' 次' : ''}`;
@@ -364,7 +372,7 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
       </div>
       <div class="ot-nav-bottom">
         <div class="ot-nav-eta">
-          <span><b>${e(hm(state.done ? now : times.eta))}</b><small>${state.done ? '已抵達' : `抵達・還要 ${minsLeft < 60 ? `${minsLeft} 分` : e(minsText(minsLeft * 60))}`}${driftText ? '・' : ''}${driftText}</small></span>
+          <span><b>${e(hm(state.done ? now : times.eta))}</b>${driftText}<small>${state.done ? '已抵達' : `${driftText ? '' : '抵達・'}還要 ${minsLeft < 60 ? `${minsLeft} 分` : e(minsText(minsLeft * 60))}`}</small></span>
           <a class="q-icon-btn" href="${e(gmapsLink(legEnd(plan, last), 'transit'))}" target="_blank" rel="noopener" aria-label="用 Google 地圖導航到目的地">${icon('route')}</a>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">結束</button>
         </div>
@@ -404,7 +412,11 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
     try {
       // Its stops, once: a bus's way (its official route first), a train's run today.
       if (l?.mode === 'bus' && l.from?.lat && !state.info.has(ri)) state.info.set(ri, await busInfo(l).catch(() => ({ leg: l })));
-      if (l && !state.ride.has(ri)) state.ride.set(ri, await rideStops(l, state.info.get(ri)).catch(() => null));
+      if (l && !state.ride.has(ri)) {
+        const had = l.train?.no;
+        state.ride.set(ri, await rideStops(l, state.info.get(ri)).catch(() => null));
+        if (!had && l.train?.no) saveNav(state);
+      }
       const rs = l ? state.ride.get(ri) : null;
       // On it already (opened again on board): the next stop from where you were last seen, not only on the next move.
       if (on && rs && state.next == null && state.pos && state.i === at) state.next = nextStop(rs.stops, rs.i, rs.j, state.pos);
@@ -497,7 +509,10 @@ export function startNav(plan, { box, draw, follow, onEnd, here = null, resume =
         }
         // On it: the stop you're coming to (its stops, from where you are).
         const rs = state.phase === 'on' ? state.ride.get(state.i) : null;
+        const knew = state.next != null;
         if (rs) state.next = nextStop(rs.stops, rs.i, rs.j, p);
+        // The stop you're coming to known for the first time: the times at the stops ahead now, not at the next 20 s.
+        if (rs && !knew) refreshLive();
         // Yours next: a buzz, once.
         if (state.phase === 'on' && state.alerted !== state.i && (rs ? state.next >= rs.j : left < NEXT_STOP_M)) {
           state.alerted = state.i;

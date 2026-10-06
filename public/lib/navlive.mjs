@@ -87,3 +87,22 @@ export function trainByTime(stops, i, now = Date.now()) {
   if (k < 0 || k > i) return null;
   return { k, away: i - k, at: stops[k].at <= now, far: false, planned: true };
 }
+
+// A train leg without its number (a planner that gives only the line, as
+// TDX's 新竹-六家): the day's train of its kind that leaves a station by
+// where you board within 3 minutes of the time given and stops later by
+// where you get off; the nearest in time. → { no, type (區間, 自強…), code }, or null.
+export function trainFor(trips, stations, l, slack = 3 * 60_000) {
+  const near = (pt, m = 800) => new Set(stations.filter(s => s.sys === l.mode && s.lat != null && meters(pt.lat, pt.lon, s.lat, s.lon) < m).map(s => s.key));
+  const from = near(l.from);
+  const to = near(l.to);
+  let best = null;
+  for (const t of trips) {
+    if (t.sys !== l.mode) continue;
+    const a = t.stops.findIndex(s => from.has(s.st));
+    if (a < 0 || !t.stops.slice(a + 1).some(s => to.has(s.st))) continue;
+    const d = Math.abs(t.stops[a].dep - l.dep);
+    if (d <= slack && (!best || d < best.d)) best = { t, d };
+  }
+  return best ? { no: String(best.t.no), type: best.t.type || '', code: best.t.code ?? '' } : null;
+}
