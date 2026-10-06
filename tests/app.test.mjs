@@ -9,8 +9,8 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName } from '../public/lib/nav.mjs';
-import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor } from '../public/lib/navlive.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml } from '../public/lib/nav.mjs';
+import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
 import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
@@ -1332,4 +1332,66 @@ test("trainFor: a train leg with only its line (TDX's 新竹-六家) gets its nu
   assert.equal(rideName({ mode: 'tra', short: '新竹-六家', train: trainFor(trips, stations, leg) }), '台鐵 區間 1773 次');
   // Nothing near the time: no guess.
   assert.equal(trainFor(trips, stations, { ...leg, dep: at(15) }), null);
+});
+
+test("wayText: the sign's way, unless it names where you board (a loop): then where you're going", () => {
+  assert.equal(wayText({ headsign: '往 竹東', from: { name: '新竹' }, to: { name: '竹中' } }), '往 竹東');
+  assert.equal(wayText({ headsign: '火車站', from: { name: '火車站' }, to: { name: '清華大學' } }), '往 清華大學');
+  assert.equal(wayText({ from: { name: '火車站' }, to: { name: '清華大學' } }), '');
+});
+
+test('boardHtml: your stop with no live time (a bus line\'s last stop: its estimate is the next bus\'s) says when you\'re there', () => {
+  const rs = { stops: ['A', 'B', 'C'].map(name => ({ name })), i: 0, j: 2 };
+  const end = Date.UTC(2026, 9, 6, 12, 53);
+  const html = boardHtml(rs, 1, new Map([[1, Date.UTC(2026, 9, 6, 12, 43)]]), 0, end);
+  assert.match(html, /<li class=" you"><i><\/i><span>C<\/span><em>下車<\/em><time>20:53<\/time>/);
+  assert.match(html, /<span>B<\/span><em>下一站<\/em><time>20:43<\/time>/);
+});
+
+test('paceOf: a plan that starts with the ride itself says the ride and what is live, not when to leave', () => {
+  const now = Date.UTC(2026, 9, 6, 12);
+  const l = { mode: 'tra', short: '區間 3258', from: { name: '拔林' }, to: { name: '新營' }, dep: now + 10 * 60_000, arr: now + 26 * 60_000 };
+  const plan = { dep: l.dep, arr: l.arr, legs: [l] };
+  const p = paceOf(plan, 0, 'before', navTimes(plan, 0, 'before', null, new Map(), now), new Map(), now, '準點');
+  assert.equal(p.text, '拔林 20:10 開・10 分後・準點');
+});
+
+test("legLabel: a train the planner named by its line, once its number is known, is its kind and number (the step's chip)", async () => {
+  const { legLabel } = await import('../public/lib/ui.mjs');
+  assert.equal(legLabel({ mode: 'tra', short: '新竹-六家', train: { no: '1774', type: '區間' } }), '區間 1774');
+  assert.equal(legLabel({ mode: 'tra', short: '新竹-六家' }), '新竹-六家');
+  assert.equal(legLabel({ mode: 'tra', short: '自強 123', train: { no: '123', type: '自強' } }), '自強 123');
+});
+
+test("on board, your own pace: where the phone is along the ride's stops, how fast it's come, when it's at each stop ahead", () => {
+  // NSTOPS: ten stops ~111 m apart along a road.
+  const cum = routeCum(NSTOPS);
+  assert.ok(Math.abs(cum[9] - 9 * 111.5) < 10, String(cum[9]));
+  // Halfway between 站2 and 站3, 20 m off the road: 2.5 stops along.
+  const a = alongRoute(NSTOPS, { lat: 24.8 + 0.00018, lon: NSTOPS[2].lon + 0.00055 }, cum);
+  assert.ok(Math.abs(a.d - cum[2] - (cum[3] - cum[2]) / 2) < 5 && a.off > 15 && a.off < 25, JSON.stringify(a));
+  // 300 m in 2 minutes (a stop and a light included): 2.5 m/s; under a minute or 100 m: nothing yet.
+  const t0 = 1_000_000;
+  assert.equal(ridePace([{ d: 0, t: t0 }, { d: 50, t: t0 + 30_000 }], t0 + 30_000), null);
+  assert.equal(ridePace([{ d: 0, t: t0 }, { d: 150, t: t0 + 60_000 }, { d: 300, t: t0 + 120_000 }], t0 + 120_000), 2.5);
+  // A fix that jumps backwards isn't a pace.
+  assert.equal(ridePace([{ d: 300, t: t0 }, { d: 100, t: t0 + 120_000 }], t0 + 120_000), null);
+  // Only the last 5 minutes: a long wait at the start no longer drags it down.
+  assert.equal(ridePace([{ d: 0, t: t0 }, { d: 0, t: t0 + 600_000 }, { d: 600, t: t0 + 840_000 }], t0 + 840_000), 600 / 240);
+  // From 2.5 stops along at 2.5 m/s: stop 3 in ~22 s, stop 5 in ~111 s.
+  const ahead = aheadByPace(cum, 3, 5, cum[2] + (cum[3] - cum[2]) / 2, 2.5, 0);
+  assert.deepEqual([...ahead.keys()], [3, 4, 5]);
+  assert.ok(Math.abs(ahead.get(5) / 1000 - (cum[5] - cum[2] - (cum[3] - cum[2]) / 2) / 2.5) < 1);
+});
+
+test("boardHtml: TDX's time first, your own pace where TDX has none, the timetable after; a train's live delay before your pace", () => {
+  const T = m => Date.UTC(2026, 9, 6, 12, m);
+  const rs = { stops: ['A', 'B', 'C', 'D'].map((name, k) => ({ name, at: T(10 * k) })), i: 0, j: 3 };
+  const html = boardHtml(rs, 1, new Map([[1, T(11)]]), 0, null, new Map([[1, T(12)], [2, T(23)], [3, T(33)]]), false);
+  assert.match(html, /<span>B<\/span><em>下一站<\/em><time>20:11<\/time>/);
+  assert.match(html, /<span>C<\/span><time>20:23<\/time>/);
+  assert.match(html, /<span>D<\/span><em>下車<\/em><time>20:33<\/time>/);
+  // A train on the live board (delay known): its timetable plus the delay comes before your pace.
+  const tr = boardHtml(rs, 1, null, 2, null, new Map([[2, T(25)]]), true);
+  assert.match(tr, /<span>C<\/span><time>20:22<\/time>/);
 });

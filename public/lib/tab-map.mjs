@@ -1162,6 +1162,8 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   for (const [k, l] of p.legs.entries()) {
     const polys = Array.isArray(l.poly) ? l.poly : l.poly ? [l.poly] : [];
     let path = polys.flatMap(x => decodeLine(x, l.fmt));
+    // No shape from the planner: through its own stops when navigation has them (nav.mjs), else a straight line.
+    if (!path.length && Array.isArray(l.path) && l.path.length > 1) path = l.path;
     if (!path.length && l.from?.lat && l.to?.lat) path = [[l.from.lat, l.from.lon], [l.to.lat, l.to.lon]];
     if (!path.length) continue;
     // Navigating: the step you're on bright, the others faint.

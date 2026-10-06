@@ -66,6 +66,8 @@ export function legLabel(l) {
   if (l.mode === 'bike') return l.ebike ? '電輔車' : 'YouBike';
   if (l.mode === 'bus') return l.short || l.name || '公車';
   if (l.mode === 'hsr') return '高鐵';
+  // A planner's line (新竹-六家) once the train is known: its kind and number, as on its sign.
+  if (l.mode === 'tra' && l.train?.type && l.train?.no && /-/.test(l.short || l.name || '')) return `${l.train.type} ${l.train.no}`;
   return l.short || l.name || MODE_NAME[l.mode];
 }
 // A plan's legs as a row of chips (the short walks left out).
