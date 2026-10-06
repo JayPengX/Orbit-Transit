@@ -4199,3 +4199,161 @@ main {
 .ot-plan-deps.ot-go-deps {
   padding-left: 0;
 }
+
+/* ---- iOS 26: Transit on the family's look (the kit's tokens, each with
+   a fallback for a phone on an older kit) ----
+   Cells on the black page are iOS's #1c1c1e with no outline; what sits in a
+   cell (fields, plans, rows, chips) is iOS's grey fill; what floats over the
+   map (the search, its results, the buttons, the chips) is the kit's glass;
+   switches are capsules. Separators between rows stay. Borders go
+   transparent, never 0, so a selected state that sets border-color shows. */
+:root {
+  --ot-card: var(--q-surface, #1c1c1e);
+}
+/* Cells: no outline. */
+.ot-card,
+.ot-stop-card,
+.ot-od-card,
+.ot-jny,
+.ot-timetable,
+.ot-near-stop,
+.ot-pickbar-box,
+.ot-go-card,
+.ot-bus-group,
+.ot-bus-stop,
+.ot-nav-top,
+.ot-nav-bottom {
+  border-color: transparent;
+}
+/* Over the map: lit at the rim, like the kit's glass. */
+.ot-card {
+  box-shadow: var(--q-glass-rim, none), 0 -18px 50px -20px rgba(0, 0, 0, 0.9);
+}
+.ot-nav-top,
+.ot-nav-bottom,
+.ot-pickbar-box {
+  box-shadow: var(--q-glass-rim, none), 0 18px 50px -20px rgba(0, 0, 0, 0.9);
+}
+/* In a cell: iOS's grey fill. */
+.ot-od button,
+.ot-plan,
+.ot-row-btn,
+.ot-st-btn,
+.ot-alt,
+.ot-swap,
+.ot-go-bike,
+.ot-manage,
+.ot-sheet select,
+.ot-mine select,
+.ot-field input,
+.ot-search-in input,
+.ot-name-in {
+  border-color: transparent;
+}
+.ot-od button,
+.ot-plan,
+.ot-alt,
+.ot-go-bike,
+.ot-manage {
+  background: var(--q-fill, rgba(255, 255, 255, 0.04));
+}
+.ot-row-btn,
+.ot-st-btn {
+  background: var(--q-fill, rgba(255, 255, 255, 0.03));
+}
+/* (The colour only: the search's magnifier and a select's chevron are its background-image.) */
+.ot-sheet select,
+.ot-mine select,
+.ot-field input,
+.ot-search-in input,
+.ot-name-in {
+  background-color: var(--q-fill, var(--q-sunken));
+}
+.ot-plan.on {
+  background: color-mix(in srgb, var(--q-accent) 12%, var(--q-fill, transparent));
+}
+/* Chips and toggles: capsules on the fill, no outline. */
+.ot-dep,
+.ot-pin-train,
+.ot-nav-chip {
+  border-color: transparent;
+  background: var(--q-fill, transparent);
+}
+.ot-dep.on {
+  background: var(--q-accent);
+}
+.ot-mtog {
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--q-fill, transparent);
+}
+.ot-mtog[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.16);
+}
+/* Floating over the map: the kit's glass. */
+.tab-map .ot-search,
+.ot-fab,
+.ot-map-chips .q-chip,
+.ot-results {
+  border-color: transparent;
+  background: var(--q-glass-strong, rgba(22, 25, 33, 0.94));
+  -webkit-backdrop-filter: var(--q-glass-blur, none);
+  backdrop-filter: var(--q-glass-blur, none);
+}
+.tab-map .ot-search,
+.ot-fab {
+  box-shadow: var(--q-glass-rim, none), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+}
+.ot-map-chips .q-chip {
+  box-shadow: var(--q-glass-rim, none), 0 6px 18px -10px rgba(0, 0, 0, 0.9);
+}
+.ot-results {
+  box-shadow: var(--q-glass-rim, none), 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+}
+.ot-fab {
+  border-radius: 50%;
+}
+.ot-fab:active {
+  transform: scale(0.94);
+  transition: transform 0.3s var(--q-spring, ease);
+}
+/* Segmented controls: a capsule track, a capsule thumb that's lifted. */
+.ot-segctl,
+.ot-rt-top .ot-segctl,
+#times-seg::before {
+  border-radius: 999px;
+  background: var(--q-fill, rgba(118, 118, 128, 0.24));
+}
+.ot-segctl button,
+.ot-rt-top .ot-segctl button,
+#times-seg .q-chip {
+  border-radius: 999px;
+}
+.ot-segctl button[aria-pressed='true'],
+.ot-rt-top .ot-segctl button[aria-pressed='true'],
+#times-seg .q-chip[aria-pressed='true'] {
+  background: #636366;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+/* The YouBike stations along the map's foot and the status toast: glass
+   too (the stripe on the left still says how many bikes). */
+.ot-nb {
+  border-color: transparent;
+  border-left-color: var(--ot-bike);
+  background: var(--q-glass-strong, rgba(20, 23, 31, 0.96));
+  -webkit-backdrop-filter: var(--q-glass-blur, none);
+  backdrop-filter: var(--q-glass-blur, none);
+  box-shadow: var(--q-glass-rim, none), 0 12px 28px -14px rgba(0, 0, 0, 0.95);
+}
+.tab-map .q-status {
+  background: var(--q-glass-strong, rgba(22, 25, 33, 0.96));
+  -webkit-backdrop-filter: var(--q-glass-blur, none);
+  backdrop-filter: var(--q-glass-blur, none);
+  box-shadow: var(--q-glass-rim, none), var(--q-shadow);
+}
+/* Swap from and to: a raised circle ringed in the card's colour, over the two fields. */
+.ot-swap {
+  background: #3a3a3c;
+  box-shadow: 0 0 0 4px var(--ot-card);
+}
