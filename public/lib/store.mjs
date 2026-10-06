@@ -63,14 +63,17 @@ export function cleanPlace(p) {
   const lat = coord(p?.lat);
   const lon = coord(p?.lon);
   if (!p || lat == null || lon == null || !(lat > 21 && lat < 27 && lon > 118 && lon < 123)) return null;
-  return { id: str(p.id, 20) || 'p' + uid(), name: str(p.name, 30) || '我的地點', icon: PLACE_ICONS[p.icon] ? p.icon : 'pin', lat, lon, address: str(p.address, 80) };
+  return { id: str(p.id, 20) || 'p' + uid(), name: str(p.name, 30) || '我的地點', icon: PLACE_ICONS[p.icon] ? p.icon : 'pin', lat, lon, address: str(p.address, 80), ...gidOf(p) };
 }
-// A trip's end: { name, lat, lon } (null: wherever you are then).
+// A place's id at Google (for Google Maps' own navigation to the place
+// itself), when it's one of Google's.
+const gidOf = p => (typeof p?.gid === 'string' && /^[A-Za-z0-9_-]{20,300}$/.test(p.gid) ? { gid: p.gid } : {});
+// A trip's end: { name, lat, lon, gid? } (null: wherever you are then).
 export function cleanEnd(p) {
   const lat = coord(p?.lat);
   const lon = coord(p?.lon);
   if (!p || lat == null || lon == null || !(lat > 21 && lat < 27 && lon > 118 && lon < 123)) return null;
-  return { name: str(p.name, 30) || '地點', lat, lon };
+  return { name: str(p.name, 30) || '地點', lat, lon, ...gidOf(p) };
 }
 const hhmm = v => (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : '');
 // A saved trip: { id, name, from (null: 目前位置), to, time ('HH:MM' or ''),
@@ -145,7 +148,7 @@ export function cleanData(d) {
     groups: groups.length ? groups : emptyData().groups,
     places: (Array.isArray(d.places) ? d.places : []).map(cleanPlace).filter(Boolean).slice(0, MAX_PLACES),
     trips: (Array.isArray(d.trips) ? d.trips : [])
-      .map(x => (x && coord(x.lat) != null ? { name: str(x.name, 40), lat: coord(x.lat), lon: coord(x.lon), t: Number(x.t) || 0 } : null))
+      .map(x => (x && coord(x.lat) != null ? { name: str(x.name, 40), lat: coord(x.lat), lon: coord(x.lon), t: Number(x.t) || 0, ...gidOf(x) } : null))
       .filter(Boolean)
       .slice(0, 10),
     trains: (Array.isArray(d.trains) ? d.trains : [])
