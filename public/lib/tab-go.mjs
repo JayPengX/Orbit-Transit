@@ -324,10 +324,11 @@ function pinnedHtml() {
       // Two lines, like a card in Maps: the line and which way, the time on
       // the right; then where you get on → off, the whole width. ☆ to unpin
       // is in the route's sheet (a tap away) and 我的.
+      // (A loop's sign naming where you get on, 往 火車站 at 火車站: where you get off says the way.)
       const short = /分|進站/.test(t.main);
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
       return `<div class="ot-ride"><button class="ot-ride-main" type="button" data-route="${route}">
-        <span class="ot-ride-top"><span class="ot-ride-no">${e(it.route)}</span><small>往 ${e(r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}</small></span>
+        <span class="ot-ride-top"><span class="ot-ride-no">${e(it.route)}</span><small>往 ${e((r.headsign === r.stop && r.off?.stop) || r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}</small></span>
         <span class="ot-ride-stops">${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}</span>
         <span class="ot-ride-eta ${t.tone}${short ? '' : ' long'}"><b>${e(t.main)}</b>${t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>
       </button>${it.back ? `<button class="ot-ride-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;

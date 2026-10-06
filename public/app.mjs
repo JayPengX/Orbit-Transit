@@ -152,10 +152,18 @@ async function boot() {
   if (changed && theirs == null && merged.t && q.active) q.write({ payload: local.data }).catch(() => {});
   ctx.cfg = await config().catch(() => ({ map: { provider: 'nlsc' }, search: 'osm' }));
   $('loading').hidden = true;
-  // A ride being navigated when the app was swiped away: the map, on with it.
-  const want = savedNav() ? 'map' : /^#(map|go|times|me|bus|train|metro)/.exec(location.hash)?.[1] || 'map';
+  // A ride being navigated when the app was swiped away: on with it, on the
+  // map (or, shrunk to its bar, on the tab you were on).
+  const was = savedNav();
+  const asked = /^#(map|go|times|me|bus|train|metro)/.exec(location.hash)?.[1] || 'map';
+  const want = was && !was.min ? 'map' : asked;
   mapTab.register(ctx);
   select(OLD[want] || want);
+  // (Shrunk, on another tab: the map started behind it, so the ride goes on and its bar shows.)
+  if (was && (OLD[want] || want) !== 'map' && !started.has('map')) {
+    started.add('map');
+    mapTab.init(ctx);
+  }
   if (want === 'metro') ctx.openMetro?.();
   ctx.locate();
   startAlerts(t => ctx.status(t), {
