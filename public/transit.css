@@ -1704,28 +1704,30 @@ main {
   max-height: 82%;
 }
 .ot-planning .ot-map-chips,
-.ot-navigating .ot-map-chips,
+.ot-navigating:not(.ot-nav-min) .ot-map-chips,
 .ot-picking .ot-map-chips,
-.ot-navigating .ot-fabs,
+.ot-navigating:not(.ot-nav-min) .ot-fabs,
 .ot-picking .ot-fabs {
   display: none;
 }
-.tab-map.ot-navigating .ot-search,
-.tab-map.ot-navigating .q-actions,
+.tab-map.ot-navigating:not(.ot-nav-min) .ot-search,
+.tab-map.ot-navigating:not(.ot-nav-min) .q-actions,
+.tab-map.ot-navigating:not(.ot-nav-min) .ot-results,
 .tab-map.ot-picking .ot-search {
   display: none;
 }
-/* The app bar's frosted glass would sit over the navigation card. */
-.tab-map.ot-navigating .q-appbar {
-  display: none;
+/* The app bar's frosted glass would sit over the navigation card: hidden,
+   all but the tab bar it holds (navigating keeps the other tabs a tap away). */
+.tab-map.ot-navigating:not(.ot-nav-min) .q-appbar {
+  visibility: hidden;
 }
-/* Navigating: the map the whole screen, like a phone's own maps (no band
-   left where the tab bar was). */
-.tab-map.ot-navigating #tabs {
-  display: none;
+.tab-map.ot-navigating:not(.ot-nav-min) .q-appbar #tabs {
+  visibility: visible;
 }
-.tab-map.ot-navigating .ot-map-panel {
-  bottom: 0;
+/* (Navigating keeps the tab bar: the other tabs stay a tap away, and the
+   ride goes on in the bar above it.) Shrunk: the card goes, the map is yours. */
+.ot-nav-min #nav {
+  display: none;
 }
 .ot-card-head .q-icon-btn.on,
 .q-icon-btn.on {
@@ -3629,7 +3631,8 @@ main {
   color: var(--ot-bad);
 }
 .ot-nav-bottom {
-  bottom: calc(10px + env(safe-area-inset-bottom));
+  /* (Above the tab bar: the map's panel ends there, safe area and all.) */
+  bottom: 10px;
   padding: 10px 10px 10px;
   border-radius: 22px;
 }
@@ -4380,4 +4383,181 @@ main {
   .ot-nav-end {
     padding-inline: 14px;
   }
+}
+
+/* ---- Navigating, shrunk or on another tab: one bar above the tab bar ----
+   The step you're on, its countdown or distance, live; a tap goes back to
+   the card. The map's own pieces at its foot move up out of its way. */
+.ot-nav-mini {
+  display: none;
+}
+body.ot-navigating:not(.tab-map) .ot-nav-mini,
+body.ot-navigating.ot-nav-min .ot-nav-mini {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--q-nav, 0px) + 8px);
+  z-index: 60;
+  display: block;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.ot-nav-mini-b {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 7px 14px 7px 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--q-glass-strong, rgba(28, 28, 30, 0.94));
+  -webkit-backdrop-filter: var(--q-glass-blur, none);
+  backdrop-filter: var(--q-glass-blur, none);
+  box-shadow: var(--q-glass-rim, none), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+  color: var(--q-text);
+  font: inherit;
+  text-align: left;
+}
+.ot-nav-mini-b:active {
+  transform: scale(0.98);
+  transition: transform 0.3s var(--q-spring, ease);
+}
+.ot-nav-mini-b .ot-nav-i {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+.ot-nav-mini-b .ot-nav-i .ot-i {
+  width: 22px;
+  height: 22px;
+}
+.ot-nav-mini-b.alert .ot-nav-i {
+  background: var(--ot-warn);
+  color: #1a1206;
+}
+.ot-nav-mini-b.alert {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ot-warn) 70%, transparent), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+}
+.ot-nav-mini-b.coming {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ot-good) 70%, transparent), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+}
+.ot-nav-mini-t {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.ot-nav-mini-t b,
+.ot-nav-mini-t small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-nav-mini-t b {
+  font-size: 15px;
+}
+.ot-nav-mini-t small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--q-text-2);
+  font-size: 12.5px;
+}
+.ot-nav-mini-t small .ot-nav-dot {
+  margin: 0;
+}
+.ot-nav-mini-big {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  line-height: 1;
+}
+.ot-nav-mini-big b {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ot-nav-mini-big small {
+  margin-top: 2px;
+  color: var(--q-text-2);
+  font-size: 10.5px;
+}
+/* Room for the bar: the map's card and buttons above it, the other tabs' ends below it. */
+body.tab-map.ot-navigating.ot-nav-min .ot-card {
+  bottom: 72px;
+  border-radius: 24px;
+}
+body.tab-map.ot-navigating.ot-nav-min .ot-fabs {
+  bottom: 86px;
+}
+body.ot-navigating:not(.tab-map) .ot-scroll::after {
+  content: '';
+  display: block;
+  height: 72px;
+}
+
+/* On board but off its way: got off somewhere else? */
+.ot-nav-ask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  background: color-mix(in srgb, var(--ot-warn) 20%, transparent);
+  color: var(--ot-warn);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ot-nav-ask span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-nav-ask button {
+  flex: none;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ot-warn);
+  color: #1a1206;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+/* The ⋯ sheet and 改下車站: rows, one tap each. */
+.ot-nav-menu {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+.ot-nav-menu .ot-row-btn {
+  box-sizing: border-box;
+  color: var(--q-text);
+  text-decoration: none;
+}
+.ot-nav-menu .ot-row-btn > .ot-i {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--q-accent);
+}
+.ot-off-stop time {
+  flex: none;
+  color: var(--q-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ot-off-stop.on {
+  border-color: color-mix(in srgb, var(--q-accent) 60%, transparent);
+}
+button.ot-nav-gm {
+  border: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.ot-nav-pace.bad button.ot-nav-gm {
+  background: var(--ot-bad);
+  color: #fff;
 }

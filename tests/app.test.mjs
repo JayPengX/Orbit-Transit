@@ -1401,3 +1401,19 @@ test("leftText: how long till you're there, short beside the arrival time and it
   assert.equal(leftText(89), '1時29分');
   assert.equal(leftText(125), '2時05分');
 });
+
+test('paceOf: before setting out, from where you are: leaving at the planned time misses the bus → leave now, or it says the bus is gone (and 重新規劃 is offered)', () => {
+  const now = Date.UTC(2026, 9, 6, 22, 30);
+  const stop = { name: '火車站', lat: 24.8034, lon: 120.9720 };
+  const plan = { dep: now + 16 * 60_000, arr: now + 60 * 60_000, legs: [
+    { mode: 'walk', from: { lat: 24.80, lon: 120.968 }, to: stop, dep: now + 16 * 60_000, arr: now + 20 * 60_000, dur: 240 },
+    { mode: 'bus', short: '182', from: stop, to: { name: '高鐵新竹站', lat: 24.808, lon: 121.04 }, dep: now + 20 * 60_000, arr: now + 50 * 60_000 }
+  ] };
+  const at = pos => paceOf(plan, 0, 'before', navTimes(plan, 0, 'before', pos, new Map(), now), new Map(), now);
+  // Next to the stop: when to set out.
+  assert.match(at({ lat: 24.8031, lon: 120.9717 }).text, /^06:46 出發・還有 16 分/);
+  // ~1 km away (18 min on foot): leaving at 06:46 misses it, leaving now makes it.
+  assert.deepEqual(at({ lat: 24.8034, lon: 120.9620 }), { text: '現在就出發・06:50 的車還趕得上', tone: 'warn' });
+  // ~2.5 km away (44 min): gone even leaving now.
+  assert.deepEqual(at({ lat: 24.8034, lon: 120.9470 }), { text: '從這裡趕不上 06:50 的車了', tone: 'bad' });
+});
