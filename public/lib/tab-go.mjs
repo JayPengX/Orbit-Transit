@@ -12,7 +12,8 @@
 // What's recommended is never pinned by itself: ☆ pins it.
 
 import { errorText } from './api.mjs';
-import { stopsEta, etaText } from './bus.mjs';
+import { stopsEta, etaText, routeSchedule, routeStops, routeCity } from './bus.mjs';
+import { nextRun } from './live.mjs';
 import { nearStops, etaRank, openRoute, chooseGroup, useBusCtx } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
 import { railNetwork, traDelays } from './raildata.mjs';
@@ -30,6 +31,7 @@ let timer = 0;
 let shown = false;
 const S = {
   pinned: new Map(), // stopUID → eta
+  planned: new Map(), // stopUID → { at, day }: the timetable's next bus there, for when none is on its way
   trains: new Map(), // pin id → [{ dep, arr, label, delay }]
   trips: new Map(), // key → { at, plans, error, loading }
   choice: new Map(), // `${trip}:${its card's plan}` → the departure picked from its times
@@ -126,6 +128,31 @@ function trips(now = Date.now()) {
 
 // ---- Loading ------------------------------------------------------------------------------------------
 
+// A pinned bus with none on its way to your stop (尚未發車, 末班已過…): the
+// timetable's next at that stop, as the route's own sheet says it (its stops
+// and times from the bus packs, no proxy read), not 「尚未發車」.
+async function plannedTimes(items) {
+  const now = Date.now();
+  const todo = items.filter(r => {
+    const v = S.pinned.get(r.stopUID);
+    return !(v?.status === 0 && v.sec != null) && r.routeUID;
+  });
+  await Promise.all(
+    todo.map(async r => {
+      try {
+        const route = { uid: r.routeUID, name: r.route, city: r.city || routeCity(r.routeUID) };
+        const near = r.lat != null ? { lat: r.lat, lon: r.lon } : null;
+        const [ways, sched] = await Promise.all([routeStops(route, near), routeSchedule(route, near)]);
+        const w = ways.find(x => x.dir === r.dir && x.stops.some(y => y.uid === r.stopUID)) || ways.find(x => x.stops.some(y => y.uid === r.stopUID));
+        const p = w && sched?.length ? nextRun(sched, w, w.stops.findIndex(y => y.uid === r.stopUID), now) : null;
+        if (p) S.planned.set(r.stopUID, p);
+        else S.planned.delete(r.stopUID);
+      } catch {}
+    })
+  );
+  if (todo.length) render();
+}
+
 let refreshing = false;
 async function refresh() {
   if (refreshing) return;
@@ -134,7 +161,7 @@ async function refresh() {
     if (!ctx.here) await ctx.locate();
     const jobs = [];
     const items = ctx.data.groups.flatMap(g => g.items).map(sideOf);
-    if (items.length) jobs.push(stopsEta(items).then(m => (S.pinned = m)).catch(() => {}));
+    if (items.length) jobs.push(stopsEta(items).then(m => (S.pinned = m)).then(() => plannedTimes(items)).catch(() => {}));
     jobs.push(trainPins());
     // The two trips that matter most get their plans at once (a planner call each, kept 4 minutes).
     for (const { w } of trips().slice(0, 2)) jobs.push(loadTrip(w));
@@ -320,7 +347,9 @@ function pinnedHtml() {
     .map(({ it }) => ({ it, r: sideOf(it), v: S.pinned.get(sideOf(it).stopUID) }))
     .sort((a, b) => etaRank(a.v) - etaRank(b.v))
     .map(({ it, r, v }) => {
-      const t = etaText(v);
+      // No bus on its way: the timetable's next there (with its day, not today's); else what TDX says.
+      const p = !(v?.status === 0 && v.sec != null) ? S.planned.get(r.stopUID) : null;
+      const t = p ? { main: hm(p.at), sub: p.day ? dayLabel(tw(p.at).date) : '預計', tone: 'wait' } : etaText(v);
       // Two lines, like a card in Maps: the line and which way, the time on
       // the right; then where you get on → off, the whole width. ☆ to unpin
       // is in the route's sheet (a tap away) and 我的.
