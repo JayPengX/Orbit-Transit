@@ -24,6 +24,7 @@ import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLA
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
 import { openRoute } from './bus-ui.mjs';
+import * as kit from '#kit/quadra.mjs';
 
 const $ = id => document.getElementById(id);
 const FALLBACK = { lat: 25.0478, lon: 121.517 }; // 台北車站
@@ -124,8 +125,11 @@ let pendingTrip = null;
 function showPlan(p, from, to, resume = null) {
   card = { kind: 'plans', from: { name: from?.name || '目前位置', lat: from?.lat, lon: from?.lon }, fromHere: !from || from.name === '目前位置', to, lat: to.lat, lon: to.lon, plans: [{ ...p, top: true, lead: true, weak: false, times: [] }], sel: 0, more: false, sources: {} };
   document.body.classList.add('ot-planning');
-  // Navigated at once only when it's time to set out (or resumed); a plan for later opens, to look at.
-  if (canNav(p) && (resume || p.dep - Date.now() <= NAV_LEAD)) {
+  // Navigated at once only when it's time to set out (or resumed); a plan
+  // for later opens, to look at. A ride already being navigated (shrunk, you
+  // went to 交通 to look at something else) isn't replaced by a tap: the plan
+  // opens, and its 開始導航 is there.
+  if (canNav(p) && (resume || (!navigating() && p.dep - Date.now() <= NAV_LEAD))) {
     renderCard();
     drawPlan(p, { fit: false });
     return navigate(card.plans[0], resume);
@@ -1238,8 +1242,18 @@ async function liveLegs(p) {
 
 // ---- Navigation ---------------------------------------------------------------------------------------
 
-function navigate(p, resume = null) {
+async function navigate(p, resume = null) {
   if (!p) return;
+  // A ride already being navigated isn't thrown away by a tap elsewhere (走過去,
+  // 開始導航 on another plan): asked first, unless it's the new plan you asked
+  // for from it (重新規劃, 改目的地).
+  if (!resume && navigating() && !(card && card.to === replanTo)) {
+    const n = navNow();
+    const ask = kit.ask || (o => Promise.resolve(globalThis.confirm(`${o.title}\n${o.body}`)));
+    const ok = await ask({ title: '取代目前的導航？', body: `正在導航到 ${navDest(n).name || '目的地'}，開始新的會結束它。`, ok: '開始新的導航', cancel: '繼續原本的' });
+    if (!ok) return;
+  }
+  replanTo = null;
   const c = card;
   closeResults();
   $('card').hidden = true;
@@ -1356,13 +1370,15 @@ function navAction(a) {
 const navDest = n => n.plan.dest || n.plan.legs.at(-1).to;
 // From where you are now to the same place: the ways now, to look at while
 // this one goes on; 開始導航 on one replaces it.
+let replanTo = null;
 function replanFromHere(to = null) {
   const n = navNow();
   if (!n) return;
+  replanTo = to || navDest(n);
   shrinkNav(true);
   ctx.goTab('map');
   when = { by: 'now', at: null };
-  plan(null, to || navDest(n));
+  plan(null, replanTo);
 }
 function navMore() {
   const n = navNow();
