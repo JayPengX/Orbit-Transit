@@ -4,6 +4,8 @@
 // interface over both: markers as HTML (bikes, stops, stations), lines (a
 // plan's route), taps on the map and on Google's places.
 
+import { TAIWAN_BOX } from './util.mjs';
+
 const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
 const NLSC = 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
 
@@ -116,7 +118,10 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
     clickableIcons: true,
     gestureHandling: 'greedy',
     keyboardShortcuts: false,
-    isFractionalZoomEnabled: false
+    isFractionalZoomEnabled: false,
+    // Taiwan only (what the app covers): never the world, never off the island's edges.
+    restriction: { latLngBounds: { north: TAIWAN_BOX.n, south: TAIWAN_BOX.s, west: TAIWAN_BOX.w, east: TAIWAN_BOX.e }, strictBounds: false },
+    minZoom: 7
   });
   const transit = new g.TransitLayer();
   transit.setMap(map);
@@ -242,7 +247,8 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
 
 function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   const L = globalThis.L;
-  const map = L.map(el, { zoomControl: false, attributionControl: true, center: [center.lat, center.lon], zoom, maxZoom: 19, minZoom: 7 });
+  // (Taiwan only, as the Google map.)
+  const map = L.map(el, { zoomControl: false, attributionControl: true, center: [center.lat, center.lon], zoom, maxZoom: 19, minZoom: 7, maxBounds: [[TAIWAN_BOX.s, TAIWAN_BOX.w], [TAIWAN_BOX.n, TAIWAN_BOX.e]], maxBoundsViscosity: 1 });
   map.attributionControl.setPrefix('');
   L.tileLayer(NLSC, { maxZoom: 19, maxNativeZoom: 19, attribution: '© 內政部國土測繪中心', className: 'ot-tiles' }).addTo(map);
   map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
