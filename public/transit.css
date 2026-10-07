@@ -20,15 +20,6 @@ html,
 body {
   height: 100%;
 }
-/* Installed, the page runs under the status bar (black-translucent, for the
-   map): iOS sizes 100% without the status bar, and a page no taller than that
-   (the map tab) had its fixed tab bar sit a status bar's height above the
-   bottom. The page is the whole screen. */
-@media (display-mode: standalone) {
-  html {
-    height: calc(100% + env(safe-area-inset-top, 0px));
-  }
-}
 body {
   margin: 0;
   background: var(--q-page);
@@ -4638,7 +4629,9 @@ button.ot-nav-gm {
    bar, sharp, the navigation card floating over it with the map around it,
    never a band of the card's colour. The status bar itself keeps the kit's
    solid strip: anything see-through there, even a half-clear tint, and iOS
-   lays its edge blur over the top of the map. So it's solid in the map's
+   lays its edge blur over the top of the map; and the page never goes
+   under the status bar (black, not black-translucent: under it, iOS
+   blurred a band below the strip too). So it's solid in the map's
    own ground colour (its dark tiles, ~#302d30, a touch deeper), reading as
    the map's top, not a black band. */
 body.tab-map {
