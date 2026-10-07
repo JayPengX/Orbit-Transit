@@ -208,7 +208,15 @@ async function trainPins() {
 const TRIP_CACHE = 'ot.trips.v1';
 const TRIP_KEEP_MS = 30 * 60_000;
 const buildOf = () => document.querySelector('meta[name="build-version"]')?.content || 'dev';
-const tripKey = (w, from) => JSON.stringify([w.id, w.at || 0, w.by || '', Math.round(from.lat * 300), Math.round(from.lon * 300), buildOf(), JSON.stringify(ctx.data.prefs || {})]);
+const tripKey = (w, from) => JSON.stringify([w.id, w.at || 0, w.by || '', Math.round(from.lat * 300), Math.round(from.lon * 300), Math.round(w.to.lat * 300), Math.round(w.to.lon * 300), buildOf(), JSON.stringify(ctx.data.prefs || {})]);
+// What a trip's plans were made for: its ends and its time. A trip changed
+// in its sheet (another end, another time) is planned again at once, not
+// shown with the plans of the trip it was.
+const tripSig = w => JSON.stringify([w.from ? [w.from.lat, w.from.lon] : null, w.to.lat, w.to.lon, w.at || 0, w.by || '']);
+const tripOf = w => {
+  const st = S.trips.get(w.id);
+  return st && st.sig === tripSig(w) ? st : null;
+};
 function readTrips() {
   try {
     return JSON.parse(localStorage.getItem(TRIP_CACHE) || '{}') || {};
@@ -241,7 +249,12 @@ async function keptTrip(key, w) {
 }
 
 async function loadTrip(w, { force = false } = {}) {
-  const old = S.trips.get(w.id);
+  const old = tripOf(w);
+  const sig = tripSig(w);
+  if (!old && S.trips.has(w.id)) {
+    S.trips.delete(w.id);
+    for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
+  }
   if (!force && old && (old.loading || Date.now() - old.at < 4 * 60_000)) return;
   // Opened again soon after: the plans kept on the phone.
   const here0 = w.from || (ctx.here ? { lat: ctx.here.lat, lon: ctx.here.lon } : null);
@@ -249,18 +262,18 @@ async function loadTrip(w, { force = false } = {}) {
     const key = tripKey(w, here0);
     const kept = await keptTrip(key, w).catch(() => null);
     if (kept) {
-      S.trips.set(w.id, { at: Date.now(), from: w.from || { name: '目前位置', ...here0 }, plans: kept, error: '', kept: true });
+      S.trips.set(w.id, { sig, at: Date.now(), from: w.from || { name: '目前位置', ...here0 }, plans: kept, error: '', kept: true });
       return render();
     }
   }
-  S.trips.set(w.id, { ...(old || {}), loading: true, at: Date.now() });
+  S.trips.set(w.id, { ...(old || {}), sig, loading: true, at: Date.now() });
   render();
   try {
     const from = w.from || (ctx.here ? { name: '目前位置', lat: ctx.here.lat, lon: ctx.here.lon } : null);
     if (!from) throw Object.assign(new Error('nohere'), { code: 'NO_HERE' });
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
     for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
-    S.trips.set(w.id, { at: Date.now(), from, plans: out.plans, error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
+    S.trips.set(w.id, { sig, at: Date.now(), from, plans: out.plans, error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
     if (out.plans.length) keepTrip(tripKey(w, from), out.plans);
     // The direct buses and every bus's times, a moment later (unless a time was picked meanwhile).
     out.later?.then(o => {
@@ -271,7 +284,7 @@ async function loadTrip(w, { force = false } = {}) {
       render();
     });
   } catch (err) {
-    S.trips.set(w.id, { at: Date.now(), plans: old?.plans || [], error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
+    S.trips.set(w.id, { sig, at: Date.now(), plans: old?.plans || [], error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
   }
   render();
 }
@@ -314,7 +327,7 @@ export function tripPlans(plans, picks = [], now = Date.now()) {
 }
 
 function tripCard({ t, w }) {
-  const st = S.trips.get(w.id);
+  const st = tripOf(w);
   const head = `<header class="ot-go-head"><span class="ot-go-title">${icon(w.recurring ? 'clock' : 'route')}<b>${e(w.label)}</b></span><small>${e(w.from ? w.from.name : '目前位置')} → ${e(w.to.name)}${w.at ? ` · ${tw(w.at).date !== tw().date ? e(dayLabel(tw(w.at).date)) + ' ' : ''}${w.by === 'arrive' ? '抵達' : '出發'} ${hm(w.at)}` : ''}</small><button class="q-icon-btn" type="button" data-edit-trip="${e(t.id)}" aria-label="編輯">${icon('edit')}</button></header>`;
   if (!st) return `<section class="ot-go-card">${head}<button class="q-btn ot-wide" type="button" data-load-trip="${e(t.id)}">看接下來的班次</button></section>`;
   const all = st.plans || [];
@@ -403,6 +416,8 @@ function placesHtml() {
 function render() {
   if (!shown) return;
   const ts = trips();
+  // (A trip just changed in its sheet: its new plans, now.)
+  for (const { w } of ts.slice(0, 2)) if (!tripOf(w) && S.trips.has(w.id)) queueMicrotask(() => loadTrip(w));
   const box = $('panel-go');
   const keep = box.scrollTop;
   box.innerHTML = `<div class="ot-wrap ot-go">

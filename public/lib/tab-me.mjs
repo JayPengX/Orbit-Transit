@@ -29,10 +29,12 @@ export const TICKETS = [
   { id: 'tra', name: '台鐵 e訂通', sub: '台鐵訂票、電子票證', app: { ios: 'https://www.railway.gov.tw/tra-tip-web/tip/applink', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E9%90%B5e%E8%A8%82%E9%80%9A&c=apps' }, web: 'https://tip.railway.gov.tw/tra-tip-web/tip' }
 ];
 
-export function init(c) {
+// What other tabs ask of this one (交通's pencil, the map's 編輯), set at the
+// start: this tab's init runs only when it's first opened, and a tap before
+// that did nothing.
+export function register(c) {
   ctx = c;
   useBusCtx(c);
-  $('me-main').addEventListener('click', onClick);
   ctx.editTrip = id => {
     const t = ctx.data.saved.find(x => x.id === id);
     if (t) ctx.saveTrip?.(null, { edit: t });
@@ -42,6 +44,10 @@ export function init(c) {
     ctx.goTab('me');
     openMetro();
   };
+}
+export function init(c) {
+  register(c);
+  $('me-main').addEventListener('click', onClick);
   (ctx.onRefresh ||= []).push(() => render());
 }
 export function show() {
