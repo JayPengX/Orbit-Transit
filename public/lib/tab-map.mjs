@@ -78,7 +78,7 @@ export async function init(c) {
   const center = ctx.here || view || FALLBACK;
   const cfg = ctx.cfg?.map || { provider: 'nlsc' };
   try {
-    map = await createMap($('map'), { provider: cfg.provider, key: cfg.key, center, zoom: view?.z || 16, onPick: pick, onTap: tap, onIdle: idle, onPlace: googlePlace });
+    map = await createMap($('map'), { provider: cfg.provider, key: cfg.key, center, zoom: view?.z || 16, onPick: pick, onTap: tap, onIdle: idle, onPlace: googlePlace, onDrag: dragged });
   } catch (err) {
     $('map').innerHTML = `<p class="ot-empty">地圖載入失敗：${e(err.message)}</p>`;
     return;
@@ -1197,8 +1197,12 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
     pts.push(...path.map(([lat, lon]) => ({ lat, lon })));
   }
   map.lines('plan', lines);
+  // Where it starts (the plan's own, not the card's: navigating, another may be open) and where it ends: a pin, like Maps'.
+  const start = p.legs[0]?.from;
+  const end = p.dest?.lat != null ? p.dest : p.legs.at(-1)?.to;
   map.layer('plan').set([
-    { id: 'from', lat: card.from.lat, lon: card.from.lon, cls: 'end from', z: 30, html: '<i></i>' },
+    ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
+    ...(end?.lat != null ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || '目的地')}">${icon('pin')}</i>` }] : []),
     ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` }))
   ]);
   if (fit && pts.length) map.fit(pts, { top: 120, bottom: Math.round(innerHeight * 0.55), left: 30, right: 30 });
@@ -1257,9 +1261,12 @@ function navigate(p, resume = null) {
     follow: pos => {
       ctx.here = { ...pos, at: Date.now() };
       drawMe(ctx.here);
+      // The map stays on you as you go (back on you a little after you've moved it by hand).
+      if (navFollow && navFull()) map?.setView(pos.lat, pos.lon);
     },
     onAction: navAction,
-    onEnd: () => {
+    onEnd: (how = {}) => {
+      if (how.arrived) ctx.status(`已抵達 ${how.arrived}，導航結束`);
       $('nav').hidden = true;
       document.body.classList.remove('ot-navigating', 'ot-nav-min');
       $('nav-mini').innerHTML = '';
@@ -1279,9 +1286,28 @@ function navDraw(plan, i) {
   if (!map) return;
   drawPlan(plan, { fit: false, lit: i });
   const l = plan.legs[i];
+  navFollow = true;
+  // On you, at the step's scale: the street for a walk or a ride of your own, the stops around for a bus, the line for a train.
+  const me = navNow()?.pos || ctx.here;
+  if (me?.lat != null) return map.setView(me.lat, me.lon, STEP_ZOOM[l.mode] || 15);
   const pts = [l.from, l.to].filter(x => x?.lat != null);
-  if (ctx.here) pts.push(ctx.here);
   if (pts.length) map.fit(pts, { top: 170, bottom: 150, left: 40, right: 40 });
+}
+const STEP_ZOOM = { walk: 17, bike: 16, bus: 15, metro: 14, lightrail: 15, tra: 13, hsr: 11 };
+// Navigating, the map follows you; moved by a finger it stops, and comes back
+// to you 10 s after the last touch (like a phone's own maps).
+let navFollow = true;
+let followBack = 0;
+function dragged() {
+  if (!navFull()) return;
+  navFollow = false;
+  clearTimeout(followBack);
+  followBack = setTimeout(() => {
+    if (!navFull()) return;
+    navFollow = true;
+    const me = navNow()?.pos || ctx.here;
+    if (me?.lat != null) map.setView(me.lat, me.lon);
+  }, 10_000);
 }
 
 // Shrunk to the bar above the tabs (the map, search and the other tabs are

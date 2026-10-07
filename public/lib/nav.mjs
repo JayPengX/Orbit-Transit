@@ -8,7 +8,7 @@
 // round when yours is next; off it, what's next. Each step moves on by itself
 // when you get there.
 
-import { watchPosition } from './api.mjs';
+import { watchPosition, roadPath } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf } from './live.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
@@ -17,7 +17,7 @@ import { rideSec, DOCK_SEC } from './plan.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel } from './ui.mjs';
-import { e, hm, minsText, distText, meters, walkSec, tw } from './util.mjs';
+import { e, hm, minsText, distText, meters, walkSec, tw, decodeLine } from './util.mjs';
 
 let nav = null;
 
@@ -147,6 +147,16 @@ export function gmapsLink(to, mode) {
 export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat != null && meters(plan.dest.lat, plan.dest.lon, plan.legs[k].to.lat, plan.legs[k].to.lon) < 300 ? plan.dest : plan.legs[k].to);
 
 const RIDE = l => l && l.mode !== 'walk' && l.mode !== 'bike';
+// A walk's or a ride's own way on the map (its road from the router), as
+// points along it; none when it's only the straight line.
+const shapes = new WeakMap();
+function wayPts(l) {
+  if (!l.poly) return null;
+  const key = Array.isArray(l.poly) ? l.poly : [l.poly];
+  if (!shapes.has(l) || shapes.get(l).key !== key.join('|')) shapes.set(l, { key: key.join('|'), pts: key.flatMap(x => decodeLine(x, l.fmt)).map(([lat, lon]) => ({ lat, lon })) });
+  const pts = shapes.get(l).pts;
+  return pts.length > 1 ? pts : null;
+}
 // The ride itself, said the way its sign says it: 公車 5608 往 竹東, 區間 1234 次 往 新竹.
 export function rideName(l) {
   let s = String(l.short || l.name || '').trim();
@@ -346,7 +356,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const t = stepText(plan, state.i, state.phase);
     const times = navTimes(plan, state.i, state.phase, state.pos, state.liveAt, now, on ? (state.arrAt ?? (rs ? state.paced?.get(rs.j) : null) ?? null) : null);
     const pace = state.done ? { text: `${hm(now)} 抵達`, tone: 'good' } : paceOf(plan, state.i, state.phase, times, state.liveAt, now, state.live);
-    const left = state.pos && l.to?.lat ? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon) : null;
+    // What's left: along its road when it has one (where you are on it), else as the crow flies.
+    const left = state.pos && l.to?.lat ? (state.leftAlong ?? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon)) : null;
     let title = state.done ? `已抵達 ${plan.legs.at(-1).to?.name || '目的地'}` : t.title;
     let sub = state.done ? '' : t.sub;
     // Yours the next stop (no stops known: under 600 m): the card turned round to say so.
@@ -403,9 +414,10 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       .join('');
     const minsLeft = Math.max(0, Math.round((times.eta - now) / 60_000));
     // Later or sooner than the plan said, by what's live now.
-    const drift = state.done ? 0 : Math.round((times.eta - plan.arr) / 60_000);
+    // (Only while a bus or train is still ahead: the rest by bike or on foot is at your own pace, nothing to be early or late for.)
+    const drift = state.done || !plan.legs.slice(state.i).some(RIDE) ? 0 : Math.round((times.eta - plan.arr) / 60_000);
     const driftText = Math.abs(drift) >= 2 ? `<em class="${drift > 0 ? 'bad' : 'good'}">${drift > 0 ? `晚 ${drift} 分` : `早 ${-drift} 分`}</em>` : '';
-    box.innerHTML = `<div class="ot-nav-top${offNext ? ' alert' : ''}${coming ? ' coming' : ''}${on ? ' aboard' : ''}" style="--c:${e(legColor(l))}">
+    const topHtml = `<div class="ot-nav-top${offNext ? ' alert' : ''}${coming ? ' coming' : ''}${on ? ' aboard' : ''}" style="--c:${e(legColor(l))}">
         ${off}${strayed}
         <div class="ot-nav-main">
           <span class="ot-nav-i">${icon(state.done ? 'pin' : offNext ? 'bell' : l.mode)}</span>
@@ -416,16 +428,27 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span>${e(paceText)}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}重新規劃</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}Google 地圖</a>` : ''}</div>` : ''}
         ${bikeLine ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
         ${then}
-      </div>
-      <div class="ot-nav-bottom">
-        <div class="ot-nav-eta">
+      </div>`;
+    const etaHtml = `<div class="ot-nav-eta">
           <span><b>${e(hm(state.done ? now : times.eta))}</b>${driftText}<small>${state.done ? '已抵達' : `${driftText ? '剩 ' : '抵達・還要 '}${leftText(minsLeft)}`}</small></span>
           <button class="q-icon-btn" type="button" data-nav="more" aria-label="更多：縮小、改下車站、重新規劃、改目的地">${icon('more')}</button>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">結束</button>
-        </div>
-        <div class="ot-nav-chips" role="group" aria-label="步驟">${chips}</div>
-      </div>`;
-    box.querySelector('.ot-nav-chip.on')?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+        </div>`;
+    // Drawn in place: the card's parts each time, the row of steps only when
+    // it changes (it's scrolled by hand; redrawn, it jumped back every few
+    // seconds), centred on the step you're on only when that changes.
+    if (!box.querySelector(':scope > .ot-nav-bottom')) box.innerHTML = '<div class="ot-nav-topw"></div><div class="ot-nav-bottom"><div class="ot-nav-etaw"></div><div class="ot-nav-chips" role="group" aria-label="步驟"></div></div>';
+    box.querySelector('.ot-nav-topw').innerHTML = topHtml;
+    box.querySelector('.ot-nav-etaw').innerHTML = etaHtml;
+    const row = box.querySelector('.ot-nav-chips');
+    if (row._html !== chips) {
+      row.innerHTML = chips;
+      row._html = chips;
+    }
+    if (state.chipsFor !== state.i) {
+      state.chipsFor = state.i;
+      row.querySelector('.ot-nav-chip.on')?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+    }
     // The bar on every other tab (and the map, shrunk): the step, its number, live; a tap goes back.
     if (mini)
       mini.innerHTML = `<button class="ot-nav-mini-b${offNext ? ' alert' : ''}${coming ? ' coming' : ''}" type="button" data-nav="open" style="--c:${e(legColor(l))}" aria-label="回到導航">
@@ -448,6 +471,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.track = [];
     state.paced = null;
     state.away = 0;
+    state.leftAlong = null;
+    state.offWay = 0;
     state.delayLive = false;
     state.done = false;
     saveNav(state);
@@ -556,6 +581,29 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       render();
     }
   };
+  // There: the last step's end (or the place itself) within 60 m, or within
+  // 150 m and no nearer for 45 s (stopped at the door of a place whose point
+  // is mid-block; checked with every position and every 10 s, as a phone
+  // standing still sends few); then the card says so and, 20 s on, ends.
+  const arrive = () => {
+    const l = plan.legs[state.i];
+    const p = state.pos;
+    if (state.done || !p || state.i !== plan.legs.length - 1 || RIDE(l) || l.to?.lat == null) return;
+    const to = Math.min(meters(p.lat, p.lon, l.to.lat, l.to.lon), plan.dest?.lat != null ? meters(p.lat, p.lon, plan.dest.lat, plan.dest.lon) : Infinity);
+    const t = Date.now();
+    if (to >= 150) state.near = null;
+    else if (!state.near || to < state.near.d - 15) state.near = { d: to, t };
+    if (!(to < ARRIVED.walk + 25 || (state.near && t - state.near.t > 45_000))) return;
+    state.done = true;
+    buzz();
+    push?.([]);
+    dropNav();
+    state.endTimer = setTimeout(() => {
+      if (nav !== state) return;
+      stopNav();
+      onEnd?.({ arrived: plan.dest?.name || l.to?.name || '目的地' });
+    }, 20_000);
+  };
   const moved = p => {
     state.pos = p;
     follow?.(p);
@@ -564,6 +612,38 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       const left = meters(p.lat, p.lon, l.to.lat, l.to.lon);
       if (l.mode === 'walk' || l.mode === 'bike') {
         if (left < ARRIVED[l.mode] && state.i < plan.legs.length - 1) return go(state.i + 1);
+        // On its road: what's left along it. Off it (45 m, twice running):
+        // a new road from where you are, at most every 30 s.
+        const pts = wayPts(l);
+        if (pts) {
+          const cum = routeCum(pts);
+          const a = alongRoute(pts, p, cum);
+          state.leftAlong = a && a.off < 45 ? Math.max(0, cum.at(-1) - a.d) : null;
+          state.offWay = a && a.off > 45 ? (state.offWay || 0) + 1 : 0;
+          if (state.offWay >= 2 && !state.rerouting && Date.now() - (state.reroutedAt || 0) > 30_000) {
+            state.rerouting = true;
+            const at = state.i;
+            roadPath(l.mode, { lat: p.lat, lon: p.lon }, l.to)
+              .then(r => {
+                if (!r || nav !== state || state.i !== at) return;
+                l.poly = r.poly;
+                l.fmt = '';
+                l.road = true;
+                l.from = { name: '', lat: p.lat, lon: p.lon };
+                if (l.mode === 'bike') l.dist = r.dist;
+                state.leftAlong = r.dist;
+                saveNav(state);
+                draw(plan, state.i);
+                render();
+              })
+              .catch(() => {})
+              .finally(() => {
+                state.rerouting = false;
+                state.reroutedAt = Date.now();
+                state.offWay = 0;
+              });
+          }
+        } else state.leftAlong = null;
       } else {
         // On board once you've left the stop behind.
         if (state.phase === 'before' && l.from?.lat && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 200 && left < meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon)) {
@@ -598,13 +678,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         }
         if (state.phase === 'on' && left < 120 && state.i < plan.legs.length - 1) return go(state.i + 1, 'before', true);
       }
-      // There: the last step's end reached.
-      if (state.i === plan.legs.length - 1 && !RIDE(l) && left < ARRIVED.walk + 15 && !state.done) {
-        state.done = true;
-        buzz();
-        push?.([]);
-        dropNav();
-      }
+      arrive();
     }
     render();
   };
@@ -614,7 +688,10 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   state.timer = setInterval(refreshLive, 20_000);
   // The countdown to the second; everything else said (to set out, till you're there) every 10 s.
   state.tick = setInterval(() => {
-    if (Date.now() - state.drawn >= 10_000) return render();
+    if (Date.now() - state.drawn >= 10_000) {
+      arrive();
+      return render();
+    }
     for (const el of [...box.querySelectorAll('[data-cd]'), ...(mini?.querySelectorAll('[data-cd]') || [])]) el.innerHTML = countBig(Number(el.dataset.cd) - Date.now(), el.dataset.k);
   }, 1000);
   box.onclick = ev => {
@@ -724,6 +801,7 @@ export function stopNav() {
   nav.stopWatch?.();
   clearInterval(nav.timer);
   clearInterval(nav.tick);
+  clearTimeout(nav.endTimer);
   nav.wake?.release?.().catch(() => {});
   nav = null;
 }

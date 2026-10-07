@@ -442,6 +442,24 @@ main {
   border-radius: 50%;
   background: #22c55e;
 }
+/* Where the trip ends: iOS Maps' red pin. */
+.ot-mk.dest i {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border: 2.5px solid #fff;
+  border-radius: 50%;
+  background: #ff453a;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+.ot-mk.dest .ot-i {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.4;
+}
 .ot-mk.board i {
   display: grid;
   place-items: center;

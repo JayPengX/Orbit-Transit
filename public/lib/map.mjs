@@ -91,20 +91,21 @@ function domItems(make) {
   };
 }
 
-export async function createMap(el, { provider = 'nlsc', key = '', center, zoom = 15, onPick = () => {}, onTap = () => {}, onIdle = () => {}, onPlace = () => {} } = {}) {
+// onDrag: the map moved by a finger (not by the app), e.g. to stop following you.
+export async function createMap(el, { provider = 'nlsc', key = '', center, zoom = 15, onPick = () => {}, onTap = () => {}, onIdle = () => {}, onPlace = () => {}, onDrag = () => {} } = {}) {
   if (provider === 'google' && key) {
     try {
       await loadGoogle(key);
-      return googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace });
+      return googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag });
     } catch {
       // Google didn't load (offline, the key refused): Taiwan's map instead.
     }
   }
   await loadLeaflet();
-  return leafletMap(el, { center, zoom, onPick, onTap, onIdle });
+  return leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag });
 }
 
-function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace }) {
+function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag }) {
   const g = globalThis.google.maps;
   const map = new g.Map(el, {
     center: { lat: center.lat, lng: center.lon },
@@ -128,6 +129,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace }) {
     onTap({ lat: ev.latLng.lat(), lon: ev.latLng.lng() });
   });
   map.addListener('idle', () => onIdle());
+  map.addListener('dragstart', () => onDrag());
 
   // One overlay for all HTML markers, placed once a frame.
   class Layer extends g.OverlayView {
@@ -238,13 +240,14 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace }) {
   };
 }
 
-function leafletMap(el, { center, zoom, onPick, onTap, onIdle }) {
+function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   const L = globalThis.L;
   const map = L.map(el, { zoomControl: false, attributionControl: true, center: [center.lat, center.lon], zoom, maxZoom: 19, minZoom: 7 });
   map.attributionControl.setPrefix('');
   L.tileLayer(NLSC, { maxZoom: 19, maxNativeZoom: 19, attribution: '© 內政部國土測繪中心', className: 'ot-tiles' }).addTo(map);
   map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
   map.on('moveend', () => onIdle());
+  map.on('dragstart', () => onDrag());
   const layers = new Map();
   const lineSets = new Map();
   const markerLayer = () =>
