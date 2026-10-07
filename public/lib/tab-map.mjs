@@ -1272,7 +1272,9 @@ function navigate(p, resume = null) {
       $('nav-mini').innerHTML = '';
       map?.resize();
       drawLayers();
-      if (card === c && c) {
+      // Arrived: the trip's over, its card and its way off the map; ended by hand, back to the plans it came from.
+      if (how.arrived) closeCard();
+      else if (card === c && c) {
         $('card').hidden = false;
         renderCard();
       }
