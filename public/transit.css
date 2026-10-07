@@ -1473,12 +1473,12 @@ main {
   background: rgba(255, 255, 255, 0.08);
   color: var(--q-text-2);
 }
-.ot-ride {
+.ot-leg-times {
   display: grid;
   gap: 2px;
   margin: 4px 0;
 }
-.ot-ride b {
+.ot-leg-times b {
   display: inline-block;
   width: 46px;
   font-variant-numeric: tabular-nums;
