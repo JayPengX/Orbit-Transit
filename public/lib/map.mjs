@@ -71,11 +71,20 @@ function loadLeaflet() {
 // Markers as HTML: set(items) keeps those with the same id (only their
 // content changed), adds the new, drops the rest.
 //   item: { id, lat, lon, html, cls, z, data }
-function domItems(make) {
+// The marker tapped (map.select): drawn as itself, selected (.is-sel, on top),
+// not covered by a pin.
+function domItems(make, selected = () => null) {
   const els = new Map();
+  let last = [];
   return {
     els,
-    set(items) {
+    again() {
+      this.set(last);
+    },
+    set(list) {
+      last = list;
+      const s = selected();
+      const items = s ? list.map(it => (it.id === s.id && it.lat === s.lat && it.lon === s.lon ? { ...it, cls: `${it.cls || ''} is-sel`, z: (it.z || 1) + 50 } : it)) : list;
       const keep = new Set();
       for (const it of items) {
         keep.add(it.id);
@@ -145,7 +154,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
       super();
       this.box = document.createElement('div');
       this.box.className = 'ot-layer';
-      this.items = domItems(it => this.make(it));
+      this.items = domItems(it => this.make(it), () => sel);
     }
     onAdd() {
       this.getPanes().overlayMouseTarget.append(this.box);
@@ -166,6 +175,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
         update: x => {
           if (x.html !== rec.it.html) node.innerHTML = x.html;
           if (x.cls !== rec.it.cls) node.className = `ot-mk ${x.cls || ''}`;
+          if (x.z !== rec.it.z) node.style.zIndex = String(x.z || 1);
           if (x.lat !== rec.it.lat || x.lon !== rec.it.lon) {
             rec.it = x;
             this.place(rec);
@@ -191,8 +201,13 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
   }
   const layers = new Map();
   const lineSets = new Map();
+  let sel = null;
   return {
     kind: 'google',
+    select(it) {
+      sel = it ? { id: it.id, lat: it.lat, lon: it.lon } : null;
+      for (const l of layers.values()) l.items.again();
+    },
     raw: map,
     center: () => ({ lat: map.getCenter().lat(), lon: map.getCenter().lng() }),
     zoom: () => map.getZoom(),
@@ -263,6 +278,7 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   map.on('zoomstart', () => Date.now() - byApp > 1500 && onDrag());
   const layers = new Map();
   const lineSets = new Map();
+  let sel = null;
   const markerLayer = () =>
     domItems(it => {
       const icon = x => L.divIcon({ className: `ot-mk ${x.cls || ''}`, html: x.html, iconSize: null });
@@ -272,6 +288,7 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
         update: x => {
           if (x.html !== rec.it.html || x.cls !== rec.it.cls) m.setIcon(icon(x));
           if (x.lat !== rec.it.lat || x.lon !== rec.it.lon) m.setLatLng([x.lat, x.lon]);
+          if (x.z !== rec.it.z) m.setZIndexOffset((x.z || 1) * 100);
           rec.it = x;
         },
         remove: () => m.remove()
@@ -281,9 +298,13 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
         onPick(rec.it);
       });
       return rec;
-    });
+    }, () => sel);
   return {
     kind: 'nlsc',
+    select(it) {
+      sel = it ? { id: it.id, lat: it.lat, lon: it.lon } : null;
+      for (const l of layers.values()) l.again();
+    },
     raw: map,
     center: () => ({ lat: map.getCenter().lat, lon: map.getCenter().lng }),
     zoom: () => map.getZoom(),

@@ -291,7 +291,7 @@ const metroMarker = ({ st, color }) => ({ id: st.key, lat: st.lat, lon: st.lon, 
 
 function pick(it) {
   following = false;
-  openCard({ kind: it.kind, item: it.data, lat: it.lat, lon: it.lon });
+  openCard({ kind: it.kind, item: it.data, lat: it.lat, lon: it.lon, marker: it });
 }
 // An empty spot: closes the card, or marks the spot (to plan a trip there).
 async function tap(pt) {
@@ -339,8 +339,11 @@ const OUTSIDE = '只支援台灣（含澎湖、金門、馬祖）的地點';
 function openCard(c) {
   if (c.lat != null && !inTaiwan(c.lat, c.lon)) return ctx.status(OUTSIDE);
   document.body.classList.remove('ot-planning');
-  card = { ...c, at: Date.now() };
-  map.layer('sel').set([{ id: 'sel', lat: c.lat, lon: c.lon, cls: 'sel', z: 40, html: icon('pin') }]);
+  const { marker, ...rest } = c;
+  card = { ...rest, at: Date.now() };
+  // A marker tapped shows itself selected; a spot or a place without one gets the pin.
+  map.select(marker || null);
+  map.layer('sel').set(marker ? [] : [{ id: 'sel', lat: c.lat, lon: c.lon, cls: 'sel', z: 40, html: '<i class="ot-drop-shadow"></i><i class="ot-drop"></i>' }]);
   renderCard();
   refreshCard();
 }
@@ -351,6 +354,7 @@ function closeCard() {
   $('card').hidden = true;
   $('card').className = 'ot-card';
   map.layer('sel').set([]);
+  map.select(null);
   map.lines('plan', []);
   map.layer('plan').set([]);
 }

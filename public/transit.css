@@ -421,17 +421,62 @@ main {
   background: #3b82f6;
   box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.25), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
-.ot-mk.sel {
-  margin: -36px 0 0 -16px;
-  color: var(--q-accent);
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+/* The marker tapped: itself, a size up, ringed in the accent, on top. */
+/* (A white rim that follows any marker's shape: its shadows, not an outline,
+   which would ring the empty box some markers draw their icon out of.) */
+.ot-mk.is-sel {
+  scale: 1.3;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
 }
-.ot-mk.sel .ot-i {
-  width: 32px;
-  height: 36px;
-  fill: var(--q-accent);
-  stroke: #0d0f14;
-  stroke-width: 1.4;
+/* A spot's pin, as in Maps: a round head with a white dot on a thin stem,
+   its tip on the spot and a soft shadow there. */
+.ot-mk.sel,
+.ot-mk.sel > * {
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.ot-mk.sel .ot-drop {
+  position: absolute;
+  left: -14px;
+  top: -42px;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+.ot-mk.sel .ot-drop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+}
+.ot-mk.sel .ot-drop::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 3px;
+  height: 14px;
+  margin: 2px 0 0 -1.5px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(#e6e6e6, #9a9a9a);
+}
+.ot-mk.sel .ot-drop-shadow {
+  position: absolute;
+  left: -6px;
+  top: -2px;
+  width: 12px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  filter: blur(1px);
 }
 .ot-mk.end i {
   display: block;
