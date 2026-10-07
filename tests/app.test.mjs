@@ -1454,3 +1454,14 @@ test("inTaiwan: the app's coverage, the main island and its islands (澎湖, 綠
   for (const [k, [a, b]] of Object.entries(yes)) assert.equal(inTaiwan(a, b), true, k);
   for (const [k, [a, b]] of Object.entries(no)) assert.equal(inTaiwan(a, b), false, k);
 });
+
+test('the map runs under the status bar: see-through bar, strip clear on the map only, the page the whole screen', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../public/transit.css', import.meta.url), 'utf8');
+  assert.match(html, /apple-mobile-web-app-status-bar-style" content="black-translucent"/);
+  assert.match(css, /body\.tab-map \{\s*--q-status-bg: transparent;/);
+  assert.match(css, /@media \(display-mode: standalone\) \{\s*html \{\s*height: calc\(100% \+ env\(safe-area-inset-top, 0px\)\);/);
+  // The strip is never made see-through anywhere else.
+  assert.equal((css.match(/--q-status-bg: transparent/g) || []).length, 1);
+});
