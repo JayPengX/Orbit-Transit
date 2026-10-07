@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay } from '../public/lib/plan.mjs';
-import { coverage, fareOf, tpassOf, passOk, inPass } from '../public/lib/tpass.mjs';
+import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
@@ -505,6 +505,19 @@ test('TPASS: buses and 台鐵 inside its cities free, 高鐵 never, YouBike’s 
   assert.deepEqual([coverage(out, hh, city).all, coverage(out, hh, city).some], [false, true]);
   assert.equal(coverage({ legs: [{ mode: 'hsr', from: { lat: 24.8, lon: 121 }, to: { lat: 24.8, lon: 121 } }] }, hh, city).some, false);
   assert.equal(fareOf(out, coverage(out, null, city)).text, 'NT$60');
+});
+
+test('TPASS: a route its official table leaves out (新竹縣 觀光8號) is paid, though inside its cities', () => {
+  const city = () => 'HsinchuCounty';
+  const ride = short => ({ legs: [{ mode: 'bus', short, name: short, from: { lat: 24.8, lon: 121 }, to: { lat: 24.7, lon: 121.1 } }], fare: 90 });
+  for (const id of ['hh', 'hhm', 'thh', 'thhm']) {
+    assert.equal(coverage(ride('觀光8號'), tpassOf(id), city).some, false, id);
+    assert.equal(passOk(ride('觀光8號'), tpassOf(id), city), false, id);
+    assert.equal(coverage(ride('觀光1號'), tpassOf(id), city).all, true, id);
+    assert.equal(routeOnPass(tpassOf(id), 'HsinchuCounty', '觀光8號'), false, id);
+    assert.equal(routeOnPass(tpassOf(id), 'HsinchuCounty', '觀光2號'), true, id);
+  }
+  assert.equal(fareOf(ride('觀光8號'), coverage(ride('觀光8號'), tpassOf('hh'), city)).text, 'NT$90');
 });
 
 test('ways of moving: a plan only with what’s allowed (a taxi never)', () => {

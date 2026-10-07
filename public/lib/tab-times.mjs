@@ -6,7 +6,7 @@
 
 import * as trainTab from './tab-train.mjs';
 import { cityRoutes, findRoutes, stationsNear, routeCity, INTERCITY } from './bus.mjs';
-import { tpassOf } from './tpass.mjs';
+import { tpassOf, routeOnPass } from './tpass.mjs';
 import { openRoute, useBusCtx } from './bus-ui.mjs';
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
@@ -154,7 +154,7 @@ async function busLoad() {
 }
 const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
 // A city bus inside your TPASS's cities (公路客運 runs between them: not marked).
-const onPass = r => Boolean(tpassOf(ctx.data.prefs.tpass)?.cities.includes(r.city));
+const onPass = r => routeOnPass(tpassOf(ctx.data.prefs.tpass), r.city, r.name);
 // A route as a row: its number, then where it runs.
 const row = r => `<button class="ot-bus-row" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"><span class="ot-bus-no">${e(r.name)}</span><span class="ot-bus-ends">${r.from && r.to ? `<b>${e(r.from)}</b><i>↔</i><b>${e(r.to)}</b>` : `<b>${e(r.to ? `往 ${r.to}` : where(r))}</b>`}<small>${e(where(r))}${onPass(r) ? ' · <em>TPASS</em>' : ''}</small></span>${icon('chevron')}</button>`;
 // A stop near you: its name and distance, its routes as numbers to tap.
