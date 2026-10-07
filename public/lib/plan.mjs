@@ -29,21 +29,27 @@ export const allowed = (p, modes) => p.legs.every(l => l.mode !== 'car' && (!KIN
 export const rideSec = (m, ebike = false) => Math.round(((m * 1.25) / (ebike ? RIDE_M_MIN.ebike : RIDE_M_MIN.bike)) * 60);
 
 // A station (bike.mjs): { uid, name, lat, lon, bikes (regular), ebike, ret (docks), ok }.
-// The best one to take a bike from near a point: the nearest with a bike
-// (with two or more preferred if it's barely farther).
-export function rentNear(pt, bikes, { ebike = false, max = NEAR_M } = {}) {
+// The station to take a bike from near a point, and the one to leave it at:
+// with the ride's other end known (`to`, `from`), the one that makes the
+// whole way quickest, walk and ride together (綠41公園 on the way home from
+// 六家, not 成功國中 past it because it's a few metres nearer the door);
+// without it, the nearest. Either way, one with two or more bikes (docks)
+// is worth a little more (a minute; 150 m without the other end).
+const ONE_LEFT_SEC = 60;
+function bestStation(pt, list, other, ebike, enough) {
+  if (!list.length) return null;
+  if (!other) return (list.find(x => enough(x.s) && x.d <= list[0].d + 150) || list[0]).s;
+  const cost = x => walkSec(x.d + bridgeExtra(pt, x.s, 'walk')) + rideSec(meters(x.s.lat, x.s.lon, other.lat, other.lon) + bridgeExtra(x.s, other, 'bike'), ebike) + (enough(x.s) ? 0 : ONE_LEFT_SEC);
+  return list.reduce((a, b) => (cost(b) < cost(a) ? b : a)).s;
+}
+export function rentNear(pt, bikes, { ebike = false, max = NEAR_M, to = null } = {}) {
   const has = s => s.ok !== false && (ebike ? s.ebike : s.bikes) >= 1;
   const list = bikes.filter(has).map(s => ({ s, d: meters(pt.lat, pt.lon, s.lat, s.lon) })).filter(x => x.d <= max).sort((a, b) => a.d - b.d);
-  if (!list.length) return null;
-  const n = ebike ? x => x.s.ebike : x => x.s.bikes;
-  const better = list.find(x => n(x) >= 2 && x.d <= list[0].d + 150);
-  return (better || list[0]).s;
+  return bestStation(pt, list, to, ebike, s => (ebike ? s.ebike : s.bikes) >= 2);
 }
-export function returnNear(pt, bikes, { max = NEAR_M } = {}) {
+export function returnNear(pt, bikes, { max = NEAR_M, from = null, ebike = false } = {}) {
   const list = bikes.filter(s => s.ok !== false && s.ret >= 1).map(s => ({ s, d: meters(pt.lat, pt.lon, s.lat, s.lon) })).filter(x => x.d <= max).sort((a, b) => a.d - b.d);
-  if (!list.length) return null;
-  const better = list.find(x => x.s.ret >= 2 && x.d <= list[0].d + 150);
-  return (better || list[0]).s;
+  return bestStation(pt, list, from, ebike, s => s.ret >= 2);
 }
 
 // (Over a river, the way round to its bridge too.)
@@ -99,8 +105,9 @@ export function swapRides(legs, bikes) {
 // From a to b by YouBike, leaving at dep: walk, ride, walk. Null when there's
 // no bike near a or no dock near b.
 export function bikeTrip(a, b, bikes, dep, { ebike = false, swap = false } = {}) {
-  const rent = rentNear(a, bikes, { ebike });
-  const ret = returnNear(b, bikes);
+  // (Where you take it, towards where you're going; where you leave it, from where you took it.)
+  const rent = rentNear(a, bikes, { ebike, to: b });
+  const ret = rent && returnNear(b, bikes, { from: rent, ebike });
   if (!rent || !ret || rent.uid === ret.uid) return null;
   const legs = [];
   let t = dep;
@@ -735,8 +742,8 @@ function withStations(p, bikes) {
     .filter(l => !(l.mode === 'walk' && (l.dist || 0) < 5 && (l.dur || 0) < 30))
     .map(l => {
       if (l.mode !== 'bike' || l.rent) return l;
-      const rent = rentNear(l.from, bikes, { max: 700 });
-      const ret = returnNear(l.to, bikes, { max: 700 });
+      const rent = rentNear(l.from, bikes, { max: 700, to: l.to });
+      const ret = returnNear(l.to, bikes, { max: 700, from: rent || l.from });
       // Our router's ride to a station: its stations, or the plan goes (a walk that long is no plan).
       if (l.placeholder) {
         if (!rent || !ret || rent.uid === ret.uid) return null;

@@ -1417,3 +1417,19 @@ test('paceOf: before setting out, from where you are: leaving at the planned tim
   // ~2.5 km away (44 min): gone even leaving now.
   assert.deepEqual(at({ lat: 24.8034, lon: 120.9470 }), { text: '從這裡趕不上 06:50 的車了', tone: 'bad' });
 });
+
+test("YouBike: the station to leave it at is the one that makes the whole way quickest from where you took it (六家 → 成功九街: 綠41公園 on the way, not 成功國中 past it, a few metres nearer the door)", () => {
+  const st = (uid, name, lat, lon, n = 10) => ({ uid, name, lat, lon, bikes: n, ebike: 2, ret: n, ok: true });
+  const bikes = [st('lj', '臺鐵六家車站', 24.80777, 121.03895), st('g41', '綠41公園', 24.81614, 121.0171), st('cg', '成功國中', 24.81872, 121.01597)];
+  const home = { lat: 24.81761, lon: 121.01652 };
+  // Nearest the door, with nothing else known: 成功國中.
+  assert.equal(returnNear(home, bikes).uid, 'cg');
+  // From 六家: 綠41公園.
+  assert.equal(returnNear(home, bikes, { from: bikes[0] }).uid, 'g41');
+  const legs = bikeTrip({ lat: 24.8078, lon: 121.0390 }, home, bikes, 0);
+  assert.equal(legs.find(l => l.mode === 'bike').to.name, '綠41公園');
+  // From the north (成功國中 is on the way then): 成功國中.
+  assert.equal(returnNear(home, bikes, { from: { lat: 24.8300, lon: 121.0120 } }).uid, 'cg');
+  // A station with its last dock is worth a minute less.
+  assert.equal(returnNear(home, [bikes[0], { ...bikes[1], ret: 1 }, bikes[2]], { from: bikes[0] }).uid, 'cg');
+});
