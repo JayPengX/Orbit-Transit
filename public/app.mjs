@@ -182,6 +182,7 @@ async function boot() {
   const asked = /^#(map|go|times|me|bus|train|metro)/.exec(location.hash)?.[1] || 'map';
   const want = was && !was.min ? 'map' : asked;
   mapTab.register(ctx);
+  meTab.register(ctx);
   select(OLD[want] || want);
   // (Shrunk, on another tab: the map started behind it, so the ride goes on and its bar shows.)
   if (was && (OLD[want] || want) !== 'map' && !started.has('map')) {
