@@ -2267,7 +2267,7 @@ main {
   background: var(--q-page);
 }
 .tab-map .q-appbar {
-  background: linear-gradient(to bottom, rgba(10, 11, 15, 0.45) 0, rgba(10, 11, 15, 0.3) calc(var(--q-top) + 1px), rgba(10, 11, 15, 0.15) 75%, rgba(10, 11, 15, 0));
+  background: linear-gradient(to bottom, rgba(42, 40, 43, 0.55) 0, rgba(42, 40, 43, 0.55) calc(var(--q-top) + 1px), rgba(42, 40, 43, 0.15) 75%, rgba(42, 40, 43, 0));
 }
 
 /* A plan's actions: navigate (only when it leaves soon) and pin it. */
@@ -4638,4 +4638,9 @@ button.ot-nav-gm {
    bar, sharp, the navigation card floating over it with the map around it,
    never a band of the card's colour. The status bar itself keeps the kit's
    solid strip: anything see-through there, even a half-clear tint, and iOS
-   lays its edge blur over the top of the map. */
+   lays its edge blur over the top of the map. So it's solid in the map's
+   own ground colour (its dark tiles, ~#302d30, a touch deeper), reading as
+   the map's top, not a black band. */
+body.tab-map {
+  --q-status-bg: #2a282b;
+}
