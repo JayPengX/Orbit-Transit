@@ -1304,8 +1304,8 @@ function navDraw(plan, i) {
   if (pts.length) map.fit(pts, { top: 170, bottom: 150, left: 40, right: 40 });
 }
 const STEP_ZOOM = { walk: 17, bike: 16, bus: 15, metro: 14, lightrail: 15, tra: 13, hsr: 11 };
-// Navigating, the map follows you; moved by a finger it stops, and comes back
-// to you 10 s after the last touch (like a phone's own maps).
+// Navigating, the map follows you; moved or zoomed by a finger it stops, and
+// comes back to you, at the step's scale, 10 s after the last touch (like a phone's own maps).
 let navFollow = true;
 let followBack = 0;
 function dragged() {
@@ -1319,8 +1319,10 @@ function dragged() {
   followBack = setTimeout(() => {
     if (!navFull()) return;
     navFollow = true;
-    const me = navNow()?.pos || ctx.here;
-    if (me?.lat != null) map.setView(me.lat, me.lon);
+    // Back on you at the step's own scale (zoomed out or in by hand, it comes back in too).
+    const n = navNow();
+    const me = n?.pos || ctx.here;
+    if (me?.lat != null) map.setView(me.lat, me.lon, STEP_ZOOM[n?.plan.legs[n.i]?.mode] || 15);
   }, 10_000);
 }
 

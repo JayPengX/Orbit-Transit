@@ -135,6 +135,9 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
   });
   map.addListener('idle', () => onIdle());
   map.addListener('dragstart', () => onDrag());
+  // A zoom by a finger (a pinch, a double tap) counts too; the app's own (following you, fitting a way) don't.
+  let byApp = 0;
+  map.addListener('zoom_changed', () => Date.now() - byApp > 1500 && onDrag());
 
   // One overlay for all HTML markers, placed once a frame.
   class Layer extends g.OverlayView {
@@ -201,11 +204,13 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
       return { n: ne.lat(), e: ne.lng(), s: sw.lat(), w: sw.lng() };
     },
     setView(lat, lon, z) {
+      byApp = Date.now();
       map.panTo({ lat, lng: lon });
       if (z) map.setZoom(z);
     },
     fit(points, pad = 60) {
       if (!points.length) return;
+      byApp = Date.now();
       const b = new g.LatLngBounds();
       for (const p of points) b.extend({ lat: p.lat, lng: p.lon });
       map.fitBounds(b, typeof pad === 'object' ? pad : { top: pad, bottom: pad, left: pad, right: pad });
@@ -254,6 +259,8 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
   map.on('moveend', () => onIdle());
   map.on('dragstart', () => onDrag());
+  let byApp = 0;
+  map.on('zoomstart', () => Date.now() - byApp > 1500 && onDrag());
   const layers = new Map();
   const lineSets = new Map();
   const markerLayer = () =>
@@ -285,10 +292,12 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
       return { n: b.getNorth(), e: b.getEast(), s: b.getSouth(), w: b.getWest() };
     },
     setView(lat, lon, z) {
+      byApp = Date.now();
       map.setView([lat, lon], z || map.getZoom());
     },
     fit(points, pad = 60) {
       if (!points.length) return;
+      byApp = Date.now();
       const p = typeof pad === 'object' ? pad : { top: pad, bottom: pad, left: pad, right: pad };
       map.fitBounds(L.latLngBounds(points.map(x => [x.lat, x.lon])), { paddingTopLeft: [p.left, p.top], paddingBottomRight: [p.right, p.bottom] });
     },
