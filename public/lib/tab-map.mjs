@@ -1272,6 +1272,9 @@ function navigate(p, resume = null) {
     onAction: navAction,
     onEnd: (how = {}) => {
       if (how.arrived) ctx.status(`已抵達 ${how.arrived}，導航結束`);
+      // (Navigation over: the map no longer follows you, until 我的位置 is tapped.)
+      following = false;
+      clearTimeout(followBack);
       $('nav').hidden = true;
       document.body.classList.remove('ot-navigating', 'ot-nav-min');
       $('nav-mini').innerHTML = '';
@@ -1306,7 +1309,11 @@ const STEP_ZOOM = { walk: 17, bike: 16, bus: 15, metro: 14, lightrail: 15, tra: 
 let navFollow = true;
 let followBack = 0;
 function dragged() {
-  if (!navFull()) return;
+  // Not navigating (or shrunk): a finger on the map means you're looking somewhere else; it stays there.
+  if (!navFull()) {
+    following = false;
+    return;
+  }
   navFollow = false;
   clearTimeout(followBack);
   followBack = setTimeout(() => {
