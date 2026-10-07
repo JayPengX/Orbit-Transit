@@ -4579,3 +4579,20 @@ button.ot-nav-gm {
   background: var(--ot-bad);
   color: #fff;
 }
+
+/* Navigating (its card on the map): the card's top runs up to the screen's
+   edge, and the kit's solid strip under the status bar takes its colour
+   (--nav-status, nav.mjs), so it's one banner, as in Maps, not a black band. */
+body.tab-map.ot-navigating:not(.ot-nav-min) {
+  --q-status-bg: var(--nav-status, var(--q-page));
+}
+@media (max-width: 640px) {
+  body.tab-map.ot-navigating:not(.ot-nav-min) .ot-nav-top {
+    top: var(--q-top, env(safe-area-inset-top));
+    left: 0;
+    right: 0;
+    max-width: none;
+    border-width: 0;
+    border-radius: 0 0 26px 26px;
+  }
+}

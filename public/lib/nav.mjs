@@ -434,6 +434,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           <button class="q-icon-btn" type="button" data-nav="more" aria-label="更多：縮小、改下車站、重新規劃、改目的地">${icon('more')}</button>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">結束</button>
         </div>`;
+    // The strip under the phone's status bar (the kit's, solid so iOS keeps
+    // the edge sharp) in the colour of the card's top: one banner to the top
+    // of the screen, like Maps', not a black band above it.
+    const band = off ? ['var(--ot-good)', 20] : strayed ? ['var(--ot-warn)', 20] : offNext ? ['var(--ot-warn)', 24] : coming ? ['var(--ot-good)', 22] : [legColor(l), 16];
+    document.body.style.setProperty('--nav-status', `color-mix(in srgb, ${band[0]} ${band[1]}%, var(--ot-card))`);
     // Drawn in place: the card's parts each time, the row of steps only when
     // it changes (it's scrolled by hand; redrawn, it jumped back every few
     // seconds), centred on the step you're on only when that changes.
