@@ -12,7 +12,7 @@
 //   我的    places, trips, pinned transit, preferences (ways of moving,
 //           TPASS), tickets, the metro maps
 
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn } from '#kit/quadra.mjs';
+import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition, permissionState } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
@@ -142,15 +142,39 @@ topActions(q, { help });
 
 async function boot() {
   bar = tabBar({ tabs: TABS, onSelect: (id, o) => select(id, o), label: '分頁' });
-  const first = await q.start();
-  const theirs = decodeData(first?.payload);
-  const merged = mergeData(ctx.data, theirs);
-  const changed = encodeData(merged) !== (first?.payload || '');
-  ctx.data = merged;
-  local.data = encodeData(merged);
-  saveLocal();
-  if (changed && theirs == null && merged.t && q.active) q.write({ payload: local.data }).catch(() => {});
-  ctx.cfg = await config().catch(() => ({ map: { provider: 'nlsc' }, search: 'osm' }));
+  // Opened again (back from the background after iOS let it go): on what this
+  // device has, at once — its copy of the pass's data and the map's settings
+  // kept from last time — and the pass and the settings read behind it
+  // (TRUTH §5). Signed out, or the first time, they're waited for.
+  const merge = first => {
+    const theirs = decodeData(first?.payload);
+    const merged = mergeData(ctx.data, theirs);
+    const changed = encodeData(merged) !== (first?.payload || '');
+    const was = encodeData(ctx.data);
+    ctx.data = merged;
+    local.data = encodeData(merged);
+    saveLocal();
+    if (changed && theirs == null && merged.t && q.active) q.write({ payload: local.data }).catch(() => {});
+    return local.data !== was;
+  };
+  const getCfg = () =>
+    config()
+      .then(c => {
+        local.cfg = c;
+        saveLocal();
+        return c;
+      })
+      .catch(() => null);
+  const quick = Boolean(storedAccount() && local.cfg);
+  const session = q.start();
+  if (quick) {
+    ctx.cfg = local.cfg;
+    getCfg();
+    session.then(first => merge(first) && ctx.refreshTabs()).catch(() => {});
+  } else {
+    merge(await session);
+    ctx.cfg = (await getCfg()) || { map: { provider: 'nlsc' }, search: 'osm' };
+  }
   $('loading').hidden = true;
   // A ride being navigated when the app was swiped away: on with it, on the
   // map (or, shrunk to its bar, on the tab you were on).
