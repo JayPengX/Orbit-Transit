@@ -21,6 +21,19 @@ export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00+08:00`
 const WEEK = '日一二三四五六';
 export const dayLabel = (date, today = tw().date) => (date === today ? '今天' : date === addDays(today, 1) ? '明天' : `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}（${WEEK[new Date(`${date}T12:00:00+08:00`).getUTCDay()]}）`);
 
+// Taiwan, what the app covers: the main island, 澎湖, 綠島, 蘭嶼, 金門 and 馬祖
+// (each by its own box, so the coast of Fujian beside them, and 平潭, are
+// out). The map stays inside TAIWAN_BOX; a place outside inTaiwan isn't one.
+export const TAIWAN_BOX = { s: 21.7, n: 26.6, w: 117.9, e: 122.5 };
+export function inTaiwan(lat, lon) {
+  if (!(lat >= 21.8 && lat <= 26.5 && lon >= 118.1 && lon <= 122.3)) return false;
+  if (lat >= 24.35 && lat <= 24.56 && lon >= 118.21 && lon <= 118.5) return true; // 金門
+  if (lat >= 25.9 && lat <= 26.42 && lon >= 119.9 && lon <= 120.55) return true; // 馬祖
+  if (lon < 119.25) return false; // the mainland's coast
+  if (lat > 25.35 && lon < 121) return false; // 平潭 and the coast north of it
+  return true;
+}
+
 // Minutes, written the way a timetable says them: 「8 分」, 「1 小時 5 分」.
 export function minsText(sec) {
   const m = Math.max(0, Math.round(sec / 60));

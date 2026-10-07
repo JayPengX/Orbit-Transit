@@ -22,7 +22,7 @@ import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { buyTicket } from './tickets.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
 import { openRoute } from './bus-ui.mjs';
 
 const $ = id => document.getElementById(id);
@@ -330,7 +330,10 @@ async function googlePlace(p) {
 // ---- The card ----------------------------------------------------------------------------------------
 
 let cardTimer = 0;
+// (Taiwan only: a spot or a place outside it, the coast of Fujian beside 金門, isn't one.)
+const OUTSIDE = '只支援台灣（含澎湖、金門、馬祖）的地點';
 function openCard(c) {
+  if (c.lat != null && !inTaiwan(c.lat, c.lon)) return ctx.status(OUTSIDE);
   document.body.classList.remove('ot-planning');
   card = { ...c, at: Date.now() };
   map.layer('sel').set([{ id: 'sel', lat: c.lat, lon: c.lon, cls: 'sel', z: 40, html: icon('pin') }]);
@@ -720,6 +723,7 @@ export function pickPoint(title, { here = false, onMap = true } = {}) {
   return new Promise(resolve => {
     let done = false;
     const finish = v => {
+      if (v && !v.here && v.lat != null && !inTaiwan(v.lat, v.lon)) return ctx.status(OUTSIDE);
       if (done) return;
       done = true;
       d.close();
@@ -945,6 +949,7 @@ async function plan(from, to, opts = {}) {
   const dest = opts.swapHere ? await hereNow() : to;
   const fromPt = start ? { name: start.name || '目前位置', lat: start.lat, lon: start.lon } : { name: '選擇出發地', lat: null, lon: null };
   if (!dest) return ctx.status('需要你的位置：請在設定允許定位');
+  if (dest.lat != null && !inTaiwan(dest.lat, dest.lon)) return ctx.status(OUTSIDE);
   card = { kind: 'plans', from: fromPt, fromHere: !from, to: dest, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
   ctx.status('');
   document.body.classList.add('ot-planning');

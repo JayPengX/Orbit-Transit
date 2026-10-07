@@ -1433,3 +1433,11 @@ test("YouBike: the station to leave it at is the one that makes the whole way qu
   // A station with its last dock is worth a minute less.
   assert.equal(returnNear(home, [bikes[0], { ...bikes[1], ret: 1 }, bikes[2]], { from: bikes[0] }).uid, 'cg');
 });
+
+test("inTaiwan: the app's coverage, the main island and its islands (澎湖, 綠島, 蘭嶼, 金門, 馬祖), not the coast of Fujian beside them", async () => {
+  const { inTaiwan } = await import('../public/lib/util.mjs');
+  const yes = { 新竹: [24.8016, 120.9716], 台北101: [25.034, 121.565], 墾丁: [21.95, 120.8], 澎湖馬公: [23.57, 119.58], 蘭嶼: [22.05, 121.55], 綠島: [22.66, 121.49], 金門: [24.43, 118.32], 小金門: [24.43, 118.24], 南竿: [26.15, 119.93], 東引: [26.37, 120.49], 彭佳嶼: [25.63, 122.07] };
+  const no = { 廈門: [24.48, 118.09], 福州: [26.07, 119.3], 平潭: [25.5, 119.78], 黃岐: [26.33, 119.88], 東京: [35.68, 139.76], 馬尼拉: [14.6, 120.98], 香港: [22.3, 114.17] };
+  for (const [k, [a, b]] of Object.entries(yes)) assert.equal(inTaiwan(a, b), true, k);
+  for (const [k, [a, b]] of Object.entries(no)) assert.equal(inTaiwan(a, b), false, k);
+});
