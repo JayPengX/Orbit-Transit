@@ -1455,12 +1455,13 @@ test("inTaiwan: the app's coverage, the main island and its islands (澎湖, 綠
   for (const [k, [a, b]] of Object.entries(no)) assert.equal(inTaiwan(a, b), false, k);
 });
 
-test("the map's top stays sharp: the phone's own status bar (black), a solid strip in the map's colour on the map tab", async () => {
+test("the map's top stays sharp: the phone's own status bar (black), the strip solid black on the map tab too", async () => {
   const { readFileSync } = await import('node:fs');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../public/transit.css', import.meta.url), 'utf8');
   // black-translucent puts the page under the status bar, and iOS blurs a band below it whatever the strip.
   assert.match(html, /apple-mobile-web-app-status-bar-style" content="black"/);
   assert.doesNotMatch(css, /--q-status-bg:\s*(transparent|rgba)/);
-  assert.match(css, /body\.tab-map \{\s*--q-status-bg: #2a282b;/);
+  // Black, as every other tab (no map-tab colour of its own).
+  assert.doesNotMatch(css, /body\.tab-map \{\s*--q-status-bg/);
 });
