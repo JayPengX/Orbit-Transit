@@ -109,8 +109,9 @@ export function stopTimes(sched, { stopUID, name, dir }, date, dow) {
 const ETA_FIELDS = '$select=StopUID,RouteUID,RouteName,SubRouteUID,Direction,EstimateTime,StopStatus,NextBusTime,PlateNumb,IsLastBus,Estimates,StopCountDown';
 
 // Every stop of one route (the route sheet), keyed by StopUID.
+export const routeEtaPath = route => `basic/v2/Bus/EstimatedTimeOfArrival/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&${ETA_FIELDS}`;
 export async function routeEta(route) {
-  const j = await tdx(`basic/v2/Bus/EstimatedTimeOfArrival/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&${ETA_FIELDS}`, { fresh: 20_000 });
+  const j = await tdx(routeEtaPath(route), { fresh: 20_000 });
   return etaMap(j);
 }
 // The stops of a group, one ask per city.

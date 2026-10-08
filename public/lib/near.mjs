@@ -14,7 +14,7 @@
 // Each falls back to TDX's own search around the point when the packs
 // can't be had.
 
-import { kept, keep, tdx, rows } from './api.mjs';
+import { kept, keep, tdx, rows, dataAt } from './api.mjs';
 import { pack } from './packs.mjs';
 import { stationsNear } from './bus.mjs';
 import { cityBikes, bikesNear } from './bike.mjs';
@@ -137,7 +137,8 @@ async function flush(asks, ask) {
       const path = `basic/v2/Bus/EstimatedTimeOfArrival/${scope === 'InterCity' ? 'InterCity' : `City/${scope}`}?$filter=${part.map(u => `StopUID eq '${u.replace(/'/g, "''")}'`).join(' or ')}&${FIELDS}`;
       jobs.push(
         ask(path, { fresh: ETA_FRESH }).then(j => {
-          const at = Date.now();
+          // (When the data is from: the proxy's copy when TDX was slow.)
+          const at = Math.min(Date.now(), dataAt(path) || Date.now());
           const by = new Map(part.map(u => [u, []]));
           for (const r of rows(j)) by.get(r.StopUID)?.push(r);
           for (const [u, list] of by) etaKept.set(`${scope}|${u}`, { at, rows: list });

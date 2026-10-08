@@ -20,7 +20,7 @@ const token = async () => {
 // 5xx, TDX busy): most of what used to say 暫時無法取得資料 was one of those.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const passing = err => !err.status || err.status === 429 || err.status >= 500;
-async function ask(path, { signal, wait = 15_000 } = {}) {
+async function ask(path, { signal, wait = 15_000, meta = null } = {}) {
   const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(await token())}`;
   const timer = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const stop = setTimeout(() => timer?.abort(), wait);
@@ -39,6 +39,8 @@ async function ask(path, { signal, wait = 15_000 } = {}) {
     body = await res.json();
   } catch {}
   if (!res.ok) throw Object.assign(new Error(body?.code || `${res.status}`), { code: body?.code || 'HTTP', status: res.status });
+  // How old the proxy's copy is (s): TDX slow, it answers with the copy it has.
+  if (meta) meta.age = Number(res.headers?.get?.('X-Transit-Age')) || 0;
   return body;
 }
 async function get(path, opts = {}) {
@@ -95,8 +97,10 @@ export async function tdx(path, { fresh = 30_000, persist = false, store = true 
   if (inflight.has(path)) return inflight.get(path);
   const p = (async () => {
     try {
-      const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}`);
-      memory.set(path, { at: Date.now(), data });
+      const meta = {};
+      const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}`, { meta });
+      // When the data is from (the proxy's copy can be older): its "N 秒前更新", and asked again sooner.
+      memory.set(path, { at: Date.now() - meta.age * 1000, data });
       stale.delete(path);
       // Live answers are kept too (a minute's copy beats an error after a relaunch).
       if (store) keep(path, data, Date.now(), persist ? Infinity : 200_000);
@@ -120,6 +124,8 @@ export async function tdx(path, { fresh = 30_000, persist = false, store = true 
 export const keptLocal = key => kept(`local/${key}`);
 export const keepLocal = (key, data) => keep(`local/${key}`, data, Date.now());
 
+// When a path's data is from (ms), or 0.
+export const dataAt = path => memory.get(path)?.at || 0;
 // What's already here for a path (no network), or null.
 export const peek = path => memory.get(path)?.data ?? null;
 

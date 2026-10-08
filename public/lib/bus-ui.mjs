@@ -4,8 +4,8 @@
 // (常用, 上班, 回家…), managing the groups, and the stops around a point with
 // every bus due.
 
-import { cityRoutes, findRoutes, routeStops, routeEta, etaText, etaOf, routeSchedule, stopTimes, stationsNear, INTERCITY } from './bus.mjs';
-import { errorText, tdx, rows } from './api.mjs';
+import { cityRoutes, findRoutes, routeStops, routeEta, routeEtaPath, etaText, etaOf, routeSchedule, stopTimes, stationsNear, INTERCITY } from './bus.mjs';
+import { errorText, tdx, rows, dataAt } from './api.mjs';
 import { CITIES, CITY_CODES, cityName, cityShort, NEAR_CITIES } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
@@ -268,7 +268,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   const refresh = async () => {
     try {
       live = await routeEta(route);
-      at = Date.now();
+      at = Math.min(Date.now(), dataAt(routeEtaPath(route)) || Date.now());
       err = '';
     } catch (x) {
       err = errorText(x);
