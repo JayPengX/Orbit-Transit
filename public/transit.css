@@ -764,10 +764,14 @@ main {
 /* Start and destination: each a field you tap to change. */
 .ot-od {
   display: grid;
+  /* One column no wider than the space: a long name ends in …, it never
+     widens the fields under the buttons beside them. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   min-width: 0;
 }
 .ot-od button {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1008,6 +1012,8 @@ main {
   display: flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+  min-width: 0;
   color: var(--ot-warn);
   font-size: 12.5px;
   font-weight: 700;
@@ -4182,6 +4188,10 @@ main {
   margin-top: 2px;
   color: var(--q-text-2);
   font-size: 13px;
+  /* One row each (a long stop name ends in …, never a second row). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* The plans card's options: when, and what to take, one row. */
 .ot-opts {
@@ -4634,3 +4644,125 @@ button.ot-nav-gm {
    blurred a band below the strip too). So the kit's strip stays solid
    black (the page's colour, the owner's choice over a map-coloured one),
    and the phone's status bar with it. */
+
+/* ---- The plans, compact (2026-10-10): several in view at once ---- */
+.ot-plans {
+  gap: 6px;
+}
+.ot-plan {
+  padding: 10px 12px;
+  border-radius: 16px;
+}
+.ot-plan-dur {
+  font-size: 19px;
+}
+.ot-plan-top {
+  flex-wrap: nowrap;
+  min-width: 0;
+  white-space: nowrap;
+}
+.ot-plan-top .ot-tag {
+  flex: none;
+}
+.ot-plan .ot-legs {
+  flex-wrap: nowrap;
+  margin: 6px 0 4px;
+  overflow: hidden;
+}
+.ot-plan .ot-leg {
+  flex: none;
+  height: 24px;
+}
+.ot-plan-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Another plan open: this one a single row (time, then its lines). */
+.ot-plan.mini {
+  padding: 8px 12px;
+}
+.ot-plan.mini .ot-plan-dur {
+  font-size: 16px;
+}
+.ot-plan.mini .ot-plan-time {
+  font-size: 12.5px;
+}
+.ot-plan.mini .ot-legs {
+  display: flex;
+  margin: 0 0 0 auto;
+  min-width: 0;
+  justify-content: flex-end;
+}
+.ot-plan.mini .ot-leg {
+  height: 22px;
+  font-size: 12px;
+}
+/* The open plan's steps, tighter. */
+.ot-plan.on .ot-steps {
+  margin-top: 8px;
+}
+.ot-plan.on .ot-steps li {
+  padding: 5px 0 6px;
+}
+.ot-plan.on .ot-steps li::before {
+  top: 31px;
+}
+
+/* ---- A trip with stops: numbered places under the start, × to drop one, + to add ---- */
+.ot-dot.stop {
+  background: transparent;
+  border: 2px solid var(--q-accent);
+}
+.ot-od-n {
+  flex: none;
+  min-width: 12px;
+  color: var(--q-muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+/* With stops, every place a little shorter, so the card keeps its size. */
+.ot-od:has(.ot-od-stop) > button,
+.ot-od-stop > button {
+  min-height: 34px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.ot-od-stop {
+  position: relative;
+  min-width: 0;
+}
+.ot-od-stop > button:first-child {
+  padding-right: 36px;
+}
+.ot-od .ot-od-x {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  width: 30px;
+  min-height: 30px;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--q-muted);
+  font-size: 18px;
+  transform: translateY(-50%);
+}
+.ot-od .ot-od-add {
+  width: auto;
+  justify-self: start;
+  min-height: 28px;
+  padding: 2px 10px;
+  border: 1px dashed var(--ot-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--q-text-2);
+  font-size: 13px;
+}
+.ot-od-add .ot-i {
+  width: 14px;
+  height: 14px;
+}
