@@ -23,7 +23,7 @@ import { pickSig } from './plan.mjs';
 import { canNav } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { icon, legChips, depChips } from './ui.mjs';
-import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel } from './util.mjs';
+import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
 
 const $ = id => document.getElementById(id);
 let ctx = null;
@@ -96,11 +96,13 @@ export function tripNow(t, here, now = Date.now()) {
   if (!from && near(way.to)) return null;
   // The next time it's on: a recurring trip on its next day (a Sunday's is
   // Monday's), at that day's own time; else today's, or tomorrow's once past.
+  // A weekdays-only trip (school, work) isn't on a national holiday: the next day it is.
+  const offOn = date => weekdaysOnly(t.days) && holidayOn(date);
   let at = null;
   let by = 'depart';
-  for (let n = 0; n < 8; n++) {
+  for (let n = 0; n < 15; n++) {
     const dow = (day.dow + n) % 7;
-    if (t.days.length && !t.days.includes(dow)) continue;
+    if (t.days.length && (!t.days.includes(dow) || offOn(addDays(day.date, n)))) continue;
     const time = slotOf(t, dow)[way.key];
     if (!time) {
       if (t.days.length) continue;
@@ -115,7 +117,7 @@ export function tripNow(t, here, now = Date.now()) {
     }
     break;
   }
-  return { id: `${t.id}:${way.rev ? 'b' : 'f'}`, from, to: way.to, at, by, label: way.label, recurring: t.days.length > 0, today: t.days.includes(day.dow) };
+  return { id: `${t.id}:${way.rev ? 'b' : 'f'}`, from, to: way.to, at, by, label: way.label, recurring: t.days.length > 0, today: t.days.includes(day.dow) && !offOn(day.date) };
 }
 
 // Saved trips in the order they matter: recurring ones today first, then the rest.

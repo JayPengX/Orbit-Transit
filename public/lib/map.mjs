@@ -28,6 +28,8 @@ export const DARK = [
   { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#c2c9d6' }] },
   { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2b3140' }] },
   { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#b9c2d3' }] },
+  // Google's own bus stops off: ours (each side of the road, with live times) are the ones to tap.
+  { featureType: 'transit.station.bus', stylers: [{ visibility: 'off' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c1724' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6680' }] }
 ];
@@ -223,6 +225,13 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
       map.panTo({ lat, lng: lon });
       if (z) map.setZoom(z);
     },
+    // A point `dy` px above the map's middle (the middle of what the
+    // search bar and a card over the map leave in view).
+    focus(lat, lon, dy = 0) {
+      byApp = Date.now();
+      map.panTo({ lat, lng: lon });
+      if (Math.round(dy)) map.panBy(0, Math.round(dy));
+    },
     fit(points, pad = 60) {
       if (!points.length) return;
       byApp = Date.now();
@@ -315,6 +324,11 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
     setView(lat, lon, z) {
       byApp = Date.now();
       map.setView([lat, lon], z || map.getZoom());
+    },
+    focus(lat, lon, dy = 0) {
+      byApp = Date.now();
+      const z = map.getZoom();
+      map.panTo(map.unproject(map.project([lat, lon], z).add([0, Math.round(dy)]), z));
     },
     fit(points, pad = 60) {
       if (!points.length) return;

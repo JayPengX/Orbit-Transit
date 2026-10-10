@@ -118,3 +118,11 @@ export const decodeLine = (poly, fmt) => (!poly ? [] : fmt === 'f' ? decodeFlexi
 export const zh = v => (v && typeof v === 'object' ? v.Zh_tw || v.En || '' : String(v ?? ''));
 export const uid = () => Math.random().toString(36).slice(2, 10);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// Taiwan's national holidays (the kit's holidays.mjs, set by the app once
+// loaded): a trip saved for weekdays only (家 → 學校) keeps the work
+// calendar and skips them. holidayOn('YYYY-MM-DD') → true on one.
+let holidayCheck = () => false;
+export const useHolidays = fn => (holidayCheck = typeof fn === 'function' ? fn : () => false);
+export const holidayOn = date => holidayCheck(date);
+export const weekdaysOnly = days => days.length > 0 && !days.includes(0) && !days.includes(6);

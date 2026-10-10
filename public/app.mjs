@@ -23,6 +23,11 @@ import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
+import { useHolidays } from './lib/util.mjs';
+// Taiwan's holidays (the kit's), before the first screen: a weekdays-only
+// trip (家 → 學校) isn't picked for a holiday (an older kit: none, at once).
+const holidays = await Promise.race([import('#kit/holidays.mjs').catch(() => null), new Promise(r => setTimeout(r, 1500, null))]);
+if (holidays?.twHoliday) useHolidays(date => Boolean(holidays.twHoliday(date)));
 
 const $ = id => document.getElementById(id);
 const VERSION = document.querySelector('meta[name="build-version"]')?.content || 'dev';

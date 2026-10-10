@@ -628,7 +628,11 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   }
   // Never nothing: the best way stays when every way was set aside.
   if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
-  // A route's other departures: the next few, within an hour and a half of its first.
+  // A route's other departures: the next few, within an hour and a half of
+  // its first; and a route that runs seldom (5615, a few buses a day) its
+  // next three all the same, up to four hours on: its card always offers a
+  // later bus when there is one (it had none, while 182's every-20-minutes
+  // did, 2026-10-10).
   const times = new Map();
   for (const g of groups.values()) {
     // (A ride or a walk of your own has no times: you leave when you like.)
@@ -636,7 +640,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
       for (const q of g) times.set(q, [q]);
       continue;
     }
-    const by = [...g].sort((a, b) => a.dep - b.dep).filter(q => q === g[0] || Math.abs(q.dep - g[0].dep) <= 90 * 60_000).slice(0, 6);
+    const by = [...g].sort((a, b) => a.dep - b.dep).filter((q, k) => q === g[0] || Math.abs(q.dep - g[0].dep) <= 90 * 60_000 || (k < 3 && q.dep - g[0].dep <= 4 * 3_600_000)).slice(0, 6);
     for (const q of g) times.set(q, by);
   }
   // Different ways first: each recommendation rides a different main line

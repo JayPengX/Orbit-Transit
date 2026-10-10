@@ -1465,3 +1465,42 @@ test("the map's top stays sharp: the phone's own status bar (black), the strip s
   // Black, as every other tab (no map-tab colour of its own).
   assert.doesNotMatch(css, /body\.tab-map \{\s*--q-status-bg/);
 });
+
+test('a weekdays-only trip (上學) skips a national holiday: Friday 國慶日補假 → Monday; an every-day trip doesn’t', async () => {
+  const { tripNow } = await import('../public/lib/tab-go.mjs');
+  const { useHolidays } = await import('../public/lib/util.mjs');
+  const { twHoliday } = await import('#kit/holidays.mjs');
+  const home = { name: '家', lat: 24.821, lon: 121.018 };
+  const school = { name: '學校', lat: 24.733, lon: 121.088 };
+  const t = cleanSaved({ id: 's1', name: '上學', from: home, to: school, time: '07:30', days: [1, 2, 3, 4, 5], back: '17:00' });
+  const gym = cleanSaved({ id: 's2', name: '運動', from: home, to: school, time: '07:30', days: [0, 1, 2, 3, 4, 5, 6] });
+  const fri = Date.parse('2026-10-09T07:00:00+08:00');
+  useHolidays(date => Boolean(twHoliday(date)));
+  const w = tripNow(t, home, fri);
+  assert.equal(w.today, false);
+  assert.equal(w.at, twAt('2026-10-12', '07:30'));
+  assert.equal(tripNow(gym, home, fri).at, twAt('2026-10-09', '07:30'));
+  useHolidays(null);
+  assert.equal(tripNow(t, home, fri).at, twAt('2026-10-09', '07:30'));
+});
+
+test('a bus leg’s live line: a later bus chosen isn’t “趕不上” because an earlier one is coming; its timetable time instead', async () => {
+  const { liveLegText } = await import('../public/lib/tab-map.mjs');
+  const now = Date.parse('2026-10-10T12:09:00+08:00');
+  const at = hhmm => Date.parse(`2026-10-10T${hhmm}:00+08:00`);
+  // The 12:11 coming now; you'll be at the stop at 12:15.
+  const coming = [{ at: at('12:11') }];
+  assert.equal(liveLegText({ dep: at('12:11') }, coming, 0, at('12:15'), now), '即時：這班 2 分後到，趕不上');
+  // The next one (13:10) picked from the chips: not on its way yet.
+  assert.equal(liveLegText({ dep: at('13:10') }, coming, 0, at('13:05'), now), '時刻表 13:10 到站 · 還沒發車');
+  // On its way and catchable, a little late.
+  assert.equal(liveLegText({ dep: at('12:20') }, [{ at: at('12:25') }], 0, at('12:15'), now), '即時 12:25 到站 · 16 分後 · 晚 5 分');
+});
+
+test('a route that runs seldom (5615, a few buses a day) still offers its next buses to pick, hours apart; a frequent one its next 90 minutes', () => {
+  const ride = (short, dep) => finish({ legs: [{ mode: 'walk', dep: T(dep) - 300e3, arr: T(dep), dur: 300 }, { mode: 'bus', short, name: short, from: { name: '縣體育場', lat: 24.8196, lon: 121.0183 }, to: { name: '國賓大飯店', lat: 24.8096, lon: 120.9765 }, dep: T(dep), arr: T(dep) + 14 * 60e3, dur: 840 }] });
+  const out = rank([ride('5615', '12:29'), ride('5615', '14:39'), ride('5615', '16:19'), ride('5615', '20:09')], { now: T('12:10') });
+  const lead = out.find(p => p.lead);
+  const hhmm = t => tw(t).hm;
+  assert.deepEqual(lead.times.map(i => hhmm(out[i].dep)).sort(), ['12:24', '14:34', '16:14']);
+});

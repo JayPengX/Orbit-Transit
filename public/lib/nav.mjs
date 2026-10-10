@@ -8,6 +8,7 @@
 // round when yours is next; off it, what's next. Each step moves on by itself
 // when you get there.
 
+import * as kit from '#kit/quadra.mjs';
 import { watchPosition, roadPath } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf } from './live.mjs';
@@ -601,7 +602,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.endTimer = setTimeout(() => {
       if (nav !== state) return;
       stopNav();
-      onEnd?.({ arrived: plan.dest?.name || l.to?.name || '目的地' });
+      onEnd?.({ arrived: plan.dest?.name || l.to?.name || '目的地', plan });
     }, 20_000);
   };
   const moved = p => {
@@ -700,8 +701,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (k != null) return go(Number(k), Number(k) === state.i ? state.phase : 'before');
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
     if (a === 'end') {
-      stopNav();
-      onEnd?.();
+      // Asked first: 結束 sits where a thumb lands, and an ended ride can't be had back.
+      const ask = kit.ask || (o => Promise.resolve(globalThis.confirm(`${o.title}\n${o.body}`)));
+      ask({ title: '結束導航？', body: `到 ${plan.dest?.name || plan.legs.at(-1)?.to?.name || '目的地'} 的導航會停止。`, ok: '結束導航', cancel: '繼續導航', danger: true }).then(ok => {
+        if (!ok || nav !== state) return;
+        stopNav();
+        onEnd?.();
+      });
     } else if (a) onAction?.(a);
   };
   if (mini) mini.onclick = ev => ev.target.closest('[data-nav="open"]') && onAction?.('open');
