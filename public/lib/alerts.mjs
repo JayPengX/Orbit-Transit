@@ -120,7 +120,7 @@ async function check() {
         const r = rows.find(x => x.routeUID === a.routeUID && Number(x.dir) === Number(a.dir) && x.sec != null);
         if (!r || r.sec > a.min * 60) continue;
         const m = Math.max(0, Math.round(r.sec / 60));
-        await notify(`${a.route} ${m <= 1 ? '即將進站' : `${m} 分後到站`}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''}：該出發了`, `transit:bus:${a.id}`);
+        await notify(`${a.route} ${m <= 1 ? '即將進站' : `${m} 分後到站`}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''} · 該出發了`, `transit:bus:${a.id}`);
         list = list.filter(x => x !== a);
       }
     }
