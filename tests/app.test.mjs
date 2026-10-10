@@ -6,7 +6,7 @@ import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys,
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
-import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn } from '../public/lib/bus.mjs';
+import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
 import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText } from '../public/lib/nav.mjs';
@@ -1503,4 +1503,19 @@ test('a route that runs seldom (5615, a few buses a day) still offers its next b
   const lead = out.find(p => p.lead);
   const hhmm = t => tw(t).hm;
   assert.deepEqual(lead.times.map(i => hhmm(out[i].dep)).sort(), ['12:24', '14:34', '16:14']);
+});
+
+test('a stop’s sides by the way its buses go: two signs on one side are one side (上泉州厝), the street’s other side another; a sign with no way joins the nearest side', () => {
+  const st = (uid, lat, lon, bearing, routes) => ({ uid, name: '上泉州厝', lat, lon, bearing, routes });
+  const sides = stopSides([
+    st('a', 24.8001, 121.0001, 'E', ['5615']),
+    st('b', 24.8001, 121.0005, 'NE', ['5616']),
+    st('c', 24.8, 121.0003, 'W', ['5615']),
+    st('d', 24.80009, 121.00049, '', ['81'])
+  ]);
+  assert.deepEqual(sides.map(s => s.group.map(x => x.uid)), [['a', 'b', 'd'], ['c']]);
+  assert.deepEqual(sides[0].routes, ['5615', '5616', '81']);
+  assert.equal(sides[1].bearing, 'W');
+  // One side only: one.
+  assert.equal(stopSides([st('a', 24.8, 121, 'S', []), st('b', 24.8002, 121, 'S', [])]).length, 1);
 });

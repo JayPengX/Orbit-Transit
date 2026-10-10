@@ -208,3 +208,26 @@ export async function stationsNear(lat, lon) {
 export const routeCity = uid => CITY_CODES[/^[A-Z]{3}/.exec(uid || '')?.[0]] || INTERCITY;
 
 export const BEARING = { E: '往東', W: '往西', S: '往南', N: '往北', SE: '往東南', NE: '往東北', SW: '往西南', NW: '往西北' };
+// A stop's stations (one name, a street's both sides, sometimes two signs a
+// side) as its sides: by the way their buses leave (each station's
+// bearing; 45° or less apart is one side), not by how far apart they stand
+// (上泉州厝 has two signs on one side, which stood as two sides). A station
+// with no bearing joins the nearest side. Each side: its stations (`group`),
+// in the middle of them, with their routes and its bearing.
+const ANGLE = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+export function stopSides(stations) {
+  const sides = [];
+  const turn = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+  for (const s of stations.filter(x => x.bearing in ANGLE)) {
+    const side = sides.find(x => turn(ANGLE[x[0].bearing], ANGLE[s.bearing]) <= 45);
+    if (side) side.push(s);
+    else sides.push([s]);
+  }
+  const d2 = (a, b) => (a.lat - b.lat) ** 2 + ((a.lon - b.lon) * Math.cos((a.lat * Math.PI) / 180)) ** 2;
+  for (const s of stations.filter(x => !(x.bearing in ANGLE))) {
+    const near = sides.map(side => [Math.min(...side.map(x => d2(x, s))), side]).sort((a, b) => a[0] - b[0])[0];
+    if (near) near[1].push(s);
+    else sides.push([s]);
+  }
+  return sides.map(g => ({ ...g[0], lat: g.reduce((a, x) => a + x.lat, 0) / g.length, lon: g.reduce((a, x) => a + x.lon, 0) / g.length, routes: [...new Set(g.flatMap(x => x.routes))], group: g }));
+}

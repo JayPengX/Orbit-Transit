@@ -10,7 +10,7 @@
 import { createMap } from './map.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, PROXY } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
-import { stationsNear, stationEta, etaText, cityRoutes, BEARING } from './bus.mjs';
+import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
@@ -274,14 +274,14 @@ const bikeMarker = s => {
 };
 const busMarker = s => ({ id: `bus:${s.uid}`, lat: s.lat, lon: s.lon, cls: 'bus', z: 2, kind: 'bus', data: s, html: icon('bus') });
 // A stop with a side on each side of the street, close in (zoom 17 on): a
-// marker where each side really is, both opening the stop's card. Further
-// out, or its halves together: one, between them.
+// marker for each side (its signs by the way their buses go: stopSides),
+// each opening that side's card, only the buses taken there. Further out:
+// one, between them, its card every bus under each side's way.
 const SIDES_ZOOM = 17;
 function busMarkers(group, z) {
-  const sides = [];
-  if (z >= SIDES_ZOOM) for (const s of group.group || [group]) if (!sides.some(x => meters(x.lat, x.lon, s.lat, s.lon) < 12)) sides.push(s);
+  const sides = z >= SIDES_ZOOM ? stopSides(group.group || [group]) : [];
   if (sides.length < 2) return [busMarker(group)];
-  return sides.map(s => ({ ...busMarker(group), id: `bus:${s.uid}`, lat: s.lat, lon: s.lon, cls: 'bus side' }));
+  return sides.map(s => ({ ...busMarker(s), cls: 'bus side' }));
 }
 // The two sides of a street (or a stop's halves) are one stop: one marker,
 // every bus through any of them on its card.
@@ -483,17 +483,22 @@ function renderCard() {
   } else if (c.kind === 'bus') {
     const s = c.item;
     const live = Array.isArray(c.live) ? c.live : null;
+    // Both sides of the street on one card (from further out): each side's
+    // buses under its way (往北), the nearer bus first within it.
+    const sides = (s.group?.length || 0) > 1 ? stopSides(s.group) : [];
+    const sideOf = r => (sides.length > 1 ? Math.max(0, sides.findIndex(x => x.group.some(st => st.uid === r.st?.uid))) : 0);
     const rowsHtml = live
       ? live
-          .map(r => ({ r, t: etaText(r) }))
-          .sort((a, b) => (a.r.sec ?? 1e9) - (b.r.sec ?? 1e9))
-          .map(({ r, t }) => {
+          .map(r => ({ r, t: etaText(r), side: sideOf(r) }))
+          .sort((a, b) => a.side - b.side || (a.r.sec ?? 1e9) - (b.r.sec ?? 1e9))
+          .map(({ r, t, side }, i, all) => {
+            const heading = sides.length > 1 && (i === 0 || all[i - 1].side !== side) ? `<p class="ot-eta-side">${e(BEARING[sides[side].bearing] || '另一側')}</p>` : '';
             const al = alertFor(r.st || s, r.routeUID, r.dir);
-            return `<div class="ot-eta-wrap"><button class="ot-eta-row" type="button" data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"><span class="ot-route-no">${e(r.route)}</span><span class="ot-eta-to">${r.toward ? `往 ${e(r.toward)}` : ''}</span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(al ? `${al.min} 分前提醒你` : t.sub)}</small></span></button><button class="q-icon-btn ot-bell${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir }))}" aria-label="到站提醒">${icon('bell')}</button></div>`;
+            return `${heading}<div class="ot-eta-wrap"><button class="ot-eta-row" type="button" data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"><span class="ot-route-no">${e(r.route)}</span><span class="ot-eta-to">${r.toward ? `往 ${e(r.toward)}` : ''}</span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(al ? `${al.min} 分前提醒你` : t.sub)}</small></span></button><button class="q-icon-btn ot-bell${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir }))}" aria-label="到站提醒">${icon('bell')}</button></div>`;
           })
           .join('') || '<p class="ot-note">這個站牌現在沒有公車資料。</p>'
       : '<p class="ot-note">載入中…</p>';
-    html = `${head(s.name, [s.group?.length > 1 ? '' : BEARING[s.bearing], s.routes.length ? `${s.routes.length} 條路線` : ''].filter(Boolean).join(' · '), `<span class="ot-badge bus">${icon('bus')}</span>`)}${err}${goThere(c)}<div class="ot-eta-list">${rowsHtml}</div><p class="ot-note">按 ${icon('bell')} 設定到站提醒：公車快到時通知你一次。</p>${actions(c)}`;
+    html = `${head(s.name, [sides.length > 1 ? '' : BEARING[s.bearing], s.routes.length ? `${s.routes.length} 條路線` : ''].filter(Boolean).join(' · '), `<span class="ot-badge bus">${icon('bus')}</span>`)}${err}${goThere(c)}<div class="ot-eta-list">${rowsHtml}</div><p class="ot-note">按 ${icon('bell')} 設定到站提醒：公車快到時通知你一次。</p>${actions(c)}`;
   } else if (c.kind === 'tra') {
     const s = c.item;
     const list = Array.isArray(c.live) ? c.live.filter(r => r.sched == null || r.sched + r.delay * 60_000 > Date.now() - 60_000).slice(0, 10) : null;
