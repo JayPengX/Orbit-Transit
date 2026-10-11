@@ -4217,6 +4217,62 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* A YouBike step's ends: 借 / 還 in a column, the station's name whole, its counts as tags under it. */
+.ot-bike-end {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: start;
+  margin-top: 6px;
+}
+.ot-bike-k {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--q-muted);
+}
+.ot-bike-at {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.ot-bike-name {
+  display: block;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--q-text);
+}
+.ot-bike-tags {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.ot-bike-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--q-text) 9%, transparent);
+  color: var(--q-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ot-bike-tag .ot-i {
+  width: 13px;
+  height: 13px;
+}
+.ot-bike-tag b {
+  font-variant-numeric: tabular-nums;
+  color: var(--q-text);
+}
+.ot-bike-tag.none b {
+  color: var(--q-muted);
+}
 /* The plans card's options: when, and what to take, one row. */
 .ot-opts {
   display: flex;

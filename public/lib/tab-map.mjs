@@ -8,6 +8,7 @@
 // starts navigation.
 
 import { createMap } from './map.mjs';
+import { fitNumbers } from '#kit/quadra.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, PROXY, liveMs, bikeMs } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides } from './bus.mjs';
@@ -545,6 +546,8 @@ function renderCard() {
     html = `${head(s.name || '載入中…', s.sub || '', `<span class="ot-badge place">${icon('pin')}</span>`)}${err}${actions(c)}`;
   } else if (c.kind === 'plans') html = plansHtml(c);
   box.innerHTML = html;
+  // A long station name shrinks to its row (never a second row, never cut).
+  fitNumbers([...box.querySelectorAll('.ot-bike-name')]);
   // The plans keep most of the map in view; the grip grows the card.
   box.classList.toggle('plans', c.kind === 'plans');
   box.classList.toggle('tall', box.classList.contains('grown'));
@@ -1239,6 +1242,11 @@ function ticketBtn(l) {
   return ` <span class="ot-pin-train ticket" role="button" data-ticket="${e(JSON.stringify(t))}">${icon('ticket')} 訂票</span>`;
 }
 
+// A YouBike step's two ends, a row each: 借 or 還, the station's whole
+// name, and under it what's there now as small tags (the bikes, the
+// 電輔車, the free docks; one line of all of it wrapped or was cut).
+const bikeEnd = (k, name, tags) =>
+  `<span class="ot-bike-end"><i class="ot-bike-k">${k}</i><span class="ot-bike-at"><span class="ot-bike-name">${e(name)}</span>${tags.length ? `<span class="ot-bike-tags">${tags.map(([a, n]) => `<span class="ot-bike-tag${Number(n) ? '' : ' none'}">${a}<b>${e(String(n))}</b></span>`).join('')}</span>` : ''}</span></span>`;
 function stepsHtml(p, c = card) {
   return `<ol class="ot-steps">${p.legs
     .map(l => {
@@ -1247,7 +1255,7 @@ function stepsHtml(p, c = card) {
         l.mode === 'walk'
           ? `步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(l.to.name)}` : ''}`
           : l.mode === 'bike'
-            ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-gmaps="${e(gmapsLink(l.to, 'bicycling'))}">${icon('route')}Google 地圖</span>` : ''}<small class="ot-step-line">借　${e(l.from.name)}${l.rent ? `・${l.ebike ? `電輔 ${l.rent.ebike}` : `一般 ${l.rent.bikes}・電輔 ${l.rent.ebike || 0}`} 台` : ''}</small><small class="ot-step-line">還　${e(l.to.name)}${l.ret ? `・空位 ${l.ret.ret}` : ''}</small>`
+            ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-gmaps="${e(gmapsLink(l.to, 'bicycling'))}">${icon('route')}Google 地圖</span>` : ''}${bikeEnd('借', l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}電輔`, l.rent.ebike]] : [[`${icon('bike')}一般`, l.rent.bikes], [`${icon('bolt')}電輔`, l.rent.ebike || 0]]) : [])}${bikeEnd('還', l.to.name, l.ret ? [['空位', l.ret.ret]] : [])}`
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}</small>${ticketBtn(l)}<span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
