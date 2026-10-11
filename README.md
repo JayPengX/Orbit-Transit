@@ -20,7 +20,7 @@ The family's rules are `Shared-Proxy/docs/TRUTH.md`, and TRUTH §7
   screen;
 - it never takes the app over.
 
-A change to how plans are recommended follows TRUTH §1's six steps (see
+A change to how plans are recommended follows TRUTH §4's six steps (see
 it live, find the rule, a failing test, the case live again, the whole
 batch old against new, say what moved).
 
@@ -251,8 +251,8 @@ node ../Shared-Proxy/tools/preview.mjs transit go --webkit
 
 | If you change… | Also check |
 | --- | --- |
-| The score or ranking | The whole batch, old code against new (`scripts/live.mjs --against`), TRUTH §1's steps; `replay.mjs` on the owner's logs |
+| The score or ranking | The whole batch, old code against new (`scripts/live.mjs --against`), TRUTH §4's steps; `replay.mjs` on the owner's logs |
 | A TDX path | Shared-Proxy's `TDX_RULES` allowlist and cache times; the `bus` push check |
 | Pack formats | Shared-Data's `build.mjs`, `shapes.mjs`, `where.mjs` (their `v`) |
 | Navigation steps | `ot.nav.v1`'s shape (resuming), the `transit:nav` notices |
-| The status bar or top | TRUTH §6: `black`, the solid strip, the map sharp under it |
+| The status bar or top | TRUTH §10: `black`, the solid strip, the map sharp under it |
