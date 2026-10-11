@@ -4675,9 +4675,8 @@ button.ot-nav-gm {
   flex: none;
 }
 .ot-plan .ot-legs {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   margin: 6px 0 4px;
-  overflow: hidden;
 }
 .ot-plan .ot-leg {
   flex: none;
@@ -4688,21 +4687,34 @@ button.ot-nav-gm {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Another plan open: this one a single row (time, then its lines). */
+/* Another plan open: this one compact, its time on the left (the length
+   over the hours) and its lines on the right, a second row of them when
+   they don't fit (one row cut the first ones off: "5615" half gone). */
 .ot-plan.mini {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
   padding: 8px 12px;
+}
+.ot-plan.mini .ot-plan-top {
+  display: grid;
+  gap: 0;
+  white-space: nowrap;
 }
 .ot-plan.mini .ot-plan-dur {
   font-size: 16px;
 }
 .ot-plan.mini .ot-plan-time {
-  font-size: 12.5px;
+  font-size: 12px;
 }
 .ot-plan.mini .ot-legs {
   display: flex;
-  margin: 0 0 0 auto;
-  min-width: 0;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  margin: 0;
+  min-width: 0;
+  overflow: visible;
 }
 .ot-plan.mini .ot-leg {
   height: 22px;

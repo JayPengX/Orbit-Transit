@@ -14,9 +14,10 @@ import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides } fro
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
-import { etaNear, liveTimes } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText } from './nav.mjs';
+import { etaNear, liveTimes, officialLeg } from './live.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
+import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { buyTicket } from './tickets.mjs';
@@ -1147,8 +1148,8 @@ function plansHtml(c) {
     const on = i === c.sel;
     const mini = open && !on;
     return `<button class="ot-plan${on ? ' on' : ''}${mini ? ' mini' : ''}" type="button" data-plan="${i}">
-        <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${mini ? `<span class="ot-legs">${legChips(p.legs)}</span>` : p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
-        ${mini ? '' : `<div class="ot-legs">${legChips(p.legs)}</div>`}${on ? deps(lead, i) : ''}
+        <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${mini ? '' : p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
+        <div class="ot-legs">${legChips(p.legs)}</div>${on ? deps(lead, i) : ''}
         ${mini ? '' : `<div class="ot-plan-sub">${[leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')].filter(Boolean).map(e).join(' · ')}</div>`}
         ${!mini && (p.miss || p.off || p.late || p.rivers?.length) ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
@@ -1245,12 +1246,22 @@ function selectPlan(i) {
 // (`roads: false`: only the buses' stops, from the packs; the walks' and rides' roads are an outside router's, asked for a plan opened.)
 async function roadLegs(p, { lit = -1, roads = true } = {}) {
   const todo = !roads ? [] : p.legs.filter(l => (l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
-  // A bus the planner gave no shape: through its stops (not a straight line across town).
+  // A ride the planner gave no shape: along its line (shapes.mjs: a bus its
+  // route's road, a train or the metro its track), else a bus through its
+  // stops; never a straight line across town.
   const buses = p.legs.filter(l => l.mode === 'bus' && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
-  if (!todo.length && !buses.length) return;
+  const rails = p.legs.filter(l => (l.mode === 'tra' || l.mode === 'hsr' || l.mode === 'metro') && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
+  if (!todo.length && !buses.length && !rails.length) return;
   await Promise.all([
     ...buses.map(async l => {
-      const path = await busPath(l).catch(() => null);
+      const o = l.route?.uid ? l : await officialLeg(l).catch(() => l);
+      const path = (await busWay(l, o.route).catch(() => null)) || (await busPath(l).catch(() => null));
+      if (path?.length > 1) l.path = path;
+    }),
+    ...rails.map(async l => {
+      let path = await railWay(l).catch(() => null);
+      // (A train the shape can't carry the whole way: by its own stops, a hop at a time.)
+      if (!path && l.mode !== 'metro') path = await railWayByStops(l.mode, await trainStops(l).catch(() => null)).catch(() => null);
       if (path?.length > 1) l.path = path;
     }),
     ...todo.map(async l => {
