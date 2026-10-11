@@ -146,8 +146,9 @@ export const rows = j => (Array.isArray(j) ? j : j && typeof j === 'object' ? Ob
 export const config = () => get('/transit/config');
 export const searchPlaces = (q, { lat, lon, session: s } = {}, opts) => get(`/transit/search?q=${encodeURIComponent(q)}${lat != null ? `&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}` : ''}${s ? `&s=${s}` : ''}`, opts);
 export const placeDetails = (id, { name = false, session: s } = {}) => get(`/transit/place?id=${encodeURIComponent(id)}${name ? '&name=1' : ''}${s ? `&s=${s}` : ''}`);
-export const routePlans = (from, to, { at = null, by = 'depart', modes = null } = {}) =>
-  get(`/transit/route?from=${from.lat.toFixed(5)},${from.lon.toFixed(5)}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}${at ? `&at=${at}` : ''}&by=${by}${modes ? `&modes=${modes.join(',')}` : ''}`, { wait: 30_000 });
+// (`src`: one planner's alone, google or tdx: Google's come in a tenth of a second, TDX's in seconds.)
+export const routePlans = (from, to, { at = null, by = 'depart', modes = null, src = '' } = {}) =>
+  get(`/transit/route?from=${from.lat.toFixed(5)},${from.lon.toFixed(5)}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}${at ? `&at=${at}` : ''}&by=${by}${modes ? `&modes=${modes.join(',')}` : ''}${src ? `&src=${src}` : ''}`, { wait: 30_000 });
 
 // Taiwan's townships (the weather route's open list), kept a month.
 const TOWNS_KEY = 'orbit-transit.towns';
