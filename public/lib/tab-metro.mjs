@@ -7,7 +7,7 @@
 
 import { MAPS, OPERATORS, loadSystem, lineRuns, interchanges, liveBoard, nextTrains, stationTitle } from './metro.mjs';
 import { createMap } from './map.mjs';
-import { errorText } from './api.mjs';
+import { errorText, liveMs } from './api.mjs';
 import { sheet, sheetHead, icon } from './ui.mjs';
 import { metroBoardHtml } from './tab-map.mjs';
 import { e, meters } from './util.mjs';
@@ -159,7 +159,7 @@ function stationSheet(list) {
     if (d.open) d.querySelector('#mb').innerHTML = parts.join('');
   };
   load();
-  const t = setInterval(load, 20_000);
+  const t = setInterval(load, liveMs());
   d.onclosed = () => clearInterval(t);
   d.addEventListener('click', ev => {
     if (ev.target.closest('[data-route-here]')) {

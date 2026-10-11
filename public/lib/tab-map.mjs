@@ -8,7 +8,7 @@
 // starts navigation.
 
 import { createMap } from './map.mjs';
-import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, PROXY } from './api.mjs';
+import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, PROXY, liveMs, bikeMs } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
@@ -157,7 +157,7 @@ export function show() {
   if (card) refreshCard();
   nearBikes();
   clearInterval(bikeTimer);
-  bikeTimer = setInterval(nearBikes, 60_000);
+  bikeTimer = setInterval(nearBikes, bikeMs());
 }
 export function hide() {
   // (An open search list doesn't follow you to another tab, or into navigation.)
@@ -418,7 +418,7 @@ function refreshCard() {
     if (card === c) renderCard();
   };
   load();
-  if (card && card.kind !== 'plans' && card.kind !== 'place' && card.kind !== 'point') cardTimer = setInterval(load, 20_000);
+  if (card && card.kind !== 'plans' && card.kind !== 'place' && card.kind !== 'point') cardTimer = setInterval(load, liveMs());
 }
 
 // A card's place as a trip's end; one of Google's carries its id (Google Maps' own navigation goes to the place itself).

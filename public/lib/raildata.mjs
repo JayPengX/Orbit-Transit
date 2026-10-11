@@ -114,7 +114,7 @@ export async function railNetwork(date, { next = false } = {}) {
 // A TRA station's board: the trains due in the next hour, with delays and
 // platforms. [{ no, type, dest, dir, sched (ms), delay (min), platform, status }].
 export async function traBoard(id) {
-  const j = await tdx(`basic/v3/Rail/TRA/StationLiveBoard/Station/${id}`, { fresh: 50_000 });
+  const j = await tdx(`basic/v3/Rail/TRA/StationLiveBoard/Station/${id}`, { fresh: 'live' });
   const today = tw().date;
   return rows(j)
     .map(r => ({
@@ -134,7 +134,7 @@ export async function traBoard(id) {
 // at or last left (`st`, as the network's keys; `status` 0 arriving, 1 at
 // it, 2 left it).
 export async function traLive() {
-  const j = await tdx('basic/v3/Rail/TRA/TrainLiveBoard', { fresh: 60_000 });
+  const j = await tdx('basic/v3/Rail/TRA/TrainLiveBoard', { fresh: 'live' });
   return new Map(rows(j).map(r => [r.TrainNo, { delay: Number(r.DelayTime) || 0, st: r.StationID ? `tra:${r.StationID}` : '', name: zh(r.StationName), status: Number(r.TrainStationStatus) || 0 }]));
 }
 // Every train's delay now (TRA), by train number.

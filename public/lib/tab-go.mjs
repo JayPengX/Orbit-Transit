@@ -11,7 +11,7 @@
 //
 // What's recommended is never pinned by itself: ☆ pins it.
 
-import { errorText } from './api.mjs';
+import { errorText, liveMs } from './api.mjs';
 import { stopsEta, etaText, routeSchedule, routeStops, routeCity } from './bus.mjs';
 import { nextRun } from './live.mjs';
 import { nearStops, etaRank, openRoute, chooseGroup, useBusCtx } from './bus-ui.mjs';
@@ -65,7 +65,7 @@ export function show() {
   render();
   refresh(true);
   clearInterval(timer);
-  timer = setInterval(() => refresh(false), 30_000);
+  timer = setInterval(() => refresh(false), liveMs());
 }
 export function hide() {
   shown = false;

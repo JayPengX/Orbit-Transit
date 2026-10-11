@@ -129,7 +129,7 @@ export function interchanges(stations) {
 // on other lines when it's an interchange).
 export async function liveBoard(st) {
   if (!LIVE.has(st.op)) return null;
-  const j = await tdx(`basic/v2/Rail/Metro/LiveBoard/${st.op}?$filter=StationID eq '${st.id}'`, { fresh: 20_000 });
+  const j = await tdx(`basic/v2/Rail/Metro/LiveBoard/${st.op}?$filter=StationID eq '${st.id}'`, { fresh: 'live' });
   return rows(j).map(r => ({ dest: zh(r.DestinationStationName) || r.TripHeadSign || '', min: r.EstimateTime == null ? null : Number(r.EstimateTime), status: Number(r.ServiceStatus) || 0, line: r.LineID || r.LineNO || '' }));
 }
 
