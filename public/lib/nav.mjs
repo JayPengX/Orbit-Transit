@@ -73,6 +73,11 @@ export async function busPath(l) {
   return j > way.i ? way.w.stops.slice(way.i, j + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]) : null;
 }
 
+// A train's stops from where you get on to where you get off ([[lat, lon]…]), or null.
+export async function trainStops(l) {
+  const r = await rideStops(l).catch(() => null);
+  return r ? r.stops.slice(r.i, r.j + 1).map(x => [x.lat, x.lon]) : null;
+}
 // A ride's stops, from where you get on (i) to where you get off (j), with
 // their times where they're known: a bus's way; a train's run today.
 async function rideStops(l, info) {
