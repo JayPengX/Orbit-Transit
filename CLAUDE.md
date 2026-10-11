@@ -1,8 +1,10 @@
 # Working on Quadra
 
 **Read `Shared-Proxy/docs/TRUTH.md` first**: the owner's standing rules for
-every app (working, security, the shared kit, data and caching, opening
-without movement, iPhone Safari, each app's yardsticks). They win over
+every app (how the owner works, working and testing, security, the shared
+kit, the data layers and cost, live results, opening without movement,
+iPhone Safari, the words and look, what each product is, Quadra's money,
+each app's yardsticks, and the owner's calls by date). They win over
 anything else here.
 
 - **Push every change to `main` directly, always** (the owner's standing

@@ -150,7 +150,7 @@ async function boot() {
   // Opened again (back from the background after iOS let it go): on what this
   // device has, at once — its copy of the pass's data and the map's settings
   // kept from last time — and the pass and the settings read behind it
-  // (TRUTH §5). Signed out, or the first time, they're waited for.
+  // (TRUTH §9). Signed out, or the first time, they're waited for.
   const merge = first => {
     const theirs = decodeData(first?.payload);
     const merged = mergeData(ctx.data, theirs);
