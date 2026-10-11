@@ -9,7 +9,7 @@
 // when you get there.
 
 import * as kit from '#kit/quadra.mjs';
-import { watchPosition, roadPath } from './api.mjs';
+import { watchPosition, roadPath, liveMs } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf } from './live.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
@@ -686,7 +686,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   state.go = go;
   state.render = render;
   state.stopWatch = watchPosition(moved);
-  state.timer = setInterval(refreshLive, 20_000);
+  state.timer = setInterval(refreshLive, liveMs());
   // The countdown to the second; everything else said (to set out, till you're there) every 10 s.
   state.tick = setInterval(() => {
     if (Date.now() - state.drawn >= 10_000) {

@@ -42,7 +42,7 @@ const merged = new WeakMap();
 // A whole city's stations (the map), live counts refreshed each minute.
 export async function cityBikes(city) {
   if (!BIKE_CITIES.has(city)) return [];
-  const [st, live] = await Promise.all([tdx(`basic/v2/Bike/Station/City/${city}?${STATION_FIELDS}`, { fresh: 86_400_000, persist: true }), tdx(`basic/v2/Bike/Availability/City/${city}?${LIVE_FIELDS}`, { fresh: 50_000 })]);
+  const [st, live] = await Promise.all([tdx(`basic/v2/Bike/Station/City/${city}?${STATION_FIELDS}`, { fresh: 86_400_000, persist: true }), tdx(`basic/v2/Bike/Availability/City/${city}?${LIVE_FIELDS}`, { fresh: 'bike' })]);
   // (Merged once a copy: a trip asks for its city's bikes at a dozen points.)
   const m = merged.get(live);
   if (m?.st === st) return m.list;
@@ -56,7 +56,7 @@ export async function cityBikes(city) {
 export async function bikesNear(lat, lon) {
   const g = v => (Math.round(v * 200) / 200).toFixed(3);
   const f = `$spatialFilter=nearby(${g(lat)},${g(lon)},1000)`;
-  const [st, live] = await Promise.all([tdx(`advanced/v2/Bike/Station/NearBy?${f}&$top=120&${STATION_FIELDS}`, { fresh: 86_400_000, persist: true }), tdx(`advanced/v2/Bike/Availability/NearBy?${f}&$top=120&${LIVE_FIELDS}`, { fresh: 50_000 })]);
+  const [st, live] = await Promise.all([tdx(`advanced/v2/Bike/Station/NearBy?${f}&$top=120&${STATION_FIELDS}`, { fresh: 86_400_000, persist: true }), tdx(`advanced/v2/Bike/Availability/NearBy?${f}&$top=120&${LIVE_FIELDS}`, { fresh: 'bike' })]);
   return mergeBikes(st, live);
 }
 

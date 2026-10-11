@@ -21,7 +21,7 @@ const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTi
 // Every bus due at the stops within r metres of a point (one TDX ask, shared
 // for 20 s by everyone near the same ~10 m).
 export async function etaNear(lat, lon, r = 150) {
-  const j = await tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${lat.toFixed(4)},${lon.toFixed(4)},${r})&${FIELDS}&$top=300`, { fresh: 20_000 });
+  const j = await tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${lat.toFixed(4)},${lon.toFixed(4)},${r})&${FIELDS}&$top=300`, { fresh: 'live' });
   return rows(j);
 }
 

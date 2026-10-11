@@ -5,7 +5,7 @@
 // every bus due.
 
 import { cityRoutes, findRoutes, routeStops, routeEta, routeEtaPath, etaText, etaOf, routeSchedule, stopTimes, stationsNear, INTERCITY } from './bus.mjs';
-import { errorText, tdx, rows, dataAt } from './api.mjs';
+import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITIES, CITY_CODES, cityName, cityShort, NEAR_CITIES } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
@@ -24,7 +24,7 @@ export const useBusCtx = c => (ctx = c);
 export async function nearStops(h, { r = 350, n = 6 } = {}) {
   const at = p => (Math.round(p * 1000) / 1000).toFixed(3);
   const [j, stations] = await Promise.all([
-    tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${at(h.lat)},${at(h.lon)},${r})&$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates&$top=300`, { fresh: 20_000 }),
+    tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${at(h.lat)},${at(h.lon)},${r})&$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates&$top=300`, { fresh: 'live' }),
     stationsNear(h.lat, h.lon).catch(() => [])
   ]);
   const where = name => {
@@ -298,7 +298,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   }
   draw();
   refresh();
-  const t = setInterval(refresh, 20_000);
+  const t = setInterval(refresh, liveMs());
   d.onclosed = () => clearInterval(t);
   // Scrolled to the stop asked for.
   if (stopUID) requestAnimationFrame(() => d.querySelector(`[data-stop="${CSS.escape(stopUID)}"]`)?.scrollIntoView({ block: 'center' }));

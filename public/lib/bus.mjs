@@ -111,7 +111,7 @@ const ETA_FIELDS = '$select=StopUID,RouteUID,RouteName,SubRouteUID,Direction,Est
 // Every stop of one route (the route sheet), keyed by StopUID.
 export const routeEtaPath = route => `basic/v2/Bus/EstimatedTimeOfArrival/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&${ETA_FIELDS}`;
 export async function routeEta(route) {
-  const j = await tdx(routeEtaPath(route), { fresh: 20_000 });
+  const j = await tdx(routeEtaPath(route), { fresh: 'live' });
   return etaMap(j);
 }
 // The stops of a group, one ask per city.
@@ -125,7 +125,7 @@ export async function stopsEta(items) {
   await Promise.all(
     [...byCity].map(async ([city, uids]) => {
       const filter = [...uids].sort().map(u => `StopUID eq ${q(u)}`).join(' or ');
-      const j = await tdx(`basic/v2/Bus/EstimatedTimeOfArrival/${scope(city)}?$filter=${filter}&${ETA_FIELDS}`, { fresh: 20_000 });
+      const j = await tdx(`basic/v2/Bus/EstimatedTimeOfArrival/${scope(city)}?$filter=${filter}&${ETA_FIELDS}`, { fresh: 'live' });
       for (const [k, v] of etaMap(j)) out.set(k, v);
     })
   );
@@ -145,7 +145,7 @@ export function stationEtaAsk(station) {
 }
 export async function stationEta(station) {
   const city = stationCity(station);
-  const j = await tdx(stationEtaAsk(station), { fresh: 20_000 });
+  const j = await tdx(stationEtaAsk(station), { fresh: 'live' });
   return rows(j).map(r => ({ ...etaOf(r), route: zh(r.RouteName), routeUID: r.RouteUID, stopUID: r.StopUID, dir: r.Direction, city: city || INTERCITY }));
 }
 

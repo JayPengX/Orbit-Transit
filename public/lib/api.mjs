@@ -3,6 +3,8 @@
 // are kept here too: in memory, and what lasts (stations, routes, a day's
 // timetable) in this device's cache, so a second look costs nothing.
 
+import { dev } from '#kit/quadra.mjs';
+
 export const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
 const DATA_CACHE = 'orbit-transit-data';
 
@@ -83,7 +85,14 @@ export const stale = new Map();
 // A failed ask falls back to the last copy of any age (`{ stale: true }` on
 // the returned array/object's meta via lastMeta).
 // `store: false`: never written to the device (a big answer kept in a smaller form by its caller).
+// Live data's speeds (the admin panel's 開發, kit dev): a card read again
+// every transitLive seconds, YouBike every transitBike; a copy here good a
+// second less, so each beat asks the Worker (whose own cache follows tdxLive).
+export const liveMs = () => dev('transitLive') * 1000;
+export const bikeMs = () => dev('transitBike') * 1000;
 export async function tdx(path, { fresh = 30_000, persist = false, store = true } = {}) {
+  if (fresh === 'live') fresh = liveMs() - 1000;
+  else if (fresh === 'bike') fresh = bikeMs() - 1000;
   const now = Date.now();
   const mem = memory.get(path);
   if (mem && now - mem.at < fresh) return mem.data;
