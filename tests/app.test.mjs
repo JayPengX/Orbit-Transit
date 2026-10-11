@@ -1519,3 +1519,29 @@ test('a stop’s sides by the way its buses go: two signs on one side are one si
   // One side only: one.
   assert.equal(stopSides([st('a', 24.8, 121, 'S', []), st('b', 24.8002, 121, 'S', [])]).length, 1);
 });
+
+test('a YouBike station out of bikes or docks while on the way: the ride moved to another, the walk with it', async () => {
+  const { moveRide } = await import('../public/lib/nav.mjs');
+  const A = { name: 'A', lat: 24.8, lon: 120.97 };
+  const S = { name: '站1', lat: 24.801, lon: 120.971 };
+  const T = { name: '站2', lat: 24.82, lon: 120.99 };
+  const B = { name: 'B', lat: 24.821, lon: 120.991 };
+  const plan = () => ({ dur: 1200, arr: 2_000_000, legs: [{ mode: 'walk', from: A, to: S, dur: 120 }, { mode: 'bike', from: S, to: T, dur: 900, poly: 'x' }, { mode: 'walk', from: T, to: B, dur: 180 }] });
+  const p = plan();
+  const S2 = { name: '站3', lat: 24.8015, lon: 120.9725, uid: 's3' };
+  assert.equal(moveRide(p, 1, 'rent', S2), true);
+  assert.equal(p.legs[0].to.name, '站3');
+  assert.equal(p.legs[1].from.name, '站3');
+  assert.equal(p.legs[1].poly, undefined);
+  // No docks at 站2: left at 站4, and walked from there.
+  const T2 = { name: '站4', lat: 24.8195, lon: 120.9885 };
+  assert.equal(moveRide(p, 1, 'return', T2), true);
+  assert.equal(p.legs[1].to.name, '站4');
+  assert.equal(p.legs[2].from.name, '站4');
+  assert.equal(p.legs.length, 3);
+  // A ride that ended where you were going (no walk after): a walk added.
+  const q = { legs: [{ mode: 'bike', from: S, to: T, dur: 900 }] };
+  moveRide(q, 0, 'return', T2);
+  assert.deepEqual(q.legs.map(l => [l.mode, l.from.name, l.to.name]), [['bike', '站1', '站4'], ['walk', '站4', '站2']]);
+  assert.equal(moveRide(q, 1, 'rent', S2), false);
+});

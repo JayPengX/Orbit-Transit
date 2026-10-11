@@ -274,6 +274,9 @@ function bikesText(bk, plan, i, pos) {
   if (!bk || bk.k < i) return '';
   const from = plan.legs[bk.k].from;
   const out = [];
+  if (bk.moved) out.push(`<span class="note warn">${icon('bike')}${e(bk.moved)}</span>`);
+  if (bk.noBike) out.push(`<span class="note bad">${icon('bike')}附近 500 公尺都沒車，按「換一條路」重新規劃</span>`);
+  if (bk.noDock) out.push(`<span class="note bad">${icon('bike')}附近 500 公尺都沒空位，按「換一條路」重新規劃</span>`);
   const taking = bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150;
   if (bk.rent && taking) {
     if (bk.has) out.push(`<span>${icon('bike')}可借 ${bk.rent.bikes}${bk.rent.ebike ? `・⚡${bk.rent.ebike}` : ''}</span>`);
@@ -281,6 +284,37 @@ function bikesText(bk, plan, i, pos) {
   }
   if (bk.ret) out.push(`<span class="${bk.ret.ret ? '' : 'bad'}">還車空位 ${bk.ret.ret}</span>`);
   return out.join('');
+}
+
+// A YouBike ride moved to another station (`end`: 'rent' where you take
+// it, 'return' where you leave it): the walk to it or from it with it (one
+// added where there was none), the times by the new distances. → true when moved.
+export function moveRide(plan, k, end, station) {
+  const l = plan.legs[k];
+  if (l?.mode !== 'bike' || station?.lat == null) return false;
+  const st = { name: station.name, lat: station.lat, lon: station.lon };
+  const walkLeg = (from, to) => {
+    const m = meters(from.lat, from.lon, to.lat, to.lon);
+    return { mode: 'walk', from, to, dist: Math.round(m * 1.3), dur: walkSec(m) };
+  };
+  const before = plan.legs.reduce((t, x) => t + (x.dur || 0), 0);
+  if (end === 'rent') {
+    const prev = plan.legs[k - 1];
+    if (prev?.mode === 'walk') Object.assign(prev, walkLeg(prev.from, st), { poly: undefined, road: false, path: undefined });
+    else plan.legs.splice(k, 0, walkLeg(l.from, st)), (k += 1);
+    l.from = st;
+  } else {
+    const next = plan.legs[k + 1];
+    if (next?.mode === 'walk') Object.assign(next, walkLeg(st, next.to), { poly: undefined, road: false, path: undefined });
+    else plan.legs.splice(k + 1, 0, walkLeg(st, l.to));
+    l.to = st;
+  }
+  const m = meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon);
+  Object.assign(l, { dist: Math.round(m * 1.25), dur: rideSec(m, l.ebike) + DOCK_SEC, poly: undefined, road: false, path: undefined });
+  const after = plan.legs.reduce((t, x) => t + (x.dur || 0), 0);
+  plan.dur = (plan.dur || before) + (after - before);
+  if (plan.arr) plan.arr += (after - before) * 1000;
+  return true;
 }
 
 // How long till you're there, short enough to sit beside the time and its drift: 45 分, 1時29分.
@@ -576,6 +610,26 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         const has = rent && rent.d < 60 && n(rent.s) > 0;
         const other = has ? null : near(a, bl.from).find(x => x.d < 500 && n(x.s) > 0);
         state.bikes = { k: bi, rent: rent && rent.d < 60 ? rent.s : null, ret: ret && ret.d < 60 ? ret.s : null, has, alt: other ? { name: other.s.name, n: n(other.s), d: other.d } : null };
+        // Out of bikes where you'd take one (and not taken yet), or no docks
+        // where you'd leave it: the ride moved to the nearest station within
+        // 500 m with 2 at least (so it doesn't swing back), the walk to it or
+        // from it redrawn, said on the card and buzzed. A station tried once
+        // isn't gone back to.
+        const tried = (state.tried ||= new Set());
+        const taking = state.i < bi || (state.i === bi && state.phase !== 'on');
+        const rentAlt = taking && rent && rent.d < 60 && !has ? near(a, bl.from).find(x => x.d < 500 && n(x.s) >= 2 && !tried.has(x.s.uid)) : null;
+        const full = ret && ret.d < 60 && !(ret.s.ret > 0);
+        const retAlt = full ? near(b, bl.to).find(x => x.d < 500 && x.s.ret >= 2 && !tried.has(x.s.uid)) : null;
+        const move = rentAlt ? ['rent', rentAlt.s, `${rent.s.name} 沒車了，改到 ${rentAlt.s.name} 借車`] : retAlt ? ['return', retAlt.s, `${ret.s.name} 沒有空位，改到 ${retAlt.s.name} 還車`] : null;
+        if (move && moveRide(plan, bi, move[0], move[1])) {
+          tried.add((move[0] === 'rent' ? rent : ret).s.uid);
+          tried.add(move[1].uid);
+          state.bikes.moved = move[2];
+          for (const m of [state.ride, state.info, state.liveAt]) for (const key of [...m.keys()]) if (key >= state.i) m.delete(key);
+          buzz();
+          setTimeout(() => go(state.i, state.phase), 0);
+        } else if (full && !retAlt) state.bikes.noDock = true;
+        else if (taking && rent && rent.d < 60 && !has && !other) state.bikes.noBike = true;
       } catch {}
     } else state.bikes = null;
     if (state.i === at) {

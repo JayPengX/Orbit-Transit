@@ -3709,6 +3709,20 @@ main {
 .ot-nav-bikes .bad {
   color: var(--ot-bad);
 }
+/* A station moved (or none near): the whole row, two lines when a station's name is long. */
+.ot-nav-bikes {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.ot-nav-bikes .note {
+  flex-basis: 100%;
+  white-space: normal;
+  align-items: flex-start;
+  line-height: 1.35;
+}
+.ot-nav-bikes .note.warn {
+  color: var(--ot-warn);
+}
 .ot-nav-bottom {
   /* (Above the tab bar: the map's panel ends there, safe area and all.) */
   bottom: 10px;

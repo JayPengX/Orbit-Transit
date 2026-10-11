@@ -36,6 +36,8 @@ let card = null; // what the card shows: { kind, ... }
 let me = null; // the device's dot
 let stopWatch = () => {};
 let following = false;
+// The map placed: where it was left, at you, or where you went (arrive): the device's first fix doesn't move it then.
+let centered = false;
 
 // What other tabs use before the map was ever opened: saving and editing trips.
 export function register(c) {
@@ -86,8 +88,9 @@ export async function init(c) {
     return;
   }
   // The first time the device's position is known (before the map was ready
-  // or after), the map goes there, unless it opened where it was left.
-  let centered = Boolean(view);
+  // or after), the map goes there, unless it opened where it was left, or
+  // you've gone somewhere already (a search picked before the first fix).
+  centered = centered || Boolean(view);
   const arrived = here => {
     drawMe(here);
     nearBikes();
@@ -245,6 +248,18 @@ async function drawLayers() {
   }
   const city = await ctx.cityOf(c.lat, c.lon);
   if (run !== drawing) return;
+  // Looking at a trip: only its own YouBike stations (where you take one and
+  // leave it), no other bikes or bus stops in the way of the way.
+  if (document.body.classList.contains('ot-planning') && card?.plans) {
+    const p = card.plans[card.sel >= 0 ? card.sel : 0];
+    const ends = (p?.legs || []).filter(l => l.mode === 'bike').flatMap(l => [l.from, l.to]).filter(x => x?.lat != null);
+    map.layer('bus').set([]);
+    if (!ends.length || !city) return map.layer('bike').set([]);
+    cityBikes(city)
+      .then(list => run === drawing && map.layer('bike').set(list.filter(st => ends.some(x => meters(x.lat, x.lon, st.lat, st.lon) <= 40)).map(bikeMarker)))
+      .catch(() => {});
+    return;
+  }
   // YouBike: the city's stations, the 200 nearest the middle.
   if (L.bike && z >= 15 && city) {
     cityBikes(city)
@@ -365,7 +380,9 @@ let selDrop = null;
 const OUTSIDE = '只支援台灣（含澎湖、金門、馬祖）的地點';
 function openCard(c) {
   if (c.lat != null && !inTaiwan(c.lat, c.lon)) return ctx.status(OUTSIDE);
+  const planned = document.body.classList.contains('ot-planning');
   document.body.classList.remove('ot-planning');
+  if (planned) setTimeout(drawLayers, 0);
   const { marker, ...rest } = c;
   card = { ...rest, at: Date.now() };
   // A marker tapped shows itself selected; a spot or a place without one gets the pin.
@@ -376,9 +393,12 @@ function openCard(c) {
   refreshCard();
 }
 function closeCard() {
+  const planned = document.body.classList.contains('ot-planning');
   card = null;
   selDrop = null;
   document.body.classList.remove('ot-planning');
+  // (The bikes and stops a trip hid: back.)
+  if (planned) drawLayers();
   clearInterval(cardTimer);
   $('card').hidden = true;
   $('card').className = 'ot-card';
@@ -906,7 +926,12 @@ async function chooseResult(r) {
   }
   arrive({ kind: 'place', item: { name: r.name, sub: r.sub, lat: r.lat, lon: r.lon, gid: r.gid }, lat: r.lat, lon: r.lon });
 }
+// Going to a place you picked (a search, a pinned place, a station): the map
+// stays there, not pulled back to you by the next fix (it was, after a
+// relaunch, the first fix coming late, or with 我的位置 still following).
 function arrive(c) {
+  following = false;
+  centered = true;
   map.setView(c.lat, c.lon, Math.max(map.zoom(), 16));
   openCard(c);
 }
@@ -1280,6 +1305,8 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
 }
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
+  // (Its own YouBike stations, only: drawLayers.)
+  if (!navFull()) drawLayers();
   const lines = [];
   const pts = [];
   for (const [k, l] of p.legs.entries()) {
