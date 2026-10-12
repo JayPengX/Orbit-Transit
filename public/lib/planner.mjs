@@ -193,7 +193,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   //      slow part (the proxy lets 4 asks a second through).
   const [linked, done] = await Promise.all([
     modes.bus && by !== 'arrive' ? trainThenBus(trains, to, now) : [],
-    Promise.all(soon.map(p => adjustPlan(p, now).catch(() => p)))
+    Promise.all(soon.map(p => adjustPlan(p, now, { start: t0 }).catch(() => p)))
   ]);
   plans = plans.map(p => done[soon.indexOf(p)] || p);
   plans.push(...linked.filter(p => allowed(p, { ...modes, bike: true })));
@@ -245,7 +245,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
             const known = new Set(plans.map(planSig));
             const extra = late.plans.map(tidy).filter(p => allowed(p, { ...modes, bike: true }) && !known.has(planSig(p)));
             const official = await Promise.all(extra.map(p => officialPlan(p, now).catch(() => p)));
-            const live = await Promise.all(official.map(p => (by !== 'arrive' && t0 - now < 60 * 60_000 && p.legs.some(l => l.mode === 'bus' && !l.live) ? adjustPlan(p, now).catch(() => p) : p)));
+            const live = await Promise.all(official.map(p => (by !== 'arrive' && t0 - now < 60 * 60_000 && p.legs.some(l => l.mode === 'bus' && !l.live) ? adjustPlan(p, now, { start: t0 }).catch(() => p) : p)));
             plans.push(...live.filter(bused));
             res.sources = joinPlanners(res, late).sources;
           }
