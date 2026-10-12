@@ -16,7 +16,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, navPickTimes, navCanPick } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
@@ -1400,19 +1400,20 @@ async function liveLegs(p) {
 
 // ---- Navigation ---------------------------------------------------------------------------------------
 
-async function navigate(p, resume = null) {
+async function navigate(p, resume = null, { swap = false } = {}) {
   if (!p) return;
   // A ride already being navigated isn't thrown away by a tap elsewhere (走過去,
   // 開始導航 on another plan): asked first, unless it's the new plan you asked
   // for from it (重新規劃, 改目的地).
-  if (!resume && navigating() && !(card && card.to === replanTo)) {
+  if (!resume && !swap && navigating() && !(card && card.to === replanTo)) {
     const n = navNow();
     const ask = kit.ask || (o => Promise.resolve(globalThis.confirm(`${o.title}\n${o.body}`)));
     const ok = await ask({ title: '取代目前的導航？', body: `正在導航到 ${navDest(n).name || '目的地'}，開始新的會結束它。`, ok: '開始新的導航', cancel: '繼續原本的' });
     if (!ok) return;
   }
   replanTo = null;
-  const c = card;
+  // (Swapped for the way that's on time: the trip goes on, whatever card is open.)
+  const c = swap ? null : card;
   closeResults();
   $('card').hidden = true;
   document.body.classList.add('ot-navigating');
@@ -1537,10 +1538,40 @@ function shrinkNav(on) {
 }
 
 // What the navigation card asks for: back to it (the bar), its ⋯, a new plan from here.
-function navAction(a) {
+function navAction(a, info) {
   if (a === 'open') return shrinkNav(false);
   if (a === 'more') return navMore();
   if (a === 'replan') return replanFromHere();
+  if (a === 'late') return navLate(info);
+  if (a === 'offer') {
+    const n = navNow();
+    if (n?.offer?.plan) navigate(n.offer.plan, null, { swap: true });
+  }
+}
+// To be there by a time and late for it (missed the bus, the next too late;
+// or late for it on the way): the ways from here for the same deadline, and
+// the best that's on time offered on the card (改騎電輔車，07:55 到), or said
+// that none is. The owner, 2026-10-12: miss the bus, still at school by 8.
+let lateBusy = false;
+async function navLate({ eta = null, k = -1, ride = '' } = {}) {
+  const n = navNow();
+  const here = n?.pos || ctx.here;
+  if (!n?.plan.deadline || !here || lateBusy || n.plan.deadline < Date.now()) return;
+  lateBusy = true;
+  try {
+    const from = { name: '目前位置', lat: here.lat, lon: here.lon };
+    const r = await planTrip(ctx.data, from, navDest(n), { at: n.plan.deadline, by: 'arrive', modes: tripModes });
+    let best = onTimeWay(r.plans, n.plan, k, Date.now());
+    if (!best && r.later) best = onTimeWay((await r.later)?.plans, n.plan, k, Date.now());
+    if (navNow()?.plan !== n.plan) return;
+    const late = eta == null ? 0 : lateBy(n.plan, eta);
+    const title = late ? `這樣會晚 ${late} 分到` : ride ? `趕不上 ${ride} 的話` : '趕不上的話';
+    if (best) navOffer({ title, sub: offerText(best), plan: { ...best, dest: n.plan.dest, then: n.plan.then } });
+    else if (late) navOffer({ title, sub: '沒有能準時到的走法' });
+  } catch {
+  } finally {
+    lateBusy = false;
+  }
 }
 const navDest = n => n.plan.dest || n.plan.legs.at(-1).to;
 // A trip's stops after its first place, at most.
@@ -1554,7 +1585,8 @@ function replanFromHere(to = null, then = null) {
   replanTo = to || navDest(n);
   shrinkNav(true);
   ctx.goTab('map');
-  when = { by: 'now', at: null };
+  // (To be there by a time: still by it, from here.)
+  when = n.plan.deadline > Date.now() ? { by: 'arrive', at: n.plan.deadline } : { by: 'now', at: null };
   plan(null, replanTo, { then: then ?? n.plan.then ?? [] });
 }
 function navMore() {
