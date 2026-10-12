@@ -3831,6 +3831,36 @@ main {
   flex: none;
 }
 /* Every step of the trip, whole: a second row when they don't fit one. */
+/* Fold a card for more map (a tap, or a swipe): the grip, the card's own
+   (.ot-card-grip's look) with room for a thumb. */
+.ot-nav-grip {
+  display: block;
+  width: 100%;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.ot-nav-grip::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.ot-nav-top .ot-nav-grip {
+  margin-top: -4px;
+}
+.ot-nav-bottom .ot-nav-grip {
+  height: 14px;
+  margin: -6px 0 2px;
+}
+.ot-nav-bottom.folded .ot-nav-chips {
+  display: none;
+}
 .ot-nav-chips {
   display: flex;
   flex-wrap: wrap;
