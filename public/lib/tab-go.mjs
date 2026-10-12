@@ -247,7 +247,9 @@ async function keptTrip(key, w) {
   if (!shown.length || (w.by !== 'arrive' && shown.some(p => p.dep < now - 60_000))) return null;
   // The buses due soon: their times now.
   const { adjustPlan } = await import('./live.mjs');
-  return Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000) ? adjustPlan(p, now).catch(() => p) : p)));
+  // (From when you can set out: now, or the trip's time; by an arrival time, as planned.)
+  const start = w.by === 'arrive' ? null : Math.max(now, w.at || now);
+  return Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000) ? adjustPlan(p, now, { start }).catch(() => p) : p)));
 }
 
 async function loadTrip(w, { force = false } = {}) {

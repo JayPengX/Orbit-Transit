@@ -223,7 +223,12 @@ export async function busTimes(plan, { near = etaAround, now = Date.now() } = {}
   return laterBuses(list, l, l.dep, { now });
 }
 
-export async function adjustPlan(plan, now = Date.now(), { near = etaAround } = {}) {
+// `start`: when you can set out (now, or the time asked): the bus you'd
+// catch is the first you can be at the stop for from then, not from when the
+// plan had you leave for the bus it was made around (it left at 19:05 for the
+// timetable's 19:15, and skipped the live 19:06 a walk away; the owner,
+// 2026-10-12). Without it, from the plan's own start.
+export async function adjustPlan(plan, now = Date.now(), { near = etaAround, start = null } = {}) {
   let legs = plan.legs.map(l => ({ ...l }));
   let changed = false;
   let miss = '';
@@ -242,19 +247,22 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround } = 
     }
     const { found, times, off: stopped } = liveTimes(list, l.short || l.name, now, l.route?.uid ? { routeUID: l.route.uid, dir: l.route.dir } : {});
     if (!found) continue;
+    // Kept on the leg: a way to this stop made later (by bike instead of the
+    // walk) catches its bus from them too (plan.mjs catchBus).
+    legs[i] = { ...l, seen: times.map(t => ({ at: t.at, planned: Boolean(t.planned), last: Boolean(t.last) })) };
     const first = legs.findIndex(x => x.mode !== 'walk' && x.mode !== 'bike');
     const before = legs.slice(0, i).reduce((a, x) => a + (x.dur || 0) * 1000, 0);
     // When you can be at the stop: now plus the walk (or ride) to it, else after the leg before.
-    const ready = i === first ? Math.max(now, legs[0].dep ?? now) + before : (legs[i - 1]?.arr ?? l.dep) + 30_000;
+    const ready = i === first ? Math.max(now, start ?? legs[0].dep ?? now) + before : (legs[i - 1]?.arr ?? l.dep) + 30_000;
     const bus = times.find(t => t.at >= ready - 30_000);
     if (!bus) {
       if (stopped) off = stopped === 3 ? `${l.short || l.name} 末班已過` : `${l.short || l.name} 今日未營運`;
       continue;
     }
-    l.live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
+    legs[i].live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
     // The buses after it, for the route's other times (moreBuses).
     // (Not waited for here: the planner waits for them all at once, beside the bikes.)
-    if (i === first) l.nextP = laterBuses(list, l, bus.at, { now });
+    if (i === first) legs[i].nextP = laterBuses(list, l, bus.at, { now });
     const delta = bus.at - l.dep;
     if (Math.abs(delta) < 60_000) continue;
     changed = true;

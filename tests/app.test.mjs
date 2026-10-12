@@ -9,7 +9,7 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt } from '../public/lib/nav.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide } from '../public/lib/nav.mjs';
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
@@ -1100,13 +1100,16 @@ test("a change from one bus to another is barely a plan (Taiwan's buses don't ke
   assert.ok(score(busBus, { now: t0 }) > score(busTrain, { now: t0 }) + 20);
 });
 
-test('a long bike ride weighs more than the minutes it saves: 27 minutes on 電輔車 below a train with short rides', () => {
+test('riding 16 minutes to a train anyway, riding the whole way in 27 is the better way (the owner, 2026-10-12); 45 minutes on a bike is not', () => {
   const t0 = Date.UTC(2026, 9, 5, 12);
   const at = m => t0 + m * 60_000;
   const ride = (from, min, ebike = false) => ({ mode: 'bike', ebike, dur: min * 60, dep: at(from), arr: at(from + min) });
   const ebikeAll = finish({ src: 'bike', legs: [ride(0, 27, true)] });
   const train = finish({ src: 't', legs: [ride(0, 16), { mode: 'tra', dur: 20 * 60, dep: at(20), arr: at(40) }, ride(41, 5)] });
-  assert.ok(score(ebikeAll, { now: t0 }) > score(train, { now: t0 }));
+  assert.ok(score(ebikeAll, { now: t0 }) < score(train, { now: t0 }));
+  const long = finish({ src: 'bike', legs: [ride(0, 45)] });
+  const short = finish({ src: 't', legs: [ride(0, 8), { mode: 'tra', dur: 20 * 60, dep: at(12), arr: at(32) }, ride(33, 8)] });
+  assert.ok(score(long, { now: t0 }) > score(short, { now: t0 }), 'three quarters of an hour on a bike, against a train with two short rides there sooner');
 });
 
 test('1–2 km: a YouBike there when you are beats a bus a minute sooner on paper (its time is a guess); a train keeps its time', () => {
@@ -1640,4 +1643,50 @@ test('a bus then another bus is set aside whenever a way without one is there, a
   assert.ok(!out.find(p => p.legs.length === 1).weak);
   // Nothing else: shown.
   assert.ok(!rank([chain], { now: T('16:45'), o, d })[0].weak);
+});
+
+test('the bus you’d catch is the first you can be at the stop for from now, not from when the plan had you leave for a later one', async () => {
+  const now = T('18:55');
+  // The plan leaves at 19:05 for the timetable's 19:15 (a 10-minute way to the stop); TDX has one at 19:06 and the next at 19:15.
+  const rows = [{ RouteName: { Zh_tw: '快捷8號支' }, StopStatus: 0, EstimateTime: 660, Estimates: [{ EstimateTime: 660 }, { EstimateTime: 1200 }] }];
+  const p = finish({ legs: [
+    { mode: 'walk', dur: 600, dist: 700, dep: T('19:05'), arr: T('19:15'), from: { lat: 24.8176, lon: 121.0165 }, to: { lat: 24.818, lon: 121.022 } },
+    { mode: 'bus', short: '快捷8號支', dur: 2100, dist: 15000, dep: T('19:15'), arr: T('19:50'), from: { name: '文興嘉興路口', lat: 24.818, lon: 121.022 }, to: { name: '竹東高中', lat: 24.733, lon: 121.088 } }
+  ] });
+  const q = await adjustPlan(p, now, { near: async () => rows, start: now });
+  assert.equal(q.legs[1].dep, T('19:06'), 'the 19:06, 11 minutes away, a 10-minute walk');
+  assert.equal(q.legs[0].dep, T('18:56'), 'set out in a minute');
+  // Asked for a time later on: the first bus from then.
+  const later = await adjustPlan(p, now, { near: async () => rows, start: T('19:00') });
+  assert.equal(later.legs[1].dep, T('19:15'));
+});
+
+test('in navigation, another departure taken: the ride and what follows it move, up to a train that keeps its time, and a train it would now miss is said', () => {
+  const P = (name, lat, lon) => ({ name, lat, lon });
+  const plan = finish({ legs: [
+    { mode: 'walk', from: P('', 24.8176, 121.0165), to: P('文興嘉興路口', 24.818, 121.022), dep: T('19:00'), arr: T('19:05'), dur: 300 },
+    { mode: 'bus', short: '快捷8號支', from: P('文興嘉興路口', 24.818, 121.022), to: P('竹東火車站', 24.738, 121.094), dep: T('19:07'), arr: T('19:40'), dur: 1980 },
+    { mode: 'walk', from: P('竹東火車站', 24.738, 121.094), to: P('竹東', 24.7382, 121.0947), dep: T('19:40'), arr: T('19:42'), dur: 120 },
+    { mode: 'tra', short: '區間 1840', from: P('竹東', 24.7382, 121.0947), to: P('合興', 24.72, 121.12), dep: T('19:50'), arr: T('20:00'), train: { no: '1840' } }
+  ] });
+  assert.equal(retimeRide(plan, 1, { dep: T('19:12'), arr: T('19:45') }), '', 'five minutes later still makes the 19:50');
+  assert.equal(plan.legs[2].arr, T('19:47'));
+  assert.equal(plan.legs[3].dep, T('19:50'), 'the train keeps its time');
+  assert.match(retimeRide(plan, 1, { dep: T('19:20'), arr: T('19:53') }), /1840/, 'now it would miss the 1840');
+  // A train for another: its number.
+  retimeRide(plan, 3, { dep: T('20:20'), arr: T('20:30'), train: { no: '1842', type: '區間' } });
+  assert.equal(plan.legs[3].short, '區間 1842');
+  assert.equal(plan.arr, T('20:30'));
+});
+
+test('a route’s stops: a bus between two stops is where a stop’s live time drops below the one before (not one at a stop, which rides on its dot)', async () => {
+  const { busBetween } = await import('../public/lib/bus-ui.mjs');
+  const v = sec => ({ status: 0, sec, more: [] });
+  // 喜來登飯店 15 分, then 文興嘉興路口 4 分: a bus between them.
+  const lives = [v(360), v(420), v(540), v(900), v(240), v(300), v(900)];
+  assert.deepEqual(lives.map((_, k) => busBetween(lives, k)), [false, false, false, false, true, false, false]);
+  // Pulling in at the stop: on its dot, not between.
+  assert.equal(busBetween([v(600), v(30)], 1), false);
+  // The stop before has none on its way (gone by): between.
+  assert.equal(busBetween([{ status: 3, sec: null }, v(200)], 1), true);
 });

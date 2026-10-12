@@ -16,7 +16,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, navPickTimes, navCanPick } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
@@ -621,7 +621,11 @@ async function cardClick(ev) {
     return $('card').classList.toggle('tall', $('card').classList.contains('grown'));
   }
   // From where you are; the start can be changed on the plan.
-  if (act === 'go') return plan(null, placeOf(card));
+  // A new trip: from now (a time picked is for the trip it was picked for, not the next one: 2026-10-12).
+  if (act === 'go') {
+    when = { by: 'now', at: null };
+    return plan(null, placeOf(card));
+  }
   if (act === 'pin') return pinSheet(placeOf(card));
   if (act === 'walk-there' || act === 'bike-there') return directTo(card, act === 'walk-there' ? 'walk' : 'bike');
   if (act === 'edit-pin') return ctx.editPlace?.(ev.target.closest('[data-id]').dataset.id);
@@ -1105,8 +1109,11 @@ async function plan(from, to, opts = {}) {
   });
 }
 
-// 出發時間 / 抵達時間: a day (today, tomorrow…) and a time; it stays until
-// 現在出發 is chosen again. A time already past today means tomorrow's.
+// 出發時間 / 抵達時間: a day (today, tomorrow…) and a time, for this trip
+// (its other ways of moving, its stops, turned round); a new trip is from
+// now (the owner, 2026-10-12: a test at 16:45 had the next trip planned for
+// then, a bus long gone and no live times). A time already past today
+// means tomorrow's.
 function setWhen(kind) {
   const replan = () => card?.kind === 'plans' && plan(card.fromHere ? null : card.from, card.to);
   if (kind === 'now') {
@@ -1453,6 +1460,7 @@ async function navigate(p, resume = null) {
       // Arrived: the trip's over, its card and its way off the map; ended by hand, back to the plans it came from.
       if (next) {
         closeCard();
+        when = { by: 'now', at: null };
         return plan(null, next[0], { then: next.slice(1) });
       }
       if (how.arrived) closeCard();
@@ -1557,6 +1565,7 @@ function navMore() {
   const d = sheet(`${sheetHead('導航', e(`到 ${navDest(n).name || '目的地'}`))}
     <div class="ot-nav-menu">
       <button class="ot-row-btn" type="button" data-m="min">${icon('down')}<span><b>縮小，先做別的事</b><small>導航繼續，點下方的列回來</small></span></button>
+      ${navCanPick() ? `<button class="ot-row-btn" type="button" data-m="times">${icon('clock')}<span><b>改搭別班</b><small>趕不上或想晚一點，選同一路線的其他班次</small></span></button>` : ''}
       ${ride && n.ride ? `<button class="ot-row-btn" type="button" data-m="off">${icon('bell')}<span><b>改下車站</b><small>提早或晚一點下車，之後的路重新規劃</small></span></button>` : ''}
       <button class="ot-row-btn" type="button" data-m="replan">${icon('route')}<span><b>換一條路</b><small>還是去 ${e(navDest(n).name || '目的地')}，從現在的位置重新找車（錯過車、想改搭）</small></span></button>
       <button class="ot-row-btn" type="button" data-m="stop">${icon('plus')}<span><b>先去別的地方</b><small>中途加一站，之後再到 ${e(navDest(n).name || '目的地')}</small></span></button>
@@ -1571,6 +1580,7 @@ function navMore() {
     if (m === 'min') return shrinkNav(true);
     if (m === 'replan') return replanFromHere();
     if (m === 'off') return changeOffSheet();
+    if (m === 'times') return navPickTimes();
     if (m === 'dest') {
       const to = await pickPoint('改去哪裡', { onMap: false });
       if (to && !to.here) replanFromHere(to, n.plan.then || []);

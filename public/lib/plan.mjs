@@ -188,6 +188,39 @@ export function bikeToRail(plan, o, bikes, { anyRide = false, at = -1 } = {}) {
   return finish({ src: 'bike+', base: plan.src, legs: [...shift(ride, leave), ...plan.legs.slice(k)] });
 }
 
+// A plan's first bus, from its stop's live times (`seen`, kept by live.mjs
+// adjustPlan): the first you can be at the stop for, setting out at `start`
+// (now, or the time asked), not the one the plan was made around (by bike
+// to 文興嘉興路口 the 19:07, not the timetable's 19:17 the walk there was
+// timed for; the owner, 2026-10-12). The bus and what follows it move with
+// it, up to a train (which keeps its time); the way to it leaves so as to be
+// there as it comes, never before now.
+const KEEPS_TIME = new Set(['tra', 'hsr', 'metro', 'lightrail']);
+export function catchBus(plan, now, start = now) {
+  const i = plan.legs.findIndex(l => l.mode !== 'walk' && l.mode !== 'bike');
+  const l = plan.legs[i];
+  if (i < 0 || l.mode !== 'bus' || !l.seen?.length) return plan;
+  const before = plan.legs.slice(0, i).reduce((a, x) => a + (x.dur || 0) * 1000, 0);
+  const ready = Math.max(now, start) + before;
+  const bus = l.seen.find(t => t.at >= ready - 30_000);
+  if (!bus) return plan;
+  const live = { at: bus.at, planned: bus.planned, last: bus.last };
+  const delta = bus.at - l.dep;
+  if (Math.abs(delta) < 60_000) return l.live?.at === bus.at ? plan : finish({ ...plan, legs: plan.legs.map((x, k) => (k === i ? { ...x, live } : x)), live: true });
+  const legs = plan.legs.map(x => ({ ...x }));
+  let k = i;
+  for (; k < legs.length && !(k > i && KEEPS_TIME.has(legs[k].mode)); k++) Object.assign(legs[k], { dep: legs[k].dep + delta, arr: legs[k].arr + delta });
+  legs[i].live = live;
+  for (let a = 0; a < i; a++) Object.assign(legs[a], { dep: legs[a].dep + delta, arr: legs[a].arr + delta });
+  if (legs[0].dep < now - 60_000) {
+    const back = now - legs[0].dep;
+    for (let a = 0; a < i; a++) Object.assign(legs[a], { dep: legs[a].dep + back, arr: legs[a].arr + back });
+  }
+  const out = finish({ ...plan, legs, live: true });
+  if (k < legs.length && legs[k - 1].arr + 60_000 > legs[k].dep) out.miss = `可能趕不上 ${legs[k].short || legs[k].name}`;
+  return out;
+}
+
 // The plan's end swapped for a bike ride from its last train or metro.
 // `at`: an earlier ride instead (the first bus, the change after it gone).
 export function bikeFromRail(plan, d, bikes, { anyRide = false, at = -1 } = {}) {
@@ -365,20 +398,18 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //   - the minutes out of the door (leaving later for the same train is
 //     better), and walking past a few minutes;
 //   - each ride on a bike by its own length, not the total: 10 minutes to the
-//     station is nothing, 18 is a workout, past that every minute counts
-//     four and a half times the minute it saves (28 minutes across town in work clothes
-//     is not how anyone goes every day). Two short rides beat one long one.
-//     (A ride cut at 30 minutes to stay free is still one ride.) And the
-//     riding in all: 15 minutes to a train and 6 from it is nearly the ride
-//     the whole way. 電輔車 is a
-//     little easier going, not a free pass;
+//     station is nothing, 18 is a workout, to half an hour every minute counts
+//     twice (20 minutes or 25 is about the same ride: the owner, 2026-10-12),
+//     past half an hour four and a half times. Two short rides beat one long
+//     one. (A ride cut at 30 minutes to stay free is still one ride.)
+//     電輔車 is a little easier going, not a free pass;
 //   - a trip whose buses or trains go the long way round (into 新竹市 and back
 //     out, when the place is the other way), or change farther from the place
 //     than you started. Getting to the first one is not the long way round:
 //     riding north to 竹北's station for a train south costs its minutes and
 //     its ride, nothing more;
 //   - what it costs in money, and a train it would now miss.
-export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.max(min - 18, 0) * 4.5;
+export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.min(Math.max(min - 18, 0), 12) * 2 + Math.max(min - 30, 0) * 4.5;
 export function score(p, opts = {}) {
   const parts = scoreParts(p, opts);
   return Object.values(parts).reduce((a, b) => a + b, 0);
@@ -403,7 +434,6 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
     const [a, b] = [rides[i - 1].mode, rides[i].mode];
     add('changes', a === 'bus' && b === 'bus' ? 35 : b === 'bus' ? 10 : 7);
   }
-  add('bus', rides.filter(l => l.mode === 'bus').reduce((a, l) => a + (l.dur || 0) / 60, 0) * 0.08);
   // Each bus caught: its time is a guess (early as often as late), so you're
   // at the stop early and it may still be late: a few minutes that on a short
   // trip are most of it (1–2 km: a YouBike, there when you are, over the bus
@@ -422,17 +452,15 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   for (const r of bikes) {
     add('bike', 1.5 + rideEffort(r.ebike ? r.min * 0.95 : r.min));
   }
-  // And riding in all: 15 minutes to the train and 6 from it is 21 on a bike,
-  // nearly what riding the whole way takes; the train saves little.
-  const rideAll = bikes.reduce((a, r) => a + r.min, 0);
-  if (rides.length) add('bike', Math.max(0, rideAll - 12) * 0.5);
   const placed = rides.filter(l => l.from?.lat != null && l.to?.lat != null);
   if (placed.length) {
-    // The rides' own way against the straight line from the first stop to the last.
+    // The rides' own way against the straight line from the first stop to
+    // the last: only a real long way round (half as far again) counts, not a
+    // line's own bends.
     const [a, b] = [placed[0].from, placed.at(-1).to];
     const span = Math.max(1000, meters(a.lat, a.lon, b.lat, b.lon));
     const path = placed.reduce((x, l) => x + meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon), 0);
-    add('detour', Math.max(0, path / span - 1.2) * 45);
+    add('detour', Math.max(0, path / span - 1.5) * 45);
   }
   if (o && d) {
     // Heading away: a change made farther from the place than where you started.
@@ -626,15 +654,27 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // The ride a plan is for: its longest bus or train.
   const main = p => vehicles(p).reduce((a, l) => (!a || (l.dur || 0) > (a.dur || 0) ? l : a), null);
   const sameRide = sameVehicle;
-  // Over the river on the bike, before or after a bus or train, when a
-  // way whose bus or train takes you over it gets there in a quarter of an
-  // hour of it (新竹站 → 成功九街: the train to 竹北 and a ride, not the
-  // train to 千甲 and a ride over 頭前溪; riding 20 minutes anyway, you'd
-  // ride the whole way). The bus or the train is for the crossing. Set
-  // aside first: what's set aside sets nothing else aside (off at 新莊 and
-  // over the river never beats the change to the 六家線).
+  // The bother of a plan: everything but its time (changes, buses, walking,
+  // riding, the long way round, money). A way is set aside by another only
+  // when that other is no more bother, never because a total came out a
+  // point lower: home a little sooner never makes a worse way "beat" one.
+  const bothers = new Map();
+  const bother = x => {
+    if (!bothers.has(x)) bothers.set(x, Object.entries(scoreParts(x, { o, d, now, by, deadline, fare: cost(x) })).reduce((a, [k, v]) => (k === 'time' || k === 'wait' ? a : a + v), 0));
+    return bothers.get(x);
+  };
+  // Over the river on the bike, before or after a bus or train, when a way
+  // whose bus or train takes you over it, or riding the whole way (40
+  // minutes at most), gets there within 20 minutes of it (新竹站 → 成功九街:
+  // the train to 竹北 and a ride, or riding it all, not the train to 千甲 and
+  // a ride over 頭前溪: riding 20 minutes anyway, you'd ride the whole way).
+  // The bus or the train is for the crossing. (20 minutes, not a fine line a
+  // minute decides.) Set aside first: what's set aside sets nothing else
+  // aside (off at 新莊 and over the river never beats the change to the 六家線).
   const bikeOver = x => x.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to));
-  const over = new Set(leads.filter(p => vehicles(p).length && bikeOver(p) && list.some(q => vehicles(q).length && !bikeOver(q) && q.arr <= p.arr + 15 * 60_000 && q.dep >= p.dep - 15 * 60_000 && !q.off)).map(p => groups.get(pickSig(p))));
+  const longest = x => Math.max(0, ...x.legs.filter(l => l.mode === 'bike').map(l => l.dur || 0)) / 60;
+  const crossesAnyway = (p, q) => !q.off && q.arr <= p.arr + 20 * 60_000 && q.dep >= p.dep - 20 * 60_000 && (vehicles(q).length ? !bikeOver(q) : q.bike && longest(q) <= 40);
+  const over = new Set(leads.filter(p => vehicles(p).length && bikeOver(p) && list.some(q => q !== p && crossesAnyway(p, q))).map(p => groups.get(pickSig(p))));
   // A bus then another bus: Taiwan's buses don't keep their times, so the
   // change is a gamble nobody plans on (the owner, 2026-10-12: 5673 then
   // 5614 shown as 最快抵達). Set aside whenever any way without one is there.
@@ -649,12 +689,12 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     const m = main(p);
     // (Its rides only, each one of this plan's: a change onto another train
     // after it, 1242 to 竹北 rather than 1758 to 六家, is a way of its own.)
-    const beaten = m && list.some(q => other(q, p) && q.score < p.score && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000 && vehicles(q).some(l => sameRide(l, m)) && vehicles(q).every(l => vehicles(p).some(x => sameRide(l, x))));
+    const beaten = m && list.some(q => other(q, p) && bother(q) < bother(p) && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000 && vehicles(q).some(l => sameRide(l, m)) && vehicles(q).every(l => vehicles(p).some(x => sameRide(l, x))));
     // More changes than another bus-or-train way that's no later (within 5
     // minutes) and less bother: off the train at 北新竹 for the 5608, when
     // staying on to 新竹 and riding is sooner.
     const n = segs(p).length;
-    const changes = n > 1 && list.some(q => other(q, p) && segs(q).length >= 1 && segs(q).length < n && q.score < p.score && q.arr <= p.arr + 5 * 60_000);
+    const changes = n > 1 && list.some(q => other(q, p) && segs(q).length >= 1 && segs(q).length < n && bother(q) <= bother(p) && q.arr <= p.arr + 5 * 60_000);
     // A change for a hop: onto a bus or metro for a stop or two (a few
     // minutes, under 1.5 km) that a walk or a bike from where you got off
     // would do (新竹站, then 綠線 one stop, then a bike again).
@@ -664,9 +704,10 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     const mostlyRidden = bikeAll != null && vehicles(p).length && rideM(p) >= Math.max(3000, bikeAll * 0.6);
     // The same first bus or train, then on further (or onto another) only to
     // ride a little less after it, or no less, home no sooner (offSooner):
-    // the extra train is for nothing.
+    // the extra train is for nothing. (However each sets out for that first
+    // train: walking to it a minute sooner is no reason to keep the other.)
     const overByBike = over.has(groups.get(pickSig(p)));
-    const further = m && list.some(q => other(q, p) && offSooner(q, p) && q.dep >= p.dep - 60_000 && q.arr <= p.arr);
+    const further = m && list.some(q => other(q, p) && offSooner(q, p) && q.arr <= p.arr);
     // Far behind the best, unless it gets there sooner than ways ahead of
     // it (off at 竹中 and ride, over the change to the 六家線: more riding, but
     // home sooner, a real choice).
@@ -782,8 +823,10 @@ export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
       }
     }
   }
+  // Each plan's first bus as you'd catch it, its way there as it is now (a bike to it built above).
+  const clock = opts.clock ?? now;
   return rank(
-    out.filter(p => allowed(p, modes)),
+    out.filter(p => allowed(p, modes)).map(p => catchBus(p, clock, now)),
     { now, o, d, ...opts }
   );
 }

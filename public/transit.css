@@ -3344,6 +3344,27 @@ main {
   box-shadow: 0 0 0 4px rgba(255, 107, 102, 0.22);
   color: #fff;
 }
+/* A bus between two stops: on the line, half way between their dots. */
+.ot-rs-bus {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 91px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ot-bad);
+  box-shadow: 0 0 0 4px rgba(255, 107, 102, 0.22);
+  color: #fff;
+  transform: translate(-50%, -50%);
+}
+.ot-rs-bus .ot-i {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+}
 .ot-rs-dot .ot-i {
   width: 16px;
   height: 16px;
@@ -4693,12 +4714,14 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
   height: 22px;
   color: var(--q-accent);
 }
-.ot-off-stop time {
+.ot-off-stop time,
+.ot-pick-dep time {
   flex: none;
   color: var(--q-text-2);
   font-variant-numeric: tabular-nums;
 }
-.ot-off-stop.on {
+.ot-off-stop.on,
+.ot-pick-dep.on {
   border-color: color-mix(in srgb, var(--q-accent) 60%, transparent);
 }
 button.ot-nav-gm {

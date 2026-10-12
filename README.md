@@ -41,9 +41,9 @@ batch old against new, say what moved).
 
 | Tab | What |
 | --- | --- |
-| **地圖** | The home tab. The map (Google's while the month is under the proxy's cap, else Taiwan's NLSC map in Leaflet; `map.mjs` is one interface over both) shows YouBike stations (regular and ⚡ 電輔車, and docks), every bus stop (each side of the road, with live times), and 台鐵, 高鐵 and metro stations. Search places, tap anything for its card (a station's bikes and docks, a stop's buses, a station's next trains), pin places, and plan a trip from here, a pinned place, a search or a spot on the map. ☆ saves a trip; 開始導航 follows it. A plan's buses, trains and metro are drawn along their real lines (`shapes.mjs`). |
+| **地圖** | The home tab. The map (Google's while the month is under the proxy's cap, else Taiwan's NLSC map in Leaflet; `map.mjs` is one interface over both) shows YouBike stations (regular and ⚡ 電輔車, and docks), every bus stop (each side of the road, with live times), and 台鐵, 高鐵 and metro stations. Search places, tap anything for its card (a station's bikes and docks, a stop's buses, a station's next trains), pin places, and plan a trip from here, a pinned place, a search or a spot on the map. A time picked (出發時間, 抵達時間) is for that trip (its ways of moving, its stops, turned round); a new trip is from now. ☆ saves a trip; 開始導航 follows it. A plan's buses, trains and metro are drawn along their real lines (`shapes.mjs`). |
 | **交通** | What's coming that you'd take, refreshed while open: **常用・釘選行程** (your saved trips' next ways to go, recurring ones by day, the way back by itself, with the buses' real times; one tap navigates); **釘選的公車・火車** (a stop's bus, a connection, one train, from whichever end you're nearer); **釘選地點** (each place's buses, bikes, station, and how to get there). What's recommended is never pinned by itself: ☆ pins it. |
-| **查時刻** | A timetable on purpose. **台鐵・高鐵**: station to station, changing wherever it's faster (the router), with each option's trains, where to change and the wait, the fare and today's delays; ☆ pins a connection or one train. **公車**: a route by number or stop name (your city, its neighbours and 公路客運), its stops each way with the buses now, or a stop's timetable for any day of the coming week; ☆ pins a stop. |
+| **查時刻** | A timetable on purpose. **台鐵・高鐵**: station to station, changing wherever it's faster (the router), with each option's trains, where to change and the wait, the fare and today's delays; ☆ pins a connection or one train. **公車**: a route by number or stop name (your city, its neighbours and 公路客運), its stops each way with the buses now (a bus at a stop on its dot, one between two stops on the line between them), or a stop's timetable for any day of the coming week; ☆ pins a stop. |
 | **我的** | **地點** (rename, reorder, remove); **行程** (a place to a place, maybe at a time, maybe every weekday; the way back comes by itself); **釘選交通** (bus stops in groups: 常用, 上班, 回家…; trains); **交通偏好** (which ways of moving to use, 每 30 分鐘換 YouBike, your TPASS); **車票** (高鐵 T Express and 台鐵 e訂通: the app opened, the train's details copied, `tickets.mjs`); **捷運路網圖** (each city's metro on the real map, a station's next trains, live where the operator sends them). |
 
 ## Planning a trip
@@ -68,7 +68,11 @@ batch old against new, say what moved).
 2. **A train far from the place** goes on by a direct bus when one comes
    soon (竹中 → 5608 → 竹東高中; `live.mjs busLink`).
 3. **The buses re-timed** by what TDX says they're doing now (`adjustPlan`,
-   N1 estimates at the boarding stop). That gives the bus you'd really
+   N1 estimates at the boarding stop): the first you can be at the stop for
+   from when you set out (now, or the time asked), not the one the plan was
+   made around; the stop's live times stay on the leg, so a way to it made
+   later (a bike instead of the walk) catches its bus from them too
+   (`plan.mjs catchBus`). That gives the bus you'd really
    catch, the rest of the trip moved with it, and a train it would now miss
    marked. Google's and TDX's names for one route are matched (快捷8經興隆大橋
    = 快捷8號, Chinese numerals as digits; never 5 and 5608).
@@ -108,45 +112,58 @@ Each falls back to TDX's own search when the packs can't be had.
 
 ## Ranking: what's practical
 
-`plan.mjs score` / `scoreParts` (`scripts/replay.mjs --why` shows them).
-What a plan costs, in minutes:
+`plan.mjs rank`. Two steps, so fixing one case can't quietly break another:
 
-| Part | Rule |
+1. **Which ways are shown** is decided by comparing ways the way a person
+   does, never by a total coming out a point lower. A way is folded (set
+   aside, still there to open) when:
+   - **a bus then another bus**, whenever a way without one is there
+     (Taiwan's buses don't keep their times: the change is a gamble);
+   - **over the river on the bike** before or after a bus or train, when a
+     way whose bus or train crosses it, or riding the whole way (40 minutes
+     at most), gets there within 20 minutes (新竹站 → 成功九街: the 竹北 train
+     and a ride, not to 千甲 and a ride over 頭前溪);
+   - **the same train for nothing**: another way sets out on the same first
+     bus or train, changes no more, rides home about as long after it (8
+     minutes more at most) and is there no later (on to 千甲 when off at 竹中
+     is home first; on to 北新竹 or 新竹 and back up to 竹北 when the change
+     to the 六家線 is home first);
+   - another way onto the same rides is no earlier out, no later there and
+     **less bother** (a bike to the train instead of a walk and a bus);
+   - more changes than a way no later (5 minutes) and no more bother;
+   - a change for a hop a walk or a bike would do;
+   - it rides most of what riding all the way would;
+   - it's far behind the best.
+
+   "Bother" is everything but time: changes, buses, walking, riding, the
+   long way round, money. Folded ways fold nothing else. The same train left
+   at stations a kilometre or more apart is two ways, each kept.
+2. **The order of what's left**: door to door in minutes, plus a short
+   table of what each bother is worth (`scoreParts`, `scripts/replay.mjs
+   --why` shows them):
+
+| Part | Worth |
 | --- | --- |
-| Time | Door to door in full; the wait before leaving counts a third while short (it's spent at home), past 15 minutes as time lost; by an arrival time, how early you must leave |
-| Changes | Onto a train or metro is easy (it keeps time); onto a bus a gamble; a bus to a bus barely a plan (Taiwan's buses don't keep their times); a bus between two trains is fine |
-| Each bus | A few minutes (early at the stop, late anyway), and a little for the time on it |
-| Walking | Past 5 minutes, slow going |
-| Bikes | Each ride by its own length: 10 minutes is nothing, 18 a workout, past that every minute counts 4.5×. Two short rides beat one long one; a swap at 30 minutes is still one ride; riding in all counts (15 to a train and 6 from it is nearly riding the whole way); 電輔車 a little easier |
-| Rivers | Only the way round to the bridge, in the ride's time |
-| The long way round | Lines that go away and back, or a change farther from the place than the start; chasing your own train past a nearer station |
-| Money | What it costs you after TPASS; a train it would now miss |
+| Time | Door to door; the wait before leaving a third while short (spent at home), past 15 minutes as time lost; by an arrival time, how early you must leave |
+| Changes | Onto a train or metro 7, onto a bus 10, a bus to a bus 35 |
+| Each bus | 4 (early at the stop, late anyway) |
+| Walking | Past 5 minutes, 0.6 a minute |
+| Each bike ride | 10 minutes nothing, to 18 a little, to 30 each minute twice (20 or 25 is about the same ride), past 30 each minute 4.5×; two short rides beat one long one; 電輔車 a little easier |
+| The long way round | Lines half as far again as the straight way; a change farther from the place than the start; chasing your own train |
+| Money | What it costs after TPASS; a train it would now miss |
+
+Live bike counts, a bus's minutes on board and a line's small bends count
+for nothing: small things never flip a choice.
+
+**The owner's verdicts** (`tests/verdicts/`, `tests/verdicts.test.mjs`):
+real trips saved on the day (`node scripts/verdict.mjs <name> <from> <to>
+--at <time>`), their plans and bikes before ranking, ranked again on every
+`npm test` and checked against what the owner said, and again with each
+bus a few minutes earlier or later (seven patterns, as live times move):
+a verdict that flips fails the tests. Every trip the owner judges is added.
 
 The first few plans with different main lines show as **推薦**, and the
-rest fold. A plan is folded (set aside, still there to open) when:
-
-- another way onto the same rides is no earlier out, no later there and
-  less bother (a bike to the train instead of a walk and a bus);
-- it changes more than a way no later and less bother;
-- **a bus then another bus**, whenever a way without one is there (Taiwan's
-  buses don't keep their times: the change is a gamble); never labelled
-  最快抵達;
-- it changes for a hop a walk or a bike would do;
-- it rides most of what riding all the way would;
-- **over the river on the bike** before or after a bus or train, when a way
-  whose bus or train crosses it gets there within 15 minutes (新竹站 →
-  成功九街: the train to 竹北 and a ride, not to 千甲 and a ride over
-  頭前溪);
-- **the same train stayed on for nothing**: another way sets out on the
-  same bus or train, changes no more, rides home about as long after it
-  (8 minutes more at most) and is there no later (on to 千甲 when off at
-  竹中 is home first; on to 北新竹 or 新竹 and back up to 竹北 when the
-  change to the 六家線 is home first, the ride home the same 15 minutes);
-- it's far behind the best.
-
-A plan that's folded folds nothing else. The same train left at stations a
-kilometre or more apart is two ways, each kept (off at 竹中 and ride, or on
-to 六家).
+rest fold.
 
 ## Navigation
 
@@ -173,6 +190,12 @@ the phone's position:
   (`tripAt`): a step's end reached, or the next step's way already under
   you (an end a fix skipped), a bus or train once its first stop is behind
   you. Started (or opened again) half way, it begins at the step you're at.
+- **Another departure**: tap the countdown (or ⋯ → 改搭別班) for the bus's
+  or train's next departures (live, or the timetable's), one tap to take
+  one; what follows moves with it, and a train it would now miss is said.
+  **Missed it** (past its time, a train's with its delay, and you're still
+  at the stop or station): the next one by itself, said and buzzed. A bus
+  with live times counts down to the next that comes.
 - **YouBike in navigation**: the bikes and docks at the ride's two stations
   now; found empty (or full), one tap moves the ride to the nearest station
   within 500 m that has some, the walk to it redrawn (none: 換一條路).
@@ -256,7 +279,8 @@ slow.
 | `lib/store.mjs`, `city.mjs`, `ui.mjs`, `util.mjs` | The pass's data, cities, shared UI, small helpers |
 | `scripts/live.mjs` | Trips on today's real data through `planTrip` (the dev door); `--against <ref>` compares code at the same moment |
 | `scripts/replay.mjs` | A 除錯紀錄's trip run again (`--why` the score's parts) |
-| `scripts/timing.mjs`, `navstate.mjs` | Planning time; a navigation state to preview |
+| `scripts/timing.mjs`, `navstate.mjs` | Planning time; a navigation state to preview (`long`: an eight-step trip) |
+| `scripts/verdict.mjs`, `tests/verdicts/` | The owner's verdicts: a real trip saved, ranked again by `tests/verdicts.test.mjs` |
 
 ## Develop, test, deploy
 
@@ -291,7 +315,7 @@ node ../Shared-Proxy/tools/preview.mjs transit go --webkit
 
 | If you change… | Also check |
 | --- | --- |
-| The score or ranking | The whole batch, old code against new (`scripts/live.mjs --against`), TRUTH §4's steps; `replay.mjs` on the owner's logs |
+| The score or ranking | `npm test` (the owner's verdicts, with buses a few minutes off), the whole batch old against new (`scripts/live.mjs --against`), TRUTH §4's steps; `replay.mjs` on the owner's logs |
 | A TDX path | Shared-Proxy's `TDX_RULES` allowlist and cache times; the `bus` push check |
 | Pack formats | Shared-Data's `build.mjs`, `shapes.mjs`, `where.mjs` (their `v`) |
 | Navigation steps | `ot.nav.v1`'s shape (resuming), the `transit:nav` notices |
