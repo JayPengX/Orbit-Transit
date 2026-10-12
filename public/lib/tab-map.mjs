@@ -1136,9 +1136,9 @@ function setWhen(kind) {
   const dayChips = [0, 1, 2].map(n => [addDays(today, n), ['今天', '明天', '後天'][n]]);
   let date = tw(base).date;
   const d = sheet(`${sheetHead(kind === 'arrive' ? '抵達時間' : '出發時間')}
-    <div class="ot-field"><span>日期</span><div class="q-chips ot-days">${dayChips.map(([v, n]) => `<button class="q-chip" type="button" data-day="${v}" aria-pressed="${v === date}">${n}<small>${e(v.slice(5).replace('-', '/'))}</small></button>`).join('')}</div></div>
-    <label class="ot-field"><span>時間</span><input id="w-time" type="time" value="${tw(base).hm}"></label>
-    <div class="ot-row ot-actions"><button class="q-btn primary" type="button" data-ok="1">查詢</button></div>`);
+    <div class="ot-field ot-when-day"><span>日期</span><div class="ot-days" role="group" aria-label="日期">${dayChips.map(([v, n]) => `<button type="button" data-day="${v}" aria-pressed="${v === date}">${n}<small>${e(v.slice(5).replace('-', '/'))}</small></button>`).join('')}</div></div>
+    <label class="ot-field ot-when-time"><span>時間</span><input id="w-time" type="time" value="${tw(base).hm}"></label>
+    <button class="q-btn primary block ot-when-go" type="button" data-ok="1">查詢</button>`);
   d.addEventListener('click', ev => {
     const b = ev.target.closest('[data-day]');
     if (b) {

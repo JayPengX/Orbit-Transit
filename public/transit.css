@@ -2432,15 +2432,67 @@ main {
   background-repeat: no-repeat;
   background-position: 14px center;
 }
-.ot-days .q-chip {
-  flex-direction: column;
-  gap: 0;
-  min-width: 64px;
-  line-height: 1.2;
+/* 出發時間 / 抵達時間: the day an iOS segmented control the whole width,
+   the time large in its cell, 查詢 the whole width under them. */
+.ot-days {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--q-fill, rgba(118, 118, 128, 0.24));
 }
-.ot-days .q-chip small {
-  opacity: 0.7;
-  font-size: 11px;
+.ot-days button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--q-text-2);
+  font: 600 15px/1.1 var(--q-font);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.ot-days button small {
+  color: var(--q-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.ot-days button[aria-pressed='true'] {
+  background: #636366;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+}
+.ot-days button[aria-pressed='true'] small {
+  color: rgba(255, 255, 255, 0.75);
+}
+.ot-when-day,
+.ot-when-time {
+  gap: 8px;
+  margin: 4px 0 22px;
+}
+.ot-field.ot-when-time input[type='time'] {
+  min-height: 60px;
+  line-height: 60px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 600;
+}
+.ot-when-time input::-webkit-date-and-time-value {
+  text-align: center;
+}
+.ot-when-go {
+  min-height: 52px;
+  margin: 6px 0 4px;
+  font-size: 17px;
 }
 
 /* ---- Round 4: the map's first screen ---- */
