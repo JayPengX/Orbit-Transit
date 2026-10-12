@@ -635,6 +635,12 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // over the river never beats the change to the 六家線).
   const bikeOver = x => x.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to));
   const over = new Set(leads.filter(p => vehicles(p).length && bikeOver(p) && list.some(q => vehicles(q).length && !bikeOver(q) && q.arr <= p.arr + 15 * 60_000 && q.dep >= p.dep - 15 * 60_000 && !q.off)).map(p => groups.get(pickSig(p))));
+  // A bus then another bus: Taiwan's buses don't keep their times, so the
+  // change is a gamble nobody plans on (the owner, 2026-10-12: 5673 then
+  // 5614 shown as 最快抵達). Set aside whenever any way without one is there.
+  const busChain = x => vehicles(x).some((l, i, a) => i > 0 && l.mode === 'bus' && a[i - 1].mode === 'bus');
+  const noChain = list.some(q => !busChain(q) && !q.off);
+  for (const p of leads) if (noChain && busChain(p)) over.add(groups.get(pickSig(p)));
   const other = (q, p) => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && !over.has(groups.get(pickSig(q)));
   for (const p of leads) {
     // Another way onto the same bus or train (a bike to it, not a walk and a

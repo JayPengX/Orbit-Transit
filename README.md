@@ -128,6 +128,9 @@ rest fold. A plan is folded (set aside, still there to open) when:
 - another way onto the same rides is no earlier out, no later there and
   less bother (a bike to the train instead of a walk and a bus);
 - it changes more than a way no later and less bother;
+- **a bus then another bus**, whenever a way without one is there (Taiwan's
+  buses don't keep their times: the change is a gamble); never labelled
+  最快抵達;
 - it changes for a hop a walk or a bike would do;
 - it rides most of what riding all the way would;
 - **over the river on the bike** before or after a bus or train, when a way
