@@ -16,7 +16,7 @@ import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEt
 import { etaAround, bikesAround } from './near.mjs';
 import { rideSec, DOCK_SEC } from './plan.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
-import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from './navlive.mjs';
+import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead } from './ui.mjs';
 import { e, hm, minsText, distText, meters, walkSec, tw, decodeLine } from './util.mjs';
 
@@ -153,6 +153,8 @@ export function gmapsLink(to, mode) {
 export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat != null && meters(plan.dest.lat, plan.dest.lon, plan.legs[k].to.lat, plan.legs[k].to.lon) < 300 ? plan.dest : plan.legs[k].to);
 
 const RIDE = l => l && l.mode !== 'walk' && l.mode !== 'bike';
+// Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
+const AWAY_MS = 45_000;
 // A walk's or a ride's own way on the map (its road from the router), as
 // points along it; none when it's only the straight line.
 const shapes = new WeakMap();
@@ -494,7 +496,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   primeBuzz();
   stopNav();
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
-  const state = { plan, i: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, min: Boolean(resume?.min) };
+  const state = { plan, i: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, min: Boolean(resume?.min) };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
   const notices = () => nav === state && push?.(navNotices(plan, state.i, state.info));
@@ -566,7 +568,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     }
     const of = !state.done && state.offer;
     const offer = of ? `<div class="ot-nav-ask ot-nav-late"><span><b>${e(of.title)}</b>${of.sub ? `<small>${e(of.sub)}</small>` : ''}</span>${of.plan ? '<button type="button" data-nav="offer">改走這條</button>' : ''}<button class="x" type="button" data-nav="offer-x" aria-label="不用">${icon('x')}</button></div>` : '';
-    const strayed = on && !state.done && state.away >= 2 ? `<div class="ot-nav-ask"><span>好像已經下車了？</span><button type="button" data-nav="replan">從這裡重新規劃</button></div>` : '';
+    const strayed = on && !state.done && state.away >= 2 && now - state.awayAt >= AWAY_MS ? `<div class="ot-nav-ask"><span>好像已經下車了？</span><button type="button" data-nav="replan">從這裡重新規劃</button></div>` : '';
     const ri = rideOf(plan, state.i);
     const liveNow = !state.done && ri >= state.i && state.fresh && now - state.fresh < 75_000;
     // Off a bus or train a moment ago: said, with what's next.
@@ -631,6 +633,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.track = [];
     state.paced = null;
     state.away = 0;
+    state.awayAt = 0;
     state.leftAlong = null;
     state.offWay = 0;
     state.delayLive = false;
@@ -829,7 +832,10 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           rs.cum ||= routeCum(rs.stops);
           const a = alongRoute(rs.stops, p, rs.cum, Math.max(0, rs.i - 1));
           const t = Date.now();
-          state.away = a && a.off > 250 ? state.away + 1 : 0;
+          // Off it (its stops' line and its road both far), for 45 s or more: asked if you got off.
+          const away = a && offRide(rs.stops, p, rs.cum, Math.max(0, rs.i - 1), legPts(l)) > 250;
+          state.away = away ? state.away + 1 : 0;
+          state.awayAt = away ? state.awayAt || t : 0;
           if (a && a.off < 150) {
             state.track = [...state.track.filter(x => x.t > t - 10 * 60_000), { d: a.d, t }];
             const pace = ridePace(state.track, t);

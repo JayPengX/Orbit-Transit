@@ -212,7 +212,10 @@ the phone's position:
   estimates, and your own pace from where the phone has been), and a buzz
   with the card turned round when yours is next. On an iPhone the buzz is
   a chime, since Safari can't vibrate; `primeBuzz` runs on the tap that
-  starts navigation.
+  starts navigation. Off the ride for 45 s (far from both the line through
+  its stops and its road on the map, `navlive.mjs offRide`: a loop's road
+  is far from the straight lines between its stops), it asks 好像已經下車了？
+  with 從這裡重新規劃.
 - **Each step** moves on by itself when you get there, by where you are
   (`tripAt`): a step's end reached, or the next step's way already under
   you (an end a fix skipped), a bus or train once its first stop is behind

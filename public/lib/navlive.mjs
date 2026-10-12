@@ -138,6 +138,16 @@ export function alongRoute(stops, pt, cum = routeCum(stops), from = 0) {
   }
   return best;
 }
+// How far off a ride you are, in metres: from the line through its stops
+// and from its way on the map (its road; `way`, points), whichever is
+// nearer. The straight lines between stops cut a loop's corners (the
+// 快捷8號支 round 高鐵新竹站: on board, on its road, 250 m and more from
+// them; the owner, 2026-10-13, asked if they'd got off).
+export function offRide(stops, pt, cum, from = 0, way = null) {
+  const a = alongRoute(stops, pt, cum, from);
+  const w = way?.length > 2 ? alongRoute(way, pt) : null;
+  return Math.min(a?.off ?? Infinity, w?.off ?? Infinity);
+}
 // The pace over the last few minutes of `track` ([{ d, t }], oldest first):
 // metres a second, once there's a minute and 100 m of it; a stretch stood
 // still counts (it's part of the ride), backwards doesn't (a bad fix).
