@@ -42,7 +42,7 @@ batch old against new, say what moved).
 | Tab | What |
 | --- | --- |
 | **地圖** | The home tab. The map (Google's while the month is under the proxy's cap, else Taiwan's NLSC map in Leaflet; `map.mjs` is one interface over both) shows YouBike stations (regular and ⚡ 電輔車, and docks), every bus stop (each side of the road, with live times), and 台鐵, 高鐵 and metro stations. Search places, tap anything for its card (a station's bikes and docks, a stop's buses, a station's next trains), pin places, and plan a trip from here, a pinned place, a search or a spot on the map. A time picked (出發時間, 抵達時間) is for that trip (its ways of moving, its stops, turned round); a new trip is from now. ☆ saves a trip; 開始導航 follows it. A plan's buses, trains and metro are drawn along their real lines (`shapes.mjs`). |
-| **交通** | What's coming that you'd take, refreshed while open: **常用・釘選行程** (your saved trips' next ways to go, recurring ones by day, the way back by itself, with the buses' real times; one tap navigates); **釘選的公車・火車** (a stop's bus, a connection, one train, from whichever end you're nearer); **釘選地點** (each place's buses, bikes, station, and how to get there). What's recommended is never pinned by itself: ☆ pins it. |
+| **交通** | What's coming that you'd take, refreshed while open: **常用・釘選行程** (your saved trips' next ways to go, recurring ones by day, with the buses' real times; one tap navigates; always from the trip's own start (from where you are only within 800 m of it, or when its start is 目前位置), the way back by itself once you're in the far end's part of the trip, its last 30%, `tab-go tripNow`; a trip saved from where you are keeps that spot as its start, and 編輯行程 changes either end); **釘選的公車・火車** (a stop's bus, a connection, one train, from whichever end you're nearer); **釘選地點** (each place's buses, bikes, station, and how to get there). What's recommended is never pinned by itself: ☆ pins it. |
 | **查時刻** | A timetable on purpose. **台鐵・高鐵**: station to station, changing wherever it's faster (the router), with each option's trains, where to change and the wait, the fare and today's delays; ☆ pins a connection or one train. **公車**: a route by number or stop name (your city, its neighbours and 公路客運), its stops each way with the buses now (a bus at a stop on its dot, one between two stops on the line between them), or a stop's timetable for any day of the coming week; ☆ pins a stop. |
 | **我的** | **地點** (rename, reorder, remove); **行程** (a place to a place, maybe at a time, maybe every weekday; the way back comes by itself); **釘選交通** (bus stops in groups: 常用, 上班, 回家…; trains); **交通偏好** (which ways of moving to use, 每 30 分鐘換 YouBike, your TPASS); **車票** (高鐵 T Express and 台鐵 e訂通: the app opened, the train's details copied, `tickets.mjs`); **捷運路網圖** (each city's metro on the real map, a station's next trains, live where the operator sends them). |
 
@@ -247,14 +247,24 @@ the phone's position:
 - **It never takes the app over.** The tabs stay; it shrinks to a bar to
   do something else.
 - **The trip can change on the way**: another stop to get off at, a new
-  plan from here (換一條路), a stop first (先去別的地方) or another place
-  (改目的地). On a bus or train those last two keep you on it: off at its
+  plan from here (換一條路), and 編輯行程: the places still to go, each
+  changed with a tap or taken off with ×, a stop added first or last. A
+  change to where you're heading first re-routes; on a bus or train it keeps
+  you on it: off at its
   stop nearest the new place or the one you had, whichever has you there
   sooner (the one you had when its stops aren't known), the rest planned
   from there, and the place you were going to next after it (`onBoardTo`,
   `navRetarget`, `navRest`). Walking, riding or waiting: the ways from here.
+  A change to the places after it only changes the list.
+- **Stayed on past your stop**: taken as off at it, but still going along
+  the bus's or train's way 300 m and more past it, you're back on it, off at
+  the next stop, the rest planned from there (`state.passed`, `stayedOn`).
+- **Each ride's stops on its line** (a bus's, a train's, the metro's:
+  `metro.mjs metroStops`), dots, where you get off ringed; every ride's
+  stops are loaded when navigation starts (`navStops`).
 - **It resumes** after the app is swiped away (`ot.nav.v1`, `savedNav`)
-  until it's over or ended.
+  until it's over or ended: it ends by itself when you get there, else 90
+  minutes past the planned arrival (a late bus is still being ridden).
 - **The lock screen**: the kit's `transit:nav` notices are handed to the
   Worker: time to leave, your bus nearly here, the train about to leave,
   your stop next.

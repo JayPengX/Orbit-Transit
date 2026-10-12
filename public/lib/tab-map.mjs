@@ -16,7 +16,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
@@ -136,7 +136,8 @@ function showPlan(p, from, to, resume = null) {
   // for later opens, to look at. A ride already being navigated (shrunk, you
   // went to 交通 to look at something else) isn't replaced by a tap: the plan
   // opens, and its 開始導航 is there.
-  if (canNav(p) && (resume || (!navigating() && p.dep - Date.now() <= NAV_LEAD))) {
+  // (A ride resumed goes on even past its planned arrival: a late bus is still being ridden.)
+  if (resume || (canNav(p) && !navigating() && p.dep - Date.now() <= NAV_LEAD)) {
     renderCard();
     drawPlan(p, { fit: false });
     return navigate(card.plans[0], resume);
@@ -1362,7 +1363,11 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   map.layer('plan').set([
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || '目的地')}">${icon('pin')}</i>` }] : []),
-    ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` }))
+    ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
+    // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
+    ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops }) =>
+      stops.slice(1).map((s, x) => ({ id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${x === stops.length - 2 ? ' off' : ''}`, z: 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>` }))
+    )
   ]);
   if (fit && pts.length) map.fit(pts, { top: 120, bottom: Math.round(innerHeight * 0.55), left: 30, right: 30 });
 }
@@ -1557,6 +1562,7 @@ function navAction(a, info) {
   if (a === 'more') return navMore();
   if (a === 'replan') return replanFromHere();
   if (a === 'late') return navLate(info);
+  if (a === 'stayed') return stayedOn(info);
   // Its cards grew, shrank or folded (the stops on board coming in, a fold):
   // the stage fitted again in the room left, so you're never under a card.
   if (a === 'cards') {
@@ -1624,8 +1630,7 @@ function navMore() {
       ${navCanPick() ? `<button class="ot-row-btn" type="button" data-m="times">${icon('clock')}<span><b>改搭別班</b><small>趕不上或想晚一點，選同一路線的其他班次</small></span></button>` : ''}
       ${ride && n.ride ? `<button class="ot-row-btn" type="button" data-m="off">${icon('bell')}<span><b>改下車站</b><small>提早或晚一點下車，之後的路重新規劃</small></span></button>` : ''}
       <button class="ot-row-btn" type="button" data-m="replan">${icon('route')}<span><b>換一條路</b><small>還是去 ${e(navDest(n).name || '目的地')}，從現在的位置重新找車（錯過車、想改搭）</small></span></button>
-      <button class="ot-row-btn" type="button" data-m="stop">${icon('plus')}<span><b>先去別的地方</b><small>中途加一站，之後再到 ${e(navDest(n).name || '目的地')}</small></span></button>
-      <button class="ot-row-btn" type="button" data-m="dest">${icon('pin')}<span><b>改目的地</b><small>不去 ${e(navDest(n).name || '目的地')} 了，改去別處</small></span></button>
+      <button class="ot-row-btn" type="button" data-m="edit">${icon('pin')}<span><b>編輯行程</b><small>加一站、拿掉一站、改目的地</small></span></button>
       <a class="ot-row-btn" href="${e(gmapsLink(legEnd(n.plan, n.plan.legs.length - 1), 'transit'))}" target="_blank" rel="noopener" data-m="gm">${icon('route')}<span><b>用 Google 地圖導航</b><small>從你的位置到目的地</small></span></a>
     </div>`);
   d.addEventListener('click', async ev => {
@@ -1637,17 +1642,54 @@ function navMore() {
     if (m === 'replan') return replanFromHere();
     if (m === 'off') return changeOffSheet();
     if (m === 'times') return navPickTimes();
-    // Another place, or a stop on the way (there first, then on to where you
-    // were going and its stops after): on a bus or train, this ride goes on
-    // and only where you get off and the rest change; else the ways from here.
-    if (m === 'dest' || m === 'stop') {
-      const to = await pickPoint(m === 'dest' ? '改去哪裡' : '先去哪裡', { onMap: false });
-      if (!to || to.here) return;
-      const then = m === 'dest' ? n.plan.then || [] : [navDest(n), ...(n.plan.then || [])];
-      const now = navNow();
-      if (now?.phase === 'on' && !['walk', 'bike'].includes(now.plan.legs[now.i]?.mode)) return onBoardTo(to, then);
-      replanFromHere(to, then);
+    if (m === 'edit') return editTripSheet();
+  });
+}
+
+// 編輯行程, navigating: the places still to go (where you're heading first,
+// then the rest), each changed with a tap or taken off with ×, a stop added
+// first or last (the owner, 2026-10-13: one place to add a stop and take it
+// off again). A change to where you're heading first re-routes (on a bus or
+// train, staying on it: onBoardTo); one to the places after it only changes
+// the list.
+function editTripSheet() {
+  const n = navNow();
+  if (!n) return;
+  const places = [navDest(n), ...(n.plan.then || [])];
+  const rows = places
+    .map((p, k) => `<div class="ot-edit-row"><button class="ot-row-btn" type="button" data-ed="${k}">${icon('pin')}<span><b>${e(p.name || '地點')}</b><small>${k === 0 ? '現在要去' : `接著第 ${k + 1} 站`}${k === places.length - 1 ? '・終點' : ''}</small></span></button>${places.length > 1 ? `<button class="q-icon-btn" type="button" data-ed-x="${k}" aria-label="拿掉 ${e(p.name || '這一站')}">${icon('x')}</button>` : ''}</div>`)
+    .join('');
+  const d = sheet(`${sheetHead('編輯行程', '點一站改地點，× 拿掉')}
+    <div class="ot-nav-menu">${rows}
+      <button class="ot-row-btn" type="button" data-ed-add="first">${icon('plus')}<span><b>先去別的地方</b><small>插在 ${e(places[0].name || '目的地')} 之前</small></span></button>
+      ${places.length <= MAX_STOPS ? `<button class="ot-row-btn" type="button" data-ed-add="last">${icon('plus')}<span><b>最後再去一個地方</b><small>${e(places.at(-1).name || '終點')} 之後</small></span></button>` : ''}
+    </div>`);
+  d.addEventListener('click', async ev => {
+    const x = ev.target.closest('[data-ed-x]')?.dataset.edX;
+    const k = ev.target.closest('[data-ed]')?.dataset.ed;
+    const add = ev.target.closest('[data-ed-add]')?.dataset.edAdd;
+    if (x == null && k == null && !add) return;
+    d.close();
+    let list = places.slice();
+    if (x != null) list.splice(Number(x), 1);
+    else {
+      const pt = await pickPoint(add === 'first' ? '先去哪裡' : add === 'last' ? '最後再去哪裡' : '改去哪裡', { onMap: false });
+      if (!pt || pt.here) return;
+      const p = { name: pt.name, lat: pt.lat, lon: pt.lon, ...(pt.gid ? { gid: pt.gid } : {}) };
+      if (add === 'first') list = [p, ...list];
+      else if (add === 'last') list = [...list, p];
+      else list[Number(k)] = p;
     }
+    if (navNow()?.plan !== n.plan || !list.length) return;
+    // Where you're heading first unchanged: only the places after it.
+    const first = list[0];
+    if (first.lat === places[0].lat && first.lon === places[0].lon) {
+      navRetarget(first, list.slice(1));
+      return ctx.status('已更新行程');
+    }
+    const now = navNow();
+    if (now.phase === 'on' && !['walk', 'bike'].includes(now.plan.legs[now.i]?.mode)) return onBoardTo(first, list.slice(1));
+    replanFromHere(first, list.slice(1));
   });
 }
 
@@ -1715,6 +1757,16 @@ async function onBoardTo(to, then) {
   navChangeOff(best.k, best.rest);
   ctx.status(`去 ${to.name}：在 ${rs.stops[best.k].name} 下車`);
 }
+// Still on the bus (or train) past your stop: off at the next one (`k`), the rest from there.
+async function stayedOn({ k, was, stop }) {
+  const n = navNow();
+  if (!n?.ride) return;
+  ctx.status(`過了 ${was}：改在 ${stop.name} 下車，重新規劃之後的路…`);
+  const rest = await restFrom({ name: stop.name, lat: stop.lat, lon: stop.lon }, navDest(n), navStopAt(k) ?? Date.now());
+  if (navNow()?.plan !== n.plan) return ctx.status('');
+  navChangeOff(k, rest);
+  ctx.status(`過了 ${was}：改在 ${stop.name} 下車`);
+}
 const nextOf = n => {
   const rs = n.ride;
   let best = rs.i + 1;
@@ -1748,16 +1800,22 @@ async function restFrom(stop, dest, at) {
 
 // ---- Saving a trip (釘選行程): a name, an optional time, maybe every weekday ------------------------------
 
+// A point's name for a trip's end: one of your places within 300 m, else as given.
+const endName = (pt, name) => ctx.data.places.map(p => ({ p, d: meters(pt.lat, pt.lon, p.lat, p.lon) })).filter(x => x.d <= 300).sort((a, b) => a.d - b.d)[0]?.p.name || name;
 export function saveTripSheet(c, { edit = null } = {}) {
-  const from = edit ? edit.from : c.fromHere ? null : { name: c.from.name, lat: c.from.lat, lon: c.from.lon };
-  const to = edit ? edit.to : { name: c.to.name, lat: c.to.lat, lon: c.to.lon };
+  // From where you are: that spot, kept (the trip's own start, for its way
+  // back and to plan from it wherever you are; the owner, 2026-10-13). 目前位置
+  // ("wherever I am") only when picked so.
+  let from = edit ? edit.from : c.from?.lat != null ? { name: c.fromHere ? endName(c.from, '出發地') : c.from.name, lat: c.from.lat, lon: c.from.lon } : null;
+  let to = edit ? edit.to : { name: c.to.name, lat: c.to.lat, lon: c.to.lon };
   const x = edit || { name: to.name, time: '', by: 'depart', days: [], back: '', alt: [] };
   if (!edit && ctx.data.saved.length >= MAX_SAVED) return ctx.status(`最多 ${MAX_SAVED} 個行程`);
   const days = new Set(x.days);
   // Days whose times differ: one row each (平日 07:30, but 週三 09:10).
   const alt = (x.alt || []).map(a => ({ days: new Set(a.days), time: a.time, back: a.back }));
   const W = '日一二三四五六';
-  const d = sheet(`${sheetHead(edit ? '編輯行程' : '釘選行程', `${e(from ? from.name : '目前位置')} → ${e(to.name)}`)}
+  const d = sheet(`${sheetHead(edit ? '編輯行程' : '釘選行程')}
+    <div class="ot-field"><span>從哪裡到哪裡</span><div class="ot-nav-menu" id="st-ends"></div></div>
     <label class="ot-field"><span>名稱</span><input id="st-name" maxlength="24" value="${e(x.name)}" placeholder="例如：上學、回家"></label>
     <div class="ot-field"><span>每週這幾天（可不選）</span><div class="q-chips ot-weekdays" id="st-days"></div>
       <div class="q-chips ot-quick"><button class="q-chip" type="button" data-quick="12345">平日</button><button class="q-chip" type="button" data-quick="0123456">每天</button><button class="q-chip" type="button" data-quick="06">週末</button><button class="q-chip" type="button" data-quick="">不固定</button></div></div>
@@ -1780,6 +1838,9 @@ export function saveTripSheet(c, { edit = null } = {}) {
       )
       .join('')}${alt.length < 4 ? `<button class="ot-go-link" type="button" data-alt-add="1">${icon('plus')} 某幾天時間不一樣</button>` : ''}${alt.length ? '<p class="ot-note">沒填的時間就用上面的。</p>' : ''}`;
   };
+  const drawEnds = () =>
+    (d.querySelector('#st-ends').innerHTML = `<button class="ot-row-btn" type="button" data-end="from">${icon('pin')}<span><b>${e(from ? from.name : '目前位置')}</b><small>${from ? '出發' : '出發：每次從你在的地方'}</small></span></button><button class="ot-row-btn" type="button" data-end="to">${icon('pin')}<span><b>${e(to.name)}</b><small>目的地</small></span></button>`);
+  drawEnds();
   drawDays();
   drawAlt();
   d.addEventListener('input', ev => {
@@ -1787,7 +1848,15 @@ export function saveTripSheet(c, { edit = null } = {}) {
     if (t.dataset.altTime) alt[Number(t.dataset.altTime)].time = t.value;
     if (t.dataset.altBack) alt[Number(t.dataset.altBack)].back = t.value;
   });
-  d.addEventListener('click', ev => {
+  d.addEventListener('click', async ev => {
+    const end = ev.target.closest('[data-end]')?.dataset.end;
+    if (end) {
+      const pt = await pickPoint(end === 'from' ? '從哪裡出發' : '要去哪裡', { here: end === 'from', onMap: false });
+      if (!pt || (pt.here && end === 'to')) return;
+      if (end === 'from') from = pt.here ? null : { name: pt.name, lat: pt.lat, lon: pt.lon };
+      else to = { name: pt.name, lat: pt.lat, lon: pt.lon };
+      return drawEnds();
+    }
     const day = ev.target.closest('[data-day]');
     const quick = ev.target.closest('[data-quick]');
     if (day || quick) {

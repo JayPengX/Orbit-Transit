@@ -1815,3 +1815,35 @@ test("on a bus round a loop (快捷8號支 by 高鐵新竹站), on its road but 
   // No road known: the stops' line, as before.
   assert.ok(offRide(stops, onRoad, routeCum(stops), 0, null) > 250);
 });
+
+test("常用行程: the way back once you're in the far end's part of the trip (成功九街 → 竹東高中, at 竹東 station), and always from the trip's own start or end, not from where you are", async () => {
+  const { tripNow } = await import('../public/lib/tab-go.mjs');
+  const home = { name: '成功九街', lat: 24.8176, lon: 121.0165 };
+  const school = { name: '竹東高中', lat: 24.733, lon: 121.0882 };
+  const t = cleanSaved({ id: 'z1', name: '上學', from: home, to: school, time: '', days: [], back: '' });
+  const noon = twAt('2026-10-13', '12:00');
+  // At 竹東 station (~1 km from school, 11 km from home): the way back, from school.
+  const back = tripNow(t, { lat: 24.7382, lon: 121.0947 }, noon);
+  assert.equal(back.to.name, '成功九街');
+  assert.equal(back.from.name, '竹東高中');
+  // At home's door: forward, from where you are.
+  const fwd = tripNow(t, { lat: 24.8178, lon: 121.0163 }, noon);
+  assert.equal(fwd.to.name, '竹東高中');
+  assert.equal(fwd.from, null);
+  // In between, 2 km from home (竹北): forward, from home, not from where you are.
+  const mid = tripNow(t, { lat: 24.8302, lon: 121.0040 }, noon);
+  assert.equal(mid.to.name, '竹東高中');
+  assert.equal(mid.from.name, '成功九街');
+});
+
+test('a metro ride’s stops, for the map: its line’s stations between where it boards and gets off, in order, either way along the line', async () => {
+  const { metroStops } = await import('../public/lib/metro.mjs');
+  const st = (id, name, lat, lon) => ({ key: `metro:TRTC:${id}`, id, name, lat, lon });
+  const S = [st('BL10', '龍山寺', 25.0353, 121.4999), st('BL11', '西門', 25.0421, 121.5082), st('BL12', '台北車站', 25.0463, 121.5174), st('BL13', '善導寺', 25.0447, 121.5232)];
+  const load = async () => ({ sys: 'TRTC', stations: S, lines: [{ id: 'BL', name: '板南線', seq: S.map(s => s.key), paths: [] }] });
+  const r = await metroStops({ mode: 'metro', name: '板南線', from: { lat: 25.0354, lon: 121.5 }, to: { lat: 25.0447, lon: 121.5231 } }, { load });
+  assert.deepEqual(r.stops.map(s => s.name), ['龍山寺', '西門', '台北車站', '善導寺']);
+  const back = await metroStops({ mode: 'metro', name: '板南線', from: { lat: 25.0463, lon: 121.5174 }, to: { lat: 25.0421, lon: 121.5082 } }, { load });
+  assert.deepEqual(back.stops.map(s => s.name), ['台北車站', '西門']);
+  assert.equal(await metroStops({ mode: 'metro', from: { lat: 24.8, lon: 121 }, to: { lat: 24.81, lon: 121 } }, { load }), null, 'no metro there');
+});

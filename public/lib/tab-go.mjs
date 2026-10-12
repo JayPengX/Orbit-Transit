@@ -77,10 +77,19 @@ export function hide() {
 const NEAR_END_M = 800;
 // A saved trip's way now: forward, or back when you're at its far end (or
 // it's the time home). → { from (null: here), to, at, by, label } or null.
+// At an end: within 800 m of it, or in its part of the trip (the last 30% of
+// the way, nearer it than the other end: 竹東 on 成功九街 → 竹東高中 is the
+// way back already; the owner, 2026-10-13).
 export function tripNow(t, here, now = Date.now()) {
   const day = tw(now);
   const today = slotOf(t, day.dow);
-  const near = p => here && p && meters(here.lat, here.lon, p.lat, p.lon) <= NEAR_END_M;
+  const span = t.from && t.to ? meters(t.from.lat, t.from.lon, t.to.lat, t.to.lon) : 0;
+  const d = p => meters(here.lat, here.lon, p.lat, p.lon);
+  const near = p => {
+    if (!here || !p) return false;
+    const other = p === t.to ? t.from : t.to;
+    return d(p) <= NEAR_END_M || (other && d(p) <= span * 0.3 && d(p) < d(other));
+  };
   const back = { from: t.to, to: t.from, label: `${t.name || t.to.name} 回程`, key: 'back', rev: true };
   const fwd = { from: t.from, to: t.to, label: t.name || t.to.name, key: 'time', rev: false };
   let way = fwd;
@@ -90,10 +99,12 @@ export function tripNow(t, here, now = Date.now()) {
     const mins = hhmm => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
     if (day.min > (today.time ? mins(today.time) + 60 : 12 * 60) && Math.abs(day.min - mins(today.back)) < Math.abs(day.min - (today.time ? mins(today.time) : 0))) way = back;
   }
-  // From where you are, when the start is "wherever I am".
-  const from = way.from && !near(way.from) ? way.from : null;
+  // From the trip's own start; from where you are only when there (800 m), or
+  // when its start is "wherever I am".
+  const at800 = p => here && p && d(p) <= NEAR_END_M;
+  const from = way.from && !at800(way.from) ? way.from : null;
   if (!way.to) return null;
-  if (!from && near(way.to)) return null;
+  if (!from && at800(way.to)) return null;
   // The next time it's on: a recurring trip on its next day (a Sunday's is
   // Monday's), at that day's own time; else today's, or tomorrow's once past.
   // A weekdays-only trip (school, work) isn't on a national holiday: the next day it is.

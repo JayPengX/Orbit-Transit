@@ -172,3 +172,40 @@ export function upcoming(list, now = Date.now(), n = 4) {
 
 // 「市政府站」, but 「台北車站」 (the name already says it).
 export const stationTitle = name => (/站$/.test(name) ? name : `${name}站`);
+
+// A metro ride's stations in order, from where it boards to where it gets
+// off (the map's stops on its line, as a bus's and a train's): its line by
+// name first, else any line through both, each end the line's station
+// within 400 m of it. → { stops: [{ name, lat, lon }], i, j } or null.
+export async function metroStops(l, { load = loadSystem } = {}) {
+  if (l?.from?.lat == null || l?.to?.lat == null) return null;
+  const maps = mapsNear([l.from.lat, l.from.lon, l.from.lat, l.from.lon]);
+  const systems = (await Promise.all(maps.flatMap(m => m.systems).map(sys => load(sys).catch(() => null)))).filter(Boolean);
+  const name = String(l.short || l.name || '');
+  let best = null;
+  for (const sys of systems) {
+    const byKey = new Map(sys.stations.map(s => [s.key, s]));
+    for (const line of sys.lines) {
+      for (const seq of [line.seq, ...line.paths]) {
+        const pts = seq.map(k => byKey.get(k)).filter(Boolean);
+        const at = pt => {
+          let k = -1;
+          let bd = 400;
+          pts.forEach((s, x) => {
+            const d = meters(pt.lat, pt.lon, s.lat, s.lon);
+            if (d < bd) [k, bd] = [x, d];
+          });
+          return k;
+        };
+        const a = at(l.from);
+        const b = at(l.to);
+        if (a < 0 || b < 0 || a === b) continue;
+        const run = (a < b ? pts.slice(a, b + 1) : pts.slice(b, a + 1).reverse()).map(s => ({ name: s.name, lat: s.lat, lon: s.lon }));
+        // (Its own line by name first; then the fewest stations: a branch's way, not round the main line.)
+        const score = (name && (name.includes(line.name) || line.name.includes(name)) ? 0 : 1000) + run.length;
+        if (!best || score < best.score) best = { score, run };
+      }
+    }
+  }
+  return best ? { stops: best.run, i: 0, j: best.run.length - 1 } : null;
+}
