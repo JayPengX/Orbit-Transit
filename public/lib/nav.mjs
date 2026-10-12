@@ -597,7 +597,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const nx = on && !state.done && state.i < last ? plan.legs[state.i + 1] : null;
     const then = nx ? `<div class="ot-nav-then"><small>下車後</small>${icon(nx.mode)}<span>${e(stepText(plan, state.i + 1, 'before').title)}${RIDE(nx) ? `・${e(hm(state.liveAt.get(state.i + 1) ?? nx.dep))} ${nx.mode === 'bus' ? '到站' : '開'}` : `・${e(minsText(nx.dur))}`}</span></div>` : '';
     const chips = plan.legs
-      .map((x, k) => `<button class="ot-nav-chip${k < state.i ? ' done' : k === state.i ? ' on' : ''}" type="button" data-nav-go="${k}" style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`)
+      // (A step behind you is done: shown, never tapped back to; the owner, 2026-10-13.)
+      .map((x, k) => `<button class="ot-nav-chip${k < state.i ? ' done' : k === state.i ? ' on' : ''}" type="button"${k < state.i ? ' disabled' : ` data-nav-go="${k}"`} style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`)
       .join('');
     const minsLeft = Math.max(0, Math.round((times.eta - now) / 60_000));
     // Later or sooner than the plan said, by what's live now.
@@ -982,7 +983,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const end = ev.target.closest('[data-nav-bike]')?.dataset.navBike;
     if (end) return swapStation(end);
     const k = ev.target.closest('[data-nav-go]')?.dataset.navGo;
-    if (k != null) return go(Number(k), Number(k) === state.i ? state.phase : 'before');
+    if (k != null && Number(k) >= state.i) return go(Number(k), Number(k) === state.i ? state.phase : 'before');
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
     if (a === 'end') {
       // Asked first: 結束 sits where a thumb lands, and an ended ride can't be had back.
