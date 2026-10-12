@@ -17,7 +17,7 @@ const { planTrip } = await import('../public/lib/planner.mjs');
 const { emptyData } = await import('../public/lib/store.mjs');
 const { recDump } = await import('#kit/quadra.mjs');
 
-const PLACES = { 竹東高中: [24.733, 121.0882], 綠41公園: [24.81614, 121.0171], 新竹站: [24.8016, 120.9716], 六家站: [24.8078, 121.039], 竹東站: [24.73823, 121.09472], 縣體育場: [24.821, 121.0184] };
+const PLACES = { 竹東高中: [24.733, 121.0882], 綠41公園: [24.81614, 121.0171], 成功國中: [24.81872, 121.01597], 新竹站: [24.8016, 120.9716], 六家站: [24.8078, 121.039], 竹東站: [24.73823, 121.09472], 縣體育場: [24.821, 121.0184] };
 const args = process.argv.slice(2);
 const opt = k => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
 const [name, a, b] = args.filter((x, i) => !x.startsWith('--') && !['--at', '--arrive', '--tpass'].includes(args[i - 1]));
