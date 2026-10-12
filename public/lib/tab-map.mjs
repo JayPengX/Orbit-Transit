@@ -16,7 +16,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
@@ -1626,14 +1626,16 @@ function navMore() {
     if (m === 'replan') return replanFromHere();
     if (m === 'off') return changeOffSheet();
     if (m === 'times') return navPickTimes();
-    if (m === 'dest') {
-      const to = await pickPoint('改去哪裡', { onMap: false });
-      if (to && !to.here) replanFromHere(to, n.plan.then || []);
-    }
-    // A stop on the way: there first, then on to where you were going (and its stops after).
-    if (m === 'stop') {
-      const to = await pickPoint('先去哪裡', { onMap: false });
-      if (to && !to.here) replanFromHere(to, [navDest(n), ...(n.plan.then || [])]);
+    // Another place, or a stop on the way (there first, then on to where you
+    // were going and its stops after): on a bus or train, this ride goes on
+    // and only where you get off and the rest change; else the ways from here.
+    if (m === 'dest' || m === 'stop') {
+      const to = await pickPoint(m === 'dest' ? '改去哪裡' : '先去哪裡', { onMap: false });
+      if (!to || to.here) return;
+      const then = m === 'dest' ? n.plan.then || [] : [navDest(n), ...(n.plan.then || [])];
+      const now = navNow();
+      if (now?.phase === 'on' && !['walk', 'bike'].includes(now.plan.legs[now.i]?.mode)) return onBoardTo(to, then);
+      replanFromHere(to, then);
     }
   });
 }
@@ -1665,6 +1667,42 @@ function changeOffSheet() {
     navChangeOff(k, await restFrom({ name: stop.name, lat: stop.lat, lon: stop.lon }, dest, at));
     ctx.status(`改在 ${stop.name} 下車`);
   });
+}
+// On board, somewhere else: the stop of this ride nearest it, or the one you
+// were getting off at, whichever has you there sooner; the rest planned from
+// it, the trip going on (the owner, 2026-10-13: a new plan from here on a
+// bus was no use).
+async function onBoardTo(to, then) {
+  const n = navNow();
+  if (!n) return;
+  const rs = n.ride;
+  // (Its stops not known: off where it was, the rest from there.)
+  if (!rs) {
+    const l = n.plan.legs[n.i];
+    ctx.status(`去 ${to.name}：重新規劃 ${l.to.name} 之後的路…`);
+    const rest = await restFrom({ name: l.to.name, lat: l.to.lat, lon: l.to.lon }, to, l.arr);
+    if (navNow()?.plan !== n.plan) return ctx.status('');
+    navRetarget(to, then);
+    navRest(rest);
+    return ctx.status(`去 ${to.name}：在 ${l.to.name} 下車`);
+  }
+  const from = Math.max(rs.i + 1, nextOf(n));
+  let near = from;
+  for (let k = from; k < rs.stops.length; k++) if (meters(rs.stops[k].lat, rs.stops[k].lon, to.lat, to.lon) < meters(rs.stops[near].lat, rs.stops[near].lon, to.lat, to.lon)) near = k;
+  const ks = [...new Set([near, rs.j])].filter(k => k >= from && k < rs.stops.length);
+  ctx.status(`去 ${to.name}：找在哪一站下車…`);
+  const tries = await Promise.all(
+    ks.map(async k => {
+      const st = rs.stops[k];
+      const rest = await restFrom({ name: st.name, lat: st.lat, lon: st.lon }, to, navStopAt(k) ?? Date.now());
+      return { k, rest, arr: rest.at(-1)?.arr ?? Infinity };
+    })
+  );
+  const best = tries.sort((a, b) => a.arr - b.arr)[0];
+  if (!best || navNow()?.plan !== n.plan) return ctx.status('');
+  navRetarget(to, then);
+  navChangeOff(best.k, best.rest);
+  ctx.status(`去 ${to.name}：在 ${rs.stops[best.k].name} 下車`);
 }
 const nextOf = n => {
   const rs = n.ride;

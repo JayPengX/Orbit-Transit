@@ -1079,6 +1079,13 @@ export function navStopAt(k) {
 // Off the ride you're on at another of its stops (earlier, or further on),
 // and from there `rest` (the legs a new plan from that stop gives) instead of
 // what the plan had after it.
+// Where the trip being navigated now ends, and the places after it (a stop
+// first, or another place, changed on board: the ride goes on).
+export function navRetarget(dest, then = []) {
+  if (!nav) return;
+  nav.plan.dest = { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) };
+  nav.plan.then = then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) }));
+}
 export function navChangeOff(k, rest = []) {
   if (!nav) return;
   const s = nav;
@@ -1091,17 +1098,25 @@ export function navChangeOff(k, rest = []) {
   l.arr = at;
   l.dur = Math.max(60, Math.round((at - l.dep) / 1000));
   if (l.stops) l.stops = k - rs.i;
+  // Its line on the map: through its stops to the new one (the planner's shape was to the old; the same stop keeps it).
+  if (k !== rs.j) {
+    delete l.poly;
+    l.path = rs.stops.slice(rs.i, k + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]);
+  }
   rs.j = k;
-  // Its line on the map: through its stops to the new one (the planner's shape was to the old).
-  delete l.poly;
-  l.path = rs.stops.slice(rs.i, k + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]);
+  s.alerted = -1;
+  navRest(rest);
+}
+// The trip after the ride you're on, planned again (`rest`: its new legs).
+export function navRest(rest = []) {
+  if (!nav) return;
+  const s = nav;
   s.plan.legs = [...s.plan.legs.slice(0, s.i + 1), ...rest];
   const end = s.plan.legs.at(-1);
-  s.plan.arr = end.arr ?? at;
+  s.plan.arr = end.arr ?? s.plan.legs[s.i].arr;
   s.plan.dur = Math.round((s.plan.arr - s.plan.dep) / 1000);
   // What was known of the legs after it is of the old ones.
   for (const m of [s.ride, s.info, s.liveAt]) for (const key of [...m.keys()]) if (key > s.i) m.delete(key);
-  s.alerted = -1;
   s.go(s.i, s.phase);
 }
 
