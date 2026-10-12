@@ -21,6 +21,10 @@ export const TPASSES = [
   { id: 'tkp', name: '南高屏', price: 999, cities: ['Tainan', 'Kaohsiung', 'PingtungCounty'], bike: false }
 ];
 export const tpassOf = id => TPASSES.find(p => p.id === id) || null;
+// Long rides cut every 30 minutes (每 30 分鐘換車): when set, and always
+// when your TPASS takes YouBike's first half hour, each half hour free (the
+// owner, 2026-10-12: riding 成功九街 → 竹東高中 is two bikes for TPASS users).
+export const bikeSwap = prefs => prefs?.bike30 === true || !!tpassOf(prefs?.tpass)?.bike;
 
 const PAID = new Set(['bus', 'tra', 'metro', 'lightrail']);
 

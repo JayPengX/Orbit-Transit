@@ -60,6 +60,19 @@ CASES['竹東站 → 縣體育場: the change to the 六家線 first, never on t
   assert.deepEqual(shown(r).filter(p => /竹中>新竹.*新竹>竹北|北新竹/.test(sayPlan(p))).map(sayPlan), []);
 };
 
+CASES['成功九街 → 竹東高中 by 08:00 (TPASS): the buses, and under them the 六家線 to 竹中 and on to 竹東 then a ride, and riding it all on two bikes (每 30 分鐘); not 竹北 and a change at 北新竹 for the same train'] = opts => {
+  const r = rankSaved('chenggong-zhudonghs-arrive0800', opts);
+  always('arrive0800', r);
+  const s = shown(r);
+  assert.ok(s.every(p => p.arr <= Date.parse('2026-10-13T08:00:00+08:00')), say(s));
+  assert.ok(s.some(p => /六家>竹中 tra:\S+:竹中>竹東 bike/.test(sayPlan(p))), say(s));
+  const ride = s.find(p => p.bike && !rides(p).length);
+  assert.ok(ride, `riding it all shown: ${say(s)}`);
+  assert.equal(ride.legs.filter(l => l.mode === 'bike').length, 2, sayPlan(ride));
+  assert.ok(ride.legs.filter(l => l.mode === 'bike').every(l => l.dur <= 33 * 60), sayPlan(ride));
+  assert.deepEqual(s.filter(p => /北新竹>竹東/.test(sayPlan(p))).map(sayPlan), []);
+};
+
 for (const [name, check] of Object.entries(CASES)) test(name, () => check());
 
 // Reliable, not lucky: every verdict again with each plan that has a bus a

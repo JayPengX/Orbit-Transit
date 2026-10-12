@@ -8,7 +8,7 @@
 // Logs hold the places you went: keep them in captures/ (git-ignored), never in the repo.
 import { readFile } from 'node:fs/promises';
 import { withBikes, scoreParts } from '../public/lib/plan.mjs';
-import { coverage, fareOf, tpassOf, inPass, passOk } from '../public/lib/tpass.mjs';
+import { coverage, fareOf, tpassOf, inPass, passOk, bikeSwap } from '../public/lib/tpass.mjs';
 import { hm } from '../public/lib/util.mjs';
 
 const args = process.argv.slice(2);
@@ -27,7 +27,7 @@ for (const { data: t } of pick) {
   const pass = tpassOf(t.prefs.tpass);
   const keep = inPass(t.from, t.to, pass, cityOf) ? p => passOk(p, pass, cityOf) : null;
   const cost = p => fareOf(p, coverage(p, pass, cityOf)).cost;
-  const ranked = withBikes(t.plans, t.from, t.to, t.bikes, t.t0, { modes: t.prefs.modes, swap: t.prefs.bike30, cost, by: t.by, deadline: t.by === 'arrive' ? t.at : null, keep, clock: t.now });
+  const ranked = withBikes(t.plans, t.from, t.to, t.bikes, t.t0, { modes: t.prefs.modes, swap: bikeSwap(t.prefs), cost, by: t.by, deadline: t.by === 'arrive' ? t.at : null, keep, clock: t.now });
   console.log(`\n${t.from.name} → ${t.to.name} · ${new Date(t.now).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}${t.by === 'arrive' ? ` · 抵達 ${hm(t.at)}` : t.at ? ` · 出發 ${hm(t.at)}` : ''} · ${t.plans.length} plans in, ${t.bikes.length} stations`);
   for (const p of ranked) {
     if (!all && (!p.lead || p.weak)) continue;

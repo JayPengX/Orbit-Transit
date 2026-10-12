@@ -708,12 +708,20 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // train: walking to it a minute sooner is no reason to keep the other.)
     const overByBike = over.has(groups.get(pickSig(p)));
     const further = m && list.some(q => other(q, p) && offSooner(q, p) && q.arr <= p.arr);
+    // The same last train, onto it from another first one, out no earlier,
+    // there no later, less bother: the way to it is all that differs (by
+    // bike to 六家 and the 六家線 to 竹中 for the 1804, over riding to 竹北
+    // and changing at 北新竹 for it; the owner, 2026-10-12).
+    const lastOf = x => vehicles(x).at(-1);
+    const feeder = vehicles(p).length > 1 && list.some(q => other(q, p) && vehicles(q).length === vehicles(p).length && sameRide(lastOf(q), lastOf(p)) && !sameRide(vehicles(q)[0], vehicles(p)[0]) && bother(q) < bother(p) && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000);
     // Far behind the best, unless it gets there sooner than ways ahead of
     // it (off at 竹中 and ride, over the change to the 六家線: more riding, but
     // home sooner, a real choice).
     const sooner = leads.some(q => q !== p && q.score < p.score && q.score <= best + Math.max(45, best) && q.arr > p.arr + 5 * 60_000 && vehicles(q).length);
-    const far = p.score > best + Math.max(45, best) && !(sooner && p.score <= best + 2 * Math.max(45, best));
-    if (beaten || changes || hop || mostlyRidden || further || overByBike || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    // (Riding it all is a choice of its own however it scores: the owner,
+    // 2026-10-12, wants it under the rest, 成功九街 → 竹東高中 by 電輔車.)
+    const far = p.score > best + Math.max(45, best) && !(sooner && p.score <= best + 2 * Math.max(45, best)) && !(p.bike && !vehicles(p).length);
+    if (beaten || changes || hop || mostlyRidden || further || feeder || overByBike || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // Never nothing: the best way stays when every way was set aside.
   if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
@@ -794,7 +802,9 @@ export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
     .filter(Boolean)
     .map(p => (swap && p.legs.some(l => l.mode === 'bike' && l.dur > SWAP_SEC) ? finish({ ...p, legs: swapRides(p.legs, bikes) }) : p));
   if (bikes.length && bike) {
-    out.push(...bikeOnly(o, d, bikes, now, { swap }));
+    // (To be there by a time: setting out so as to get in 5 minutes before it.)
+    const ridden = bikeOnly(o, d, bikes, now, { swap });
+    out.push(...(opts.by === 'arrive' && opts.deadline ? ridden.map(p => finish({ ...p, legs: shift(p.legs, opts.deadline - 5 * 60_000 - p.arr) })) : ridden));
     // (From the plans with their stations: a train reached by bike can still end by bike.)
     for (const p of out.slice()) {
       if (p.legs.some(l => l.placeholder) || (p.bike && !p.legs.some(l => l.mode !== 'walk' && l.mode !== 'bike'))) continue;

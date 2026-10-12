@@ -87,7 +87,11 @@ batch old against new, say what moved).
 
    The station to take a bike from and leave it at is the one that makes
    the whole way quickest (綠41公園 on the way home from 六家, not the
-   nearer one past it). 每 30 分鐘換 swaps bikes to stay free.
+   nearer one past it). 每 30 分鐘換 swaps bikes to stay free, always for a
+   TPASS that takes YouBike (its switch shows only without one). To be there
+   by a time, riding it all sets out to get in 5 minutes early, and our own
+   trains are searched from two hours before (the planners leave out the
+   六家線 then 內灣線 to 竹東).
 5. **Rivers** (`rivers.mjs`): a ride over 頭前溪 or 鳳山溪 goes round by
    the bridge least out of its way, and that distance is its time; no
    bridge counts against it on top (the owner, 2026-10-12). A ride's length
@@ -123,6 +127,9 @@ Each falls back to TDX's own search when the packs can't be had.
      way whose bus or train crosses it, or riding the whole way (40 minutes
      at most), gets there within 20 minutes (新竹站 → 成功九街: the 竹北 train
      and a ride, not to 千甲 and a ride over 頭前溪);
+   - **the same last train from another first one**: out no earlier, there
+     no later, less bother (the 六家線 to 竹中 for the 1804, not 竹北 and a
+     change at 北新竹 for it);
    - **the same train for nothing**: another way sets out on the same first
      bus or train, changes no more, rides home about as long after it (8
      minutes more at most) and is there no later (on to 千甲 when off at 竹中
@@ -133,7 +140,7 @@ Each falls back to TDX's own search when the packs can't be had.
    - more changes than a way no later (5 minutes) and no more bother;
    - a change for a hop a walk or a bike would do;
    - it rides most of what riding all the way would;
-   - it's far behind the best.
+   - it's far behind the best (never riding it all: a choice of its own).
 
    "Bother" is everything but time: changes, buses, walking, riding, the
    long way round, money. Folded ways fold nothing else. The same train left

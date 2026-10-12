@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay } from '../public/lib/plan.mjs';
-import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass } from '../public/lib/tpass.mjs';
+import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
@@ -489,6 +489,9 @@ test('saved trips, pinned trains and preferences: cleaned, nothing allowed is ev
   const p = cleanPrefs({ modes: { bus: false, tra: false, hsr: false, metro: false, bike: false }, bike30: true, tpass: 'hh' });
   assert.ok(Object.values(p.modes).every(Boolean));
   assert.equal(p.bike30, true);
+  assert.equal(bikeSwap({ bike30: false, tpass: 'thhm' }), true, 'TPASS with YouBike: cut every 30 minutes');
+  assert.equal(bikeSwap({ bike30: false, tpass: '' }), false);
+  assert.equal(bikeSwap({ bike30: true, tpass: '' }), true);
   assert.deepEqual(modeList(cleanPrefs({ modes: { bike: false } })), ['bus', 'tra', 'hsr', 'metro']);
   const d = decodeData(encodeData({ ...emptyData(), saved: [t], prefs: { modes: { bus: false } } }));
   assert.equal(d.saved[0].name, '上學');
