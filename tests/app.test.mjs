@@ -1798,3 +1798,17 @@ test("a bus's estimate counts from when TDX made it (its DataTime), not from whe
   const { DataTime, ...plain } = row;
   assert.equal(liveTimes([plain], '快捷8號支', made + 70_000).times[0].at, made + 70_000 + 240_000);
 });
+
+test("on a bus round a loop (快捷8號支 by 高鐵新竹站), on its road but far from the straight lines between its stops: still on it, never asked if you got off", async () => {
+  const { offRide } = await import('../public/lib/navlive.mjs');
+  // Two stops 1.2 km apart; the road goes round a block 400 m to the side.
+  const stops = [{ lat: 24.808, lon: 121.03 }, { lat: 24.808, lon: 121.042 }];
+  const road = [[24.808, 121.03], [24.8116, 121.03], [24.8116, 121.042], [24.808, 121.042]].map(([lat, lon]) => ({ lat, lon }));
+  const onRoad = { lat: 24.8116, lon: 121.036 };
+  assert.ok(alongRoute(stops, onRoad).off > 250, 'the stops’ line alone says off');
+  assert.ok(offRide(stops, onRoad, routeCum(stops), 0, road) < 30, 'its road says on it');
+  // Really off (a street away from both): off.
+  assert.ok(offRide(stops, { lat: 24.818, lon: 121.036 }, routeCum(stops), 0, road) > 250);
+  // No road known: the stops' line, as before.
+  assert.ok(offRide(stops, onRoad, routeCum(stops), 0, null) > 250);
+});
