@@ -189,9 +189,14 @@ rest fold.
 the phone's position:
 
 - **The whole trip on the map**: every step in its colours (the one you're
-  on boldest, the ones behind you faint), the rest of the trip from where
-  you are kept in view; a finger on the map stops that for 10 s. A tap on
-  the map while navigating opens nothing.
+  on boldest, the ones behind you faint). In view, the stage you're at
+  (`stageView`): walking or on a bike, you and the rest of that step to
+  where the next one starts, close up; waiting, the stop and where the bus
+  or train goes; on board, the rest of the ride to your stop. A finger on
+  the map stops that for 10 s. A tap on the map while navigating opens
+  nothing.
+- **The line under the step** (the bus to catch, how early or late) is
+  whole: it goes on to a second line between its parts, never cut.
 - **Every step at the bottom**, whole (a second row when they don't fit).
 - **Walking and riding**: how far is left, and one tap opens Google Maps'
   own turn-by-turn for that step (free, no billed call).

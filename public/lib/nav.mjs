@@ -296,7 +296,8 @@ export function paceOf(plan, i, phase, times, liveAt = new Map(), now = Date.now
     const m = Math.round((dep - now) / 60_000);
     return { text: `${at}${when}${m > 0 ? `・${m} 分後` : '・就要到了'}${live && !/到站/.test(live) ? `・${live}` : ''}`, tone: m > 0 ? '' : 'warn' };
   }
-  // (How early or late you'll be there says when: one line beside Google 地圖, never cut.)
+  // (How early or late you'll be there says when: beside Google 地圖, on to a
+  // second line between its parts when the stop's name is long, never cut.)
   const slack = Math.round((dep - times.ready.get(ri)) / 60_000);
   if (slack >= 2) return { text: `${at}${when}・早到 ${slack} 分`, tone: 'good' };
   if (slack >= 0) return { text: `${at}${when}・剛好趕上`, tone: 'warn' };
@@ -590,7 +591,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           ${big ? `<span class="ot-nav-big"${cd}>${big}</span>` : ''}
         </div>
         ${track}${board}
-        ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span>${e(paceText)}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}重新規劃</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}Google 地圖</a>` : ''}</div>` : ''}
+        ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map((x, k, a) => `<span>${e(x)}${k < a.length - 1 ? '・' : ''}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}重新規劃</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}Google 地圖</a>` : ''}</div>` : ''}
         ${bikeLine ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
         ${then}
       </div>`;
@@ -997,6 +998,39 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
 
 // The ride being navigated, for the screens around it: the plan, the step,
 // its stops (a bus or train's, once known), shrunk or not.
+// What the map shows at each stage of the trip (the owner, 2026-10-13: the
+// whole trip in view was too far out on a walk or a short ride): walking or
+// riding a bike, you and the rest of that step to where the next one starts;
+// waiting for a bus or train, you, the stop and where it takes you; on
+// board, you and the rest of the ride to where you get off. `path(l)`: a
+// leg's line as [[lat, lon]…]. Never closer than a street or two (~400 m
+// across). → [{ lat, lon }…]
+export function stageView(plan, i, phase, me, path) {
+  const l = plan.legs[i];
+  if (!l) return [];
+  let pts = path(l).map(([lat, lon]) => ({ lat, lon }));
+  // From you on (you're past the rest), once you're on the step.
+  const own = l.mode === 'walk' || l.mode === 'bike';
+  if (me?.lat != null && pts.length > 1 && (own || phase === 'on')) {
+    let k = 0;
+    pts.forEach((p, j) => meters(me.lat, me.lon, p.lat, p.lon) < meters(me.lat, me.lon, pts[k].lat, pts[k].lon) && (k = j));
+    pts = pts.slice(Math.min(k, pts.length - 2));
+  }
+  // A walk: on to where the next step starts.
+  const next = plan.legs[i + 1];
+  if (l.mode === 'walk' && next?.from?.lat != null) pts.push({ lat: next.from.lat, lon: next.from.lon });
+  if (me?.lat != null) pts.push({ lat: me.lat, lon: me.lon });
+  if (!pts.length) return pts;
+  // (At least ~400 m across, round its middle.)
+  const lat = pts.map(p => p.lat);
+  const lon = pts.map(p => p.lon);
+  const c = { lat: (Math.min(...lat) + Math.max(...lat)) / 2, lon: (Math.min(...lon) + Math.max(...lon)) / 2 };
+  const dLat = 0.0018;
+  const dLon = dLat / Math.cos((c.lat * Math.PI) / 180);
+  pts.push({ lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat + dLat, lon: c.lon + dLon });
+  return pts;
+}
+
 export function navNow() {
   if (!nav) return null;
   return { plan: nav.plan, i: nav.i, phase: nav.phase, pos: nav.pos, ride: nav.ride.get(nav.i) || null, min: nav.min, offer: nav.offer || null };
