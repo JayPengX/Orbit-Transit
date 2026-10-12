@@ -741,6 +741,22 @@ test('a change gone: by YouBike to the one bus that goes the whole way', () => {
   assert.equal(ranked[0], direct);
 });
 
+test('a change gone at the end, and a long walk to the first bus: by YouBike at both ends (成功九街 → 竹東高中: to 文興嘉興路口 by bike, not walking 16 minutes, off the 快捷8號支 and on by bike)', () => {
+  const o = { lat: 24.8179, lon: 121.016 };
+  const s = { lat: 24.8125, lon: 121.0238 }; // 文興嘉興路口, ~1 km away
+  const m = { lat: 24.7468, lon: 121.0726 }; // off the first bus, ~2 km short
+  const d = { lat: 24.733, lon: 121.0882 };
+  const st = (uid, name, lat, lon) => ({ uid, name, lat, lon, bikes: 5, ebike: 1, ret: 5, ok: true });
+  const bikes = [st('g', '綠41公園', 24.81614, 121.0171), st('n', '陽明交通大學(六家校區)', 24.81287, 121.02331), st('x', '客運下公館站', 24.7465, 121.0729), st('z', '竹東高中', 24.7333, 121.0879)];
+  const leg = (mode, short, a, b, dep, arr, dist = 0) => ({ mode, short, from: { name: short, ...a }, to: { name: short, ...b }, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist });
+  const two = finish({ legs: [leg('walk', '', o, s, '07:12', '07:28', 1260), leg('bus', '快捷8號支', s, m, '07:28', '08:00'), leg('bus', '5625', m, d, '08:09', '08:15')] });
+  const ranked = withBikes([two], o, d, bikes, T('07:10'), { modes: null });
+  const both = ranked.find(p => p.legs[0].mode !== 'bus' && p.legs.filter(l => l.mode === 'bike').length === 2 && p.legs.filter(l => l.mode === 'bus').length === 1);
+  assert.ok(both, ranked.map(p => p.legs.map(l => l.mode).join(' ')).join('\n'));
+  assert.equal(both.legs.find(l => l.mode === 'bike').from.name, '綠41公園');
+  assert.ok(!both.legs.some(l => l.mode === 'walk' && l.dur > 5 * 60));
+});
+
 test('a weekday trip on a Sunday is Monday’s; a day of its own keeps its own time', async () => {
   const { tripNow } = await import('../public/lib/tab-go.mjs');
   const home = { name: '家', lat: 24.821, lon: 121.018 };
@@ -1448,6 +1464,28 @@ test("YouBike: the station to leave it at is the one that makes the whole way qu
   assert.equal(returnNear(home, bikes, { from: { lat: 24.8300, lon: 121.0120 } }).uid, 'cg');
   // Its last dock now changes nothing.
   assert.equal(returnNear(home, [bikes[0], { ...bikes[1], ret: 1 }, bikes[2]], { from: bikes[0] }).uid, 'g41');
+});
+
+test("YouBike: the station to take a bike from is on the way, never behind you for a few metres less walk (成功九街 → the bus at 文興嘉興路口, or 六家: 綠41公園, not 成功國中 and back past the door); never a walk past 5 minutes to save a little riding", () => {
+  const st = (uid, name, lat, lon) => ({ uid, name, lat, lon, bikes: 10, ebike: 2, ret: 10, ok: true });
+  const bikes = [st('g41', '綠41公園', 24.81614, 121.0171), st('cg', '成功國中', 24.81872, 121.01597), st('ny', '陽明交通大學(六家校區)', 24.81287, 121.02331)];
+  const stop = { name: '文興嘉興路口', lat: 24.8125, lon: 121.0238 };
+  // Along 成功九街, 成功國中 a little nearer (114 and 94 m, 綠41公園 196 and 221 m).
+  for (const home of [{ lat: 24.81774, lon: 121.0163 }, { lat: 24.81788, lon: 121.01603 }]) {
+    assert.equal(rentNear(home, bikes).uid, 'cg', 'nearest the door, with nothing else known');
+    assert.equal(rentNear(home, bikes, { to: stop }).uid, 'g41');
+    assert.equal(bikeTrip(home, stop, bikes, 0).find(l => l.mode === 'bike').from.name, '綠41公園');
+  }
+  // And to 六家's station, by the same rule.
+  assert.equal(rentNear({ lat: 24.81788, lon: 121.01603 }, bikes, { to: { lat: 24.80766, lon: 121.03941 } }).uid, 'g41');
+  // At 成功國中's door (48 m; 綠41公園 342 m): 成功國中.
+  assert.equal(rentNear({ lat: 24.81886, lon: 121.01552 }, bikes, { to: stop }).uid, 'cg');
+  // Going north, 成功國中 is on the way: 成功國中.
+  assert.equal(rentNear({ lat: 24.81774, lon: 121.0163 }, bikes, { to: { lat: 24.8300, lon: 121.0120 } }).uid, 'cg');
+  // 竹東街上 → 縣體育場, 10 km: 竹東信義立體停車場 2 minutes away, a little behind, not 客運竹東站 8 minutes on.
+  const zd = [st('xy', '竹東信義立體停車場', 24.73871, 121.09028), st('ky', '客運竹東站', 24.73945, 121.08559)];
+  const pick = rentNear({ lat: 24.74, lon: 121.09 }, zd, { to: { lat: 24.821, lon: 121.0184 } });
+  assert.equal(pick.uid, 'xy');
 });
 
 test("inTaiwan: the app's coverage, the main island and its islands (澎湖, 綠島, 蘭嶼, 金門, 馬祖), not the coast of Fujian beside them", async () => {

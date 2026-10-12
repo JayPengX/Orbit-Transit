@@ -83,14 +83,22 @@ batch old against new, say what moved).
    - all the way by bike (or 電輔車), when it's near enough;
    - by bike to the train or metro instead of a bus or a long walk (leave
      later, the same train);
-   - by bike from the last station.
+   - by bike from the last station;
+   - a change gone at either end (by bike to the bus after it, or off the
+     first one and on by bike), and both together (成功九街 → 竹東高中: by
+     bike to 文興嘉興路口, not a 16-minute walk, off the 快捷8號支 and on by
+     bike).
 
    The station to take a bike from and leave it at is the one that makes
    the whole way quickest (綠41公園 on the way home from 六家, not the
-   nearer one past it). 每 30 分鐘換 swaps bikes to stay free, always for a
-   TPASS that takes YouBike (its switch shows only without one). To be there
-   by a time, riding it all sets out to get in 5 minutes early, and our own
-   trains, the buses to the stations and the buses on from them are searched
+   nearer one past it). A station behind you is walked out to and ridden
+   back over the same ground, both lost (from 成功九街 to the bus at
+   文興嘉興路口, 綠41公園 on the way, not 成功國中 behind for a few metres
+   less walk); a walk past 5 minutes is slow going, as in the score.
+   每 30 分鐘換 swaps bikes to stay free, always for a TPASS that takes
+   YouBike (its switch shows only without one). To be there by a time,
+   riding it all sets out to get in 5 minutes early, and our own trains,
+   the buses to the stations and the buses on from them are searched
    from two hours before (the planners leave out the 六家線 then 內灣線 to
    竹東; without YouBike, a bus to the station, not a 5 km walk).
 5. **Rivers** (`rivers.mjs`): a ride over 頭前溪 or 鳳山溪 goes round by

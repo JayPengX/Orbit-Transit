@@ -28,6 +28,9 @@ const KIND = { bus: 'bus', tra: 'tra', hsr: 'hsr', metro: 'metro', lightrail: 'm
 export const allowed = (p, modes) => p.legs.every(l => l.mode !== 'car' && (!KIND[l.mode] || modes?.[KIND[l.mode]] !== false));
 
 export const rideSec = (m, ebike = false) => Math.round(((m * 1.25) / (ebike ? RIDE_M_MIN.ebike : RIDE_M_MIN.bike)) * 60);
+// Walking past 5 minutes is slow going: what a walk of m metres (as walked)
+// costs on top of its time, in minutes.
+const slowWalk = m => Math.max(0, m / 75 - 5) * 0.6;
 // A ride's length on the roads: the straight line and a quarter; over a
 // river, round by its bridge, each side of it nearly straight (竹中 → 綠41公園
 // 5.3 km on the roads, 千甲's over 頭前溪橋 4.5: the way round and a quarter
@@ -47,11 +50,21 @@ const roadM = (a, b) => {
 // with the ride's other end known (`to`, `from`), the one that makes the
 // whole way quickest, walk and ride together (綠41公園 on the way home from
 // 六家, not 成功國中 past it because it's a few metres nearer the door);
-// without it, the nearest.
+// without it, the nearest. A station behind you (the ride from it longer than
+// from the door) is walked out to and ridden back over the same ground: both
+// lost, each as slow as walking (from 成功九街 to the bus at 文興嘉興路口 or to
+// 六家, 綠41公園 on the way, not 成功國中 behind; the owner, 2026-10-13). A walk
+// past 5 minutes is slow going, as in the score (竹東街上: not 8 minutes on
+// foot to save 2 on the bike).
 function bestStation(pt, list, other, ebike) {
   if (!list.length) return null;
   if (!other) return list[0].s;
-  const cost = x => walkSec(x.d + bridgeExtra(pt, x.s)) + rideSec(roadM(x.s, other) / 1.25, ebike);
+  const direct = meters(pt.lat, pt.lon, other.lat, other.lon);
+  const back = x => Math.max(0, meters(x.s.lat, x.s.lon, other.lat, other.lon) - direct);
+  const cost = x => {
+    const walk = x.d + bridgeExtra(pt, x.s);
+    return walkSec(walk + 2 * back(x)) + slowWalk(walk * 1.3) * 60 + rideSec(roadM(x.s, other) / 1.25, ebike);
+  };
   return list.reduce((a, b) => (cost(b) < cost(a) ? b : a)).s;
 }
 const usable = s => s.ok !== false;
@@ -440,8 +453,7 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   // trip are most of it (1–2 km: a YouBike, there when you are, over the bus
   // a minute sooner on paper). A train or the metro keeps its time.
   add('board', rides.filter(l => l.mode === 'bus').length * 4);
-  // Walking past 5 minutes is slow going.
-  add('walk', Math.max(0, (p.walk || 0) / 75 - 5) * 0.6);
+  add('walk', slowWalk(p.walk || 0));
   // The bike rides, one swapped bike to the next counted as one ride.
   let ride = null;
   const bikes = [];
@@ -838,6 +850,10 @@ export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
       for (const k of rides.slice(0, -1)) {
         const b = bikeFromRail(p, d, bikes, { at: k });
         if (b) out.push(b);
+        // And by bike to that first one too (成功九街 → 竹東高中: to 文興嘉興路口
+        // by bike, not a 16-minute walk, then off the 快捷8號支 and on by bike).
+        const ab = b && bikeToRail(b, o, bikes, { anyRide: true });
+        if (ab) out.push(ab);
       }
     }
   }

@@ -84,6 +84,16 @@ CASES['成功九街 → 竹東高中 by 08:00 without YouBike: the buses, never 
   assert.ok(s.every(p => p.deadline == null || p.deadline === Date.parse('2026-10-13T08:00:00+08:00')));
 };
 
+CASES['成功九街 → 竹東高中 at 06:45 (the north half of the street, 成功國中 a little nearer): by bike from 綠41公園 on the way, never 成功國中 behind and back past the door, to 文興嘉興路口 and to 六家; to 文興嘉興路口 by bike, never a 16-minute walk'] = opts => {
+  const r = rankSaved('chenggong-zhudonghs-0645', opts);
+  always('0645', r);
+  const s = shown(r);
+  const firstBike = p => p.legs.find(l => l.mode === 'bike');
+  assert.deepEqual(r.filter(p => firstBike(p)?.from.name === '成功國中' && rides(p)[0] && /文興嘉興|六家/.test(rides(p)[0].from?.name || '')).map(sayPlan), [], 'from 成功國中 to the south-east');
+  assert.ok(s.some(p => firstBike(p)?.from.name === '綠41公園' && /文興嘉興/.test(rides(p)[0]?.from?.name || '')), say(s));
+  assert.deepEqual(s.filter(p => p.legs.some(l => l.mode === 'walk' && l.dur > 10 * 60 && /文興嘉興/.test(l.to?.name || ''))).map(sayPlan), []);
+};
+
 for (const [name, check] of Object.entries(CASES)) test(name, () => check());
 
 // Reliable, not lucky: every verdict again with each plan that has a bus a
