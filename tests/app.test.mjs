@@ -1773,8 +1773,11 @@ test('navigating, the map shows the stage you are at: a bike ride close up (neve
   const walk = stageView(plan, 2, 'before', P('', 24.8129, 121.0233), path);
   assert.ok(walk.some(p => p.lat === st.lat && p.lon === st.lon), 'a walk: on to the stop');
   assert.ok(span(walk) >= 350, 'never closer than a street or two');
-  const wait = stageView(plan, 3, 'before', P('', 24.8127, 121.0233), path);
-  assert.ok(span(wait) < 800, `waiting: you and the stop close up, ${Math.round(span(wait))} m`);
+  const wait = stageView(plan, 3, 'before', P('', 24.8126, 121.0236), path);
+  assert.ok(span(wait) < 160, `waiting: the street, which side the stop is on, ${Math.round(span(wait))} m`);
+  // Still a way off it: you and the stop both.
+  const nearing = stageView(plan, 3, 'before', P('', 24.814, 121.022), path);
+  assert.ok(nearing.some(p => p.lat === 24.814) && span(nearing) > 200);
   assert.ok(wait.some(p => p.lat === st.lat && p.lon === st.lon));
   const on = stageView(plan, 3, 'on', P('', 24.7701, 121.0601), path);
   assert.ok(!on.some(p => p.lat > 24.8), 'on board: from you on, not where you got on');

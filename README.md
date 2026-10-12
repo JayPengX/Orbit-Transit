@@ -191,8 +191,9 @@ the phone's position:
 - **The whole trip on the map**: every step in its colours (the one you're
   on boldest, the ones behind you faint). In view, the stage you're at
   (`stageView`): walking or on a bike, you and the rest of that step to
-  where the next one starts, close up; waiting, you and the stop close up
-  (until the ride has you on board); on board, the rest of the ride to your
+  where the next one starts, close up; waiting, the street itself (~100 m
+  across: which side of the road the stop is on), wider only to have you
+  in it too, until the ride has you on board; on board, the rest of the ride to your
   stop. A finger on the map stops that for 10 s. Back in the app, the
   stage again once the page has its size (a fit with no room to fit into
   is left for the next, never zoomed out to the island: `map.mjs`
