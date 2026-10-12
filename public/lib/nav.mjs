@@ -1001,14 +1001,16 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
 // What the map shows at each stage of the trip (the owner, 2026-10-13: the
 // whole trip in view was too far out on a walk or a short ride): walking or
 // riding a bike, you and the rest of that step to where the next one starts;
-// waiting for a bus or train, you, the stop and where it takes you; on
-// board, you and the rest of the ride to where you get off. `path(l)`: a
+// waiting for a bus or train, you and the stop close up (to find it; not yet
+// where it goes, the owner, 2026-10-13); on board, you and the rest of the
+// ride to where you get off. `path(l)`: a
 // leg's line as [[lat, lon]…]. Never closer than a street or two (~400 m
 // across). → [{ lat, lon }…]
 export function stageView(plan, i, phase, me, path) {
   const l = plan.legs[i];
   if (!l) return [];
-  let pts = path(l).map(([lat, lon]) => ({ lat, lon }));
+  // (Waiting: only the stop.)
+  let pts = RIDE(l) && phase !== 'on' ? (l.from?.lat != null ? [{ lat: l.from.lat, lon: l.from.lon }] : []) : path(l).map(([lat, lon]) => ({ lat, lon }));
   // From you on (you're past the rest), once you're on the step.
   const own = l.mode === 'walk' || l.mode === 'bike';
   if (me?.lat != null && pts.length > 1 && (own || phase === 'on')) {

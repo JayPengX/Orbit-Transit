@@ -191,10 +191,14 @@ the phone's position:
 - **The whole trip on the map**: every step in its colours (the one you're
   on boldest, the ones behind you faint). In view, the stage you're at
   (`stageView`): walking or on a bike, you and the rest of that step to
-  where the next one starts, close up; waiting, the stop and where the bus
-  or train goes; on board, the rest of the ride to your stop. A finger on
-  the map stops that for 10 s. A tap on the map while navigating opens
-  nothing.
+  where the next one starts, close up; waiting, you and the stop close up
+  (until the ride has you on board); on board, the rest of the ride to your
+  stop. A finger on the map stops that for 10 s. Back in the app, the
+  stage again once the page has its size (a fit with no room to fit into
+  is left for the next, never zoomed out to the island: `map.mjs`
+  `roomFor`). A tap on the map while navigating opens nothing. A saved
+  trip or another plan opened while navigating shrinks navigation to its
+  bar first.
 - **The line under the step** (the bus to catch, how early or late) is
   whole: it goes on to a second line between its parts, never cut.
 - **Every step at the bottom**, whole (a second row when they don't fit).
@@ -256,7 +260,7 @@ the phone's position:
 
 | Data | Source | How |
 | --- | --- | --- |
-| Live bus arrivals, train boards, metro boards, YouBike now | TDX | `/transit/tdx` (Shared-Proxy `transit.js`): cached and shared on the Worker (`tdxLive` 10 s, `tdxBike` 30 s), read by the app every `transitLive` / `transitBike` |
+| Live bus arrivals (each estimate counted from its `DataTime`, when TDX made it: `util.mjs etaAge`), train boards, metro boards, YouBike now | TDX | `/transit/tdx` (Shared-Proxy `transit.js`): cached and shared on the Worker (`tdxLive` 10 s, `tdxBike` 30 s), read by the app every `transitLive` / `transitBike` |
 | Stations, routes, a day's timetables | TDX | `/transit/tdx` (stations a day, timetables 6 h) and the device (`orbit-transit-data` cache: stations a week, a day's 台鐵 timetable in a compact form, a tenth of TDX's 3.7 MB) |
 | Bus routes and timetables | Shared-Data `bus/<City>.json`, `bus/InterCity/<square>.json` (weekly) | `packs.mjs`: kept on the phone (under 20 h fresh, any age when the site can't be reached); a route not in its pack asked of TDX |
 | What's near a point | Shared-Data `where.json` (nightly) | `near.mjs`, kept a day |

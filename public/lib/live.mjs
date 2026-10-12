@@ -13,10 +13,10 @@ import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stopTimes, routeCity } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish } from './plan.mjs';
-import { meters, walkSec, zh, tw, twAt, addDays } from './util.mjs';
+import { meters, walkSec, zh, tw, twAt, addDays, etaAge } from './util.mjs';
 
 const MIN = 60_000;
-const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates';
+const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,DataTime';
 
 // Every bus due at the stops within r metres of a point (one TDX ask, shared
 // for 20 s by everyone near the same ~10 m).
@@ -51,8 +51,10 @@ export function liveTimes(list, name, now = Date.now(), { dir = null, routeUID =
   const running = mine.some(r => ![3, 4].includes(Number(r.StopStatus) || 0));
   for (const r of mine) {
     const st = Number(r.StopStatus) || 0;
-    if (r.EstimateTime != null && st === 0) times.push({ at: now + Number(r.EstimateTime) * 1000, last: r.IsLastBus === true, plate: r.PlateNumb || '' });
-    for (const x of r.Estimates || []) if (Number.isFinite(Number(x.EstimateTime))) times.push({ at: now + Number(x.EstimateTime) * 1000, last: x.IsLastBus === true, plate: x.PlateNumb || '' });
+    // (From when TDX made the estimate, not from now: util.mjs etaAge.)
+    const made = now - etaAge(r, now) * 1000;
+    if (r.EstimateTime != null && st === 0) times.push({ at: made + Number(r.EstimateTime) * 1000, last: r.IsLastBus === true, plate: r.PlateNumb || '' });
+    for (const x of r.Estimates || []) if (Number.isFinite(Number(x.EstimateTime))) times.push({ at: made + Number(x.EstimateTime) * 1000, last: x.IsLastBus === true, plate: x.PlateNumb || '' });
     if (st === 1 && r.NextBusTime) times.push({ at: Date.parse(r.NextBusTime), last: r.IsLastBus === true, plate: '', planned: true });
     if (st === 3 || st === 4) off = st;
   }

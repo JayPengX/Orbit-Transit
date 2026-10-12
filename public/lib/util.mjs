@@ -53,6 +53,15 @@ export const near = (a, b) => meters(a.lat, a.lon, b.lat, b.lon);
 
 // Walking: streets aren't straight (×1.3) at 75 m a minute.
 export const WALK_M_MIN = 75;
+// How old a TDX bus estimate is, in seconds, by when it was made (its
+// DataTime): an estimate is counted from then, not from when it reached the
+// phone (Hsinchu's buses make one about a minute, and the proxy keeps it a
+// while: counted from now, "4 minutes" stayed 4 minutes, the countdown back
+// up each time it was read; the owner, 2026-10-13). 0 without one; at most 5 minutes.
+export const etaAge = (r, now = Date.now()) => {
+  const t = Date.parse(r?.DataTime || '');
+  return Number.isFinite(t) ? Math.min(300, Math.max(0, (now - t) / 1000)) : 0;
+};
 export const walkSec = m => Math.round(((m * 1.3) / WALK_M_MIN) * 60);
 
 // Google's encoded polyline → [[lat, lon]…].

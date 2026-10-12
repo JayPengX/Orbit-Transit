@@ -1755,7 +1755,7 @@ test('a route’s stops: a bus between two stops is where a stop’s live time d
   assert.equal(busBetween([{ status: 3, sec: null }, v(200)], 1), true);
 });
 
-test('navigating, the map shows the stage you are at: a bike ride close up (never the whole trip), waiting the bus and where it goes, on board the rest of the ride', () => {
+test('navigating, the map shows the stage you are at: a bike ride close up (never the whole trip), waiting you and the stop close up, on board the rest of the ride', () => {
   const P = (name, lat, lon) => ({ name, lat, lon });
   const park = P('綠41公園', 24.81614, 121.0171), ny = P('陽明交通大學(六家校區)', 24.81287, 121.02331), st = P('文興嘉興路口', 24.8125, 121.0238), hs = P('竹東高中', 24.7333, 121.0879);
   const plan = { legs: [
@@ -1773,9 +1773,28 @@ test('navigating, the map shows the stage you are at: a bike ride close up (neve
   const walk = stageView(plan, 2, 'before', P('', 24.8129, 121.0233), path);
   assert.ok(walk.some(p => p.lat === st.lat && p.lon === st.lon), 'a walk: on to the stop');
   assert.ok(span(walk) >= 350, 'never closer than a street or two');
-  const wait = stageView(plan, 3, 'before', P('', 24.8125, 121.0237), path);
-  assert.ok(wait.some(p => p.lat < 24.74), 'waiting: where the bus goes');
+  const wait = stageView(plan, 3, 'before', P('', 24.8127, 121.0233), path);
+  assert.ok(span(wait) < 800, `waiting: you and the stop close up, ${Math.round(span(wait))} m`);
+  assert.ok(wait.some(p => p.lat === st.lat && p.lon === st.lon));
   const on = stageView(plan, 3, 'on', P('', 24.7701, 121.0601), path);
   assert.ok(!on.some(p => p.lat > 24.8), 'on board: from you on, not where you got on');
   assert.ok(on.some(p => p.lat < 24.74), 'to your stop');
+});
+
+test("a bus's estimate counts from when TDX made it (its DataTime), not from when it was read: \"4 minutes\" read again a minute later is 3 minutes, the countdown never back up", () => {
+  const made = Date.parse('2026-10-13T06:51:36+08:00');
+  const row = { RouteName: { Zh_tw: '快捷8號支' }, Direction: 0, StopStatus: 0, EstimateTime: 240, DataTime: '2026-10-13T06:51:36+08:00', Estimates: [{ EstimateTime: 900 }] };
+  // Read at once, and again 70 s later (the same estimate, the proxy's copy): the same moment both times.
+  const first = liveTimes([row], '快捷8號支', made).times[0].at;
+  const again = liveTimes([row], '快捷8號支', made + 70_000).times[0].at;
+  assert.equal(first, made + 240_000);
+  assert.equal(again, first);
+  assert.deepEqual(liveTimes([row], '快捷8號支', made + 70_000).times.map(t => t.at - made), [240_000, 900_000]);
+  // A stop's row: 170 s to go, 830 s for the next.
+  const v = etaOf({ ...row, StopUID: 'X' }, made + 70_000);
+  assert.equal(v.sec, 170);
+  assert.deepEqual(v.more, [830]);
+  // No DataTime: from now, as before.
+  const { DataTime, ...plain } = row;
+  assert.equal(liveTimes([plain], '快捷8號支', made + 70_000).times[0].at, made + 70_000 + 240_000);
 });

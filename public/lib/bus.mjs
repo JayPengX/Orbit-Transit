@@ -3,7 +3,7 @@
 
 import { packRoute } from './packs.mjs';
 import { tdx, rows } from './api.mjs';
-import { zh, hm } from './util.mjs';
+import { zh, hm, etaAge } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 
 // 'InterCity' is 公路客運 and 國道客運 (they belong to no city).
@@ -106,7 +106,7 @@ export function stopTimes(sched, { stopUID, name, dir }, date, dow) {
 
 // ---- When the bus comes -------------------------------------------------------------------------
 
-const ETA_FIELDS = '$select=StopUID,RouteUID,RouteName,SubRouteUID,Direction,EstimateTime,StopStatus,NextBusTime,PlateNumb,IsLastBus,Estimates,StopCountDown';
+const ETA_FIELDS = '$select=StopUID,RouteUID,RouteName,SubRouteUID,Direction,EstimateTime,StopStatus,NextBusTime,PlateNumb,IsLastBus,Estimates,StopCountDown,DataTime';
 
 // Every stop of one route (the route sheet), keyed by StopUID.
 export const routeEtaPath = route => `basic/v2/Bus/EstimatedTimeOfArrival/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&${ETA_FIELDS}`;
@@ -149,10 +149,11 @@ export async function stationEta(station) {
   return rows(j).map(r => ({ ...etaOf(r), route: zh(r.RouteName), routeUID: r.RouteUID, stopUID: r.StopUID, dir: r.Direction, city: city || INTERCITY }));
 }
 
-// One N1 row → { sec (to arrival, or null), status, next (ms), last, plate, more: [sec…] }.
-export function etaOf(r) {
-  const sec = r.EstimateTime == null ? null : Number(r.EstimateTime);
-  const more = (r.Estimates || []).map(x => Number(x.EstimateTime)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
+// One N1 row → { sec (to arrival from now, or null), status, next (ms), last, plate, more: [sec…] }.
+export function etaOf(r, now = Date.now()) {
+  const age = etaAge(r, now);
+  const sec = r.EstimateTime == null ? null : Math.max(0, Math.round(Number(r.EstimateTime) - age));
+  const more = (r.Estimates || []).map(x => Math.round(Number(x.EstimateTime) - age)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
   return { sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null };
 }
 export function etaMap(j) {

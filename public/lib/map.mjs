@@ -118,6 +118,12 @@ export async function createMap(el, { provider = 'nlsc', key = '', center, zoom 
   return leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag });
 }
 
+// Room between a fit's paddings: none while a page comes back from the
+// background (its size not known yet, or the cards over the map taller than
+// it), and a fit then zooms out to the whole island (the owner, navigating,
+// 2026-10-13); it's left for the next one.
+const roomFor = (el, p) => el.clientWidth - p.left - p.right >= 60 && el.clientHeight - p.top - p.bottom >= 60;
+
 function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag }) {
   const g = globalThis.google.maps;
   const map = new g.Map(el, {
@@ -234,10 +240,13 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
     },
     fit(points, pad = 60) {
       if (!points.length) return;
+      const p = typeof pad === 'object' ? pad : { top: pad, bottom: pad, left: pad, right: pad };
+      if (!roomFor(el, p)) return false;
       byApp = Date.now();
       const b = new g.LatLngBounds();
-      for (const p of points) b.extend({ lat: p.lat, lng: p.lon });
-      map.fitBounds(b, typeof pad === 'object' ? pad : { top: pad, bottom: pad, left: pad, right: pad });
+      for (const x of points) b.extend({ lat: x.lat, lng: x.lon });
+      map.fitBounds(b, p);
+      return true;
     },
     layer(name) {
       if (!layers.has(name)) {
@@ -332,9 +341,11 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
     },
     fit(points, pad = 60) {
       if (!points.length) return;
-      byApp = Date.now();
       const p = typeof pad === 'object' ? pad : { top: pad, bottom: pad, left: pad, right: pad };
+      if (!roomFor(el, p)) return false;
+      byApp = Date.now();
       map.fitBounds(L.latLngBounds(points.map(x => [x.lat, x.lon])), { paddingTopLeft: [p.left, p.top], paddingBottomRight: [p.right, p.bottom] });
+      return true;
     },
     layer(name) {
       if (!layers.has(name)) layers.set(name, markerLayer());
