@@ -1551,11 +1551,22 @@ function shrinkNav(on) {
 }
 
 // What the navigation card asks for: back to it (the bar), its ⋯, a new plan from here.
+let cardsTimer = 0;
 function navAction(a, info) {
   if (a === 'open') return shrinkNav(false);
   if (a === 'more') return navMore();
   if (a === 'replan') return replanFromHere();
   if (a === 'late') return navLate(info);
+  // Its cards grew, shrank or folded (the stops on board coming in, a fold):
+  // the stage fitted again in the room left, so you're never under a card.
+  if (a === 'cards') {
+    clearTimeout(cardsTimer);
+    cardsTimer = setTimeout(() => {
+      const n = navNow();
+      if (n && navFollow && navFull()) navView(n.plan, n.i);
+    }, 150);
+    return;
+  }
   if (a === 'offer') {
     const n = navNow();
     if (n?.offer?.plan) navigate(n.offer.plan, null, { swap: true });

@@ -153,6 +153,25 @@ export function gmapsLink(to, mode) {
 export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat != null && meters(plan.dest.lat, plan.dest.lon, plan.legs[k].to.lat, plan.legs[k].to.lon) < 300 ? plan.dest : plan.legs[k].to);
 
 const RIDE = l => l && l.mode !== 'walk' && l.mode !== 'bike';
+// The two cards folded small, for more map (the owner, 2026-10-13: the map
+// between them was too small): the top to its step and the line under it,
+// the bottom to when you're there; a tap on the grip (or a swipe) folds or
+// opens one, kept on the device. → { top, bottom }
+const FOLD_KEY = 'ot.nav.fold';
+function readFold() {
+  try {
+    const f = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {};
+    return { top: f.top === true, bottom: f.bottom === true };
+  } catch {
+    return { top: false, bottom: false };
+  }
+}
+function saveFold(f) {
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify(f));
+  } catch {}
+}
+const grip = (which, folded) => `<button class="ot-nav-grip" type="button" data-nav="fold-${which}" aria-label="${folded ? '展開' : '收合'}" aria-expanded="${!folded}"></button>`;
 // Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
 const AWAY_MS = 45_000;
 // A walk's or a ride's own way on the map (its road from the router), as
@@ -496,7 +515,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   primeBuzz();
   stopNav();
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
-  const state = { plan, i: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, min: Boolean(resume?.min) };
+  const state = { plan, i: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min) };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
   const notices = () => nav === state && push?.(navNotices(plan, state.i, state.info));
@@ -585,17 +604,19 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // (Only while a bus or train is still ahead: the rest by bike or on foot is at your own pace, nothing to be early or late for.)
     const drift = state.done || !plan.legs.slice(state.i).some(RIDE) ? 0 : Math.round((times.eta - plan.arr) / 60_000);
     const driftText = Math.abs(drift) >= 2 ? `<em class="${drift > 0 ? 'bad' : 'good'}">${drift > 0 ? `晚 ${drift} 分` : `早 ${-drift} 分`}</em>` : '';
-    const topHtml = `<div class="ot-nav-top${offNext ? ' alert' : ''}${coming ? ' coming' : ''}${on ? ' aboard' : ''}" style="--c:${e(legColor(l))}">
+    const fold = state.fold;
+    const topHtml = `<div class="ot-nav-top${offNext ? ' alert' : ''}${coming ? ' coming' : ''}${on ? ' aboard' : ''}${fold.top ? ' folded' : ''}" style="--c:${e(legColor(l))}">
         ${off}${offer}${strayed}
         <div class="ot-nav-main">
           <span class="ot-nav-i">${icon(state.done ? 'pin' : offNext ? 'bell' : l.mode)}</span>
           <div class="ot-nav-text"><b>${e(title)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>
           ${big ? `<span class="ot-nav-big"${cd}>${big}</span>` : ''}
         </div>
-        ${track}${board}
+        ${fold.top ? '' : `${track}${board}`}
         ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map((x, k, a) => `<span>${e(x)}${k < a.length - 1 ? '・' : ''}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}重新規劃</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}Google 地圖</a>` : ''}</div>` : ''}
-        ${bikeLine ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
-        ${then}
+        ${bikeLine && !fold.top ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
+        ${fold.top ? '' : then}
+        ${grip('top', fold.top)}
       </div>`;
     const etaHtml = `<div class="ot-nav-eta">
           <span><b>${e(hm(state.done ? now : times.eta))}</b>${driftText}<small>${state.done ? '已抵達' : `${driftText ? '剩 ' : '抵達・還要 '}${leftText(minsLeft)}`}</small></span>
@@ -603,13 +624,22 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           <button class="q-btn ot-nav-end" type="button" data-nav="end">結束</button>
         </div>`;
     // Drawn in place: the card's parts each time, the steps only when they change.
-    if (!box.querySelector(':scope > .ot-nav-bottom')) box.innerHTML = '<div class="ot-nav-topw"></div><div class="ot-nav-bottom"><div class="ot-nav-etaw"></div><div class="ot-nav-chips" role="group" aria-label="步驟"></div></div>';
+    if (!box.querySelector(':scope > .ot-nav-bottom')) box.innerHTML = '<div class="ot-nav-topw"></div><div class="ot-nav-bottom"><div class="ot-nav-gripw"></div><div class="ot-nav-etaw"></div><div class="ot-nav-chips" role="group" aria-label="步驟"></div></div>';
+    const bottom = box.querySelector(':scope > .ot-nav-bottom');
+    bottom.classList.toggle('folded', fold.bottom);
+    bottom.querySelector('.ot-nav-gripw').innerHTML = grip('bottom', fold.bottom);
     box.querySelector('.ot-nav-topw').innerHTML = topHtml;
     box.querySelector('.ot-nav-etaw').innerHTML = etaHtml;
     const row = box.querySelector('.ot-nav-chips');
     if (row._html !== chips) {
       row.innerHTML = chips;
       row._html = chips;
+    }
+    // The cards' heights changed (stops came in, a fold): the map fits the room left.
+    const hs = `${box.querySelector('.ot-nav-top')?.offsetHeight}|${bottom.offsetHeight}`;
+    if (hs !== state.cardHs) {
+      state.cardHs = hs;
+      onAction?.('cards');
     }
     // The bar on every other tab (and the map, shrunk): the step, its number, live; a tap goes back.
     if (mini)
@@ -962,10 +992,33 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         stopNav();
         onEnd?.();
       });
+    } else if (a === 'fold-top' || a === 'fold-bottom') {
+      foldCard(a === 'fold-top' ? 'top' : 'bottom');
     } else if (a === 'offer-x') {
       state.offer = null;
       render();
     } else if (a) onAction?.(a);
+  };
+  // Folded or opened: kept and drawn (the map fits the room left: tab-map watchCards).
+  const foldCard = (which, to = !state.fold[which]) => {
+    if (state.fold[which] === to) return;
+    state.fold = { ...state.fold, [which]: to };
+    saveFold(state.fold);
+    render();
+  };
+  // A swipe on a card: the top up to fold, down to open; the bottom the other way.
+  let swipe = null;
+  box.ontouchstart = ev => {
+    const card = ev.target.closest('.ot-nav-top, .ot-nav-bottom');
+    swipe = card && ev.touches.length === 1 ? { y: ev.touches[0].clientY, top: card.classList.contains('ot-nav-top') } : null;
+  };
+  box.ontouchend = ev => {
+    if (!swipe) return;
+    const dy = (ev.changedTouches[0]?.clientY ?? swipe.y) - swipe.y;
+    const s = swipe;
+    swipe = null;
+    if (Math.abs(dy) < 36) return;
+    foldCard(s.top ? 'top' : 'bottom', s.top ? dy < 0 : dy > 0);
   };
   if (mini) mini.onclick = ev => ev.target.closest('[data-nav="open"]') && onAction?.('open');
   // Back from the background (an iPhone pauses the page): where you are now, the buses again.

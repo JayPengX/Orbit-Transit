@@ -202,6 +202,11 @@ the phone's position:
 - **The line under the step** (the bus to catch, how early or late) is
   whole: it goes on to a second line between its parts, never cut.
 - **Every step at the bottom**, whole (a second row when they don't fit).
+- **Both cards fold** for more map: a tap on a card's grip, or a swipe (the
+  top up, the bottom down). Folded, the top keeps its step and the line
+  under it; the bottom when you're there, ⋯ and 結束. Kept on the device
+  (`ot.nav.fold`); the map fits the room left whenever a card's height
+  changes (`cards`).
 - **Walking and riding**: how far is left, and one tap opens Google Maps'
   own turn-by-turn for that step (free, no billed call).
 - **A bus or train step** counts down to the second and shows where it is
