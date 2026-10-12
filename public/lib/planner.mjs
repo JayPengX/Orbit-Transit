@@ -18,7 +18,7 @@ import { railNetwork } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
-import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM } from './tpass.mjs';
+import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
 import { meters, tw, hm } from './util.mjs';
@@ -105,6 +105,7 @@ export function joinPlanners(a, b) {
     .filter(p => !seen.has(planSig(p)) && seen.add(planSig(p)));
   return { plans, sources: { ...(a.sources || {}), ...(b.sources || {}), ms: { ...(a.sources?.ms || {}), ...(b.sources?.ms || {}) } }, err: a.err && b.err ? a.err : (!plans.length && (a.err || b.err)) || null };
 }
+const ARRIVE_EARLY = 2 * 3_600_000;
 export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null } = {}) {
   const prefs = only ? { ...data.prefs, modes: { ...data.prefs.modes, ...only } } : data.prefs;
   const modes = prefs.modes;
@@ -145,10 +146,13 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const tdxAsk = ask('tdx').then(r => (tdxIn = r));
   const [gRes, trains, metros] = await Promise.all([
     ask('google'),
-    by === 'arrive' || !useRail
+    // (To be there by a time: the trains from two hours before it that get
+    // in by then; the ranking takes the latest that does. The planners
+    // leave out the 六家線 then 內灣線 to 竹東, 2026-10-12.)
+    !useRail
       ? []
-      : railNetwork(tw(t0).date, { next: tw(t0).min >= 21 * 60 })
-          .then(n => railPlans((net = n), from, to, t0, { bike: modes.bike, bus: modes.bus, use: useTrain }))
+      : railNetwork(tw(by === 'arrive' ? t0 - ARRIVE_EARLY : t0).date, { next: by !== 'arrive' && tw(t0).min >= 21 * 60 })
+          .then(n => (by === 'arrive' ? railPlans((net = n), from, to, t0 - ARRIVE_EARLY, { n: 8, bike: modes.bike, use: useTrain }).filter(p => p.arr <= t0) : railPlans((net = n), from, to, t0, { bike: modes.bike, bus: modes.bus, use: useTrain })))
           .catch(() => [])
           .finally(() => lap('trains', t)),
     // Our metro rides (板南線 then 文湖線, which the planners may leave out).
@@ -163,7 +167,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   let plans = [...res.plans.map(tidy), ...trains, ...metros].filter(p => allowed(p, { ...modes, bike: true }));
   // YouBike near both ends and the stations, asked now, while the buses are
   // looked at (it doesn't wait for them; a train-then-bus's stop is asked after).
-  const bikeCities = modes.bike && prefs.bike30 ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
+  const bikeCities = modes.bike && bikeSwap(prefs) ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
   const asked = [];
   const bikesAt = pts => {
     const fresh = pts.filter(p => !asked.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400));
@@ -215,7 +219,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     }
     const bikes = await bikesNow;
     const t2 = performance.now();
-    const ranked = withBikes(list, from, to, bikes, t0, { modes, swap: prefs.bike30, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
+    const ranked = withBikes(list, from, to, bikes, t0, { modes, swap: bikeSwap(prefs), cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
     // Each plan's fare line (TPASS counted).
     for (const p of ranked) p.fareText = fareOf(p, coverage(p, pass, cityOf)).text;
     lap(`rank${stage}`, t2);

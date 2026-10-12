@@ -2,7 +2,7 @@
 // today's code, as the phone ranks it (replay.mjs's settings): → the ranked plans.
 import { readFileSync } from 'node:fs';
 import { withBikes } from '../public/lib/plan.mjs';
-import { coverage, fareOf, tpassOf, inPass, passOk } from '../public/lib/tpass.mjs';
+import { coverage, fareOf, tpassOf, inPass, passOk, bikeSwap } from '../public/lib/tpass.mjs';
 
 // `jitter(i)`: minutes to move plan i by when it has a bus (live times move
 // a few minutes from one reading to the next): the verdicts must not flip.
@@ -20,7 +20,7 @@ export function rankSaved(name, { jitter = null } = {}) {
   const pass = tpassOf(t.prefs.tpass);
   const keep = inPass(t.from, t.to, pass, cityOf) ? p => passOk(p, pass, cityOf) : null;
   const cost = p => fareOf(p, coverage(p, pass, cityOf)).cost;
-  return withBikes(t.plans, t.from, t.to, t.bikes, t.t0, { modes: t.prefs.modes, swap: t.prefs.bike30, cost, by: t.by, deadline: t.by === 'arrive' ? t.at : null, keep, clock: t.now });
+  return withBikes(t.plans, t.from, t.to, t.bikes, t.t0, { modes: t.prefs.modes, swap: bikeSwap(t.prefs), cost, by: t.by, deadline: t.by === 'arrive' ? t.at : null, keep, clock: t.now });
 }
 // A plan in a line: its rides by line and stations, its bikes by minutes.
 export const sayPlan = p => p.legs.filter(l => l.mode !== 'walk').map(l => (l.mode === 'bike' ? `bike${Math.round((l.dur || 0) / 60)}` : `${l.mode}:${String(l.short || l.name || '').replace(/\s+/g, '')}:${l.from?.name || ''}>${l.to?.name || ''}`)).join(' ');
