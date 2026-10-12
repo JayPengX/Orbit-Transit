@@ -9,7 +9,7 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, onTimeWay, offerText } from '../public/lib/nav.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, onTimeWay, offerText, stageView } from '../public/lib/nav.mjs';
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
@@ -1753,4 +1753,29 @@ test('a route’s stops: a bus between two stops is where a stop’s live time d
   assert.equal(busBetween([v(600), v(30)], 1), false);
   // The stop before has none on its way (gone by): between.
   assert.equal(busBetween([{ status: 3, sec: null }, v(200)], 1), true);
+});
+
+test('navigating, the map shows the stage you are at: a bike ride close up (never the whole trip), waiting the bus and where it goes, on board the rest of the ride', () => {
+  const P = (name, lat, lon) => ({ name, lat, lon });
+  const park = P('綠41公園', 24.81614, 121.0171), ny = P('陽明交通大學(六家校區)', 24.81287, 121.02331), st = P('文興嘉興路口', 24.8125, 121.0238), hs = P('竹東高中', 24.7333, 121.0879);
+  const plan = { legs: [
+    { mode: 'walk', from: P('', 24.81788, 121.01603), to: park },
+    { mode: 'bike', from: park, to: ny },
+    { mode: 'walk', from: ny, to: st },
+    { mode: 'bus', from: st, to: hs, path: [[24.8125, 121.0238], [24.79, 121.04], [24.77, 121.06], [24.75, 121.08], [24.7333, 121.0879]] },
+    { mode: 'walk', from: hs, to: P('竹東高中', 24.733, 121.0882) }
+  ] };
+  const path = l => l.path || [[l.from.lat, l.from.lon], [l.to.lat, l.to.lon]];
+  const span = pts => meters(Math.min(...pts.map(p => p.lat)), Math.min(...pts.map(p => p.lon)), Math.max(...pts.map(p => p.lat)), Math.max(...pts.map(p => p.lon)));
+  const bike = stageView(plan, 1, 'before', P('', 24.8158, 121.0185), path);
+  assert.ok(span(bike) < 1500, `the ride close up: ${Math.round(span(bike))} m`);
+  assert.ok(!bike.some(p => p.lat < 24.8), 'not on to 竹東');
+  const walk = stageView(plan, 2, 'before', P('', 24.8129, 121.0233), path);
+  assert.ok(walk.some(p => p.lat === st.lat && p.lon === st.lon), 'a walk: on to the stop');
+  assert.ok(span(walk) >= 350, 'never closer than a street or two');
+  const wait = stageView(plan, 3, 'before', P('', 24.8125, 121.0237), path);
+  assert.ok(wait.some(p => p.lat < 24.74), 'waiting: where the bus goes');
+  const on = stageView(plan, 3, 'on', P('', 24.7701, 121.0601), path);
+  assert.ok(!on.some(p => p.lat > 24.8), 'on board: from you on, not where you got on');
+  assert.ok(on.some(p => p.lat < 24.74), 'to your stop');
 });

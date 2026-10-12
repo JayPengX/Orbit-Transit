@@ -1,4 +1,4 @@
-// node scripts/navstate.mjs <walk|wait|on|train|bike|long|late> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
+// node scripts/navstate.mjs <walk|wait|on|train|bike|long|late|wenxing> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
 const now = Date.now(), m = x => now + x * 60_000;
 const here = { lat: 24.8026, lon: 120.9702 };
 const stop = { name: '新竹車站(中正路)', lat: 24.8026, lon: 120.9702 };
@@ -26,6 +26,19 @@ if (sc === 'long') {
     { mode: 'bike', name: 'YouBike', from: P('臺鐵六家車站', 24.8079, 121.0392), to: park, dep: m(38), arr: m(53), dur: 900, dist: 3000 },
     { mode: 'walk', from: park, to: P('成功九街', 24.8176, 121.0165), dep: m(53), arr: m(56), dur: 180 }
   ];
+}
+// The owner's 2026-10-13 trip, on the bike: 成功九街 → 綠41公園 → 陽明交通大學(六家校區), the 快捷8號支 from 文興嘉興路口 (a long stop name and 早到 on the line under the step).
+if (sc === 'wenxing') {
+  const P = (name, lat, lon) => ({ name, lat, lon });
+  const park = P('綠41公園', 24.81614, 121.0171), ny = P('陽明交通大學(六家校區)', 24.81287, 121.02331), st = P('文興嘉興路口', 24.8125, 121.0238), hs = P('竹東高中', 24.733, 121.0882);
+  legs = [
+    { mode: 'walk', from: P('', 24.81788, 121.01603), to: park, dep: m(-3), arr: m(0), dur: 180, dist: 290 },
+    { mode: 'bike', name: 'YouBike', from: park, to: ny, dep: m(0), arr: m(6), dur: 360, dist: 1130 },
+    { mode: 'walk', from: ny, to: st, dep: m(6), arr: m(7), dur: 60, dist: 70 },
+    { mode: 'bus', name: '快捷8號支', short: '快捷8號支', headsign: '竹東', from: st, to: P('竹東高中', 24.7333, 121.0879), dep: m(12), arr: m(48), dur: 2160, stops: 20 },
+    { mode: 'walk', from: P('竹東高中', 24.7333, 121.0879), to: hs, dep: m(48), arr: m(50), dur: 120, dist: 110 }
+  ];
+  i = 1;
 }
 const plan = { tags: [], transfers: 0, walk: 400, legs, dep: legs[0].dep, arr: legs.at(-1).arr, dur: (legs.at(-1).arr - legs[0].dep) / 1000, dest: { name: legs.at(-1).to.name, lat: legs.at(-1).to.lat, lon: legs.at(-1).to.lon }, ...(sc === 'late' ? { deadline: m(70) } : {}) };
 process.stdout.write(JSON.stringify({ plan, i, phase, at: now }));

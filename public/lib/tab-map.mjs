@@ -16,7 +16,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
@@ -1441,7 +1441,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
     follow: pos => {
       ctx.here = { ...pos, at: Date.now() };
       drawMe(ctx.here);
-      // The rest of the trip stays in view as you go (every few seconds; back a little after you've moved the map by hand).
+      // The stage you're at stays in view as you go (every few seconds; back a little after you've moved the map by hand).
       const n = navNow();
       if (navFollow && navFull() && n && Date.now() - viewAt > 5_000) navView(n.plan, n.i);
     },
@@ -1474,21 +1474,20 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   // (Only the way on the map now.)
   drawLayers();
 }
-// The way being navigated on the map, the step you're on lit; in view, the
-// rest of the trip from where you are to its end (not only the step).
+// The way being navigated on the map, the step you're on lit; in view, that
+// stage of the trip (nav.mjs stageView: a walk close up, a ride to its end).
 function navDraw(plan, i) {
   if (!map) return;
   drawPlan(plan, { fit: false, lit: i });
   navFollow = true;
   navView(plan, i);
 }
-// Between the card on top and the one at the bottom: what's left of the trip, you on it.
+// Between the card on top and the one at the bottom: the stage you're at, you on it.
 let viewAt = 0;
 function navView(plan, i) {
   viewAt = Date.now();
-  const pts = plan.legs.slice(i).flatMap(l => legPath(l).map(([lat, lon]) => ({ lat, lon })));
-  const me = navNow()?.pos || ctx.here;
-  if (me?.lat != null) pts.push({ lat: me.lat, lon: me.lon });
+  const n = navNow();
+  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath);
   if (!pts.length) return;
   const box = $('map').getBoundingClientRect();
   const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;
