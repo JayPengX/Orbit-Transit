@@ -239,7 +239,12 @@ the phone's position:
 - **It never takes the app over.** The tabs stay; it shrinks to a bar to
   do something else.
 - **The trip can change on the way**: another stop to get off at, a new
-  plan from here, another place (換一條路).
+  plan from here (換一條路), a stop first (先去別的地方) or another place
+  (改目的地). On a bus or train those last two keep you on it: off at its
+  stop nearest the new place or the one you had, whichever has you there
+  sooner (the one you had when its stops aren't known), the rest planned
+  from there, and the place you were going to next after it (`onBoardTo`,
+  `navRetarget`, `navRest`). Walking, riding or waiting: the ways from here.
 - **It resumes** after the app is swiped away (`ot.nav.v1`, `savedNav`)
   until it's over or ended.
 - **The lock screen**: the kit's `transit:nav` notices are handed to the
