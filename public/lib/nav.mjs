@@ -1064,12 +1064,15 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
 // where it goes, the owner, 2026-10-13); on board, you and the rest of the
 // ride to where you get off. `path(l)`: a
 // leg's line as [[lat, lon]…]. Never closer than a street or two (~400 m
-// across). → [{ lat, lon }…]
+// across); waiting, the street itself (~100 m: which side of the road the
+// stop is on, exactly where; the owner, 2026-10-13), wider only to have you
+// in it too. → [{ lat, lon }…]
 export function stageView(plan, i, phase, me, path) {
   const l = plan.legs[i];
   if (!l) return [];
   // (Waiting: only the stop.)
-  let pts = RIDE(l) && phase !== 'on' ? (l.from?.lat != null ? [{ lat: l.from.lat, lon: l.from.lon }] : []) : path(l).map(([lat, lon]) => ({ lat, lon }));
+  const waiting = RIDE(l) && phase !== 'on';
+  let pts = waiting ? (l.from?.lat != null ? [{ lat: l.from.lat, lon: l.from.lon }] : []) : path(l).map(([lat, lon]) => ({ lat, lon }));
   // From you on (you're past the rest), once you're on the step.
   const own = l.mode === 'walk' || l.mode === 'bike';
   if (me?.lat != null && pts.length > 1 && (own || phase === 'on')) {
@@ -1082,11 +1085,11 @@ export function stageView(plan, i, phase, me, path) {
   if (l.mode === 'walk' && next?.from?.lat != null) pts.push({ lat: next.from.lat, lon: next.from.lon });
   if (me?.lat != null) pts.push({ lat: me.lat, lon: me.lon });
   if (!pts.length) return pts;
-  // (At least ~400 m across, round its middle.)
+  // (At least ~400 m across, round its middle; waiting ~100 m.)
   const lat = pts.map(p => p.lat);
   const lon = pts.map(p => p.lon);
   const c = { lat: (Math.min(...lat) + Math.max(...lat)) / 2, lon: (Math.min(...lon) + Math.max(...lon)) / 2 };
-  const dLat = 0.0018;
+  const dLat = waiting ? 0.00045 : 0.0018;
   const dLon = dLat / Math.cos((c.lat * Math.PI) / 180);
   pts.push({ lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat + dLat, lon: c.lon + dLon });
   return pts;
