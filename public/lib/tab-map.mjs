@@ -612,8 +612,8 @@ async function cardClick(ev) {
     tripModes = same ? null : next;
     return plan(card.fromHere ? null : card.from, card.to);
   }
-  const when = ev.target.closest('[data-when]');
-  if (when) return setWhen(when.dataset.when);
+  const pickWhen = ev.target.closest('[data-when]');
+  if (pickWhen) return setWhen(pickWhen.dataset.when);
   if (!act || !card) return;
   if (act === 'close') return closeCard();
   if (act === 'grow') {
