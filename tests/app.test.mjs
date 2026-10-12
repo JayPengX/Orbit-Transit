@@ -1625,3 +1625,19 @@ test('the same first train, then on to 北新竹 and back up to 竹北, with the
   assert.ok(out.find(p => p.legs[1].to.name === '竹北').weak);
   assert.ok(!out.find(p => p.legs[1].to.name === '六家').weak);
 });
+
+test('a bus then another bus is set aside whenever a way without one is there, and never labelled 最快抵達', () => {
+  const o = { lat: 24.733, lon: 121.088 };
+  const d = { lat: 24.8176, lon: 121.0165 };
+  const S = (name, lat, lon) => ({ name, lat, lon });
+  const bus = (short, from, to, dep, arr) => ({ mode: 'bus', short, from, to, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000 });
+  const chain = finish({ legs: [bus('5673', S('竹東高中', 24.733, 121.088), S('監理站', 24.79, 121.01), '16:52', '17:20'), bus('5614', S('台肥五廠', 24.792, 121.012), S('上泉州厝', 24.817, 121.016), '17:30', '17:48')] });
+  const one = finish({ legs: [bus('快捷8號支', S('竹東高中', 24.733, 121.088), S('縣政府', 24.8265, 121.0128), '17:15', '18:05')] });
+  const out = rank([chain, one], { now: T('16:45'), o, d });
+  const c = out.find(p => p.legs.length === 2);
+  assert.ok(c.weak, 'set aside, though there sooner');
+  assert.ok(!c.tags.includes('最快抵達'));
+  assert.ok(!out.find(p => p.legs.length === 1).weak);
+  // Nothing else: shown.
+  assert.ok(!rank([chain], { now: T('16:45'), o, d })[0].weak);
+});
