@@ -58,8 +58,10 @@ batch old against new, say what moved).
      changing wherever that's faster (a 內灣線 train to 竹中, the 六家線, a
      walk to HSR 新竹, the HSR to 台北), with real change times. The search
      runs again from just after each first departure, so every option is
-     the latest way to leave for its arrival. With bikes allowed, it
-     includes YouBike to a station 1.2–4.5 km away.
+     the latest way to leave for its arrival, and a change is made at the
+     first station where the next train already calls (off at 竹中 for the
+     六家 train, never on to 新莊 and back for the same train). With bikes
+     allowed, it includes YouBike to a station 1.2–4.5 km away.
    - Our own **metro router** (`metroroute.mjs`), for rides the planners
      leave out (板橋 → 內湖 by 板南線 then 文湖線). It uses TDX's station
      times, half the headway as the wait, and 3 minutes a change.
@@ -70,8 +72,10 @@ batch old against new, say what moved).
    catch, the rest of the trip moved with it, and a train it would now miss
    marked. Google's and TDX's names for one route are matched (快捷8經興隆大橋
    = 快捷8號, Chinese numerals as digits; never 5 and 5608).
-4. **YouBike ideas** (`plan.mjs`), each checked against the bikes and docks
-   there now:
+4. **YouBike ideas** (`plan.mjs`), by where the stations are, never by the
+   bikes or docks there at the moment (too live to plan on; navigation moves
+   the ride if a station is empty when you get there). A station out of
+   service isn't one; every station is YouBike 2.0's, 電輔車 included:
    - all the way by bike (or 電輔車), when it's near enough;
    - by bike to the train or metro instead of a bus or a long walk (leave
      later, the same train);
@@ -80,10 +84,11 @@ batch old against new, say what moved).
    The station to take a bike from and leave it at is the one that makes
    the whole way quickest (綠41公園 on the way home from 六家, not the
    nearer one past it). 每 30 分鐘換 swaps bikes to stay free.
-5. **Rivers** (`rivers.mjs`): a ride over 頭前溪 or 鳳山溪 takes the bridge
-   it would use. A main road's bridge in the traffic (經國大橋) is a ride
-   few take; a small one is a little cost; the way round counts three
-   times its minutes.
+5. **Rivers** (`rivers.mjs`): a ride over 頭前溪 or 鳳山溪 goes round by
+   the bridge least out of its way, and that distance is its time; no
+   bridge counts against it on top (the owner, 2026-10-12). A ride's length
+   on the roads is the straight line and a quarter, or, over a river, the
+   way by its bridge and a little (竹中 → 綠41公園 5.3 km, as the roads say).
 6. **Only the ways of moving the person allows** are used (我的 →
    交通偏好). A taxi never is: TDX sometimes ends a trip with one.
 7. **TPASS** (`tpass.mjs`): what the pass covers counts as free. That is
@@ -112,19 +117,44 @@ What a plan costs, in minutes:
 | Changes | Onto a train or metro is easy (it keeps time); onto a bus a gamble; a bus to a bus barely a plan (Taiwan's buses don't keep their times); a bus between two trains is fine |
 | Each bus | A few minutes (early at the stop, late anyway), and a little for the time on it |
 | Walking | Past 5 minutes, slow going |
-| Bikes | Each ride by its own length: 10 minutes is nothing, 18 a workout, past that every minute counts 4.5×. Two short rides beat one long one; a swap at 30 minutes is still one ride; riding in all counts (15 to a train and 6 from it is nearly riding the whole way); 電輔車 a little easier; a station with one or two bikes may be empty |
-| Rivers | The bridge it takes and the way round |
+| Bikes | Each ride by its own length: 10 minutes is nothing, 18 a workout, past that every minute counts 4.5×. Two short rides beat one long one; a swap at 30 minutes is still one ride; riding in all counts (15 to a train and 6 from it is nearly riding the whole way); 電輔車 a little easier |
+| Rivers | Only the way round to the bridge, in the ride's time |
 | The long way round | Lines that go away and back, or a change farther from the place than the start; chasing your own train past a nearer station |
 | Money | What it costs you after TPASS; a train it would now miss |
 
 The first few plans with different main lines show as **推薦**, and the
-rest fold.
+rest fold. A plan is folded (set aside, still there to open) when:
+
+- another way onto the same rides is no earlier out, no later there and
+  less bother (a bike to the train instead of a walk and a bus);
+- it changes more than a way no later and less bother;
+- it changes for a hop a walk or a bike would do;
+- it rides most of what riding all the way would;
+- **over the river on the bike** before or after a bus or train, when a way
+  whose bus or train crosses it gets there within 15 minutes (新竹站 →
+  成功九街: the train to 竹北 and a ride, not to 千甲 and a ride over
+  頭前溪);
+- **the same train stayed on for nothing**: another way sets out on the
+  same bus or train, changes no more, rides home about as long after it
+  (8 minutes more at most) and is there no later (on to 千甲 when off at
+  竹中 is home first; on to 北新竹 or 新竹 and back up to 竹北 when the
+  change to the 六家線 is home first, the ride home the same 15 minutes);
+- it's far behind the best.
+
+A plan that's folded folds nothing else. The same train left at stations a
+kilometre or more apart is two ways, each kept (off at 竹中 and ride, or on
+to 六家).
 
 ## Navigation
 
 `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`. A plan followed step by step with
 the phone's position:
 
+- **The whole trip on the map**: every step in its colours (the one you're
+  on boldest, the ones behind you faint), the rest of the trip from where
+  you are kept in view; a finger on the map stops that for 10 s. A tap on
+  the map while navigating opens nothing.
+- **Every step at the bottom**, whole (a second row when they don't fit).
 - **Walking and riding**: how far is left, and one tap opens Google Maps'
   own turn-by-turn for that step (free, no billed call).
 - **A bus or train step** counts down to the second and shows where it is
@@ -136,7 +166,14 @@ the phone's position:
   with the card turned round when yours is next. On an iPhone the buzz is
   a chime, since Safari can't vibrate; `primeBuzz` runs on the tap that
   starts navigation.
-- **Each step** moves on by itself when you get there.
+- **Each step** moves on by itself when you get there, by where you are
+  (`tripAt`): a step's end reached, or the next step's way already under
+  you (an end a fix skipped), a bus or train once its first stop is behind
+  you. Started (or opened again) half way, it begins at the step you're at.
+- **YouBike in navigation**: the bikes and docks at the ride's two stations
+  now; found empty (or full), one tap moves the ride to the nearest station
+  within 500 m that has some, the walk to it redrawn (none: 換一條路).
+  Never by itself.
 - **It never takes the app over.** The tabs stay; it shrinks to a bar to
   do something else.
 - **The trip can change on the way**: another stop to get off at, a new

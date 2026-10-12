@@ -271,6 +271,23 @@ export function earliest(net, starts, targets, { use = () => true, maxHours = 30
     legs.unshift({ trip, from: e.from, to: c.to, dep: e.dep, arr: c.arr, stops: c.k - e.k + 1, fromK: e.k, toK: c.k + 1 });
     k = e.from;
   }
+  // A train is boarded at the first stop it can be reached (the scan's way),
+  // which can be past where the train before it already crosses its way: on
+  // to 新莊 for the 六家 train that calls at 竹中 nine minutes later, back
+  // through where you'd been. The change is made at the first such stop
+  // instead, when there's time for it: the same trains, the same arrival.
+  for (let x = 0; x + 1 < legs.length; x++) {
+    const [a, b] = [legs[x], legs[x + 1]];
+    if (a.walk || b.walk) continue;
+    for (let p = a.fromK + 1; p < a.toK; p++) {
+      const s = a.trip.stops[p];
+      const q = b.trip.stops.findIndex((y, k) => k > b.fromK && k < b.toK && y.st === s.st);
+      if (q < 0 || !net.st.has(s.st) || s.arr + changeMin(net.st.get(s.st)) * 60_000 > b.trip.stops[q].dep) continue;
+      legs[x] = { ...a, to: s.st, arr: s.arr, stops: p - a.fromK, toK: p };
+      legs[x + 1] = { ...b, from: s.st, dep: b.trip.stops[q].dep, stops: b.toK - q, fromK: q };
+      break;
+    }
+  }
   // Walks before the first train and after the last aren't legs of a train journey.
   while (legs[0]?.walk && starts.length > 1) legs.shift();
   const rides = legs.filter(l => !l.walk);

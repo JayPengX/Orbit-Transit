@@ -9,7 +9,7 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText } from '../public/lib/nav.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt } from '../public/lib/nav.mjs';
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
@@ -148,7 +148,7 @@ const D = { lat: 25.0330, lon: 121.5654, name: '台北101' };
 const BIKES = [
   { uid: 'a', name: '家附近', lat: 24.8012, lon: 120.9903, bikes: 3, ebike: 1, ret: 5, ok: true },
   { uid: 'b', name: '新竹火車站', lat: 24.8020, lon: 120.9718, bikes: 0, ebike: 0, ret: 8, ok: true },
-  { uid: 'c', name: '空站', lat: 24.8011, lon: 120.9901, bikes: 0, ebike: 0, ret: 0, ok: true },
+  { uid: 'c', name: '暫停站', lat: 24.8011, lon: 120.9901, bikes: 0, ebike: 0, ret: 0, ok: false },
   { uid: 'd', name: '101 站', lat: 25.0335, lon: 121.5650, bikes: 2, ebike: 0, ret: 3, ok: true },
   { uid: 'e', name: '市府站', lat: 25.0410, lon: 121.5650, bikes: 9, ebike: 0, ret: 2, ok: true }
 ];
@@ -169,10 +169,10 @@ const busPlan = P(T('08:00'), [
   { mode: 'bus', short: '20', dur: 600, dist: 1000, dep: T('10:06'), arr: T('10:16'), from: { name: '市府', lat: 25.0410, lon: 121.5655 }, to: { name: '101', lat: 25.0335, lon: 121.5654 } }
 ]);
 
-test('YouBike stations: the nearest with a bike (two or more if barely farther), the nearest with a dock', () => {
+test('YouBike stations: by where they are, never by the bikes or docks there now; one out of service isn’t one', () => {
   assert.equal(rentNear(O, BIKES).uid, 'a');
   assert.equal(rentNear(O, BIKES, { ebike: true }).uid, 'a');
-  assert.equal(rentNear({ lat: 24.8020, lon: 120.9718 }, BIKES), null, 'no bike at 新竹 station');
+  assert.equal(rentNear({ lat: 24.8020, lon: 120.9718 }, BIKES).uid, 'b', 'none there now: still the station (navigation moves it if it’s empty then)');
   assert.equal(returnNear({ lat: 24.8020, lon: 120.9718 }, BIKES).uid, 'b');
 });
 
@@ -286,7 +286,7 @@ test('TDX’s YouBike first mile gets its stations; a long walk to a bus becomes
   const near = [...BIKES, { uid: 'f', name: '站前 YouBike', lat: 24.8013, lon: 120.9781, bikes: 1, ebike: 0, ret: 6, ok: true }];
   const out = withBikes([tdxBike], O, D, near, T('07:59'));
   const mine = out.find(p => p.src === 'tdx-bike');
-  assert.equal(mine.legs[0].from.name, '家附近', 'the station with a bike');
+  assert.equal(mine.legs[0].from.name, '家附近', 'the station in service');
   assert.equal(mine.legs[0].rent.uid, 'a');
   assert.equal(mine.legs[0].to.name, '站前 YouBike');
   assert.equal(mine.legs.length, 2, 'the empty walk gone');
@@ -954,25 +954,22 @@ test('a route sheet’s times: the nearest day it runs when not today; a live bu
   assert.equal(liveTrusted([], w, 1, at('2026-10-05', '07:20')), true, 'no timetable: as TDX says');
 });
 
-test('a ride over 頭前溪 counts against a plan and says so; one on this side doesn’t', async () => {
+test('a ride over 頭前溪 is timed round by its bridge, and nothing more held against it (the owner, 2026-10-12)', async () => {
   const { crossings } = await import('../public/lib/rivers.mjs');
   const stadium = { lat: 24.8212, lon: 121.0176 };
   assert.equal(crossings(stadium, { lat: 24.7985, lon: 121.0045 }), 1, '千甲: over the river');
   assert.equal(crossings(stadium, { lat: 24.8076, lon: 121.0402 }), 0, '六家: this side');
   assert.equal(crossings(stadium, { lat: 24.8392, lon: 121.0095 }), 0, '竹北: this side');
   const ride = to => finish({ legs: [{ mode: 'bike', from: stadium, to, dep: T('08:00'), arr: T('08:15'), dur: 900 }] });
-  assert.ok(score(ride({ lat: 24.7985, lon: 121.0045 }), { now: T('08:00') }) - score(ride({ lat: 24.8076, lon: 121.0402 }), { now: T('08:00') }) >= 20);
+  assert.equal(score(ride({ lat: 24.7985, lon: 121.0045 }), { now: T('08:00') }), score(ride({ lat: 24.8076, lon: 121.0402 }), { now: T('08:00') }), 'the same 15 minutes either side');
 });
 
-test('over 頭前溪 by the bridge a ride would take: from 千甲 經國大橋 in the traffic, from 竹中 a small bridge (more riding, home sooner, a real choice)', async () => {
-  const { bridgesFor, crossingCost } = await import('../public/lib/rivers.mjs');
+test('over 頭前溪 by the bridge least out of the way: from 千甲 經國大橋, from 竹中 nearly on its way', async () => {
+  const { bridgesFor } = await import('../public/lib/rivers.mjs');
   const school = { lat: 24.8189, lon: 121.0172 };
-  const chiencha = { lat: 24.7985, lon: 121.0045 };
-  const chuchung = { lat: 24.7836, lon: 121.0372 };
-  assert.equal(bridgesFor(chiencha, school, 'bike', { direct: true })[0].name, '經國大橋', "a planner's ride from 千甲 goes over 經國大橋");
-  assert.equal(bridgesFor(chuchung, school)[0].kind, 'small');
-  assert.ok(crossingCost(chiencha, school, 'bike') > 3 * crossingCost(chuchung, school, 'bike', true));
-  assert.ok(bridgesFor(chiencha, school)[0].extra > 1000, 'our own ride round to a bike path is longer (its time says so)');
+  assert.equal(bridgesFor({ lat: 24.7985, lon: 121.0045 }, school)[0].name, '經國大橋');
+  assert.ok(bridgesFor({ lat: 24.7836, lon: 121.0372 }, school)[0].extra < 200);
+  assert.ok(bridgesFor({ lat: 24.7985, lon: 121.0045 }, school)[0].extra > 300, 'from 千甲, round to it');
 });
 
 test('a bus route from Shared-Data’s pack, in TDX’s own shapes: its stops each way, its times (or the first stop’s for every stop), its headways', async () => {
@@ -1185,7 +1182,7 @@ test('navigating, live: when you’ll be at the train from where you are (early,
   const far = { lat: 24.8257, lon: 121.0093 };
   const c = navTimes(plan, 0, 'before', far, new Map(), at(2));
   assert.equal(paceOf(plan, 0, 'before', c, new Map(), at(2)).tone, 'bad');
-  assert.match(paceOf(plan, 0, 'before', c, new Map(), at(2)).text, /晚了/);
+  assert.match(paceOf(plan, 0, 'before', c, new Map(), at(2)).text, /晚 \d+ 分/);
   // A train 4 minutes late (its live time): you make it, and you're there later.
   const late = new Map([[1, at(14)]]);
   const d = navTimes(plan, 0, 'before', near, late, at(2));
@@ -1318,7 +1315,7 @@ test("paceOf: walking to the stop, the line doesn't say the stop's name again (t
   const times = navTimes(plan, 0, 'before', null, new Map(), now);
   const p = paceOf(plan, 0, 'before', times, new Map(), now);
   assert.ok(!p.text.includes('新竹車站'), p.text);
-  assert.match(p.text, /早 \d+ 分/);
+  assert.match(p.text, /早到 \d+ 分/);
   // Waiting at the stop itself, it still says where.
   assert.ok(paceOf(plan, 1, 'before', navTimes(plan, 1, 'before', null, new Map(), now), new Map(), now).text.startsWith('新竹車站'));
 });
@@ -1443,8 +1440,8 @@ test("YouBike: the station to leave it at is the one that makes the whole way qu
   assert.equal(legs.find(l => l.mode === 'bike').to.name, '綠41公園');
   // From the north (成功國中 is on the way then): 成功國中.
   assert.equal(returnNear(home, bikes, { from: { lat: 24.8300, lon: 121.0120 } }).uid, 'cg');
-  // A station with its last dock is worth a minute less.
-  assert.equal(returnNear(home, [bikes[0], { ...bikes[1], ret: 1 }, bikes[2]], { from: bikes[0] }).uid, 'cg');
+  // Its last dock now changes nothing.
+  assert.equal(returnNear(home, [bikes[0], { ...bikes[1], ret: 1 }, bikes[2]], { from: bikes[0] }).uid, 'g41');
 });
 
 test("inTaiwan: the app's coverage, the main island and its islands (澎湖, 綠島, 蘭嶼, 金門, 馬祖), not the coast of Fujian beside them", async () => {
@@ -1544,4 +1541,87 @@ test('a YouBike station out of bikes or docks while on the way: the ride moved t
   moveRide(q, 0, 'return', T2);
   assert.deepEqual(q.legs.map(l => [l.mode, l.from.name, l.to.name]), [['bike', '站1', '站4'], ['walk', '站4', '站2']]);
   assert.equal(moveRide(q, 1, 'rent', S2), false);
+});
+
+test('a change where the next train already crosses your way: off at 竹中 for the 六家 train, not on to 新竹 and back', () => {
+  // The 1901 from 上員 reaches 竹中 07:36 and 新竹 07:49; the 1801 leaves 新竹 08:00 and calls at 竹中 08:12.
+  const early = traTrips({ TrainDate: '2026-10-05', TrainTimetables: [train('1901', '6', '區間車', [stop('1201', '07:30'), stop('1194', '07:36'), stop('1193', '07:44'), stop('1210', '07:49')], { end: '新竹' })] });
+  const n2 = network(stations, [...trips, ...early], links(stations));
+  const j = earliest(n2, [{ key: 'tra:1201', at: T('07:20') }], [{ key: 'tra:1195' }], { use: t => t.sys === 'tra' });
+  const rides = j.legs.filter(l => !l.walk);
+  assert.deepEqual(rides.map(l => `${l.trip.no} ${l.from}>${l.to}`), ['1901 tra:1201>tra:1194', '1801 tra:1194>tra:1195']);
+  assert.equal(rides[0].arr, T('07:36'));
+  assert.equal(rides[1].dep, T('08:12'));
+  assert.deepEqual([rides[0].stops, rides[1].stops], [1, 1]);
+  assert.equal(j.arr, T('08:17'), 'the same arrival');
+});
+
+test('the same train left at another station a kilometre or more on is a way of its own; on further only to ride less, home no sooner, is set aside', () => {
+  const o = { lat: 24.733, lon: 121.088 };
+  const d = { lat: 24.8176, lon: 121.0165 };
+  const zhuzhong = { name: '竹中', lat: 24.782, lon: 121.031 };
+  const qianjia = { name: '千甲', lat: 24.8068, lon: 121.0034 };
+  const ride = to => ({ mode: 'tra', short: '區間 1831', from: { name: '竹東', lat: 24.7382, lon: 121.0947 }, to, dep: T('17:12'), arr: to === zhuzhong ? T('17:27') : T('17:34'), train: { no: '1831' } });
+  const bike = (from, dep, min) => ({ mode: 'bike', from, to: d, dep, arr: dep + min * 60_000, dur: min * 60, dist: min * 230 });
+  const viaZ = finish({ legs: [ride(zhuzhong), bike(zhuzhong, T('17:28'), 26)] });
+  const viaQ = finish({ legs: [ride(qianjia), bike(qianjia, T('17:36'), 21)] });
+  assert.ok(!sameWay(viaZ, viaQ));
+  const out = rank([viaZ, viaQ], { now: T('17:00'), o, d });
+  assert.equal(out.length, 2, 'both kept');
+  assert.ok(out.find(p => p.legs[0].to.name === '千甲').weak, 'on to 千甲 for nothing: set aside');
+  assert.ok(!out.find(p => p.legs[0].to.name === '竹中').weak);
+});
+
+test('navigation knows the step you are at from where you are: a step’s end missed, a ride under way, a trip started half way', () => {
+  // 竹東高中 → walk → bike to 竹東站 → walk → 1831 to 竹中 → walk off the platform.
+  const P = (lat, lon, name = '') => ({ name, lat, lon });
+  const school = P(24.733, 121.0882);
+  const dock = P(24.7335, 121.0885, '竹東高中站');
+  const stDock = P(24.7378, 121.0938, '竹東車站站');
+  const zhudong = P(24.7382, 121.0947, '竹東');
+  const zhuzhong = P(24.782, 121.031, '竹中');
+  const plan = finish({
+    legs: [
+      { mode: 'walk', from: school, to: dock, dep: T('17:02'), arr: T('17:03'), dur: 60 },
+      { mode: 'bike', from: dock, to: stDock, dep: T('17:03'), arr: T('17:09'), dur: 360 },
+      { mode: 'walk', from: stDock, to: zhudong, dep: T('17:09'), arr: T('17:10'), dur: 60 },
+      { mode: 'tra', short: '區間 1831', from: zhudong, to: zhuzhong, dep: T('17:12'), arr: T('17:27'), path: [[24.7382, 121.0947], [24.76, 121.06], [24.782, 121.031]] },
+      { mode: 'walk', from: zhuzhong, to: P(24.7825, 121.0315), dep: T('17:27'), arr: T('17:28'), dur: 60 }
+    ]
+  });
+  assert.equal(tripAt(plan, school, 0, T('17:02')), null, 'at the start: nothing to move on to');
+  assert.deepEqual(tripAt(plan, P(24.7356, 121.0911), 0, T('17:05')), { i: 1, phase: 'before' }, 'half way on the bike, the walk’s end never seen');
+  assert.deepEqual(tripAt(plan, P(24.76, 121.06), 0, T('17:20')), { i: 3, phase: 'on' }, 'started on the train');
+  assert.equal(tripAt(plan, P(24.76, 121.06), 0, T('16:30')), null, 'not on a train that can’t have come yet');
+  assert.equal(tripAt(plan, zhudong, 2, T('17:11')), null, 'at the station, waiting: still the walk to it');
+});
+
+test('over the river on the bike after a train is set aside when a train over it gets there in a quarter of an hour; and what’s set aside sets nothing else aside', () => {
+  // 新竹站 → 成功九街: the train to 竹北 and a ride, over the train to 千甲 and a ride over 頭前溪.
+  const o = { lat: 24.8016, lon: 120.9716 };
+  const d = { lat: 24.8176, lon: 121.0165 };
+  const hsinchu = { name: '新竹', lat: 24.8016, lon: 120.9716 };
+  const qianjia = { name: '千甲', lat: 24.7985, lon: 121.0045 };
+  const zhubei = { name: '竹北', lat: 24.8392, lon: 121.0095 };
+  const tr = (no, to, dep, arr) => ({ mode: 'tra', short: `區間 ${no}`, from: hsinchu, to, dep: T(dep), arr: T(arr), train: { no } });
+  const bike = (from, dep, min) => ({ mode: 'bike', from, to: d, dep: T(dep), arr: T(dep) + min * 60_000, dur: min * 60, dist: min * 230 });
+  const viaQ = finish({ legs: [tr('1798', qianjia, '18:45', '18:51'), bike(qianjia, '18:52', 15)] });
+  const viaZ = finish({ legs: [tr('1242', zhubei, '18:37', '18:47'), bike(zhubei, '18:48', 15)] });
+  const out = rank([viaQ, viaZ], { now: T('18:30'), o, d });
+  assert.ok(out.find(p => p.legs[0].to.name === '千甲').weak, 'the ride over 頭前溪 after the train: set aside');
+  assert.ok(!out.find(p => p.legs[0].to.name === '竹北').weak);
+});
+
+test('the same first train, then on to 北新竹 and back up to 竹北, with the same ride home: set aside for the change to the 六家線, home sooner', () => {
+  const o = { lat: 24.733, lon: 121.088 };
+  const d = { lat: 24.8176, lon: 121.0165 };
+  const S = (name, lat, lon) => ({ name, lat, lon });
+  const zhudong = S('竹東', 24.7382, 121.0947), zhuzhong = S('竹中', 24.782, 121.031), liujia = S('六家', 24.8078, 121.039), north = S('北新竹', 24.809, 120.985), zhubei = S('竹北', 24.8392, 121.0095);
+  const tr = (no, from, to, dep, arr) => ({ mode: 'tra', short: `區間 ${no}`, from, to, dep: T(dep), arr: T(arr), train: { no } });
+  const bike = (from, dep, min) => ({ mode: 'bike', from, to: d, dep: T(dep), arr: T(dep) + min * 60_000, dur: min * 60, dist: min * 230 });
+  const viaL = finish({ legs: [tr('1831', zhudong, zhuzhong, '17:12', '17:27'), tr('1758', zhuzhong, liujia, '17:41', '17:46'), bike(liujia, '17:47', 15)] });
+  const viaN = finish({ legs: [tr('1831', zhudong, north, '17:12', '17:38'), tr('1242', north, zhubei, '17:46', '17:50'), bike(zhubei, '17:51', 15)] });
+  const out = rank([viaN, viaL], { now: T('17:00'), o, d });
+  assert.ok(out.find(p => p.legs[1].to.name === '竹北').weak);
+  assert.ok(!out.find(p => p.legs[1].to.name === '六家').weak);
 });

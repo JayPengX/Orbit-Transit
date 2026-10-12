@@ -3757,15 +3757,12 @@ main {
 .ot-nav-end {
   flex: none;
 }
+/* Every step of the trip, whole: a second row when they don't fit one. */
 .ot-nav-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ot-nav-chips::-webkit-scrollbar {
-  display: none;
 }
 .ot-nav-chip {
   display: inline-flex;

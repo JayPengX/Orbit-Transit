@@ -27,7 +27,7 @@ export function mergeBikes(stations, live) {
         lat: Number(s.StationPosition?.PositionLat),
         lon: Number(s.StationPosition?.PositionLon),
         cap: Number(s.BikesCapacity) || 0,
-        kind: s.ServiceType === 1 ? 'YouBike 1.0' : s.ServiceType === 3 ? 'Moovo' : 'YouBike 2.0',
+        kind: s.ServiceType === 3 ? 'Moovo' : 'YouBike 2.0',
         bikes: detail.GeneralBikes != null ? Number(detail.GeneralBikes) || 0 : Math.max(0, total - ebike),
         ebike,
         ret: Number(a?.AvailableReturnBikes) || 0,
