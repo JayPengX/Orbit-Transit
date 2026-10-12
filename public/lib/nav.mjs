@@ -16,6 +16,7 @@ import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEt
 import { etaAround, bikesAround } from './near.mjs';
 import { rideSec, DOCK_SEC } from './plan.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
+import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead } from './ui.mjs';
 import { e, hm, minsText, distText, meters, walkSec, tw, decodeLine } from './util.mjs';
@@ -25,6 +26,10 @@ let nav = null;
 // The ride being followed, kept on the phone: swiped away and opened again,
 // it goes on where it was (savedNav, for tab-map), until it's over or ended.
 const NAV_KEY = 'ot.nav.v1';
+// How long past the plan's arrival a ride is still kept (it ends by itself
+// when you get there): a late bus is still being ridden (the owner,
+// 2026-10-13: opened again on the last stretch, ended at 5 minutes past).
+const NAV_KEEP = 90 * 60_000;
 const plain = x => JSON.parse(JSON.stringify(x, (k, v) => (v instanceof Promise ? undefined : v)));
 function saveNav(state) {
   try {
@@ -34,7 +39,7 @@ function saveNav(state) {
 export function savedNav(now = Date.now()) {
   try {
     const x = JSON.parse(localStorage.getItem(NAV_KEY) || 'null');
-    if (x?.plan?.legs?.length && x.plan.arr > now - 5 * 60_000) return x;
+    if (x?.plan?.legs?.length && x.plan.arr > now - NAV_KEEP) return x;
     localStorage.removeItem(NAV_KEY);
   } catch {}
   return null;
@@ -103,6 +108,7 @@ async function rideStops(l, info) {
     const j = i >= 0 ? nearestStop(stops, l.to, i + 1, 800) : -1;
     return j > i ? { stops, i, j } : null;
   }
+  if (l.mode === 'metro' || l.mode === 'lightrail') return metroStops(l);
   return null;
 }
 
@@ -661,6 +667,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.delay = 0;
     state.fresh = 0;
     state.offAt = off ? Date.now() : 0;
+    // (Off a bus or train by the map: watched a while for still being on it.)
+    state.passed = off && RIDE(plan.legs[state.i - 1]) ? { k: state.i - 1, at: Date.now() } : null;
     state.track = [];
     state.paced = null;
     state.away = 0;
@@ -798,6 +806,24 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.pos = p;
     state.posAt = Date.now();
     follow?.(p);
+    // Taken as off at your stop, but still going along the bus's (or train's)
+    // way, 300 m and more past it: you stayed on. Back on it, off at the next
+    // stop, the rest planned from there (the owner, 2026-10-13).
+    const sp = state.passed;
+    if (sp && state.i === sp.k + 1 && Date.now() - sp.at < 6 * 60_000) {
+      const rs = state.ride.get(sp.k);
+      if (rs?.stops?.length && rs.j < rs.stops.length - 1) {
+        rs.cum ||= routeCum(rs.stops);
+        const a = alongRoute(rs.stops, p, rs.cum, rs.j);
+        const k = a && a.off < 120 && a.d > rs.cum[rs.j] + 300 ? rs.cum.findIndex((c, x) => x > rs.j && c > a.d + 50) : -1;
+        if (k > 0) {
+          const was = rs.stops[rs.j].name;
+          state.passed = null;
+          go(sp.k, 'on');
+          return onAction?.('stayed', { k, was, stop: rs.stops[k] });
+        }
+      }
+    } else if (sp) state.passed = null;
     // Moved on to a later step already (its start reached, or this one's end
     // missed): there at once, off the bus or train if that's where you were.
     const on = tripAt(plan, p, state.i);
@@ -1025,7 +1051,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // Back from the background (an iPhone pauses the page): where you are now, the buses again.
   state.onShow = () => {
     if (document.visibilityState !== 'visible' || nav !== state) return;
-    if (plan.arr < Date.now() - 5 * 60_000) {
+    if (plan.arr < Date.now() - NAV_KEEP) {
       stopNav();
       return onEnd?.();
     }
@@ -1053,7 +1079,24 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   const here0 = here && !(here.at && now - here.at > 3 * 60_000) ? tripAt(plan, here, 0, now) : null;
   const start = here0 && (here0.i > from.i || (here0.i === from.i && here0.phase === 'on')) ? here0 : from;
   go(start.i, start.phase);
+  // Every ride's stops, for the map (each stop a dot on its line), ahead of
+  // reaching it; refreshLive finds them kept.
+  (async () => {
+    for (const [k, l] of plan.legs.entries()) {
+      if (!RIDE(l) || state.ride.has(k) || k < state.i) continue;
+      if (l.mode === 'bus' && l.from?.lat && !state.info.has(k)) state.info.set(k, await busInfo(l).catch(() => ({ leg: l })));
+      const rs = await rideStops(l, state.info.get(k)).catch(() => null);
+      if (nav !== state) return;
+      if (!state.ride.has(k)) state.ride.set(k, rs);
+    }
+    if (nav === state) draw(plan, state.i);
+  })();
   return state;
+}
+// Each ride's stops from where it boards to where it gets off, for the map: [{ k, stops }].
+export function navStops() {
+  if (!nav) return [];
+  return [...nav.ride].filter(([k, rs]) => rs?.stops && k >= nav.i).map(([k, rs]) => ({ k, stops: rs.stops.slice(rs.i, rs.j + 1).filter(s => s.lat != null) }));
 }
 
 // The ride being navigated, for the screens around it: the plan, the step,
@@ -1142,6 +1185,8 @@ export function navRetarget(dest, then = []) {
   if (!nav) return;
   nav.plan.dest = { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) };
   nav.plan.then = then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) }));
+  saveNav(nav);
+  nav.render?.();
 }
 export function navChangeOff(k, rest = []) {
   if (!nav) return;

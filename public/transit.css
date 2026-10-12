@@ -516,6 +516,32 @@ main {
   background: var(--c);
   color: #fff;
 }
+/* 編輯行程, navigating: a place and its × on one row. */
+.ot-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ot-edit-row .ot-row-btn {
+  flex: 1;
+  min-width: 0;
+}
+/* A ride's stops on its line, navigating: small dots; where you get off a ring. */
+.ot-mk.stopdot i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border: 2px solid var(--c);
+  border-radius: 50%;
+  background: #fff;
+}
+.ot-mk.stopdot.off i {
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+  border-width: 4px;
+}
 .ot-mk.board .ot-i {
   width: 14px;
   height: 14px;
