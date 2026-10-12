@@ -202,7 +202,9 @@ the phone's position:
   bar first.
 - **The line under the step** (the bus to catch, how early or late) is
   whole: it goes on to a second line between its parts, never cut.
-- **Every step at the bottom**, whole (a second row when they don't fit).
+- **Every step at the bottom**, whole (a second row when they don't fit);
+  a tap on the one you're at or one ahead goes to it, the ones behind you
+  are faded and can't be tapped.
 - **Both cards fold** for more map: a tap on a card's grip, or a swipe (the
   top up, the bottom down). Folded, the top keeps its step and the line
   under it; the bottom when you're there, ⋯ and 結束. Kept on the device

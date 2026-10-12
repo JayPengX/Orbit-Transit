@@ -3888,6 +3888,8 @@ main {
 }
 .ot-nav-chip.done {
   opacity: 0.45;
+  /* (Behind you: shown, not a button.) */
+  pointer-events: none;
 }
 .ot-nav-chip.on {
   border-color: color-mix(in srgb, var(--c) 70%, transparent);
