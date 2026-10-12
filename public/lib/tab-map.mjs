@@ -317,6 +317,8 @@ const metroMarker = ({ st, color }) => ({ id: st.key, lat: st.lat, lon: st.lon, 
 // ---- Taps ----------------------------------------------------------------------------------------
 
 function pick(it) {
+  // Navigating: the map is to look at; a tap opens nothing (it would take the trip's card and its way off the map).
+  if (navFull()) return dragged();
   following = false;
   openCard({ kind: it.kind, item: it.data, lat: it.lat, lon: it.lon, marker: it });
   focusAbove(it);
@@ -336,6 +338,7 @@ function focusAbove(p) {
 }
 // An empty spot: closes the card, or marks the spot (to plan a trip there).
 async function tap(pt) {
+  if (navFull()) return dragged();
   following = false;
   if (!$('results').hidden) return closeResults();
   if (card) return closeCard();
@@ -352,6 +355,7 @@ async function tap(pt) {
 }
 // One of Google's places: a station opens ours (with its live board).
 async function googlePlace(p) {
+  if (navFull()) return dragged();
   following = false;
   const rail = await railStations().catch(() => []);
   const metro = (await metroSystems(p).catch(() => [])).flatMap(s => s.stations);
@@ -470,7 +474,7 @@ async function directTo(c, mode) {
     const city = await ctx.cityOf(h.lat, h.lon);
     const bikes = city ? await cityBikes(city).catch(() => []) : [];
     legs = bikeTrip(from, to, bikes, now);
-    if (!legs) return ctx.status('附近沒有可借的 YouBike（或那邊沒有空位可還）');
+    if (!legs) return ctx.status('附近沒有 YouBike 站');
   }
   showPlan(finish({ src: mode, legs, tags: [] }), from, to);
 }
@@ -1311,6 +1315,15 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
     if (!navFull()) renderCard();
   }
 }
+// A leg's way on the map: its shape; no shape from the planner, through its
+// own stops when navigation has them (nav.mjs), else a straight line. → [[lat, lon]…]
+function legPath(l) {
+  const polys = Array.isArray(l.poly) ? l.poly : l.poly ? [l.poly] : [];
+  const path = polys.flatMap(x => decodeLine(x, l.fmt));
+  if (path.length) return path;
+  if (Array.isArray(l.path) && l.path.length > 1) return l.path;
+  return l.from?.lat && l.to?.lat ? [[l.from.lat, l.from.lon], [l.to.lat, l.to.lon]] : [];
+}
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
   // (Its own YouBike stations, only: drawLayers.)
@@ -1318,15 +1331,12 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const lines = [];
   const pts = [];
   for (const [k, l] of p.legs.entries()) {
-    const polys = Array.isArray(l.poly) ? l.poly : l.poly ? [l.poly] : [];
-    let path = polys.flatMap(x => decodeLine(x, l.fmt));
-    // No shape from the planner: through its own stops when navigation has them (nav.mjs), else a straight line.
-    if (!path.length && Array.isArray(l.path) && l.path.length > 1) path = l.path;
-    if (!path.length && l.from?.lat && l.to?.lat) path = [[l.from.lat, l.from.lon], [l.to.lat, l.to.lon]];
+    const path = legPath(l);
     if (!path.length) continue;
-    // Navigating: the step you're on bright, the others faint.
-    const dim = lit >= 0 && k !== lit;
-    lines.push({ pts: path, color: dim ? '#4b5263' : l.mode === 'walk' ? '#c5ccd8' : legColor(l), width: l.mode === 'walk' ? 4 : dim ? 5 : 8, dash: l.mode === 'walk', z: dim ? 4 : 6 });
+    // Navigating: the whole trip in its colours, the step you're on the boldest, the steps behind you faint.
+    const done = lit >= 0 && k < lit;
+    const on = lit < 0 || k === lit;
+    lines.push({ pts: path, color: done ? '#4b5263' : l.mode === 'walk' ? '#c5ccd8' : legColor(l), width: l.mode === 'walk' ? 4 : on ? 8 : 6, dash: l.mode === 'walk', z: on ? 6 : done ? 3 : 5 });
     pts.push(...path.map(([lat, lon]) => ({ lat, lon })));
   }
   map.lines('plan', lines);
@@ -1423,8 +1433,9 @@ async function navigate(p, resume = null) {
     follow: pos => {
       ctx.here = { ...pos, at: Date.now() };
       drawMe(ctx.here);
-      // The map stays on you as you go (back on you a little after you've moved it by hand).
-      if (navFollow && navFull()) map?.setView(pos.lat, pos.lon);
+      // The rest of the trip stays in view as you go (every few seconds; back a little after you've moved the map by hand).
+      const n = navNow();
+      if (navFollow && navFull() && n && Date.now() - viewAt > 5_000) navView(n.plan, n.i);
     },
     onAction: navAction,
     onEnd: (how = {}) => {
@@ -1454,21 +1465,30 @@ async function navigate(p, resume = null) {
   // (Only the way on the map now.)
   drawLayers();
 }
-// The way being navigated on the map, the step you're on lit and in view.
+// The way being navigated on the map, the step you're on lit; in view, the
+// rest of the trip from where you are to its end (not only the step).
 function navDraw(plan, i) {
   if (!map) return;
   drawPlan(plan, { fit: false, lit: i });
-  const l = plan.legs[i];
   navFollow = true;
-  // On you, at the step's scale: the street for a walk or a ride of your own, the stops around for a bus, the line for a train.
-  const me = navNow()?.pos || ctx.here;
-  if (me?.lat != null) return map.setView(me.lat, me.lon, STEP_ZOOM[l.mode] || 15);
-  const pts = [l.from, l.to].filter(x => x?.lat != null);
-  if (pts.length) map.fit(pts, { top: 170, bottom: 150, left: 40, right: 40 });
+  navView(plan, i);
 }
-const STEP_ZOOM = { walk: 17, bike: 16, bus: 15, metro: 14, lightrail: 15, tra: 13, hsr: 11 };
-// Navigating, the map follows you; moved or zoomed by a finger it stops, and
-// comes back to you, at the step's scale, 10 s after the last touch (like a phone's own maps).
+// Between the card on top and the one at the bottom: what's left of the trip, you on it.
+let viewAt = 0;
+function navView(plan, i) {
+  viewAt = Date.now();
+  const pts = plan.legs.slice(i).flatMap(l => legPath(l).map(([lat, lon]) => ({ lat, lon })));
+  const me = navNow()?.pos || ctx.here;
+  if (me?.lat != null) pts.push({ lat: me.lat, lon: me.lon });
+  if (!pts.length) return;
+  const box = $('map').getBoundingClientRect();
+  const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;
+  const bottom = $('nav').querySelector('.ot-nav-bottom')?.getBoundingClientRect().top;
+  map.fit(pts, { top: Math.max(60, (top || box.top + 170) - box.top + 24), bottom: Math.max(60, box.bottom - (bottom || box.bottom - 150) + 24), left: 36, right: 36 });
+}
+// Navigating, the map keeps the rest of the trip in view as you go; moved or
+// zoomed by a finger (or tapped) it stops, and 10 s after the last touch it
+// comes back to the trip (like a phone's own maps).
 let navFollow = true;
 let followBack = 0;
 function dragged() {
@@ -1482,10 +1502,8 @@ function dragged() {
   followBack = setTimeout(() => {
     if (!navFull()) return;
     navFollow = true;
-    // Back on you at the step's own scale (zoomed out or in by hand, it comes back in too).
     const n = navNow();
-    const me = n?.pos || ctx.here;
-    if (me?.lat != null) map.setView(me.lat, me.lon, STEP_ZOOM[n?.plan.legs[n.i]?.mode] || 15);
+    if (n) navView(n.plan, n.i);
   }, 10_000);
 }
 
