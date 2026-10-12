@@ -24,7 +24,7 @@ export const useBusCtx = c => (ctx = c);
 export async function nearStops(h, { r = 350, n = 6 } = {}) {
   const at = p => (Math.round(p * 1000) / 1000).toFixed(3);
   const [j, stations] = await Promise.all([
-    tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${at(h.lat)},${at(h.lon)},${r})&$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates&$top=300`, { fresh: 'live' }),
+    tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${at(h.lat)},${at(h.lon)},${r})&$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,DataTime&$top=300`, { fresh: 'live' }),
     stationsNear(h.lat, h.lon).catch(() => [])
   ]);
   const where = name => {

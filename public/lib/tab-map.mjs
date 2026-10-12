@@ -128,6 +128,8 @@ export async function init(c) {
 }
 let pendingTrip = null;
 function showPlan(p, from, to, resume = null) {
+  // (A ride being navigated goes on, shrunk to its bar, while this one opens: never both cards at once.)
+  if (!resume && navFull()) shrinkNav(true);
   card = { kind: 'plans', from: { name: from?.name || '目前位置', lat: from?.lat, lon: from?.lon }, fromHere: !from || from.name === '目前位置', to, lat: to.lat, lon: to.lon, plans: [{ ...p, top: true, lead: true, weak: false, times: [] }], sel: 0, more: false, sources: {} };
   document.body.classList.add('ot-planning');
   // Navigated at once only when it's time to set out (or resumed); a plan
@@ -153,6 +155,11 @@ function takePending() {
 export function show() {
   map?.resize();
   if (pendingTrip && map) return takePending();
+  // Back to the app while navigating: the stage you're at again, once the page has its size.
+  if (map && navFull()) setTimeout(() => {
+    const n = navNow();
+    if (n && navFollow && navFull()) navView(n.plan, n.i);
+  }, 350);
   // A station sent from another tab (捷運's 在地圖上看).
   if (map && ctx.mapFocus) {
     const st = ctx.mapFocus;
@@ -1484,7 +1491,9 @@ function navDraw(plan, i) {
 }
 // Between the card on top and the one at the bottom: the stage you're at, you on it.
 let viewAt = 0;
-function navView(plan, i) {
+function navView(plan, i, tries = 0) {
+  // (Not while the app is away: no size to fit into.)
+  if (document.visibilityState !== 'visible') return;
   viewAt = Date.now();
   const n = navNow();
   const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath);
@@ -1492,7 +1501,12 @@ function navView(plan, i) {
   const box = $('map').getBoundingClientRect();
   const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;
   const bottom = $('nav').querySelector('.ot-nav-bottom')?.getBoundingClientRect().top;
-  map.fit(pts, { top: Math.max(60, (top || box.top + 170) - box.top + 24), bottom: Math.max(60, box.bottom - (bottom || box.bottom - 150) + 24), left: 36, right: 36 });
+  const done = map.fit(pts, { top: Math.max(60, (top || box.top + 170) - box.top + 24), bottom: Math.max(60, box.bottom - (bottom || box.bottom - 150) + 24), left: 36, right: 36 });
+  // (No room yet, the page still laying out: again in a moment, never zoomed out to the island.)
+  if (done === false && tries < 6) setTimeout(() => {
+    const m = navNow();
+    if (m && navFollow && navFull() && Date.now() - viewAt >= 400) navView(m.plan, m.i, tries + 1);
+  }, 500);
 }
 // Navigating, the map keeps the rest of the trip in view as you go; moved or
 // zoomed by a finger (or tapped) it stops, and 10 s after the last touch it

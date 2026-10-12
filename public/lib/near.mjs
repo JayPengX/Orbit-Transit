@@ -108,7 +108,7 @@ export async function stationsAround(lat, lon, opts) {
 
 // ---- When the buses come, a city's stops in one ask -----------------------------------------------
 
-const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,PlateNumb';
+const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,PlateNumb,DataTime';
 const ETA_FRESH = 20_000;
 const CHUNK = 40; // stops an ask (the address stays short)
 const etaKept = new Map(); // `${scope}|${uid}` → { at, rows }
