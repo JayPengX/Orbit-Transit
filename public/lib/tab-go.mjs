@@ -240,11 +240,12 @@ async function keptTrip(key, w) {
   const hit = readTrips()[key];
   const now = Date.now();
   if (!hit || now - hit.at > TRIP_KEEP_MS) return null;
-  // Every way shown still to come (by an arrival time, as it was); else planned again.
+  // Every way shown still to come; else planned again.
   // (The list stays whole: a card's times point into it.)
   const plans = hit.plans;
   const shown = plans.filter(p => p.lead && !p.weak);
-  if (!shown.length || (w.by !== 'arrive' && shown.some(p => p.dep < now - 60_000))) return null;
+  // (By an arrival time too: a way whose time to set out has gone is planned again.)
+  if (!shown.length || shown.some(p => p.dep < now - 60_000)) return null;
   // The buses due soon: their times now.
   const { adjustPlan } = await import('./live.mjs');
   // (From when you can set out: now, or the trip's time; by an arrival time, as planned.)

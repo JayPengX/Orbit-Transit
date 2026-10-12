@@ -73,6 +73,17 @@ CASES['成功九街 → 竹東高中 by 08:00 (TPASS): the buses, and under them
   assert.deepEqual(s.filter(p => /北新竹>竹東/.test(sayPlan(p))).map(sayPlan), []);
 };
 
+CASES['成功九街 → 竹東高中 by 08:00 without YouBike: the buses, never walking 5 km to 千甲 at 04:48 (a walk over 2 km folds while there is a way without one); nothing late'] = opts => {
+  const r = rankSaved('chenggong-zhudonghs-arrive0800-nobike', opts);
+  always('arrive0800-nobike', r);
+  const s = shown(r);
+  assert.ok(s.every(p => p.arr <= Date.parse('2026-10-13T08:00:00+08:00')), say(s));
+  assert.ok(s.every(p => p.legs.every(l => l.mode !== 'walk' || (l.dist || 0) <= 2000)), say(s));
+  assert.ok(s.every(p => p.legs.every(l => l.mode !== 'bike')), say(s));
+  assert.ok(s.some(p => /快捷8號/.test(sayPlan(p))), say(s));
+  assert.ok(s.every(p => p.deadline == null || p.deadline === Date.parse('2026-10-13T08:00:00+08:00')));
+};
+
 for (const [name, check] of Object.entries(CASES)) test(name, () => check());
 
 // Reliable, not lucky: every verdict again with each plan that has a bus a

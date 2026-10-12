@@ -18,6 +18,7 @@ export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
 export const BIKE_MAX_M = 12_000; // further than this, nobody wants to ride
 export const NEAR_M = 500; // a station farther than this from where you are isn't "here"
+export const TREK_M = 2000; // a walk to a bus or train longer than this is no way there
 export const SWAP_SEC = 30 * 60; // YouBike's free (TPASS) or cheapest first half hour
 const RAIL = new Set(['metro', 'tra', 'hsr', 'lightrail']);
 
@@ -681,6 +682,12 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const busChain = x => vehicles(x).some((l, i, a) => i > 0 && l.mode === 'bus' && a[i - 1].mode === 'bus');
   const noChain = list.some(q => !busChain(q) && !q.off);
   for (const p of leads) if (noChain && busChain(p)) over.add(groups.get(pickSig(p)));
+  // A walk nobody takes to a bus or train (over 2 km in one go: 5.4 km to
+  // 千甲 at 04:48 for an 08:00 at school, without YouBike; the owner,
+  // 2026-10-12), whenever a way without one is there.
+  const trek = x => vehicles(x).length && x.legs.some(l => l.mode === 'walk' && (l.dist || 0) > TREK_M);
+  const noTrek = list.some(q => !trek(q) && !q.off);
+  for (const p of leads) if (noTrek && trek(p)) over.add(groups.get(pickSig(p)));
   const other = (q, p) => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && !over.has(groups.get(pickSig(q)));
   for (const p of leads) {
     // Another way onto the same bus or train (a bike to it, not a walk and a
@@ -717,7 +724,8 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // Far behind the best, unless it gets there sooner than ways ahead of
     // it (off at 竹中 and ride, over the change to the 六家線: more riding, but
     // home sooner, a real choice).
-    const sooner = leads.some(q => q !== p && q.score < p.score && q.score <= best + Math.max(45, best) && q.arr > p.arr + 5 * 60_000 && vehicles(q).length);
+    // (By a time, sooner there is no merit: you said when.)
+    const sooner = by !== 'arrive' && leads.some(q => q !== p && q.score < p.score && q.score <= best + Math.max(45, best) && q.arr > p.arr + 5 * 60_000 && vehicles(q).length);
     // (Riding it all is a choice of its own however it scores: the owner,
     // 2026-10-12, wants it under the rest, 成功九街 → 竹東高中 by 電輔車.)
     const far = p.score > best + Math.max(45, best) && !(sooner && p.score <= best + 2 * Math.max(45, best)) && !(p.bike && !vehicles(p).length);
@@ -836,7 +844,7 @@ export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
   // Each plan's first bus as you'd catch it, its way there as it is now (a bike to it built above).
   const clock = opts.clock ?? now;
   return rank(
-    out.filter(p => allowed(p, modes)).map(p => catchBus(p, clock, now)),
+    out.filter(p => allowed(p, modes)).map(p => catchBus(p, clock, opts.by === 'arrive' ? clock : now)),
     { now, o, d, ...opts }
   );
 }

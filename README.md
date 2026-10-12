@@ -90,8 +90,9 @@ batch old against new, say what moved).
    nearer one past it). 每 30 分鐘換 swaps bikes to stay free, always for a
    TPASS that takes YouBike (its switch shows only without one). To be there
    by a time, riding it all sets out to get in 5 minutes early, and our own
-   trains are searched from two hours before (the planners leave out the
-   六家線 then 內灣線 to 竹東).
+   trains, the buses to the stations and the buses on from them are searched
+   from two hours before (the planners leave out the 六家線 then 內灣線 to
+   竹東; without YouBike, a bus to the station, not a 5 km walk).
 5. **Rivers** (`rivers.mjs`): a ride over 頭前溪 or 鳳山溪 goes round by
    the bridge least out of its way, and that distance is its time; no
    bridge counts against it on top (the owner, 2026-10-12). A ride's length
@@ -140,7 +141,9 @@ Each falls back to TDX's own search when the packs can't be had.
    - more changes than a way no later (5 minutes) and no more bother;
    - a change for a hop a walk or a bike would do;
    - it rides most of what riding all the way would;
-   - it's far behind the best (never riding it all: a choice of its own).
+   - a walk over 2 km to a bus or train, while a way without one is there;
+   - it's far behind the best (never riding it all: a choice of its own;
+     by a time, never kept for getting in sooner).
 
    "Bother" is everything but time: changes, buses, walking, riding, the
    long way round, money. Folded ways fold nothing else. The same train left
@@ -203,6 +206,12 @@ the phone's position:
   **Missed it** (past its time, a train's with its delay, and you're still
   at the stop or station): the next one by itself, said and buzzed. A bus
   with live times counts down to the next that comes.
+- **To be there by a time** (a trip planned 抵達 by it): late for the bus
+  on the way, or the next one in too late after missing it, the ways from
+  where you are for the same time are looked for, and the best that's on
+  time offered on the card (「趕不上 5608 的話・改騎電輔車，07:55 到」, one
+  tap swaps the navigation), or said that none is. 換一條路 plans by that
+  time too.
 - **YouBike in navigation**: the bikes and docks at the ride's two stations
   now; found empty (or full), one tap moves the ride to the nearest station
   within 500 m that has some, the walk to it redrawn (none: 換一條路).

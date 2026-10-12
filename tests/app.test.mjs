@@ -9,7 +9,7 @@ import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../publ
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide } from '../public/lib/nav.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, onTimeWay, offerText } from '../public/lib/nav.mjs';
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
@@ -1680,6 +1680,29 @@ test('in navigation, another departure taken: the ride and what follows it move,
   retimeRide(plan, 3, { dep: T('20:20'), arr: T('20:30'), train: { no: '1842', type: '區間' } });
   assert.equal(plan.legs[3].short, '區間 1842');
   assert.equal(plan.arr, T('20:30'));
+});
+
+test('to be there by a time, late in navigation: how late, and the way from here that still makes it (never the ride you are headed for, never one that left)', () => {
+  const P = (name, lat, lon) => ({ name, lat, lon });
+  const stop = P('文興嘉興路口', 24.818, 121.022);
+  const school = P('竹東高中', 24.733, 121.0882);
+  const plan = finish({ deadline: T('08:00'), legs: [
+    { mode: 'walk', from: P('', 24.8176, 121.0165), to: stop, dep: T('06:50'), arr: T('07:00'), dur: 600 },
+    { mode: 'bus', short: '快捷8號支', from: stop, to: school, dep: T('07:02'), arr: T('07:40'), dur: 2280 }
+  ] });
+  assert.equal(lateBy(plan, T('07:40')), 0);
+  assert.equal(lateBy(plan, T('08:01')), 0, 'a minute is on time');
+  assert.equal(lateBy(plan, T('08:15')), 15);
+  assert.equal(lateBy({ ...plan, deadline: undefined }, T('09:00')), 0, 'no time said: never late');
+  const ride = finish({ src: 'bike', tags: [], top: true, lead: true, legs: [{ mode: 'bike', ebike: true, from: P('A', 24.817, 121.017), to: P('B', 24.734, 121.088), dep: T('07:05'), arr: T('07:55'), dur: 3000 }] });
+  const same = finish({ top: true, lead: true, legs: [{ ...plan.legs[1], dep: T('07:02'), arr: T('07:40') }] });
+  const gone = finish({ top: true, lead: true, legs: [{ mode: 'bus', short: '5608', from: P('X', 24.81, 121.02), to: school, dep: T('06:40'), arr: T('07:30'), dur: 3000 }] });
+  const late = finish({ top: true, lead: true, legs: [{ mode: 'bus', short: '5608', from: P('X', 24.81, 121.02), to: school, dep: T('07:30'), arr: T('08:20'), dur: 3000 }] });
+  const now = T('07:03');
+  assert.equal(onTimeWay([same, ride], plan, 1, T('06:58')), null, 'the bus you are headed for still comes: nothing to change');
+  assert.equal(onTimeWay([gone, late, ride], plan, 1, now), ride, 'the one that left and the one too late are no way');
+  assert.equal(onTimeWay([gone, late], plan, 1, now), null);
+  assert.equal(offerText(ride), '改騎電輔車，07:55 到');
 });
 
 test('a route’s stops: a bus between two stops is where a stop’s live time drops below the one before (not one at a stop, which rides on its dot)', async () => {
