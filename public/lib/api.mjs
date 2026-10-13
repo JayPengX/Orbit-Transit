@@ -241,16 +241,36 @@ const walkKey = (a, b) => `${p5(a)}|${p5(b)}`;
 const paced = (dist, extra = {}) => ({ dist, sec: Math.round((dist / WALK_M_MIN) * 60), ...extra });
 // (Known on the phone now, or null.)
 export const walkKnown = (a, b) => walksKept.get(walkKey(a, b)) || null;
+// (OpenStreetMap's walks from one point to many, one ask: its table, the
+// metres from each point to its nearest path added, which it leaves out.)
+async function osmWalks(from, tos) {
+  const pts = [from, ...tos].map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
+  const j = await fetch(`${OSRM.walk}/table/v1/driving/${pts}?sources=0&annotations=distance`, { signal: AbortSignal.timeout?.(8000) })
+    .then(r => (r.ok ? r.json() : null))
+    .catch(() => null);
+  const row = j?.distances?.[0];
+  if (!row) return tos.map(() => null);
+  const snap = Number(j.sources?.[0]?.distance) || 0;
+  return tos.map((_, i) => (row[i + 1] == null ? null : Math.round(row[i + 1] + snap + (Number(j.destinations?.[i + 1]?.distance) || 0))));
+}
+// Each walk the shorter of Google's and OpenStreetMap's: a router misses
+// paths, it never makes one up (Google's 210 m by the lane to 成功國中 where
+// OpenStreetMap goes round the block, 485; OpenStreetMap's 344 m into 縣體育場
+// where Google goes round to an entrance, 748).
 export async function walksTo(from, tos, { line = false } = {}) {
   const need = tos.map((t, i) => (walksKept.get(walkKey(from, t)) && (!line || walksKept.get(walkKey(from, t)).poly) ? -1 : i)).filter(i => i >= 0);
   if (need.length) {
-    const asked = await get(`/transit/walk?from=${p5(from)}&to=${need.map(i => p5(tos[i])).join(';')}${line ? '&line=1' : ''}`).catch(() => null);
+    const [asked, osm] = await Promise.all([get(`/transit/walk?from=${p5(from)}&to=${need.map(i => p5(tos[i])).join(';')}${line ? '&line=1' : ''}`).catch(() => null), osmWalks(from, need.map(i => tos[i]))]);
     await Promise.all(
       need.map(async (i, k) => {
         const g = asked?.walks?.[k];
-        // (Past Google's cap, or no answer: OpenStreetMap's router.)
-        const r = g || (await roadPath('walk', from, tos[i]));
-        if (r) walksKept.set(walkKey(from, tos[i]), paced(r.dist, r.poly ? { poly: r.poly } : {}));
+        const o = osm[k];
+        // Google's, unless OpenStreetMap's is shorter (or Google's isn't there: past its cap).
+        if (g && (o == null || g.dist <= o)) return walksKept.set(walkKey(from, tos[i]), paced(g.dist, g.poly ? { poly: g.poly } : {}));
+        // (Its line, when one's wanted: OpenStreetMap's route.)
+        const r = line || o == null ? await roadPath('walk', from, tos[i]) : null;
+        const dist = o ?? r?.dist;
+        if (dist != null) walksKept.set(walkKey(from, tos[i]), paced(dist, r?.poly ? { poly: r.poly } : {}));
       })
     );
     keepWalks();
