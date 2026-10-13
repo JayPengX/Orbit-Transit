@@ -1205,8 +1205,8 @@ test('navigating, live: when you’ll be at the train from where you are (early,
     { mode: 'tra', short: '區間 1247', dur: 600, dep: at(10), arr: at(20), from: { name: '竹北', lat: 24.8392, lon: 121.0093 }, to: { name: '新竹', lat: 24.8016, lon: 120.9716 } },
     { mode: 'walk', dur: 120, dep: at(20), arr: at(22), from: { lat: 24.8016, lon: 120.9716 }, to: { lat: 24.8018, lon: 120.9653 } }
   ] });
-  // 400 m from the station, two minutes in: there in ~7, the train in 8.
-  const near = { lat: 24.8392 - 0.0036, lon: 121.0093 };
+  // 470 m from the station, two minutes in: there in ~7 (at 5 km/h), the train in 8.
+  const near = { lat: 24.8392 - 0.0042, lon: 121.0093 };
   const a = navTimes(plan, 0, 'before', near, new Map(), at(2));
   assert.ok(a.ready.get(1) > at(7) && a.ready.get(1) < at(10));
   assert.equal(a.eta, at(22));
