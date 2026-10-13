@@ -7,7 +7,7 @@
 
 import { kept, keep } from './api.mjs';
 
-export const PACKS = 'https://jaypengx.github.io/Shared-Data/bus/';
+export const PACKS = 'https://orbit-workers-proxy.pengzjay.workers.dev/data/bus/';
 const SQUARE = 0.25;
 export const squareOf = (lat, lon) => `${(Math.floor(lat / SQUARE) * SQUARE).toFixed(2)}_${(Math.floor(lon / SQUARE) * SQUARE).toFixed(2)}`;
 const FRESH = 20 * 3_600_000;

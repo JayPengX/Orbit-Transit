@@ -20,7 +20,7 @@ import { stationsNear } from './bus.mjs';
 import { cityBikes, bikesNear } from './bike.mjs';
 import { meters } from './util.mjs';
 
-export const WHERE = 'https://jaypengx.github.io/Shared-Data/where.json';
+export const WHERE = 'https://orbit-workers-proxy.pengzjay.workers.dev/data/where.json';
 const FRESH = 20 * 3_600_000;
 
 // where.json (kept a day): { cell, packs: [name…], cells: { "<i>_<j>": [k…] } }.
