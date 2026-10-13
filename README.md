@@ -220,8 +220,10 @@ the phone's position:
   (`ot.nav.fold`); the map fits the room left whenever a card's height
   changes (`cards`).
 - **Walking and riding**: how far is left, and one tap opens Google Maps'
-  or Apple Maps' own turn-by-turn for that step (我的 → 交通偏好 → 導航 App;
-  walking for a walk, cycling for a YouBike ride; free, no billed call).
+  or Apple Maps' own directions for that step (我的 → 交通偏好 → 導航 App;
+  walking for a walk, cycling for a YouBike ride; free, no billed call),
+  opened to look over and start yourself; from where you are on the step
+  you're at, from the step's own start on one looked ahead to (or a plan's).
   Never for a bus or train: those the app navigates itself (the owner,
   2026-10-13: the whole trip by Google's transit, from ⋯, removed).
 - **A bus or train step** counts down to the second and shows where it is
