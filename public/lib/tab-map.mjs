@@ -258,16 +258,11 @@ async function drawLayers() {
   drawPlaces();
   const city = await ctx.cityOf(c.lat, c.lon);
   if (run !== drawing) return;
-  // Looking at a trip: only its own YouBike stations (where you take one and
-  // leave it), no other bikes or bus stops in the way of the way.
+  // Looking at a trip: no other bikes or bus stops in the way of the way (its
+  // own YouBike stations are the plan's: drawPlan).
   if (document.body.classList.contains('ot-planning') && card?.plans) {
-    const p = card.plans[card.sel >= 0 ? card.sel : 0];
-    const ends = (p?.legs || []).filter(l => l.mode === 'bike').flatMap(l => [l.from, l.to]).filter(x => x?.lat != null);
     map.layer('bus').set([]);
-    if (!ends.length || !city) return map.layer('bike').set([]);
-    cityBikes(city)
-      .then(list => run === drawing && map.layer('bike').set(list.filter(st => ends.some(x => meters(x.lat, x.lon, st.lat, st.lon) <= 40)).map(bikeMarker)))
-      .catch(() => {});
+    map.layer('bike').set([]);
     return;
   }
   // YouBike: the city's stations, the 200 nearest the middle.
@@ -1348,9 +1343,12 @@ function legPath(l) {
   if (Array.isArray(l.path) && l.path.length > 1) return l.path;
   return l.from?.lat && l.to?.lat ? [[l.from.lat, l.from.lon], [l.to.lat, l.to.lon]] : [];
 }
-// Where each YouBike goes back: its station on the map too (navigating, the
-// map's own bike stations are off). A swap (every 30 minutes) takes the next
-// bike where this one goes back: that station is marked once, as a start.
+// A trip's YouBike stations, where you take a bike and where it goes back:
+// each as the map's own station marker, its tip on the station (looking at
+// the trip and navigating, when the map's other bike stations are off). A
+// swap (every 30 minutes) returns and takes one at one station: once.
+export const planBikes = legs => [...new Map(legs.filter(l => l.mode === 'bike').flatMap(l => [l.rent, l.ret]).filter(st => st?.uid && st.lat != null).map(st => [st.uid, st])).values()];
+// A ride's end without its station (a plan from elsewhere): a bike at the spot.
 export const bikeReturns = legs =>
   legs.filter((l, k) => {
     const next = legs[k + 1];
@@ -1380,8 +1378,9 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   map.layer('plan').set([
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || '目的地')}">${icon('pin')}</i>` }] : []),
-    ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
-    ...bikeReturns(p.legs).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
+    ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && l.rent?.uid)).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
+    ...planBikes(p.legs).map(st => ({ ...bikeMarker(st), id: `pbike:${st.uid}`, z: 20 })),
+    ...bikeReturns(p.legs).filter(l => !l.ret?.uid).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
     ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops }) =>
       stops.slice(1).map((s, x) => ({ id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${x === stops.length - 2 ? ' off' : ''}`, z: 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>` }))
