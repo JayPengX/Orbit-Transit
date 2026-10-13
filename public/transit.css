@@ -409,18 +409,21 @@ main {
   border-radius: 50%;
   background: #fff;
 }
-/* A pinned place (家, 學校…): its icon in a white-ringed disc, its name beside it. */
+/* A pinned place (家, 學校…): its icon in a white-ringed disc, its name on a
+   solid label tucked under it. Pinned from one of Google's places, it sits on
+   Google's own icon (the place's own spot) and the label over Google's name
+   beside it, so the place shows once (Google can't hide a single place). */
 .ot-mk.place {
   display: flex;
   align-items: center;
-  gap: 5px;
   margin: -14px 0 0 -14px;
   white-space: nowrap;
-  font: 700 12px/1 var(--q-font);
+  font: 700 12.5px/1 var(--q-font);
   color: #e8ecf3;
-  text-shadow: 0 0 3px #000, 0 0 6px #000;
 }
 .ot-mk.place i {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: 28px;
@@ -431,8 +434,14 @@ main {
   background: #1f2937;
   font-style: normal;
   font-size: 15px;
-  text-shadow: none;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.ot-mk.place span {
+  margin-left: -10px;
+  padding: 5px 9px 5px 14px;
+  border-radius: 0 10px 10px 0;
+  background: #1f2937;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 .ot-mk.me {
   margin: -11px 0 0 -11px;
