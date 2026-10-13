@@ -184,26 +184,41 @@ export function hide() {
 
 let bikeTimer = 0;
 let shownBikes = [];
+let nearRun = 0;
 async function nearBikes() {
   const box = $('near-bikes');
   const h = ctx.here;
   if (!box || !h || !ctx.data.layers.bike) return box && (box.hidden = true);
+  const run = ++nearRun;
   const city = await ctx.cityOf(h.lat, h.lon);
   const list = city ? await cityBikes(city).catch(() => []) : [];
+  if (run !== nearRun) return;
+  // (The straight line's guess first, `walk` the streets' metres and seconds once they're in.)
   const near = list
     .map(s => ({ s, d: meters(h.lat, h.lon, s.lat, s.lon) }))
     .filter(x => x.d <= 1000)
     .sort((a, b) => a.d - b.d)
-    .slice(0, 5);
-  shownBikes = near.map(x => x.s);
-  box.hidden = !near.length;
-  box.innerHTML = near
-    .map(
-      ({ s, d }) => `<button class="ot-nb ${bikeLevel(s)}" type="button" data-nb="${e(s.uid)}"><span class="ot-nb-top"><i class="ot-nb-i">${icon('bike')}</i><b>${e(s.name)}</b></span>
+    .slice(0, 5)
+    .map(x => ({ ...x, walk: { dist: Math.round(x.d * 1.3), sec: walkSec(x.d) } }));
+  const draw = rows => {
+    shownBikes = rows.map(x => x.s);
+    box.hidden = !rows.length;
+    box.innerHTML = rows
+      .map(
+        ({ s, walk }) => `<button class="ot-nb ${bikeLevel(s)}" type="button" data-nb="${e(s.uid)}"><span class="ot-nb-top"><i class="ot-nb-i">${icon('bike')}</i><b>${e(s.name)}</b></span>
       <span class="ot-nb-n">${s.ok === false ? '<em>暫停營運</em>' : `<em>${s.bikes}</em><small>一般</small><em class="e">${s.ebike}</em><small>電輔</small><em class="d">${s.ret}</em><small>空位</small>`}</span>
-      <small class="ot-nb-d">${icon('walk')} ${Math.max(1, Math.round(walkSec(d) / 60))} 分 · ${e(distText(d))}</small></button>`
-    )
-    .join('');
+      <small class="ot-nb-d">${icon('walk')} ${Math.max(1, Math.round(walk.sec / 60))} 分 · ${e(distText(walk.dist))}</small></button>`
+      )
+      .join('');
+  };
+  draw(near);
+  if (!near.length) return;
+  // Walking there by the streets (OpenStreetMap's router, free; asked again
+  // only once you've moved ~10 m), nearest that way first.
+  const from = { lat: Math.round(h.lat * 1e4) / 1e4, lon: Math.round(h.lon * 1e4) / 1e4 };
+  const roads = await Promise.all(near.map(x => roadPath('walk', from, x.s).catch(() => null)));
+  if (run !== nearRun || !roads.some(Boolean)) return;
+  draw(near.map((x, k) => (roads[k] ? { ...x, walk: { dist: roads[k].dist, sec: walkSec(roads[k].dist / 1.3) } } : x)).sort((a, b) => a.walk.dist - b.walk.dist));
 }
 export const navOn = () => navigating();
 // Navigating with its card on the map (not shrunk to the bar to do something else).
@@ -478,7 +493,7 @@ async function directTo(c, mode) {
   } else {
     const city = await ctx.cityOf(h.lat, h.lon);
     const bikes = city ? await cityBikes(city).catch(() => []) : [];
-    legs = bikeTrip(from, to, bikes, now);
+    legs = bikeTrip(from, to, bikes, now, { first: true });
     if (!legs) return ctx.status('附近沒有 YouBike 站');
   }
   showPlan(finish({ src: mode, legs, tags: [] }), from, to);
@@ -1327,9 +1342,11 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
       l.road = true;
       l.poly = r.poly;
       l.fmt = '';
-      if (l.mode === 'bike') l.dist = r.dist;
+      // (Its length too: the streets' walking distance, not the straight line's guess.)
+      l.dist = r.dist;
     })
   ]);
+  p.walk = p.legs.filter(l => l.mode === 'walk').reduce((a, l) => a + (l.dist || 0), 0);
   if (card?.plans?.includes(p) && (card.plans[card.sel] === p || (card.sel < 0 && card.plans[0] === p) || navFull())) {
     drawPlan(p, { fit: false, lit });
     if (!navFull()) renderCard();
