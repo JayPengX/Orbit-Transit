@@ -140,8 +140,8 @@ export const navigating = () => Boolean(nav);
 export const NAV_LEAD = 20 * 60_000;
 export const canNav = (p, now = Date.now()) => Boolean(p) && p.arr > now;
 
-// Google Maps' own navigation for one step (walking, riding) or the rest by
-// transit: from where you are then (no origin: Google's own 你的位置, never
+// Google Maps' (or Apple's, below) own navigation for a walk or a ride of
+// your own, never a bus or train (the app's own): from where you are then (no origin: Google's own 你的位置, never
 // a point we pinned), to the place itself when it's one of Google's (its
 // place id: the shop, not a spot in the road outside it), else the point.
 export const GOOGLE_ID = /^[A-Za-z0-9_-]{20,300}$/;
@@ -152,9 +152,23 @@ export function gmapsLink(to, mode) {
     p.set('destination_place_id', to.gid);
   } else p.set('destination', `${to.lat},${to.lon}`);
   p.set('travelmode', mode);
-  if (mode !== 'transit') p.set('dir_action', 'navigate');
+  p.set('dir_action', 'navigate');
   return `https://www.google.com/maps/dir/?${p}`;
 }
+// Apple Maps' own navigation, the same: from where you are, walking or
+// cycling, to the point (Apple has no Google place id; the
+// name labels it). Apple's Maps URLs (maps.apple.com/directions).
+const APPLE_MODE = { walking: 'walking', bicycling: 'cycling' };
+export function appleMapsLink(to, mode) {
+  const p = new URLSearchParams({ destination: `${to.lat},${to.lon}`, mode: APPLE_MODE[mode] || 'walking' });
+  if (to.name) p.set('destination-name', to.name);
+  return `https://maps.apple.com/directions?${p}`;
+}
+// The app the person navigates with (我的 → 交通偏好 → 導航 App): its link and its name.
+let mapsApp = () => 'google';
+export const useMapsApp = get => (mapsApp = get);
+export const mapsLink = (to, mode) => (mapsApp() === 'apple' ? appleMapsLink(to, mode) : gmapsLink(to, mode));
+export const mapsName = () => (mapsApp() === 'apple' ? 'Apple 地圖' : 'Google 地圖');
 // Where a leg ends, for Google: the trip's own place for its last one.
 export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat != null && meters(plan.dest.lat, plan.dest.lon, plan.legs[k].to.lat, plan.legs[k].to.lon) < 300 ? plan.dest : plan.legs[k].to);
 
@@ -323,7 +337,7 @@ export function paceOf(plan, i, phase, times, liveAt = new Map(), now = Date.now
     const m = Math.round((dep - now) / 60_000);
     return { text: `${at}${when}${m > 0 ? `・${m} 分後` : '・就要到了'}${live && !/到站/.test(live) ? `・${live}` : ''}`, tone: m > 0 ? '' : 'warn' };
   }
-  // (How early or late you'll be there says when: beside Google 地圖, on to a
+  // (How early or late you'll be there says when: beside Google (or Apple) 地圖, on to a
   // second line between its parts when the stop's name is long, never cut.)
   const slack = Math.round((dep - times.ready.get(ri)) / 60_000);
   if (slack >= 2) return { text: `${at}${when}・早到 ${slack} 分`, tone: 'good' };
@@ -578,9 +592,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const board = on && rs && state.next != null && !state.done ? boardHtml(rs, state.next, state.ahead, state.delay, times.end[state.i], state.paced, state.delayLive, navStopAt) : '';
     // YouBike where you take it and leave it, now: bikes (or none, and the nearest that has some), docks.
     const bikeLine = state.done ? '' : bikesText(state.bikes, plan, state.i, state.pos);
-    // A walk or a ride of your own: Google Maps' turn-by-turn for it, from where you are.
+    // A walk or a ride of your own: Google's or Apple's turn-by-turn for it (walking, cycling), from where you are.
     const own = !state.done && (l.mode === 'walk' || l.mode === 'bike') && l.to?.lat != null;
-    const gm = own ? gmapsLink(legEnd(plan, state.i), l.mode === 'bike' ? 'bicycling' : 'walking') : '';
+    const gm = own ? mapsLink(legEnd(plan, state.i), l.mode === 'bike' ? 'bicycling' : 'walking') : '';
     const paceText = pace.text || (own ? `約 ${hm(times.end[state.i])} 到${l.to?.name ? ` ${l.to.name}` : ''}` : '');
     // Late for the bus or train: a new plan from here, one tap.
     const late = !state.done && pace.tone === 'bad';
@@ -620,7 +634,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           ${big ? `<span class="ot-nav-big"${cd}>${big}</span>` : ''}
         </div>
         ${fold.top ? '' : `${track}${board}`}
-        ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map((x, k, a) => `<span>${e(x)}${k < a.length - 1 ? '・' : ''}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}重新規劃</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}Google 地圖</a>` : ''}</div>` : ''}
+        ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map((x, k, a) => `<span>${e(x)}${k < a.length - 1 ? '・' : ''}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}重新規劃</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
         ${bikeLine && !fold.top ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
         ${fold.top ? '' : then}
         ${grip('top', fold.top)}

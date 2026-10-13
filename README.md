@@ -48,7 +48,7 @@ batch old against new, say what moved).
 **Opening** (`tab-map ready`, `app.mjs`): the loading screen lifts onto the finished map: a fresh fix (1.5 s at most; the kept one after), the tiles (1.5 s at most), what's in view and the strip in its order; 4 s at the very most. The map's library and its tiles' servers are asked by the page as it opens (`index.html`, the provider kept from the last opening), not once the app's code is in. Each ride's start is marked on the way; a YouBike's stations are the map's own station markers, the tip on the station, with what you need there as it is now: where you take one its bikes (the bike, ⚡ too), where it goes back its docks (a parking P, an icon like its bike, `dock`), a swap (every 30 minutes) both on one marker; no words on the marker (`planBikes`, `planBikeMarker`), looking at the trip and navigating, when the map's other bike stations are off. |
 | **交通** | What's coming that you'd take, refreshed while open: **常用・釘選行程** (your saved trips' next ways to go, recurring ones by day, with the buses' real times; one tap navigates; always from the trip's own start (from where you are only within 800 m of it, or when its start is 目前位置), the way back by itself once you're in the far end's part of the trip, its last 30%, `tab-go tripNow`; a trip saved from where you are keeps that spot as its start, and 編輯行程 changes either end); **釘選的公車・火車** (a stop's bus, a connection, one train, from whichever end you're nearer); **釘選地點** (each place's buses, bikes, station, and how to get there). What's recommended is never pinned by itself: ☆ pins it. |
 | **查時刻** | A timetable on purpose. **台鐵・高鐵**: station to station, changing wherever it's faster (the router), with each option's trains, where to change and the wait, the fare and today's delays; ☆ pins a connection or one train. **公車**: a route by number or stop name (your city, its neighbours and 公路客運), its stops each way with the buses now (a bus at a stop on its dot, one between two stops on the line between them), or a stop's timetable for any day of the coming week; ☆ pins a stop. |
-| **我的** | **地點** (rename, reorder, remove); **行程** (a place to a place, maybe at a time, maybe every weekday; the way back comes by itself); **釘選交通** (bus stops in groups: 常用, 上班, 回家…; trains); **交通偏好** (which ways of moving to use, 每 30 分鐘換 YouBike, your TPASS); **車票** (高鐵 T Express and 台鐵 e訂通: the app opened, the train's details copied, `tickets.mjs`); **捷運路網圖** (each city's metro on the real map, a station's next trains, live where the operator sends them). |
+| **我的** | **地點** (rename, reorder, remove); **行程** (a place to a place, maybe at a time, maybe every weekday; the way back comes by itself); **釘選交通** (bus stops in groups: 常用, 上班, 回家…; trains); **交通偏好** (which ways of moving to use, 每 30 分鐘換 YouBike, the app a walk or a ride is handed to: Google 地圖 or Apple 地圖, your TPASS); **車票** (高鐵 T Express and 台鐵 e訂通: the app opened, the train's details copied, `tickets.mjs`); **捷運路網圖** (each city's metro on the real map, a station's next trains, live where the operator sends them). |
 
 ## Planning a trip
 
@@ -218,7 +218,10 @@ the phone's position:
   (`ot.nav.fold`); the map fits the room left whenever a card's height
   changes (`cards`).
 - **Walking and riding**: how far is left, and one tap opens Google Maps'
-  own turn-by-turn for that step (free, no billed call).
+  or Apple Maps' own turn-by-turn for that step (我的 → 交通偏好 → 導航 App;
+  walking for a walk, cycling for a YouBike ride; free, no billed call).
+  Never for a bus or train: those the app navigates itself (the owner,
+  2026-10-13: the whole trip by Google's transit, from ⋯, removed).
 - **A bus or train step** counts down to the second and shows where it is
   now: how many stops away and which it's at, from TDX's estimates at
   every stop for a bus, and the live board and timetable for a train. No
@@ -299,7 +302,7 @@ the phone's position:
 | What's near a point | Shared-Data `where.json` (nightly) | `near.mjs`, kept a day |
 | The lines' shapes | Shared-Data `shape/rail.json`, `shape/bus/…` (weekly) | `shapes.mjs`, kept a week |
 | The map | Google Maps JS (the browser key, counted as a map load) or NLSC | `/transit/config` |
-| Place search, details | Google Places (New), OpenStreetMap past the cap | `/transit/search`, `/transit/place` |
+| Place search, details (Autocomplete beside Text Search's 20 near you: a chain's branches nearest first, a typo still found, the same chain far away left out while one is near; Shared-Proxy `nearFirst`) | Google Places (New), OpenStreetMap past the cap | `/transit/search`, `/transit/place` |
 | Plans | Google's transit routes and TDX's planner | `/transit/route` |
 
 Every ask is signed with the pass's session (`api.mjs`), given a time
