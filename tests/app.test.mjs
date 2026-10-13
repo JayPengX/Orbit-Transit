@@ -169,11 +169,25 @@ const busPlan = P(T('08:00'), [
   { mode: 'bus', short: '20', dur: 600, dist: 1000, dep: T('10:06'), arr: T('10:16'), from: { name: '市府', lat: 25.0410, lon: 121.5655 }, to: { name: '101', lat: 25.0335, lon: 121.5654 } }
 ]);
 
-test('YouBike stations: by where they are, never by the bikes or docks there now; one out of service isn’t one', () => {
+test('YouBike stations: by where they are, not by the bikes or docks there now, except where a trip starts with the bike: never one empty as you plan (the owner, 2026-10-13); one out of service isn’t one', () => {
   assert.equal(rentNear(O, BIKES).uid, 'a');
   assert.equal(rentNear(O, BIKES, { ebike: true }).uid, 'a');
-  assert.equal(rentNear({ lat: 24.8020, lon: 120.9718 }, BIKES).uid, 'b', 'none there now: still the station (navigation moves it if it’s empty then)');
-  assert.equal(returnNear({ lat: 24.8020, lon: 120.9718 }, BIKES).uid, 'b');
+  const station = { lat: 24.8020, lon: 120.9718 };
+  const near = { uid: 'n', name: '旁邊', lat: 24.8024, lon: 120.9722, bikes: 2, ebike: 0, ret: 4, ok: true };
+  // A bike taken later (off a train): by place, the counts will have changed.
+  assert.equal(rentNear(station, [...BIKES, near]).uid, 'b', 'later on: still the station there');
+  // The trip starts with it: one that has a bike now.
+  assert.equal(rentNear(station, BIKES, { first: true }), null, 'no bike there now: not where you take one');
+  assert.equal(rentNear(station, [...BIKES, near], { first: true }).uid, 'n', 'the next one that has a bike');
+  assert.equal(rentNear(station, [...BIKES, near], { first: true, ebike: true }), null, 'a 電輔車 ride: one with a 電輔車');
+  assert.equal(rentNear(station, [...BIKES, { ...near, bikes: 0, ebike: 1 }], { first: true }).uid, 'n', 'a 電輔車 is a bike to take');
+  // Where it goes back: full or not, the nearest (navigating, 換附近的站 is a tap).
+  assert.equal(returnNear(station, [...BIKES, near]).uid, 'b');
+  assert.equal(returnNear(station, [{ ...BIKES[1], ret: 0 }, near]).uid, 'b');
+  // Riding the whole way from beside the empty one: from the one with bikes.
+  const ride = bikeOnly(station, { lat: 24.8013, lon: 120.9906 }, [...BIKES, near], Date.now())[0];
+  assert.ok(ride, 'riding it all');
+  assert.equal(ride.legs.find(l => l.mode === 'bike').rent.uid, 'n');
 });
 
 test('by bike to the train: the same 自強, leaving later', () => {

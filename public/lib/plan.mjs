@@ -69,8 +69,16 @@ function bestStation(pt, list, other, ebike) {
 }
 const usable = s => s.ok !== false;
 const within = (pt, bikes, max) => bikes.filter(usable).map(s => ({ s, d: meters(pt.lat, pt.lon, s.lat, s.lon) })).filter(x => x.d <= max).sort((a, b) => a.d - b.d);
-export function rentNear(pt, bikes, { ebike = false, max = NEAR_M, to = null } = {}) {
-  return bestStation(pt, within(pt, bikes, max), to, ebike);
+// Where you take one, on a trip that starts with the bike (`first`): never a
+// station empty as you plan (no bike there now; for a 電輔車, none of those),
+// the owner's one exception to stations by place (2026-10-13). A bike taken
+// later (off a train) is by place: the counts will have changed by then. A
+// station full where it goes back is still the one (換附近的站 is a tap,
+// navigating), and a swap's needs no bike: you take one again where you
+// return yours.
+const hasBike = (s, ebike) => s.bikes == null || (ebike ? s.ebike : s.bikes + s.ebike) > 0;
+export function rentNear(pt, bikes, { ebike = false, max = NEAR_M, to = null, first = false } = {}) {
+  return bestStation(pt, within(pt, bikes, max).filter(x => !first || hasBike(x.s, ebike)), to, ebike);
 }
 export function returnNear(pt, bikes, { max = NEAR_M, from = null, ebike = false } = {}) {
   return bestStation(pt, within(pt, bikes, max), from, ebike);
@@ -128,9 +136,10 @@ export function swapRides(legs, bikes) {
 
 // From a to b by YouBike, leaving at dep: walk, ride, walk. Null when there's
 // no bike near a or no dock near b.
-export function bikeTrip(a, b, bikes, dep, { ebike = false, swap = false } = {}) {
+// `first`: the trip starts with it (where you take one has a bike now: rentNear).
+export function bikeTrip(a, b, bikes, dep, { ebike = false, swap = false, first = false } = {}) {
   // (Where you take it, towards where you're going; where you leave it, from where you took it.)
-  const rent = rentNear(a, bikes, { ebike, to: b });
+  const rent = rentNear(a, bikes, { ebike, to: b, first });
   const ret = rent && returnNear(b, bikes, { from: rent, ebike });
   if (!rent || !ret || rent.uid === ret.uid) return null;
   const legs = [];
@@ -173,10 +182,10 @@ export function bikeOnly(o, d, bikes, now, { swap = false } = {}) {
   const dist = meters(o.lat, o.lon, d.lat, d.lon);
   if (dist > BIKE_MAX_M || dist < 300) return [];
   const out = [];
-  const plain = bikeTrip(o, d, bikes, now, { swap });
+  const plain = bikeTrip(o, d, bikes, now, { swap, first: true });
   if (plain) out.push(finish({ src: 'bike', legs: plain }));
   if (dist >= 2000) {
-    const e = bikeTrip(o, d, bikes, now, { ebike: true, swap });
+    const e = bikeTrip(o, d, bikes, now, { ebike: true, swap, first: true });
     if (e) out.push(finish({ src: 'bike', legs: e }));
   }
   return out;
@@ -194,7 +203,7 @@ export function bikeToRail(plan, o, bikes, { anyRide = false, at = -1 } = {}) {
   if (!before.some(l => l.mode === 'bus') && before.reduce((a, l) => a + (l.mode === 'walk' ? l.dist || 0 : 0), 0) < 600) return null;
   const board = plan.legs[k];
   if (!board.from?.lat || meters(o.lat, o.lon, board.from.lat, board.from.lon) > 6000) return null;
-  const ride = bikeTrip(o, board.from, bikes, 0);
+  const ride = bikeTrip(o, board.from, bikes, 0, { first: true });
   if (!ride) return null;
   const took = ride.at(-1).arr; // from 0
   const leave = board.dep - 2 * 60_000 - took;
@@ -869,9 +878,9 @@ function withStations(p, bikes) {
   const legs = p.legs
     // TDX's zero-length walks between two halves of one stop.
     .filter(l => !(l.mode === 'walk' && (l.dist || 0) < 5 && (l.dur || 0) < 30))
-    .map(l => {
+    .map((l, i, all) => {
       if (l.mode !== 'bike' || l.rent) return l;
-      const rent = rentNear(l.from, bikes, { max: 700, to: l.to });
+      const rent = rentNear(l.from, bikes, { max: 700, to: l.to, first: all.slice(0, i).every(x => x.mode === 'walk') });
       const ret = returnNear(l.to, bikes, { max: 700, from: rent || l.from });
       // Our router's ride to a station: its stations, or the plan goes (a walk that long is no plan).
       if (l.placeholder) {
