@@ -124,7 +124,7 @@ export async function init(c) {
   idle();
   // A ride being followed when the app was swiped away: on with it.
   const was = savedNav();
-  if (was) pendingTrip = { nav: was.plan, from: was.plan.legs[0].from, to: was.plan.legs.at(-1).to, resume: { i: was.i, phase: was.phase, min: Boolean(was.min) } };
+  if (was) pendingTrip = { nav: was.plan, from: was.plan.legs[0].from, to: was.plan.legs.at(-1).to, resume: { i: was.i, reached: was.reached, phase: was.phase, min: Boolean(was.min) } };
   // (Started behind another tab, for a shrunk ride: only the ride, not the map's own refreshing.)
   if (pendingTrip) document.body.classList.contains('tab-map') ? show() : takePending();
   settle().finally(isReady);
