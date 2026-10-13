@@ -1348,6 +1348,14 @@ function legPath(l) {
   if (Array.isArray(l.path) && l.path.length > 1) return l.path;
   return l.from?.lat && l.to?.lat ? [[l.from.lat, l.from.lon], [l.to.lat, l.to.lon]] : [];
 }
+// Where each YouBike goes back: its station on the map too (navigating, the
+// map's own bike stations are off). A swap (every 30 minutes) takes the next
+// bike where this one goes back: that station is marked once, as a start.
+export const bikeReturns = legs =>
+  legs.filter((l, k) => {
+    const next = legs[k + 1];
+    return l.mode === 'bike' && l.to?.lat != null && !(next?.mode === 'bike' && next.from?.lat != null && meters(l.to.lat, l.to.lon, next.from.lat, next.from.lon) < 40);
+  });
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
   // (Its own YouBike stations, only: drawLayers.)
@@ -1373,6 +1381,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || '目的地')}">${icon('pin')}</i>` }] : []),
     ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
+    ...bikeReturns(p.legs).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
     ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops }) =>
       stops.slice(1).map((s, x) => ({ id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${x === stops.length - 2 ? ' off' : ''}`, z: 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>` }))
