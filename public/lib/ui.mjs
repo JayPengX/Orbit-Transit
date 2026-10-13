@@ -21,6 +21,8 @@ export const sheetHead = (title, sub = '') => `<div class="q-sheet-head"><div><h
 // 24×24 stroked icons, one per way of moving.
 const I = {
   walk: '<circle cx="13" cy="4.5" r="2"/><path d="M10.5 21l2-6.5 3 3V21M7 12.5l2.5-4.5 4 1 2.5 3.5M12.5 9l-1.5 5.5"/>',
+  // Where a YouBike goes back: a parking sign's P, centred in its square.
+  dock: '<rect x="3" y="3" width="18" height="18" rx="4.5"/><path d="M9 16.5v-9h3a2.75 2.75 0 0 1 0 5.5H9"/>',
   bike: '<circle cx="6" cy="16.5" r="3.5"/><circle cx="18" cy="16.5" r="3.5"/><path d="M6 16.5l4-8h5l3 8M10 8.5L12.5 16.5h-6.5M14 5.5h2.5"/>',
   bus: '<rect x="4.5" y="3.5" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 18.5V21M16 18.5V21"/><circle cx="8" cy="15" r=".6"/><circle cx="16" cy="15" r=".6"/>',
   metro: '<rect x="5.5" y="3" width="13" height="15" rx="4"/><path d="M5.5 11.5h13M9 21l1.5-3M15 21l-1.5-3"/><circle cx="9" cy="14.8" r=".6"/><circle cx="15" cy="14.8" r=".6"/>',
