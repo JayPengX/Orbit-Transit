@@ -11,12 +11,12 @@
 //      inside your TPASS's area only by what the pass takes.
 // Only the ways of moving the person allows (我的 → 交通偏好) are used.
 
-import { routePlans, townships } from './api.mjs';
+import { routePlans, townships, walksTo, walkKnown } from './api.mjs';
 import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -26,6 +26,17 @@ import { crossings } from './rivers.mjs';
 import { rec } from '#kit/quadra.mjs';
 
 const RAIL = new Set(['tra', 'hsr']);
+
+// The planner's YouBike stations by the streets: the walks it knows (either way round).
+useStreetWalks((a, b) => (walkKnown(a, b) || walkKnown(b, a))?.dist ?? null);
+// The walks from each end of the trip to its five nearest stations (within
+// 700 m), Google's (one ask an end), before the stations are chosen; 1.5 s
+// at most (the straight line for any not in).
+async function streetWalks(bikes, from, to) {
+  const near = p => bikes.map(s => ({ s, d: meters(p.lat, p.lon, s.lat, s.lon) })).filter(x => x.d <= 700 && x.s.ok !== false).sort((a, b) => a.d - b.d).slice(0, 5).map(x => x.s);
+  const asks = [from, to].map(p => (p?.lat != null && near(p).length ? walksTo(p, near(p)).catch(() => null) : null));
+  await Promise.race([Promise.all(asks), new Promise(r => setTimeout(r, 1500))]);
+}
 
 // A point's TDX city, from the townships list (loaded once, kept a month).
 let towns = null;
@@ -222,6 +233,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
       list = [...list, ...more];
     }
     const bikes = await bikesNow;
+    await streetWalks(bikes, from, to);
     const t2 = performance.now();
     const ranked = withBikes(list, from, to, bikes, t0, { modes, swap: bikeSwap(prefs), cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
     // Each plan's fare line (TPASS counted); to be there by a time, the time

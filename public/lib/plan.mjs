@@ -57,14 +57,25 @@ const roadM = (a, b) => {
 // 六家, 綠41公園 on the way, not 成功國中 behind; the owner, 2026-10-13). A walk
 // past 5 minutes is slow going, as in the score (竹東街上: not 8 minutes on
 // foot to save 2 on the bike).
+// Walks by the streets where they're known (the planner asks Google's for
+// the stations near each end, api walksTo): a station round the block of a
+// stadium is no 4-minute walk however near it looks (新竹縣體育場 → 成功國中:
+// 350 m as the crow flies, 670 on foot). → metres, or null (the straight
+// line ×1.3 then).
+let streetM = () => null;
+export const useStreetWalks = f => (streetM = f);
 function bestStation(pt, list, other, ebike) {
   if (!list.length) return null;
   if (!other) return list[0].s;
   const direct = meters(pt.lat, pt.lon, other.lat, other.lon);
   const back = x => Math.max(0, meters(x.s.lat, x.s.lon, other.lat, other.lon) - direct);
   const cost = x => {
-    const walk = x.d + bridgeExtra(pt, x.s);
-    return walkSec(walk + 2 * back(x)) + slowWalk(walk * 1.3) * 60 + rideSec(roadM(x.s, other) / 1.25, ebike);
+    const road = streetM(pt, x.s);
+    const walk = road != null ? road / 1.3 : x.d + bridgeExtra(pt, x.s);
+    // (Choosing where to take a bike, a walk past 5 minutes counts double:
+    // 光明九路停車場 511 m on foot was taken over 新竹縣體育場 151 m to save a
+    // few minutes' riding; the owner, 2026-10-13.)
+    return walkSec(walk + 2 * back(x)) + slowWalk(walk * 1.3) * 60 * 2 + rideSec(roadM(x.s, other) / 1.25, ebike);
   };
   return list.reduce((a, b) => (cost(b) < cost(a) ? b : a)).s;
 }
@@ -85,9 +96,10 @@ export function returnNear(pt, bikes, { max = NEAR_M, from = null, ebike = false
   return bestStation(pt, within(pt, bikes, max), from, ebike);
 }
 
-// (Over a river, the way round to its bridge too.)
+// (By the streets where known; else the straight line, over a river the way round to its bridge too.)
 const walkLeg = (from, to, dep) => {
-  const dist = Math.round((meters(from.lat, from.lon, to.lat, to.lon) + bridgeExtra(from, to)) * 1.3);
+  const road = streetM(from, to);
+  const dist = road != null ? Math.round(road) : Math.round((meters(from.lat, from.lon, to.lat, to.lon) + bridgeExtra(from, to)) * 1.3);
   const dur = walkSec(dist / 1.3);
   return { mode: 'walk', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dur, dist, dep, arr: dep + dur * 1000, straight: true };
 };
