@@ -24,7 +24,7 @@ import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { buyTicket } from './tickets.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, WALK_M_MIN, inTaiwan } from './util.mjs';
 import { openRoute } from './bus-ui.mjs';
 import * as kit from '#kit/quadra.mjs';
 
@@ -199,7 +199,7 @@ async function nearBikes() {
     .filter(x => x.d <= 1000)
     .sort((a, b) => a.d - b.d)
     .slice(0, 5)
-    .map(x => ({ ...x, walk: { dist: Math.round(x.d * 1.3), sec: walkSec(x.d) } }));
+    .map(x => ({ ...x, walk: { dist: Math.round(x.d), sec: walkSec(x.d) } }));
   const draw = rows => {
     shownBikes = rows.map(x => x.s);
     box.hidden = !rows.length;
@@ -213,12 +213,10 @@ async function nearBikes() {
   };
   draw(near);
   if (!near.length) return;
-  // Walking there by the streets (OpenStreetMap's router, free; asked again
-  // only once you've moved ~10 m), nearest that way first.
-  const from = { lat: Math.round(h.lat * 1e4) / 1e4, lon: Math.round(h.lon * 1e4) / 1e4 };
-  const roads = await Promise.all(near.map(x => roadPath('walk', from, x.s).catch(() => null)));
-  if (run !== nearRun || !roads.some(Boolean)) return;
-  draw(near.map((x, k) => (roads[k] ? { ...x, walk: { dist: roads[k].dist, sec: walkSec(roads[k].dist / 1.3) } } : x)).sort((a, b) => a.walk.dist - b.walk.dist));
+  // Walking there by the streets (walkFrom), nearest that way first.
+  const ws = await Promise.all(near.map(x => walkFrom(h, x.s)));
+  if (run !== nearRun || !ws.some(Boolean)) return;
+  draw(near.map((x, k) => (ws[k] ? { ...x, walk: ws[k] } : x)).sort((a, b) => a.walk.dist - b.walk.dist));
 }
 export const navOn = () => navigating();
 // Navigating with its card on the map (not shrunk to the bar to do something else).
@@ -469,13 +467,34 @@ function refreshCard() {
 
 // A card's place as a trip's end; one of Google's carries its id (Google Maps' own navigation goes to the place itself).
 const placeOf = c => ({ name: c.item.name || '', lat: c.item.lat ?? c.lat, lon: c.item.lon ?? c.lon, ...(c.kind === 'place' && (c.item.gid || GOOGLE_ID.test(c.item.id || '')) ? { gid: c.item.gid || c.item.id } : {}) });
+// Walking from where you are to a spot: one rule for the strip of nearest
+// stations, a card's 距離 and 走過去, and the walk it starts. By the streets
+// (OpenStreetMap's foot router, free; asked again once you've moved ~10 m),
+// the straight line until it answers. → { dist, sec, road }
+const walks = new Map();
+const hereAt = h => ({ lat: Math.round(h.lat * 1e4) / 1e4, lon: Math.round(h.lon * 1e4) / 1e4 });
+const walkKey = (h, p) => { const a = hereAt(h); return `${a.lat},${a.lon}|${p.lat.toFixed(5)},${p.lon.toFixed(5)}`; };
+const walkOf = r => ({ dist: r.dist, sec: Math.round((r.dist / WALK_M_MIN) * 60), road: r });
+// (Known now, or null.)
+const walkKnown = (h, p) => walks.get(walkKey(h, p)) || null;
+async function walkFrom(h, p) {
+  const k = walkKey(h, p);
+  if (!walks.has(k)) {
+    const r = await roadPath('walk', hereAt(h), p).catch(() => null);
+    if (!r) return null;
+    walks.set(k, walkOf(r));
+  }
+  return walks.get(k);
+}
 // To a stop (or a bike station) on foot or by YouBike only, navigated at once.
 function goThere(c, { bike = true } = {}) {
   const h = ctx.here;
   if (!h) return '';
   const d = meters(h.lat, h.lon, c.lat, c.lon);
   if (d < 40 || d > 8000) return '';
-  const walkMin = Math.max(1, Math.round(walkSec(d) / 60));
+  const w = walkKnown(h, c);
+  if (!w) walkFrom(h, c).then(x => x && card === c && renderCard());
+  const walkMin = Math.max(1, Math.round((w ? w.sec : walkSec(d)) / 60));
   return `<div class="ot-go-there"><button class="q-btn" type="button" data-card="walk-there">${icon('walk')} 走過去 · ${walkMin} 分</button>${bike && d > 600 ? `<button class="q-btn" type="button" data-card="bike-there">${icon('bike')} 騎 YouBike</button>` : ''}</div>`;
 }
 async function directTo(c, mode) {
@@ -486,10 +505,11 @@ async function directTo(c, mode) {
   const now = Date.now();
   let legs;
   if (mode === 'walk') {
-    const road = await roadPath('walk', from, to);
-    const dist = road?.dist || Math.round(meters(h.lat, h.lon, c.lat, c.lon) * 1.3);
-    const dur = road?.dur ? Math.max(road.dur, Math.round((dist / 75) * 60)) : walkSec(dist / 1.3);
-    legs = [{ mode: 'walk', from, to, dist, dur, dep: now, arr: now + dur * 1000, poly: road?.poly, road: Boolean(road) }];
+    // (The walk its button said: walkFrom.)
+    const w = await walkFrom(h, to);
+    const dist = w?.dist || Math.round(meters(h.lat, h.lon, c.lat, c.lon) * 1.3);
+    const dur = w?.sec || walkSec(dist / 1.3);
+    legs = [{ mode: 'walk', from, to, dist, dur, dep: now, arr: now + dur * 1000, poly: w?.road.poly, road: Boolean(w) }];
   } else {
     const city = await ctx.cityOf(h.lat, h.lon);
     const bikes = city ? await cityBikes(city).catch(() => []) : [];
@@ -506,7 +526,8 @@ function actions(c, { pin = true } = {}) {
   </div>`;
 }
 function head(title, sub, badge = '') {
-  const d = ctx.here && card ? distText(meters(ctx.here.lat, ctx.here.lon, card.lat, card.lon)) : '';
+  // (Walking, by the streets once known: what 走過去 and the strip say.)
+  const d = ctx.here && card ? distText(walkKnown(ctx.here, card)?.dist ?? meters(ctx.here.lat, ctx.here.lon, card.lat, card.lon)) : '';
   return `<div class="ot-card-grip" data-card="grow"></div><div class="ot-card-head">${badge}<div class="ot-card-title"><h2>${e(title)}</h2><p>${[sub, d && `距離 ${d}`].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="關閉">×</button></div>`;
 }
 
