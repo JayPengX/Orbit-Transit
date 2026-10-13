@@ -1313,12 +1313,15 @@ test("gmapsLink: from Google's own 你的位置; to Google's place when there's 
   assert.equal(a.get('destination'), '巨城');
   assert.equal(a.get('destination_place_id'), gid);
   assert.equal(a.get('travelmode'), 'bicycling');
-  assert.equal(a.get('dir_action'), 'navigate');
+  assert.equal(a.has('dir_action'), false, 'opened to look over and start, walking as cycling');
   const b = new URL(gmapsLink({ name: '路邊', lat: 24.81, lon: 120.97 }, 'walking')).searchParams;
   assert.equal(b.has('origin'), false);
   assert.equal(b.get('destination'), '24.81,120.97');
   assert.equal(b.has('destination_place_id'), false);
   assert.equal(b.get('travelmode'), 'walking');
+  assert.equal(b.has('dir_action'), false);
+  // A step not yours yet: from its own start.
+  assert.equal(new URL(gmapsLink({ name: '路邊', lat: 24.81, lon: 120.97 }, 'walking', { lat: 24.8, lon: 120.96 })).searchParams.get('origin'), '24.8,120.96');
   // A bad id is never sent.
   assert.equal(new URL(gmapsLink({ name: 'x', lat: 24.81, lon: 120.97, gid: 'no good!' }, 'walking')).searchParams.has('destination_place_id'), false);
 });
@@ -1913,6 +1916,8 @@ test('Apple Maps for a walk or a ride (我的 → 導航 App): walking or cyclin
   assert.equal(a.searchParams.get('destination'), '24.81614,121.0171');
   assert.equal(a.searchParams.get('mode'), 'cycling');
   assert.equal(a.searchParams.get('destination-name'), '綠41公園');
+  assert.equal(a.searchParams.has('source'), false);
+  assert.equal(new URL(appleMapsLink(to, 'walking', { lat: 24.8, lon: 121.01 })).searchParams.get('source'), '24.8,121.01');
   assert.equal(new URL(appleMapsLink(to, 'walking')).searchParams.get('mode'), 'walking');
   let app = 'google';
   useMapsApp(() => app);

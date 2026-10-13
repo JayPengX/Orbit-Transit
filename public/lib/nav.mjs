@@ -140,34 +140,39 @@ export const navigating = () => Boolean(nav);
 export const NAV_LEAD = 20 * 60_000;
 export const canNav = (p, now = Date.now()) => Boolean(p) && p.arr > now;
 
-// Google Maps' (or Apple's, below) own navigation for a walk or a ride of
-// your own, never a bus or train (the app's own): from where you are then (no origin: Google's own 你的位置, never
-// a point we pinned), to the place itself when it's one of Google's (its
-// place id: the shop, not a spot in the road outside it), else the point.
+// Google Maps' (or Apple's, below) own directions for a walk or a ride of
+// your own, never a bus or train (the app's own): opened to look over and
+// start yourself, walking as cycling (the owner, 2026-10-13: walking had
+// started at once). From `from`, the step's own start, when it isn't the
+// step you're at (one looked ahead to, or a plan's); else none: the app's
+// own 你的位置, never a point we pinned. To the place itself when it's one
+// of Google's (its place id: the shop, not a spot in the road outside it),
+// else the point.
 export const GOOGLE_ID = /^[A-Za-z0-9_-]{20,300}$/;
-export function gmapsLink(to, mode) {
+export function gmapsLink(to, mode, from = null) {
   const p = new URLSearchParams({ api: '1' });
+  if (from?.lat != null) p.set('origin', `${from.lat},${from.lon}`);
   if (to.gid && GOOGLE_ID.test(to.gid) && to.name) {
     p.set('destination', to.name);
     p.set('destination_place_id', to.gid);
   } else p.set('destination', `${to.lat},${to.lon}`);
   p.set('travelmode', mode);
-  p.set('dir_action', 'navigate');
   return `https://www.google.com/maps/dir/?${p}`;
 }
-// Apple Maps' own navigation, the same: from where you are, walking or
-// cycling, to the point (Apple has no Google place id; the
-// name labels it). Apple's Maps URLs (maps.apple.com/directions).
+// Apple Maps' own directions, the same: walking or cycling, to the point
+// (Apple has no Google place id; the name labels it). Apple's Maps URLs
+// (maps.apple.com/directions).
 const APPLE_MODE = { walking: 'walking', bicycling: 'cycling' };
-export function appleMapsLink(to, mode) {
+export function appleMapsLink(to, mode, from = null) {
   const p = new URLSearchParams({ destination: `${to.lat},${to.lon}`, mode: APPLE_MODE[mode] || 'walking' });
   if (to.name) p.set('destination-name', to.name);
+  if (from?.lat != null) p.set('source', `${from.lat},${from.lon}`);
   return `https://maps.apple.com/directions?${p}`;
 }
 // The app the person navigates with (我的 → 交通偏好 → 導航 App): its link and its name.
 let mapsApp = () => 'google';
 export const useMapsApp = get => (mapsApp = get);
-export const mapsLink = (to, mode) => (mapsApp() === 'apple' ? appleMapsLink(to, mode) : gmapsLink(to, mode));
+export const mapsLink = (to, mode, from = null) => (mapsApp() === 'apple' ? appleMapsLink(to, mode, from) : gmapsLink(to, mode, from));
 export const mapsName = () => (mapsApp() === 'apple' ? 'Apple 地圖' : 'Google 地圖');
 // Where a leg ends, for Google: the trip's own place for its last one.
 export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat != null && meters(plan.dest.lat, plan.dest.lon, plan.legs[k].to.lat, plan.legs[k].to.lon) < 300 ? plan.dest : plan.legs[k].to);
@@ -595,7 +600,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const bikeLine = state.done ? '' : bikesText(state.bikes, plan, state.i, state.pos);
     // A walk or a ride of your own: Google's or Apple's turn-by-turn for it (walking, cycling), from where you are.
     const own = !state.done && (l.mode === 'walk' || l.mode === 'bike') && l.to?.lat != null;
-    const gm = own ? mapsLink(legEnd(plan, state.i), l.mode === 'bike' ? 'bicycling' : 'walking') : '';
+    // (From where you are on the step you're at; one looked ahead to, from its own start.)
+    const gm = own ? mapsLink(legEnd(plan, state.i), l.mode === 'bike' ? 'bicycling' : 'walking', state.i > state.reached ? l.from : null) : '';
     const paceText = pace.text || (own ? `約 ${hm(times.end[state.i])} 到${l.to?.name ? ` ${l.to.name}` : ''}` : '');
     // Late for the bus or train: a new plan from here, one tap.
     const late = !state.done && pace.tone === 'bad';
