@@ -1931,3 +1931,26 @@ test('Apple Maps for a walk or a ride (我的 → 導航 App): walking or cyclin
   assert.equal(cleanPrefs({ maps: 'waze' }).maps, 'google');
   assert.equal(cleanPrefs(null).maps, 'google');
 });
+
+test('YouBike stations by the streets where known: by 新竹縣體育場 (151 m on foot), not 成功國中 round the stadium block (503 m, 350 as the crow flies) nor 光明九路停車場 (511 m: a walk past 5 minutes to save a little riding); the walk to it its street length', async () => {
+  const { useStreetWalks } = await import('../public/lib/plan.mjs');
+  const here = { lat: 24.8198, lon: 121.01775 };
+  // 八方雲集 竹北縣政二店, a 4-minute walk past 光明九路停車場 (where the owner's plan left the bike).
+  const to = { lat: 24.8255, lon: 121.0128 };
+  const st = (uid, name, lat, lon) => ({ uid, name, lat, lon, bikes: 2, ebike: 2, ret: 10, ok: true });
+  const bikes = [st('ty', '新竹縣體育場', 24.81913, 121.01859), st('cg', '成功國中', 24.81872, 121.01597), st('gm', '光明九路停車場', 24.82246, 121.01549)];
+  // By the straight line, 成功國中 looks a short walk on the way (the owner's plan: 4′ for 670 m).
+  assert.equal(rentNear(here, bikes, { to, first: true }).uid, 'cg');
+  // Google's walks (what the planner asks for the stations near each end).
+  const street = { ty: 151, cg: 503, gm: 511 };
+  useStreetWalks((a, b) => street[a.uid] ?? street[b.uid] ?? null);
+  try {
+    assert.equal(rentNear(here, bikes, { to, first: true }).uid, 'ty');
+    const ride = bikeTrip(here, to, bikes, Date.now(), { first: true });
+    assert.equal(ride.find(l => l.mode === 'bike').rent.uid, 'ty');
+    assert.equal(ride[0].mode, 'walk');
+    assert.equal(ride[0].dist, 151, 'the walk to it its street length');
+  } finally {
+    useStreetWalks(() => null);
+  }
+});

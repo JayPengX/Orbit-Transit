@@ -85,7 +85,12 @@ batch old against new, say what moved).
    tap, navigating), with one exception (the owner, 2026-10-13): a trip that
    starts with the bike never takes it at a station with none there as you
    plan (`rentNear first`; for a 電輔車 ride, none of those); a bike taken
-   later (off a train) and where it goes back stay by place. A station out of
+   later (off a train) and where it goes back stay by place. The walks to
+   and from the five stations nearest each end are by the streets (Google's,
+   `planner streetWalks`, `plan.mjs useStreetWalks`): a station round a
+   stadium's block is no short walk however near it looks; choosing one, a
+   walk past 5 minutes counts double (新竹縣體育場 151 m on foot, not 成功國中
+   503 or 光明九路停車場 511). A station out of
    service isn't one; every station is YouBike 2.0's, 電輔車 included:
    - all the way by bike (or 電輔車), when it's near enough;
    - by bike to the train or metro instead of a bus or a long walk (leave
