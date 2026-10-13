@@ -10,7 +10,7 @@
 //   - by bike from the last station, instead of a bus or a long walk: there
 //     sooner.
 
-import { meters, walkSec, tw, hm, addDays } from './util.mjs';
+import { meters, walkSec, tw, hm, addDays, decodeLine } from './util.mjs';
 import { journeys, directs } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
 
@@ -176,6 +176,35 @@ export function tidy(p) {
     if (late > 0 && (legs[i - 1].mode === 'walk' || legs[i - 1].mode === 'bike')) legs = [...shift(legs.slice(0, i), -late), ...legs.slice(i)];
   }
   return legs === p.legs ? p : finish({ ...p, legs });
+}
+
+// A planner's walk by its own line: TDX sends a walk's line but often not
+// its length (the proxy's straight-line guess then: 210 m for a 510 m walk
+// round the block to 成功國中) nor a time that fits it. A line clearly longer
+// than its length: the line's length, and the time to walk it at our pace,
+// the first walk setting out earlier, the last one in later, one between
+// two rides no longer than the time between them.
+const lineM = l => {
+  const pts = (Array.isArray(l.poly) ? l.poly : [l.poly]).flatMap(x => decodeLine(x, l.fmt));
+  let m = 0;
+  for (let i = 1; i < pts.length; i++) m += meters(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+  return Math.round(m);
+};
+export function walksByLine(p) {
+  let changed = false;
+  const legs = p.legs.map((l, i, all) => {
+    if (l.mode !== 'walk' || !l.poly?.length) return l;
+    const m = lineM(l);
+    if (m <= (l.dist || 0) * 1.1 + 20) return l;
+    changed = true;
+    const need = Math.max(l.dur || 0, walkSec(m / 1.3));
+    if (i === 0 && all.length > 1) return { ...l, dist: m, dur: need, dep: l.arr - need * 1000 };
+    if (i === all.length - 1) return { ...l, dist: m, dur: need, arr: l.dep + need * 1000 };
+    const room = Math.max(l.dur || 0, (all[i + 1].dep - l.dep) / 1000);
+    const dur = Math.min(need, room);
+    return { ...l, dist: m, dur, arr: l.dep + dur * 1000 };
+  });
+  return changed ? finish({ ...p, legs }) : p;
 }
 
 // All the way by bike (and by 電輔車 when one is there and it's worth it).

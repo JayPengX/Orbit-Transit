@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, walksByLine, RAIL_BIKE_M } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -167,7 +167,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const res = tdxIn ? joinPlanners(gRes, tdxIn) : gRes;
   const tdxLate = tdxIn ? null : tdxAsk;
   if (res.err && !trains.length && !metros.length) return { plans: [], sources: res.sources || {}, error: res.err };
-  let plans = [...res.plans.map(tidy), ...trains, ...metros].filter(p => allowed(p, { ...modes, bike: true }));
+  let plans = [...res.plans.map(p => tidy(walksByLine(p))), ...trains, ...metros].filter(p => allowed(p, { ...modes, bike: true }));
   // YouBike near both ends and the stations, asked now, while the buses are
   // looked at (it doesn't wait for them; a train-then-bus's stop is asked after).
   const bikeCities = modes.bike && bikeSwap(prefs) ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
@@ -257,7 +257,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           if (tdxLate) {
             const late = await tdxLate;
             const known = new Set(plans.map(planSig));
-            const extra = late.plans.map(tidy).filter(p => allowed(p, { ...modes, bike: true }) && !known.has(planSig(p)));
+            const extra = late.plans.map(p => tidy(walksByLine(p))).filter(p => allowed(p, { ...modes, bike: true }) && !known.has(planSig(p)));
             const official = await Promise.all(extra.map(p => officialPlan(p, now).catch(() => p)));
             const live = await Promise.all(official.map(p => (by !== 'arrive' && t0 - now < 60 * 60_000 && p.legs.some(l => l.mode === 'bus' && !l.live) ? adjustPlan(p, now, { start: t0 }).catch(() => p) : p)));
             plans.push(...live.filter(bused));
