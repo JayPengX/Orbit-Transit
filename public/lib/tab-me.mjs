@@ -89,6 +89,8 @@ function render() {
       <div class="q-chips ot-modes"><button class="q-chip" type="button" data-all-modes="1" aria-pressed="${allOn}">全部大眾運輸</button>${Object.entries(MODES).map(([k, n]) => `<button class="q-chip" type="button" data-mode="${k}" aria-pressed="${P.modes[k]}">${e(n)}</button>`).join('')}</div>
       <p class="ot-note">關掉一種，就用其他方式代替（例如不騎 YouBike 就改搭公車或步行）。</p>
       ${pass?.bike ? '' : `<div class="ot-order-row"><span>每 30 分鐘換一台 YouBike<small>長程騎車時，在半路的站還車再借：每段都在 30 分鐘內（TPASS 免費、或最便宜的時段）</small></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${P.bike30}" aria-label="每 30 分鐘換車"><i></i></button></div>`}
+      <label class="ot-field"><span>導航 App</span><select id="me-maps"><option value="google" ${P.maps !== 'apple' ? 'selected' : ''}>Google 地圖</option><option value="apple" ${P.maps === 'apple' ? 'selected' : ''}>Apple 地圖</option></select></label>
+      <p class="ot-note">導航時走路、騎 YouBike 的那一段，交給這個 App 帶路（步行、自行車模式）。</p>
       <label class="ot-field"><span>我的 TPASS</span><select id="me-tpass"><option value="">沒有 TPASS</option>${TPASSES.map(t => `<option value="${t.id}" ${t.id === P.tpass ? 'selected' : ''}>${e(t.name)}（NT$${t.price}）</option>`).join('')}</select></label>
       <p class="ot-note">${pass ? `${e(pass.name)}：範圍內的公車、台鐵、捷運不另收費${pass.bike ? '，YouBike 前 30 分鐘免費（長程騎車會在半路的站換一台，每段都免費）' : ''}。路線比較會把這些算成 0 元（高鐵不含）。` : '選了 TPASS，路線比較會把月票涵蓋的車資算成 0 元。'}</p>
     </section>
@@ -150,8 +152,9 @@ function onClick(ev) {
   if (act === 'add-trip') return ctx.newTrip?.();
 }
 document.addEventListener('change', ev => {
-  if (ev.target.id !== 'me-tpass' || !ctx) return;
-  ctx.data.prefs.tpass = ev.target.value;
+  if (!ctx || !['me-tpass', 'me-maps'].includes(ev.target.id)) return;
+  if (ev.target.id === 'me-maps') ctx.data.prefs.maps = ev.target.value === 'apple' ? 'apple' : 'google';
+  else ctx.data.prefs.tpass = ev.target.value;
   done();
 });
 // A pinned place's name and icon.

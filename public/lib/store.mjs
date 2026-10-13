@@ -31,7 +31,8 @@ export const emptyData = () => ({
   prefs: defaultPrefs(),
   t: 0
 });
-export const defaultPrefs = () => ({ modes: Object.fromEntries(Object.keys(MODES).map(k => [k, true])), bike30: false, tpass: '' });
+// `maps`: the app a walk or a ride is handed to (google, apple).
+export const defaultPrefs = () => ({ modes: Object.fromEntries(Object.keys(MODES).map(k => [k, true])), bike30: false, tpass: '', maps: 'google' });
 
 const str = (v, n = 60) => (typeof v === 'string' ? v.slice(0, n) : '');
 const coord = v => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 1e6) / 1e6 : null);
@@ -133,6 +134,7 @@ export function cleanPrefs(p) {
   if (!Object.values(d.modes).some(Boolean)) d.modes = defaultPrefs().modes;
   d.bike30 = p.bike30 === true;
   d.tpass = str(p.tpass, 12);
+  d.maps = p.maps === 'apple' ? 'apple' : 'google';
   return d;
 }
 

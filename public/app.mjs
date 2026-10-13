@@ -18,7 +18,7 @@ import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
 import { warmRail } from './lib/raildata.mjs';
 import { startAlerts } from './lib/alerts.mjs';
-import { savedNav } from './lib/nav.mjs';
+import { savedNav, useMapsApp } from './lib/nav.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
@@ -99,6 +99,8 @@ export const ctx = {
   onRefresh: [],
   refreshTabs: () => ctx.onRefresh.forEach(f => f())
 };
+// (A walk or a ride handed to Google's or Apple's Maps, as 我的 says.)
+useMapsApp(() => ctx.data.prefs?.maps);
 
 // ---- Tabs --------------------------------------------------------------------------------------
 

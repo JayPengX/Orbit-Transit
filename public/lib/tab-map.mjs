@@ -16,7 +16,7 @@ import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, gmapsLink, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
@@ -667,9 +667,9 @@ export function metroBoardHtml(live) {
 }
 
 async function cardClick(ev) {
-  // A step's Google Maps link sits inside its plan's button: it opens Google, never selects the plan.
-  const gm = ev.target.closest('[data-gmaps]');
-  if (gm) return void window.open(gm.dataset.gmaps, '_blank', 'noopener');
+  // A step's Google (or Apple) Maps link sits inside its plan's button: it opens the app, never selects the plan.
+  const gm = ev.target.closest('[data-maps]');
+  if (gm) return void window.open(gm.dataset.maps, '_blank', 'noopener');
   const act = ev.target.closest('[data-card]')?.dataset.card;
   const tk = ev.target.closest('[data-ticket]');
   if (tk) return buyTicket(JSON.parse(tk.dataset.ticket), t => ctx.status(t));
@@ -1364,7 +1364,7 @@ function stepsHtml(p, c = card) {
         l.mode === 'walk'
           ? `步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(l.to.name)}` : ''}`
           : l.mode === 'bike'
-            ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-gmaps="${e(gmapsLink(l.to, 'bicycling'))}">${icon('route')}Google 地圖</span>` : ''}${bikeEnd('借', l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}電輔`, l.rent.ebike]] : [[`${icon('bike')}一般`, l.rent.bikes], [`${icon('bolt')}電輔`, l.rent.ebike || 0]]) : [])}${bikeEnd('還', l.to.name, l.ret ? [['空位', l.ret.ret]] : [])}`
+            ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-maps="${e(mapsLink(l.to, 'bicycling'))}">${icon('route')}${mapsName()}</span>` : ''}${bikeEnd('借', l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}電輔`, l.rent.ebike]] : [[`${icon('bike')}一般`, l.rent.bikes], [`${icon('bolt')}電輔`, l.rent.ebike || 0]]) : [])}${bikeEnd('還', l.to.name, l.ret ? [['空位', l.ret.ret]] : [])}`
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}</small>${ticketBtn(l)}<span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
@@ -1770,12 +1770,10 @@ function navMore() {
       ${ride && n.ride ? `<button class="ot-row-btn" type="button" data-m="off">${icon('bell')}<span><b>改下車站</b><small>提早或晚一點下車，之後的路重新規劃</small></span></button>` : ''}
       <button class="ot-row-btn" type="button" data-m="replan">${icon('route')}<span><b>換一條路</b><small>還是去 ${e(navDest(n).name || '目的地')}，從現在的位置重新找車（錯過車、想改搭）</small></span></button>
       <button class="ot-row-btn" type="button" data-m="edit">${icon('pin')}<span><b>編輯行程</b><small>加一站、拿掉一站、改目的地</small></span></button>
-      <a class="ot-row-btn" href="${e(gmapsLink(legEnd(n.plan, n.plan.legs.length - 1), 'transit'))}" target="_blank" rel="noopener" data-m="gm">${icon('route')}<span><b>用 Google 地圖導航</b><small>從你的位置到目的地</small></span></a>
     </div>`);
   d.addEventListener('click', async ev => {
     const m = ev.target.closest('[data-m]')?.dataset.m;
     if (!m) return;
-    if (m === 'gm') return d.close();
     d.close();
     if (m === 'min') return shrinkNav(true);
     if (m === 'replan') return replanFromHere();

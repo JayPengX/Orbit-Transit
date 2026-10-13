@@ -1314,11 +1314,11 @@ test("gmapsLink: from Google's own 你的位置; to Google's place when there's 
   assert.equal(a.get('destination_place_id'), gid);
   assert.equal(a.get('travelmode'), 'bicycling');
   assert.equal(a.get('dir_action'), 'navigate');
-  const b = new URL(gmapsLink({ name: '路邊', lat: 24.81, lon: 120.97 }, 'transit')).searchParams;
+  const b = new URL(gmapsLink({ name: '路邊', lat: 24.81, lon: 120.97 }, 'walking')).searchParams;
   assert.equal(b.has('origin'), false);
   assert.equal(b.get('destination'), '24.81,120.97');
   assert.equal(b.has('destination_place_id'), false);
-  assert.equal(b.has('dir_action'), false);
+  assert.equal(b.get('travelmode'), 'walking');
   // A bad id is never sent.
   assert.equal(new URL(gmapsLink({ name: 'x', lat: 24.81, lon: 120.97, gid: 'no good!' }, 'walking')).searchParams.has('destination_place_id'), false);
 });
@@ -1903,4 +1903,26 @@ test("a trip's YouBike stations: where you take one its bikes, where it goes bac
   assert.match(c.cls, /none/);
   assert.match(planBikeMarker({ st: A, rent: true, ret: false }, { ...A, bikes: 1, ebike: 0 }).html, /<b>1<\/b>/);
   assert.equal(a.id, 'pbike:A');
+});
+
+test('Apple Maps for a walk or a ride (我的 → 導航 App): walking or cycling, to the point, labelled; Google’s the default; never a bus or train', async () => {
+  const { appleMapsLink, mapsLink, mapsName, useMapsApp } = await import('../public/lib/nav.mjs');
+  const to = { name: '綠41公園', lat: 24.81614, lon: 121.0171, gid: 'ChIJ0123456789abcdefghij' };
+  const a = new URL(appleMapsLink(to, 'bicycling'));
+  assert.equal(a.origin + a.pathname, 'https://maps.apple.com/directions');
+  assert.equal(a.searchParams.get('destination'), '24.81614,121.0171');
+  assert.equal(a.searchParams.get('mode'), 'cycling');
+  assert.equal(a.searchParams.get('destination-name'), '綠41公園');
+  assert.equal(new URL(appleMapsLink(to, 'walking')).searchParams.get('mode'), 'walking');
+  let app = 'google';
+  useMapsApp(() => app);
+  assert.match(mapsLink(to, 'walking'), /^https:\/\/www\.google\.com\/maps\/dir\/.*travelmode=walking/);
+  assert.equal(mapsName(), 'Google 地圖');
+  app = 'apple';
+  assert.match(mapsLink(to, 'bicycling'), /^https:\/\/maps\.apple\.com\/directions\?.*mode=cycling/);
+  assert.equal(mapsName(), 'Apple 地圖');
+  useMapsApp(() => 'google');
+  assert.equal(cleanPrefs({ maps: 'apple' }).maps, 'apple');
+  assert.equal(cleanPrefs({ maps: 'waze' }).maps, 'google');
+  assert.equal(cleanPrefs(null).maps, 'google');
 });
