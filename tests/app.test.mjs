@@ -1859,3 +1859,14 @@ test('a pinned place is on the map: its icon and name, a tap opening its card (t
   assert.deepEqual(m.data, { name: '家<b>', sub: '東區', lat: 24.8, lon: 120.97, pin: 'h', gid: 'g1' });
   assert.match(placeMarker({ id: 'x', name: 'x', icon: 'nope', lat: 24, lon: 121 }).html, /📍/);
 });
+
+test('a YouBike ride shows where it goes back on the map (a swap: once, where the next bike is taken)', async () => {
+  const { bikeReturns } = await import('../public/lib/tab-map.mjs');
+  const A = { lat: 24.80, lon: 121.00 };
+  const B = { lat: 24.81, lon: 121.01 };
+  const C = { lat: 24.83, lon: 121.03 };
+  const walk = { mode: 'walk', from: C, to: { lat: 24.84, lon: 121.04 } };
+  assert.deepEqual(bikeReturns([{ mode: 'walk', from: {}, to: A }, { mode: 'bike', from: A, to: C }, walk]).map(l => l.to), [C]);
+  assert.deepEqual(bikeReturns([{ mode: 'bike', from: A, to: B }, { mode: 'bike', from: B, to: C }]).map(l => l.to), [C]);
+  assert.deepEqual(bikeReturns([{ mode: 'bus', from: A, to: B }, walk]), []);
+});
