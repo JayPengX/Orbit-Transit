@@ -33,7 +33,7 @@ const NAV_KEEP = 90 * 60_000;
 const plain = x => JSON.parse(JSON.stringify(x, (k, v) => (v instanceof Promise ? undefined : v)));
 function saveNav(state) {
   try {
-    localStorage.setItem(NAV_KEY, JSON.stringify({ plan: plain(state.plan), i: state.i, phase: state.phase, min: Boolean(state.min), at: Date.now() }));
+    localStorage.setItem(NAV_KEY, JSON.stringify({ plan: plain(state.plan), i: state.i, reached: state.reached, phase: state.phase, min: Boolean(state.min), at: Date.now() }));
   } catch {}
 }
 export function savedNav(now = Date.now()) {
@@ -535,7 +535,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   primeBuzz();
   stopNav();
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
-  const state = { plan, i: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min) };
+  // (`i`: the step shown; `reached`: the furthest step the trip has got to by itself, where you are, the arrivals, getting off: the steps before it are done, never a tap's.)
+  const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min) };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
   const notices = () => nav === state && push?.(navNotices(plan, state.i, state.info));
@@ -617,8 +618,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const nx = on && !state.done && state.i < last ? plan.legs[state.i + 1] : null;
     const then = nx ? `<div class="ot-nav-then"><small>下車後</small>${icon(nx.mode)}<span>${e(stepText(plan, state.i + 1, 'before').title)}${RIDE(nx) ? `・${e(hm(state.liveAt.get(state.i + 1) ?? nx.dep))} ${nx.mode === 'bus' ? '到站' : '開'}` : `・${e(minsText(nx.dur))}`}</span></div>` : '';
     const chips = plan.legs
-      // (A step behind you is done: shown, never tapped back to; the owner, 2026-10-13.)
-      .map((x, k) => `<button class="ot-nav-chip${k < state.i ? ' done' : k === state.i ? ' on' : ''}" type="button"${k < state.i ? ' disabled' : ` data-nav-go="${k}"`} style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`)
+      // (A step the trip has got past by itself is done: shown, never tapped back to; one you only
+      // looked ahead past stays a tap away; the owner, 2026-10-13.)
+      .map((x, k) => `<button class="ot-nav-chip${k < state.reached ? ' done' : k === state.i ? ' on' : ''}" type="button"${k < state.reached ? ' disabled' : ` data-nav-go="${k}"`} style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`)
       .join('');
     const minsLeft = Math.max(0, Math.round((times.eta - now) / 60_000));
     // Later or sooner than the plan said, by what's live now.
@@ -696,6 +698,12 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     render();
     refreshLive();
     notices();
+  };
+  // The trip moving you on (or back on a ride you stayed on) by itself:
+  // that step is where you've got to. (A tap only shows a step: go.)
+  const reach = (i, phase = 'before', off = false) => {
+    state.reached = Math.max(0, Math.min(plan.legs.length - 1, i));
+    go(i, phase, off);
   };
   // What's live: the ride to catch (this step's, or the next one's) — a bus,
   // when it really comes to the stop at the time you'll be there and where it
@@ -833,7 +841,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         if (k > 0) {
           const was = rs.stops[rs.j].name;
           state.passed = null;
-          go(sp.k, 'on');
+          reach(sp.k, 'on');
           return onAction?.('stayed', { k, was, stop: rs.stops[k] });
         }
       }
@@ -847,13 +855,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         state.where = null;
         saveNav(state);
         refreshLive();
-      } else return go(on.i, on.phase, RIDE(plan.legs[on.i - 1]) && state.i === on.i - 1);
+      } else return reach(on.i, on.phase, RIDE(plan.legs[on.i - 1]) && state.i === on.i - 1);
     }
     const l = plan.legs[state.i];
     if (l.to?.lat) {
       const left = meters(p.lat, p.lon, l.to.lat, l.to.lon);
       if (l.mode === 'walk' || l.mode === 'bike') {
-        if (left < ARRIVED[l.mode] && state.i < plan.legs.length - 1) return go(state.i + 1);
+        if (left < ARRIVED[l.mode] && state.i < plan.legs.length - 1) return reach(state.i + 1);
         // On its road: what's left along it. Off it (45 m, twice running):
         // a new road from where you are, at most every 30 s.
         const pts = wayPts(l);
@@ -921,7 +929,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           state.alerted = state.i;
           buzz();
         }
-        if (state.phase === 'on' && left < (OFF_M[l.mode] || 120) && state.i < plan.legs.length - 1) return go(state.i + 1, 'before', true);
+        if (state.phase === 'on' && left < (OFF_M[l.mode] || 120) && state.i < plan.legs.length - 1) return reach(state.i + 1, 'before', true);
       }
       arrive();
     }
@@ -1023,7 +1031,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const end = ev.target.closest('[data-nav-bike]')?.dataset.navBike;
     if (end) return swapStation(end);
     const k = ev.target.closest('[data-nav-go]')?.dataset.navGo;
-    if (k != null && Number(k) >= state.i) return go(Number(k), Number(k) === state.i ? state.phase : 'before');
+    if (k != null && Number(k) >= state.reached) return go(Number(k), Number(k) === state.i ? state.phase : 'before');
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
     if (a === 'end') {
       // Asked first: 結束 sits where a thumb lands, and an ended ride can't be had back.
@@ -1092,6 +1100,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // (Where the device was a few minutes ago at most: an old fix is no "here".)
   const here0 = here && !(here.at && now - here.at > 3 * 60_000) ? tripAt(plan, here, 0, now) : null;
   const start = here0 && (here0.i > from.i || (here0.i === from.i && here0.phase === 'on')) ? here0 : from;
+  // (Opened again: as far as it had got, the step shown as it was.)
+  state.reached = start === from && resume?.reached != null ? Math.min(Number(resume.reached) || 0, start.i) : start.i;
   go(start.i, start.phase);
   // Every ride's stops, for the map (each stop a dot on its line), ahead of
   // reaching it; refreshLive finds them kept.
