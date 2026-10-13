@@ -302,7 +302,7 @@ the phone's position:
 | What's near a point | Shared-Data `where.json` (nightly) | `near.mjs`, kept a day |
 | The lines' shapes | Shared-Data `shape/rail.json`, `shape/bus/…` (weekly) | `shapes.mjs`, kept a week |
 | The map | Google Maps JS (the browser key, counted as a map load) or NLSC | `/transit/config` |
-| Place search, details (Autocomplete beside Text Search's 20 near you: a chain's branches nearest first, a typo still found, the same chain far away left out while one is near; Shared-Proxy `nearFirst`) | Google Places (New), OpenStreetMap past the cap | `/transit/search`, `/transit/place` |
+| Place search, details (Autocomplete beside Text Search's 20 near you: a chain's branches nearest first, a typo still found, the same chain far away left out while one is near, a place's parts folded into it: LaLaport, not its cinema or car parks; Shared-Proxy `nearFirst`, `folded`) | Google Places (New), OpenStreetMap past the cap | `/transit/search`, `/transit/place` |
 | Plans | Google's transit routes and TDX's planner | `/transit/route` |
 
 Every ask is signed with the pass's session (`api.mjs`), given a time
