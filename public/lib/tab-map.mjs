@@ -9,7 +9,7 @@
 
 import { createMap } from './map.mjs';
 import { fitNumbers } from '#kit/quadra.mjs';
-import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, PROXY, liveMs, bikeMs } from './api.mjs';
+import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
@@ -24,7 +24,7 @@ import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { buyTicket } from './tickets.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, WALK_M_MIN, inTaiwan } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
 import { openRoute } from './bus-ui.mjs';
 import * as kit from '#kit/quadra.mjs';
 
@@ -80,13 +80,15 @@ export async function init(c) {
       return null;
     }
   })();
+  // (Never opened here before, nowhere known: where you are, briefly, not 台北車站's tiles first.)
+  if (!ctx.here && !view) await Promise.race([ctx.locate(), wait(1500)]);
   const center = ctx.here || view || FALLBACK;
   const cfg = ctx.cfg?.map || { provider: 'nlsc' };
   try {
     map = await createMap($('map'), { provider: cfg.provider, key: cfg.key, center, zoom: view?.z || 16, onPick: pick, onTap: tap, onIdle: idle, onPlace: googlePlace, onDrag: dragged });
   } catch (err) {
     $('map').innerHTML = `<p class="ot-empty">地圖載入失敗：${e(err.message)}</p>`;
-    return;
+    return isReady();
   }
   // The first time the device's position is known (before the map was ready
   // or after), the map goes there, unless it opened where it was left, or
@@ -125,8 +127,34 @@ export async function init(c) {
   if (was) pendingTrip = { nav: was.plan, from: was.plan.legs[0].from, to: was.plan.legs.at(-1).to, resume: { i: was.i, phase: was.phase, min: Boolean(was.min) } };
   // (Started behind another tab, for a shrunk ride: only the ride, not the map's own refreshing.)
   if (pendingTrip) document.body.classList.contains('tab-map') ? show() : takePending();
+  settle().finally(isReady);
 }
 let pendingTrip = null;
+
+// The map's first screen finished, for the loading screen to lift onto
+// (app.mjs, a few seconds at most): where you are now, the map's tiles,
+// what's in view, and the strip of nearest stations in its order. Nothing
+// pops in after it.
+let isReady = () => {};
+export const ready = new Promise(r => (isReady = r));
+const wait = ms => new Promise(r => setTimeout(r, ms));
+async function settle() {
+  const step = f => globalThis.__bootStep?.('', f);
+  step(0.85);
+  // What's in view asked now, beside the tiles (Google's map has no bounds
+  // before its first frame: asked again after them, from the phone's copies).
+  drawLayers();
+  // A fresh fix, briefly (the one kept on the phone stands in after that).
+  if (!ctx.here || Date.now() - (ctx.here.at || 0) > 60_000) await Promise.race([ctx.locate(), wait(1500)]);
+  // (The tiles at most 1.5 s: on a poor connection the rest isn't held up by them.)
+  await Promise.race([map.tiles(), wait(1500)]);
+  step(0.92);
+  // (As they stand after any move that fix made: the last drawing of each.)
+  drawLayers();
+  await Promise.race([Promise.all([drawn, nearDone]), wait(2500)]);
+  await Promise.race([Promise.all([drawn, nearDone]), wait(500)]);
+  step(1);
+}
 function showPlan(p, from, to, resume = null) {
   // (A ride being navigated goes on, shrunk to its bar, while this one opens: never both cards at once.)
   if (!resume && navFull()) shrinkNav(true);
@@ -185,38 +213,43 @@ export function hide() {
 let bikeTimer = 0;
 let shownBikes = [];
 let nearRun = 0;
-async function nearBikes() {
+// (Settled once the strip is drawn, or a newer one is: the loading screen waits on it.)
+let nearDone = Promise.resolve();
+function nearBikes() {
+  nearDone = nearBikesNow();
+  return nearDone;
+}
+async function nearBikesNow() {
   const box = $('near-bikes');
   const h = ctx.here;
   if (!box || !h || !ctx.data.layers.bike) return box && (box.hidden = true);
+  // (Not shown navigating or looking at a trip: not asked then; show() asks again after.)
+  if (navigating() || document.body.classList.contains('ot-planning')) return;
   const run = ++nearRun;
   const city = await ctx.cityOf(h.lat, h.lon);
   const list = city ? await cityBikes(city).catch(() => []) : [];
-  if (run !== nearRun) return;
-  // (The straight line's guess first, `walk` the streets' metres and seconds once they're in.)
+  if (run !== nearRun) return nearDone;
   const near = list
     .map(s => ({ s, d: meters(h.lat, h.lon, s.lat, s.lon) }))
     .filter(x => x.d <= 1000)
     .sort((a, b) => a.d - b.d)
-    .slice(0, 5)
-    .map(x => ({ ...x, walk: { dist: Math.round(x.d), sec: walkSec(x.d) } }));
-  const draw = rows => {
-    shownBikes = rows.map(x => x.s);
-    box.hidden = !rows.length;
-    box.innerHTML = rows
-      .map(
-        ({ s, walk }) => `<button class="ot-nb ${bikeLevel(s)}" type="button" data-nb="${e(s.uid)}"><span class="ot-nb-top"><i class="ot-nb-i">${icon('bike')}</i><b>${e(s.name)}</b></span>
+    .slice(0, 5);
+  // Drawn once, in its order: each walk by the streets (walksFrom, one ask
+  // for the five; kept on the phone, so a reopen has them at once); one not
+  // in after 1.5 s by the straight line, until the next time.
+  const asked = walksFrom(h, near.map(x => x.s));
+  const ws = await Promise.race([asked, new Promise(r => setTimeout(() => r(near.map(x => walkKnown(h, x.s))), 1500))]);
+  if (run !== nearRun) return nearDone;
+  const rows = near.map((x, k) => ({ ...x, walk: ws[k] || { dist: Math.round(x.d), sec: walkSec(x.d) } })).sort((a, b) => a.walk.dist - b.walk.dist);
+  shownBikes = rows.map(x => x.s);
+  box.hidden = !rows.length;
+  box.innerHTML = rows
+    .map(
+      ({ s, walk }) => `<button class="ot-nb ${bikeLevel(s)}" type="button" data-nb="${e(s.uid)}"><span class="ot-nb-top"><i class="ot-nb-i">${icon('bike')}</i><b>${e(s.name)}</b></span>
       <span class="ot-nb-n">${s.ok === false ? '<em>暫停營運</em>' : `<em>${s.bikes}</em><small>一般</small><em class="e">${s.ebike}</em><small>電輔</small><em class="d">${s.ret}</em><small>空位</small>`}</span>
       <small class="ot-nb-d">${icon('walk')} ${Math.max(1, Math.round(walk.sec / 60))} 分 · ${e(distText(walk.dist))}</small></button>`
-      )
-      .join('');
-  };
-  draw(near);
-  if (!near.length) return;
-  // Walking there by the streets (walkFrom), nearest that way first.
-  const ws = await Promise.all(near.map(x => walkFrom(h, x.s)));
-  if (run !== nearRun || !ws.some(Boolean)) return;
-  draw(near.map((x, k) => (ws[k] ? { ...x, walk: ws[k] } : x)).sort((a, b) => a.walk.dist - b.walk.dist));
+    )
+    .join('');
 }
 export const navOn = () => navigating();
 // Navigating with its card on the map (not shrunk to the bar to do something else).
@@ -256,8 +289,15 @@ const inView = (b, p, pad = 0.002) => p.lat >= b.s - pad && p.lat <= b.n + pad &
 const closest = (list, c, n) => list.map(x => [meters(c.lat, c.lon, x.lat, x.lon), x]).sort((a, b) => a[0] - b[0]).slice(0, n).map(x => x[1]);
 
 let drawing = 0;
-async function drawLayers() {
+// (Settled once what's in view is drawn, or a newer drawing is: the loading screen waits on it.)
+let drawn = Promise.resolve();
+function drawLayers() {
+  drawn = drawLayersNow();
+  return drawn;
+}
+async function drawLayersNow() {
   const run = ++drawing;
+  const jobs = [];
   const b = map.bounds();
   if (!b) return;
   const z = map.zoom();
@@ -270,7 +310,7 @@ async function drawLayers() {
   }
   drawPlaces();
   const city = await ctx.cityOf(c.lat, c.lon);
-  if (run !== drawing) return;
+  if (run !== drawing) return drawn;
   // Looking at a trip: no other bikes or bus stops in the way of the way (its
   // own YouBike stations are the plan's: drawPlan).
   if (document.body.classList.contains('ot-planning') && card?.plans) {
@@ -280,26 +320,27 @@ async function drawLayers() {
   }
   // YouBike: the city's stations, the 200 nearest the middle.
   if (L.bike && z >= 15 && city) {
-    cityBikes(city)
+    jobs.push(cityBikes(city)
       .then(list => run === drawing && map.layer('bike').set(closest(list.filter(s => inView(b, s)), c, 200).map(bikeMarker)))
-      .catch(() => {});
+      .catch(() => {}));
   } else map.layer('bike').set([]);
   // Bus stops: around the middle, from a closer zoom.
   if (L.bus && z >= 16) {
-    stationsNear(c.lat, c.lon)
+    jobs.push(stationsNear(c.lat, c.lon)
       .then(list => run === drawing && map.layer('bus').set(closest(stopGroups(list.filter(s => inView(b, s))), c, 120).flatMap(g => busMarkers(g, z))))
-      .catch(() => {});
+      .catch(() => {}));
   } else map.layer('bus').set([]);
   if (L.rail && z >= 10) {
-    railStations()
+    jobs.push(railStations()
       .then(list => run === drawing && map.layer('rail').set(list.filter(s => inView(b, s, 0.01) && (s.sys === 'hsr' || z >= 12 || s.cls <= '1')).map(railMarker)))
-      .catch(() => {});
+      .catch(() => {}));
   } else map.layer('rail').set([]);
   if (L.metro && z >= 12) {
-    metroSystems([b.s, b.w, b.n, b.e])
+    jobs.push(metroSystems([b.s, b.w, b.n, b.e])
       .then(systems => run === drawing && map.layer('metro').set(systems.flatMap(s => s.stations.map(st => ({ st, color: s.lines.find(l => st.lines.includes(l.id))?.color }))).filter(x => inView(b, x.st, 0.005)).map(metroMarker)))
-      .catch(() => {});
+      .catch(() => {}));
   } else map.layer('metro').set([]);
+  await Promise.all(jobs);
 }
 
 const bikeMarker = s => {
@@ -467,24 +508,32 @@ function refreshCard() {
 
 // A card's place as a trip's end; one of Google's carries its id (Google Maps' own navigation goes to the place itself).
 const placeOf = c => ({ name: c.item.name || '', lat: c.item.lat ?? c.lat, lon: c.item.lon ?? c.lon, ...(c.kind === 'place' && (c.item.gid || GOOGLE_ID.test(c.item.id || '')) ? { gid: c.item.gid || c.item.id } : {}) });
-// Walking from where you are to a spot: one rule for the strip of nearest
-// stations, a card's 距離 and 走過去, and the walk it starts. By the streets
-// (OpenStreetMap's foot router, free; asked again once you've moved ~10 m),
-// the straight line until it answers. → { dist, sec, road }
-const walks = new Map();
-const hereAt = h => ({ lat: Math.round(h.lat * 1e4) / 1e4, lon: Math.round(h.lon * 1e4) / 1e4 });
-const walkKey = (h, p) => { const a = hereAt(h); return `${a.lat},${a.lon}|${p.lat.toFixed(5)},${p.lon.toFixed(5)}`; };
-const walkOf = r => ({ dist: r.dist, sec: Math.round((r.dist / WALK_M_MIN) * 60), road: r });
-// (Known now, or null.)
-const walkKnown = (h, p) => walks.get(walkKey(h, p)) || null;
-async function walkFrom(h, p) {
-  const k = walkKey(h, p);
-  if (!walks.has(k)) {
-    const r = await roadPath('walk', hereAt(h), p).catch(() => null);
-    if (!r) return null;
-    walks.set(k, walkOf(r));
-  }
-  return walks.get(k);
+// Walking from where you are to a spot: one walk for the strip of nearest
+// stations, a card's 距離 and 走過去, and the walk it starts (api walksTo:
+// Google's streets). From where you were when it was last asked, until
+// you're 50 m from there: every one of them from the same spot, so they
+// agree, and Google is asked once each 50 m, not each step.
+let anchor = null;
+const fromHere = h => {
+  if (!anchor || meters(anchor.lat, anchor.lon, h.lat, h.lon) > 20) anchor = { lat: Math.round(h.lat * 1e5) / 1e5, lon: Math.round(h.lon * 1e5) / 1e5 };
+  return anchor;
+};
+const walkKnown = (h, p) => walkKnownAt(fromHere(h), p);
+const walkFrom = (h, p, { line = false } = {}) => walkTo(fromHere(h), p, { line }).catch(() => null);
+const walksFrom = (h, list) => walksTo(fromHere(h), list).catch(() => list.map(() => null));
+// A trip that's only a walk from where you are says what the strip and the
+// card say for it (the planner's own walk may be from a few metres off, or
+// OpenStreetMap's): the one walk, its length and time. (`walkHereNow`: only
+// what's known already.)
+const onlyWalkHere = p => ctx.here && p.legs.length === 1 && p.legs[0].mode === 'walk' && p.legs[0].from?.lat != null && meters(ctx.here.lat, ctx.here.lon, p.legs[0].from.lat, p.legs[0].from.lon) < 50;
+const asWalk = (p, w) => {
+  const l = p.legs[0];
+  return w ? finish({ ...p, legs: [{ ...l, dist: w.dist, dur: w.sec, arr: l.dep + w.sec * 1000 }] }) : p;
+};
+const walkHereNow = plans => plans.map(p => (onlyWalkHere(p) ? asWalk(p, walkKnown(ctx.here, p.legs[0].to)) : p));
+async function walkHere(plans) {
+  const ws = await Promise.all(plans.map(p => (onlyWalkHere(p) ? Promise.race([walkFrom(ctx.here, p.legs[0].to), wait(1500)]) : null)));
+  return plans.map((p, k) => (ws[k] ? asWalk(p, ws[k]) : p));
 }
 // To a stop (or a bike station) on foot or by YouBike only, navigated at once.
 function goThere(c, { bike = true } = {}) {
@@ -506,10 +555,10 @@ async function directTo(c, mode) {
   let legs;
   if (mode === 'walk') {
     // (The walk its button said: walkFrom.)
-    const w = await walkFrom(h, to);
+    const w = await walkFrom(h, to, { line: true });
     const dist = w?.dist || Math.round(meters(h.lat, h.lon, c.lat, c.lon) * 1.3);
     const dur = w?.sec || walkSec(dist / 1.3);
-    legs = [{ mode: 'walk', from, to, dist, dur, dep: now, arr: now + dur * 1000, poly: w?.road.poly, road: Boolean(w) }];
+    legs = [{ mode: 'walk', from, to, dist, dur, dep: now, arr: now + dur * 1000, poly: w?.poly, fmt: '', road: Boolean(w?.poly) }];
   } else {
     const city = await ctx.cityOf(h.lat, h.lon);
     const bikes = city ? await cityBikes(city).catch(() => []) : [];
@@ -1125,7 +1174,7 @@ async function plan(from, to, opts = {}) {
   try {
     const at = when.by === 'now' ? null : when.at;
     out = await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes });
-    c.plans = out.plans;
+    c.plans = await walkHere(out.plans);
     c.choice = {};
     c.sources = out.sources;
     if (out.error && !out.plans.length) c.error = errorText(out.error);
@@ -1148,7 +1197,7 @@ async function plan(from, to, opts = {}) {
   out?.later?.then(o => {
     if (!o?.plans?.length || card !== c || navFull() || Object.keys(c.choice || {}).length) return;
     const open = c.plans[c.sel];
-    c.plans = o.plans;
+    c.plans = walkHereNow(o.plans);
     c.sel = open ? c.plans.findIndex(p => pickSig(p) === pickSig(open) && Math.abs(p.dep - open.dep) < 60_000) : -1;
     renderCard();
     if (c.sel < 0 && c.plans.length) {
@@ -1358,8 +1407,12 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
       if (path?.length > 1) l.path = path;
     }),
     ...todo.map(async l => {
-      const r = await roadPath(l.mode, l.from, l.to);
-      if (!r) return;
+      // A walk: the one walk (walkTo, Google's streets), from where you are
+      // as the strip and the cards have it when it starts beside you; a
+      // ride: OpenStreetMap's bike router.
+      const here = l.mode === 'walk' && ctx.here && meters(ctx.here.lat, ctx.here.lon, l.from.lat, l.from.lon) < 50;
+      const r = l.mode === 'walk' ? await (here ? walkFrom(ctx.here, l.to, { line: true }) : walkTo(l.from, l.to, { line: true }).catch(() => null)) : await roadPath(l.mode, l.from, l.to);
+      if (!r?.poly) return;
       l.road = true;
       l.poly = r.poly;
       l.fmt = '';

@@ -49,6 +49,10 @@
 <script>!function(b,v,q,m,f,i){try{v=localStorage.getItem('quadra.kit')||''}catch(e){v=''}q=v?'?v='+encodeURIComponent(v):'';m={'#kit/':b};f=['quadra.mjs','logos.mjs','names.mjs','photos.mjs','catalog.mjs'];for(i=0;i<f.length;i++)m['#kit/'+f[i]]=b+f[i]+q;window.QUADRA_KIT={base:b,version:v,url:function(x){return b+x+q}};document.write('<script type="import'+'map">'+JSON.stringify({imports:m})+'<\/script><link rel="stylesheet" href="'+b+'quadra.css'+q+'"><link rel="modulepreload" href="'+b+'quadra.mjs'+q+'"><link rel="modulepreload" href="'+b+'brand.mjs'+q+'">')}('../Shared-Proxy/kit/')</script>
 <!-- /kit:head -->
 <link rel="stylesheet" href="./transit.css" />
+<!-- The map's library, asked as the page opens (the provider kept from the
+     last opening: map.mjs loadGoogle / loadLeaflet take it over), not a second later
+     once the app's code has loaded; and its tiles' servers connected to. -->
+<script>!function(c,g,s){try{c=(JSON.parse(localStorage.getItem('orbit-transit.v1')||'{}').cfg||{}).map||{}}catch(e){c={}}s=document.createElement('script');s.async=true;(c.provider==='google'&&c.key?['https://maps.googleapis.com','https://maps.gstatic.com']:['https://wmts.nlsc.gov.tw']).forEach(function(h){var p=document.createElement('link');p.rel='preconnect';p.href=h;p.crossOrigin='';document.head.appendChild(p)});if(c.provider==='google'&&c.key){window.__otMapsEarly=new Promise(function(r){window.__otMaps=r});s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(c.key)+'&v=weekly&language=zh-TW&region=TW&loading=async&callback=__otMaps'}else{g='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';var l=document.createElement('link');l.rel='stylesheet';l.href=g+'leaflet.min.css';document.head.appendChild(l);window.__otLeafletEarly=new Promise(function(r,j){s.onload=r;s.onerror=j});s.src=g+'leaflet.min.js'}document.head.appendChild(s)}()</script>
 </head>
 <body class="tab-map">
 <div id="loading" data-title="Orbit Transit" data-cache="orbit-transit-"></div>
