@@ -1365,7 +1365,7 @@ export function planBikeMarker({ st, rent, ret }, live = null) {
   const s = live || st;
   const lv = [rent && bikeLevel(s), ret && dockLevel(s)].filter(Boolean).sort((a, b) => LEVELS.indexOf(b) - LEVELS.indexOf(a))[0];
   // (Docks as a parking sign's P, bikes as the map's own: its bike, the count, ⚡.)
-  const parts = s.ok === false ? [`${icon('bike')}<b>停</b>`] : [ret && `<u>P</u><b>${s.ret}</b>`, rent && `${icon('bike')}<b>${s.bikes}</b>${s.ebike ? `<i>⚡${s.ebike}</i>` : ''}`].filter(Boolean);
+  const parts = s.ok === false ? [`${icon('bike')}<b>停</b>`] : [ret && `${icon('dock')}<b>${s.ret}</b>`, rent && `${icon('bike')}<b>${s.bikes}</b>${s.ebike ? `<i>⚡${s.ebike}</i>` : ''}`].filter(Boolean);
   return { id: `pbike:${st.uid}`, lat: st.lat, lon: st.lon, cls: `bike plan ${lv}`, z: 20, kind: 'bike', data: s, html: parts.join('<s></s>') };
 }
 // A ride's end without its station (a plan from elsewhere): a bike at the spot.
