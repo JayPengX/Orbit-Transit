@@ -1881,12 +1881,11 @@ test("a trip's YouBike stations: where you take one its bikes, where it goes bac
   assert.deepEqual(roles(planBikes([ride(A, B), ride(B, C)])), ['A:借', 'B:借還', 'C:還']);
   assert.deepEqual(planBikes([{ mode: 'bike', from: A, to: C }]), []);
   const [a, b, c] = planBikes([ride(A, B), ride(B, C)]).map(x => planBikeMarker(x));
-  assert.match(a.html, /借<\/em><b>5<\/b><i>⚡2/);
-  assert.doesNotMatch(a.html, /還/);
-  assert.match(b.html, /還<\/em><b>19<\/b>.*借<\/em><b>5/);
-  assert.match(c.html, /還<\/em><b>0<\/b>/);
-  assert.doesNotMatch(c.html, /借/);
-  // No docks where it goes back: shown as an empty station; live counts win over the plan's.
+  assert.match(a.html, /ot-i.*<b>5<\/b><i>⚡2/);
+  assert.doesNotMatch(a.html, /<u>P/);
+  assert.match(b.html, /<u>P<\/u><b>19<\/b><s><\/s>.*<b>5<\/b>/);
+  assert.match(c.html, /^<u>P<\/u><b>0<\/b>$/);
+    // No docks where it goes back: shown as an empty station; live counts win over the plan's.
   assert.match(c.cls, /none/);
   assert.match(planBikeMarker({ st: A, rent: true, ret: false }, { ...A, bikes: 1, ebike: 0 }).html, /<b>1<\/b>/);
   assert.equal(a.id, 'pbike:A');

@@ -1348,8 +1348,8 @@ function legPath(l) {
 // each as the map's own station marker, its tip on the station (looking at
 // the trip and navigating, when the map's other bike stations are off),
 // with what you need there: where you take one its bikes (and ⚡), where it
-// goes back its docks (還), a swap (every 30 minutes, returned and another
-// taken at one station) both, once.
+// goes back its docks (a parking P), a swap (every 30 minutes, returned and
+// another taken at one station) both, once.
 //   → [{ st, rent, ret }]
 export function planBikes(legs) {
   const at = new Map();
@@ -1364,8 +1364,9 @@ const LEVELS = ['ok', 'few', 'none', 'off'];
 export function planBikeMarker({ st, rent, ret }, live = null) {
   const s = live || st;
   const lv = [rent && bikeLevel(s), ret && dockLevel(s)].filter(Boolean).sort((a, b) => LEVELS.indexOf(b) - LEVELS.indexOf(a))[0];
-  const parts = s.ok === false ? ['<b>停</b>'] : [ret && `<em>還</em><b>${s.ret}</b>`, rent && `<em>借</em><b>${s.bikes}</b>${s.ebike ? `<i>⚡${s.ebike}</i>` : ''}`].filter(Boolean);
-  return { id: `pbike:${st.uid}`, lat: st.lat, lon: st.lon, cls: `bike plan ${lv}`, z: 20, kind: 'bike', data: s, html: `${icon('bike')}${parts.join('<s></s>')}` };
+  // (Docks as a parking sign's P, bikes as the map's own: its bike, the count, ⚡.)
+  const parts = s.ok === false ? [`${icon('bike')}<b>停</b>`] : [ret && `<u>P</u><b>${s.ret}</b>`, rent && `${icon('bike')}<b>${s.bikes}</b>${s.ebike ? `<i>⚡${s.ebike}</i>` : ''}`].filter(Boolean);
+  return { id: `pbike:${st.uid}`, lat: st.lat, lon: st.lon, cls: `bike plan ${lv}`, z: 20, kind: 'bike', data: s, html: parts.join('<s></s>') };
 }
 // A ride's end without its station (a plan from elsewhere): a bike at the spot.
 export const bikeReturns = legs =>
