@@ -28,7 +28,8 @@ const KIND = { bus: 'bus', tra: 'tra', hsr: 'hsr', metro: 'metro', lightrail: 'm
 export const allowed = (p, modes) => p.legs.every(l => l.mode !== 'car' && (!KIND[l.mode] || modes?.[KIND[l.mode]] !== false));
 
 export const rideSec = (m, ebike = false) => Math.round(((m * 1.25) / (ebike ? RIDE_M_MIN.ebike : RIDE_M_MIN.bike)) * 60);
-// Walking past 5 minutes is slow going: what a walk of m metres (as walked)
+// Walking past 375 m (5 minutes at 4.5 km/h, the pace it was fitted on; not
+// moved with the pace) is slow going: what a walk of m metres (as walked)
 // costs on top of its time, in minutes.
 const slowWalk = m => Math.max(0, m / 75 - 5) * 0.6;
 // A ride's length on the roads: the straight line and a quarter; over a

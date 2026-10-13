@@ -51,8 +51,9 @@ export function meters(aLat, aLon, bLat, bLon) {
 }
 export const near = (a, b) => meters(a.lat, a.lon, b.lat, b.lon);
 
-// Walking: streets aren't straight (×1.3) at 75 m a minute.
-export const WALK_M_MIN = 75;
+// Walking: streets aren't straight (×1.3) at 83 m a minute, 5 km/h (Google's
+// pace; 75, 4.5 km/h, until the owner's call of 2026-10-13).
+export const WALK_M_MIN = 83;
 // How old a TDX bus estimate is, in seconds, by when it was made (its
 // DataTime): an estimate is counted from then, not from when it reached the
 // phone (Hsinchu's buses make one about a minute, and the proxy keeps it a

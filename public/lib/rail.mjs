@@ -11,7 +11,7 @@
 // again from just after each first departure so that every option is the
 // latest way to leave for its arrival.
 
-import { meters, twAt, zh } from './util.mjs';
+import { meters, twAt, zh, WALK_M_MIN } from './util.mjs';
 import { cityFromAddress } from './city.mjs';
 
 export const SYSTEMS = { tra: '台鐵', hsr: '高鐵', metro: '捷運' };
@@ -147,7 +147,7 @@ export function links(stations, known = []) {
       if (a.sys === 'metro' && b.sys === 'metro' && a.op === b.op) continue;
       const d = meters(a.lat, a.lon, b.lat, b.lon);
       if (d > 900) continue;
-      const walk = Math.max(4, Math.round((d * 1.3) / 75) + 4);
+      const walk = Math.max(4, Math.round((d * 1.3) / WALK_M_MIN) + 4);
       out.push({ from: a.key, to: b.key, min: given.get(`${a.key}>${b.key}`) ?? walk, d: Math.round(d) });
       out.push({ from: b.key, to: a.key, min: given.get(`${b.key}>${a.key}`) ?? walk, d: Math.round(d) });
     }
