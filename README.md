@@ -129,7 +129,7 @@ batch old against new, say what moved).
 **Near a point** (`near.mjs`), worked out on the phone instead of asking TDX
 around every point:
 - **Bus stops**: within a kilometre, from the bus packs kept here.
-  Shared-Data's `where.json` says which packs have stops near.
+  `where.json` (the family's data) says which packs have stops near.
 - **Buses due**: one ask a city for every stop wanted at that moment.
 - **YouBike**: the city's stations, one ask a city.
 
@@ -307,9 +307,9 @@ the phone's position:
 | --- | --- | --- |
 | Live bus arrivals (each estimate counted from its `DataTime`, when TDX made it: `util.mjs etaAge`), train boards, metro boards, YouBike now | TDX | `/transit/tdx` (Shared-Proxy `transit.js`): cached and shared on the Worker (`tdxLive` 10 s, `tdxBike` 30 s), read by the app every `transitLive` / `transitBike` |
 | Stations, routes, a day's timetables | TDX | `/transit/tdx` (stations a day, timetables 6 h) and the device (`orbit-transit-data` cache: stations a week, a day's 台鐵 timetable in a compact form, a tenth of TDX's 3.7 MB) |
-| Bus routes and timetables | Shared-Data `bus/<City>.json`, `bus/InterCity/<square>.json` (weekly) | `packs.mjs`: kept on the phone (under 20 h fresh, any age when the site can't be reached); a route not in its pack asked of TDX |
-| What's near a point | Shared-Data `where.json` (nightly) | `near.mjs`, kept a day |
-| The lines' shapes | Shared-Data `shape/rail.json`, `shape/bus/…` (weekly) | `shapes.mjs`, kept a week |
+| Bus routes and timetables | The family's data (R2, the proxy's `/data/`): `bus/<City>.json`, `bus/InterCity/<square>.json` (a city weekly, Shared-Proxy `builders/buses.js`) | `packs.mjs`: kept on the phone (under 20 h fresh, any age when the site can't be reached); a route not in its pack asked of TDX |
+| What's near a point | `/data/where.json` (weekly, with the packs) | `near.mjs`, kept a day |
+| The lines' shapes | `/data/shape/rail.json`, `shape/bus/…` (weekly) | `shapes.mjs`, kept a week |
 | The map | Google Maps JS (the browser key, counted as a map load) or NLSC | `/transit/config` |
 | Place search, details (Autocomplete beside Text Search's 20 near you: a chain's branches nearest first, a typo still found, the same chain far away left out while one is near, a place's parts folded into it: LaLaport, not its cinema or car parks; Shared-Proxy `nearFirst`, `folded`) | Google Places (New), OpenStreetMap past the cap | `/transit/search`, `/transit/place` |
 | Plans | Google's transit routes and TDX's planner | `/transit/route` |
@@ -349,7 +349,7 @@ slow.
 | `lib/rail.mjs`, `raildata.mjs` | The train router (Connection Scan over 台鐵 + 高鐵) and its data |
 | `lib/metro.mjs`, `metroroute.mjs`, `tab-metro.mjs` | Metro systems, boards, our metro router, the maps |
 | `lib/bus.mjs`, `bus-ui.mjs` | Routes, stops, arrivals, timetables; route sheets, groups, stops near a point |
-| `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | Shared-Data's packs: what's near, bus packs, line shapes |
+| `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | The family's data (`/data/`): what's near, bus packs, line shapes |
 | `lib/bike.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike, rivers and bridges, TPASS |
 | `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation, where the bus or train is, the buzz, bus alerts |
 | `lib/tab-go.mjs`, `tab-times.mjs`, `tab-train.mjs`, `tab-me.mjs` | 交通, 查時刻 (and its trains), 我的 |
@@ -395,6 +395,6 @@ node ../Shared-Proxy/tools/preview.mjs transit go --webkit
 | --- | --- |
 | The score or ranking | `npm test` (the owner's verdicts, with buses a few minutes off), the whole batch old against new (`scripts/live.mjs --against`), TRUTH §4's steps; `replay.mjs` on the owner's logs |
 | A TDX path | Shared-Proxy's `TDX_RULES` allowlist and cache times; the `bus` push check |
-| Pack formats | Shared-Data's `build.mjs`, `shapes.mjs`, `where.mjs` (their `v`) |
+| Pack formats | Shared-Proxy's `builders/buses.js` (its `v`) |
 | Navigation steps | `ot.nav.v1`'s shape (resuming), the `transit:nav` notices |
 | The status bar or top | TRUTH §10: `black`, the solid strip, the map sharp under it |
