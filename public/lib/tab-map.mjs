@@ -252,9 +252,10 @@ async function drawLayers() {
   const L = ctx.data.layers;
   // Navigating: only the way (its stops and stations are on it); the rest is in the way.
   if (navFull()) {
-    for (const k of ['bike', 'bus', 'rail', 'metro']) map.layer(k).set([]);
+    for (const k of ['bike', 'bus', 'rail', 'metro', 'places']) map.layer(k).set([]);
     return;
   }
+  drawPlaces();
   const city = await ctx.cityOf(c.lat, c.lon);
   if (run !== drawing) return;
   // Looking at a trip: only its own YouBike stations (where you take one and
@@ -957,7 +958,15 @@ function arrive(c) {
 
 // ---- Pinned places ---------------------------------------------------------------------------------
 
+// On the map at every zoom (their icon and name), a tap opening the place's card, as its chip does.
+const placeCard = p => ({ kind: 'place', item: { name: p.name, sub: p.address, lat: p.lat, lon: p.lon, pin: p.id, gid: p.gid }, lat: p.lat, lon: p.lon });
+export const placeMarker = p => ({ id: `place:${p.id}`, lat: p.lat, lon: p.lon, cls: 'place', z: 6, kind: 'place', data: placeCard(p).item, html: `<i>${PLACE_ICONS[p.icon] || '📍'}</i><span>${e(p.name)}</span>` });
+function drawPlaces() {
+  map?.layer('places').set(navFull() ? [] : ctx.data.places.map(placeMarker));
+}
+
 function drawChips() {
+  drawPlaces();
   $('map-chips').innerHTML =
     ctx.data.places.map(p => `<button class="q-chip" type="button" data-place="${e(p.id)}">${PLACE_ICONS[p.icon] || '📍'} ${e(p.name)}</button>`).join('') +
     `<button class="q-chip ot-chip-muted" type="button" data-chip="pin">${icon('plus')} 釘選地點</button>`;
@@ -965,7 +974,7 @@ function drawChips() {
     const pl = ev.target.closest('[data-place]');
     if (pl) {
       const p = ctx.data.places.find(x => x.id === pl.dataset.place);
-      if (p) arrive({ kind: 'place', item: { name: p.name, sub: p.address, lat: p.lat, lon: p.lon, pin: p.id, gid: p.gid }, lat: p.lat, lon: p.lon });
+      if (p) arrive({ ...placeCard(p), marker: placeMarker(p) });
       return;
     }
     const layer = ev.target.closest('[data-layer]')?.dataset.layer;

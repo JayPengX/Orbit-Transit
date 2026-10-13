@@ -409,6 +409,31 @@ main {
   border-radius: 50%;
   background: #fff;
 }
+/* A pinned place (家, 學校…): its icon in a white-ringed disc, its name beside it. */
+.ot-mk.place {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -14px 0 0 -14px;
+  white-space: nowrap;
+  font: 700 12px/1 var(--q-font);
+  color: #e8ecf3;
+  text-shadow: 0 0 3px #000, 0 0 6px #000;
+}
+.ot-mk.place i {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1f2937;
+  font-style: normal;
+  font-size: 15px;
+  text-shadow: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
 .ot-mk.me {
   margin: -11px 0 0 -11px;
 }

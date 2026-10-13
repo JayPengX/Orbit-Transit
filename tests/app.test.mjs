@@ -1847,3 +1847,15 @@ test('a metro ride’s stops, for the map: its line’s stations between where i
   assert.deepEqual(back.stops.map(s => s.name), ['台北車站', '西門']);
   assert.equal(await metroStops({ mode: 'metro', from: { lat: 24.8, lon: 121 }, to: { lat: 24.81, lon: 121 } }, { load }), null, 'no metro there');
 });
+
+test('a pinned place is on the map: its icon and name, a tap opening its card (the pin kept, so 已釘選)', async () => {
+  const { placeMarker } = await import('../public/lib/tab-map.mjs');
+  const m = placeMarker({ id: 'h', name: '家<b>', icon: 'home', lat: 24.8, lon: 120.97, address: '東區', gid: 'g1' });
+  assert.equal(m.id, 'place:h');
+  assert.equal(m.kind, 'place');
+  assert.deepEqual([m.lat, m.lon], [24.8, 120.97]);
+  assert.match(m.html, /🏠/);
+  assert.match(m.html, /家&lt;b&gt;/);
+  assert.deepEqual(m.data, { name: '家<b>', sub: '東區', lat: 24.8, lon: 120.97, pin: 'h', gid: 'g1' });
+  assert.match(placeMarker({ id: 'x', name: 'x', icon: 'nope', lat: 24, lon: 121 }).html, /📍/);
+});
