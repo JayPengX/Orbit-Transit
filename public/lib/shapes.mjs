@@ -15,7 +15,7 @@ import { kept, keep } from './api.mjs';
 import { decodeLine } from './util.mjs';
 import { squareOf } from './packs.mjs';
 
-export const SHAPES = 'https://jaypengx.github.io/Shared-Data/shape/';
+export const SHAPES = 'https://orbit-workers-proxy.pengzjay.workers.dev/data/shape/';
 const FRESH = 6 * 86_400_000;
 const memory = new Map();
 const inflight = new Map();
