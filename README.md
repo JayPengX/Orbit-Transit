@@ -52,7 +52,11 @@ batch old against new, say what moved).
 
 1. **Plans side by side.**
    - The proxy's planners: Google's transit routes and TDX's planner,
-     walking and by YouBike.
+     walking and by YouBike. A planner's walk whose line is clearly longer than its
+     length (TDX sends the line but often no length: the proxy's straight
+     guess) takes the line's length and the time to walk it at our pace
+     (`plan.mjs walksByLine`: the first walk sets out earlier, the last gets
+     in later, one between rides no longer than the gap).
    - Our own **台鐵 / 高鐵 router** (`rail.mjs`). It turns a day's whole
      timetable into connections and runs the Connection Scan Algorithm,
      changing wherever that's faster (a 內灣線 train to 竹中, the 六家線, a
