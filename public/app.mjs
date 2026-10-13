@@ -180,7 +180,6 @@ async function boot() {
     merge(await session);
     ctx.cfg = (await getCfg()) || { map: { provider: 'nlsc' }, search: 'osm' };
   }
-  $('loading').hidden = true;
   // A ride being navigated when the app was swiped away: on with it, on the
   // map (or, shrunk to its bar, on the tab you were on).
   const was = savedNav();
@@ -188,6 +187,9 @@ async function boot() {
   const want = was && !was.min ? 'map' : asked;
   mapTab.register(ctx);
   meTab.register(ctx);
+  // The first tab drawn behind the loading screen, which lifts onto it
+  // finished: the map's tiles, what's in view, the strip (mapTab.ready), at
+  // most 4 s (then as it stands).
   select(OLD[want] || want);
   // (Shrunk, on another tab: the map started behind it, so the ride goes on and its bar shows.)
   if (was && (OLD[want] || want) !== 'map' && !started.has('map')) {
@@ -195,6 +197,8 @@ async function boot() {
     mapTab.init(ctx);
   }
   if (want === 'metro') ctx.openMetro?.();
+  if ((OLD[want] || want) === 'map') await Promise.race([mapTab.ready, new Promise(r => setTimeout(r, 4000))]);
+  $('loading').hidden = true;
   ctx.locate();
   startAlerts(t => ctx.status(t), {
     schedule: items => schedulePush(q, items),

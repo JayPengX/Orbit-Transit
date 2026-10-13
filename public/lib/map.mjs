@@ -55,6 +55,9 @@ function style(href) {
 let googleLoad = null;
 function loadGoogle(key) {
   if (globalThis.google?.maps?.Map) return Promise.resolve();
+  // (Asked by the page as it opened, with this key: that one.)
+  if (!googleLoad && globalThis.__otMapsEarly && String(document.querySelector('script[src*="maps.googleapis.com"]')?.src || '').includes(encodeURIComponent(key)))
+    googleLoad = Promise.race([globalThis.__otMapsEarly, new Promise((_, reject) => setTimeout(() => reject(new Error('maps timeout')), 15_000))]);
   googleLoad ||= new Promise((resolve, reject) => {
     globalThis.__otMaps = resolve;
     script(`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&language=zh-TW&region=TW&loading=async&callback=__otMaps`).catch(reject);
@@ -66,7 +69,8 @@ let leafletLoad = null;
 function loadLeaflet() {
   if (globalThis.L?.map) return Promise.resolve();
   style(`${LEAFLET}leaflet.min.css`);
-  leafletLoad ||= script(`${LEAFLET}leaflet.min.js`);
+  // (Asked by the page as it opened: that one, or again if it failed.)
+  leafletLoad ||= globalThis.__otLeafletEarly ? globalThis.__otLeafletEarly.catch(() => script(`${LEAFLET}leaflet.min.js`)) : script(`${LEAFLET}leaflet.min.js`);
   return leafletLoad;
 }
 
@@ -142,6 +146,8 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
   });
   const transit = new g.TransitLayer();
   transit.setMap(map);
+  // (The first screen's tiles in: what the loading screen waits for.)
+  const tiles = new Promise(r => g.event.addListenerOnce(map, 'tilesloaded', r));
   map.addListener('click', ev => {
     // A tap on one of Google's places: ours to show, not Google's bubble.
     if (ev.placeId) {
@@ -212,6 +218,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
   let sel = null;
   return {
     kind: 'google',
+    tiles: () => tiles,
     select(it) {
       sel = it ? { id: it.id, lat: it.lat, lon: it.lon } : null;
       for (const l of layers.values()) l.items.again();
@@ -288,7 +295,9 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   // (Taiwan only, as the Google map.)
   const map = L.map(el, { zoomControl: false, attributionControl: true, center: [center.lat, center.lon], zoom, maxZoom: 19, minZoom: 7, maxBounds: [[TAIWAN_BOX.s, TAIWAN_BOX.w], [TAIWAN_BOX.n, TAIWAN_BOX.e]], maxBoundsViscosity: 1 });
   map.attributionControl.setPrefix('');
-  L.tileLayer(NLSC, { maxZoom: 19, maxNativeZoom: 19, attribution: '© 內政部國土測繪中心', className: 'ot-tiles' }).addTo(map);
+  const layer = L.tileLayer(NLSC, { maxZoom: 19, maxNativeZoom: 19, attribution: '© 內政部國土測繪中心', className: 'ot-tiles' });
+  const tiles = new Promise(r => layer.once('load', r));
+  layer.addTo(map);
   map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
   map.on('moveend', () => onIdle());
   map.on('dragstart', () => onDrag());
@@ -319,6 +328,7 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
     }, () => sel);
   return {
     kind: 'nlsc',
+    tiles: () => tiles,
     select(it) {
       sel = it ? { id: it.id, lat: it.lat, lon: it.lon } : null;
       for (const l of layers.values()) l.again();

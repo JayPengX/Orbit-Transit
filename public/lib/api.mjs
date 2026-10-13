@@ -4,6 +4,7 @@
 // timetable) in this device's cache, so a second look costs nothing.
 
 import { dev } from '#kit/quadra.mjs';
+import { WALK_M_MIN } from './util.mjs';
 
 export const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
 const DATA_CACHE = 'orbit-transit-data';
@@ -209,6 +210,54 @@ export const errorText = err =>
             : err?.code === 'TDX_FAILED' || err?.status >= 500
               ? '交通部 TDX 暫時沒有回應，稍後自動再試。'
               : '暫時無法取得資料，稍後自動再試。';
+
+// ---- Walks ---------------------------------------------------------------------------------------
+// One walk wherever it's shown (the strip of nearest stations, a card's 距離
+// and 走過去, a trip's walks): Google's streets (the proxy's /transit/walk:
+// the lanes and short cuts OpenStreetMap's router misses; free under the
+// month's cap, each walk kept there a month), OpenStreetMap's router past
+// it. Its time at our pace (WALK_M_MIN), for every one alike. Kept on the
+// phone, the newest 400 (without their lines): a reopen has them at once.
+//   → [{ dist, sec, poly? } | null]
+const WALKS_KEY = 'orbit-transit.walks';
+const walksKept = (() => {
+  try {
+    return new Map(JSON.parse(localStorage.getItem(WALKS_KEY) || '[]'));
+  } catch {
+    return new Map();
+  }
+})();
+let walksSave = 0;
+const keepWalks = () => {
+  clearTimeout(walksSave);
+  walksSave = setTimeout(() => {
+    try {
+      localStorage.setItem(WALKS_KEY, JSON.stringify([...walksKept].slice(-400).map(([k, w]) => [k, { dist: w.dist, sec: w.sec }])));
+    } catch {}
+  }, 1000);
+};
+const p5 = p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
+const walkKey = (a, b) => `${p5(a)}|${p5(b)}`;
+const paced = (dist, extra = {}) => ({ dist, sec: Math.round((dist / WALK_M_MIN) * 60), ...extra });
+// (Known on the phone now, or null.)
+export const walkKnown = (a, b) => walksKept.get(walkKey(a, b)) || null;
+export async function walksTo(from, tos, { line = false } = {}) {
+  const need = tos.map((t, i) => (walksKept.get(walkKey(from, t)) && (!line || walksKept.get(walkKey(from, t)).poly) ? -1 : i)).filter(i => i >= 0);
+  if (need.length) {
+    const asked = await get(`/transit/walk?from=${p5(from)}&to=${need.map(i => p5(tos[i])).join(';')}${line ? '&line=1' : ''}`).catch(() => null);
+    await Promise.all(
+      need.map(async (i, k) => {
+        const g = asked?.walks?.[k];
+        // (Past Google's cap, or no answer: OpenStreetMap's router.)
+        const r = g || (await roadPath('walk', from, tos[i]));
+        if (r) walksKept.set(walkKey(from, tos[i]), paced(r.dist, r.poly ? { poly: r.poly } : {}));
+      })
+    );
+    keepWalks();
+  }
+  return tos.map(t => walksKept.get(walkKey(from, t)) || null);
+}
+export const walkTo = (from, to, opts) => walksTo(from, [to], opts).then(r => r[0]);
 
 // ---- The roads a walk or a YouBike ride takes ------------------------------------------------
 // OpenStreetMap's routers (FOSSGIS's OSRM, open to all, light use only:
