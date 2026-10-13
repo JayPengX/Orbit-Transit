@@ -414,6 +414,7 @@ function closeCard() {
   map.layer('sel').set([]);
   map.select(null);
   map.lines('plan', []);
+  planDraw++;
   map.layer('plan').set([]);
 }
 // The card's live part, again every 20 s while it's open.
@@ -1345,15 +1346,34 @@ function legPath(l) {
 }
 // A trip's YouBike stations, where you take a bike and where it goes back:
 // each as the map's own station marker, its tip on the station (looking at
-// the trip and navigating, when the map's other bike stations are off). A
-// swap (every 30 minutes) returns and takes one at one station: once.
-export const planBikes = legs => [...new Map(legs.filter(l => l.mode === 'bike').flatMap(l => [l.rent, l.ret]).filter(st => st?.uid && st.lat != null).map(st => [st.uid, st])).values()];
+// the trip and navigating, when the map's other bike stations are off),
+// with what you need there: where you take one its bikes (and ⚡), where it
+// goes back its docks (還), a swap (every 30 minutes, returned and another
+// taken at one station) both, once.
+//   → [{ st, rent, ret }]
+export function planBikes(legs) {
+  const at = new Map();
+  for (const l of legs.filter(l => l.mode === 'bike'))
+    for (const [st, role] of [[l.rent, 'rent'], [l.ret, 'ret']])
+      if (st?.uid && st.lat != null) at.set(st.uid, { st, rent: false, ret: false, ...at.get(st.uid), [role]: true });
+  return [...at.values()];
+}
+const dockLevel = s => (s.ok === false ? 'off' : s.ret === 0 ? 'none' : s.ret <= 3 ? 'few' : 'ok');
+const LEVELS = ['ok', 'few', 'none', 'off'];
+// (The station now when the city's bikes are in: `live`.)
+export function planBikeMarker({ st, rent, ret }, live = null) {
+  const s = live || st;
+  const lv = [rent && bikeLevel(s), ret && dockLevel(s)].filter(Boolean).sort((a, b) => LEVELS.indexOf(b) - LEVELS.indexOf(a))[0];
+  const parts = s.ok === false ? ['<b>停</b>'] : [ret && `<em>還</em><b>${s.ret}</b>`, rent && `<em>借</em><b>${s.bikes}</b>${s.ebike ? `<i>⚡${s.ebike}</i>` : ''}`].filter(Boolean);
+  return { id: `pbike:${st.uid}`, lat: st.lat, lon: st.lon, cls: `bike plan ${lv}`, z: 20, kind: 'bike', data: s, html: `${icon('bike')}${parts.join('<s></s>')}` };
+}
 // A ride's end without its station (a plan from elsewhere): a bike at the spot.
 export const bikeReturns = legs =>
   legs.filter((l, k) => {
     const next = legs[k + 1];
     return l.mode === 'bike' && l.to?.lat != null && !(next?.mode === 'bike' && next.from?.lat != null && meters(l.to.lat, l.to.lon, next.from.lat, next.from.lon) < 40);
   });
+let planDraw = 0;
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
   // (Its own YouBike stations, only: drawLayers.)
@@ -1375,17 +1395,27 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const end = p.dest?.lat != null ? p.dest : p.legs.at(-1)?.to;
   // The place's own dropped pin already marks where it ends: one mark there, not two on top of each other.
   const marked = selDrop && end?.lat != null && meters(selDrop.lat, selDrop.lon, end.lat, end.lon) < 60;
-  map.layer('plan').set([
+  const bikes = planBikes(p.legs);
+  const marks = live => [
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || '目的地')}">${icon('pin')}</i>` }] : []),
     ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && l.rent?.uid)).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
-    ...planBikes(p.legs).map(st => ({ ...bikeMarker(st), id: `pbike:${st.uid}`, z: 20 })),
+    ...bikes.map(b => planBikeMarker(b, live?.get(b.st.uid))),
     ...bikeReturns(p.legs).filter(l => !l.ret?.uid).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
     ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops }) =>
       stops.slice(1).map((s, x) => ({ id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${x === stops.length - 2 ? ' off' : ''}`, z: 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>` }))
     )
-  ]);
+  ];
+  const run = ++planDraw;
+  map.layer('plan').set(marks(null));
+  // Its YouBike stations as they are now (bikes to take, docks to return to).
+  if (bikes.length)
+    ctx
+      .cityOf(bikes[0].st.lat, bikes[0].st.lon)
+      .then(city => city && cityBikes(city))
+      .then(list => list && run === planDraw && map.layer('plan').set(marks(new Map(list.map(x => [x.uid, x])))))
+      .catch(() => {});
   if (fit && pts.length) map.fit(pts, { top: 120, bottom: Math.round(innerHeight * 0.55), left: 30, right: 30 });
 }
 

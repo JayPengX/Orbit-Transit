@@ -1871,12 +1871,23 @@ test('a YouBike ride shows where it goes back on the map (a swap: once, where th
   assert.deepEqual(bikeReturns([{ mode: 'bus', from: A, to: B }, walk]), []);
 });
 
-test("a trip's YouBike stations are on the map as stations: where you take it and where it goes back, a swap's once", async () => {
-  const { planBikes } = await import('../public/lib/tab-map.mjs');
-  const st = (uid, lat) => ({ uid, name: uid, lat, lon: 121, bikes: 3, ebike: 1, ret: 5 });
-  const [A, B, C] = [st('A', 24.8), st('B', 24.81), st('C', 24.83)];
+test("a trip's YouBike stations: where you take one its bikes, where it goes back its docks, a swap's both, once", async () => {
+  const { planBikes, planBikeMarker } = await import('../public/lib/tab-map.mjs');
+  const st = (uid, lat, o = {}) => ({ uid, name: uid, lat, lon: 121, bikes: 5, ebike: 2, ret: 19, ...o });
+  const [A, B, C] = [st('A', 24.8), st('B', 24.81), st('C', 24.83, { ret: 0 })];
   const ride = (r, t) => ({ mode: 'bike', from: { lat: r.lat, lon: r.lon }, to: { lat: t.lat, lon: t.lon }, rent: r, ret: t });
-  assert.deepEqual(planBikes([{ mode: 'walk' }, ride(A, C), { mode: 'walk' }]).map(s => s.uid), ['A', 'C']);
-  assert.deepEqual(planBikes([ride(A, B), ride(B, C)]).map(s => s.uid), ['A', 'B', 'C']);
+  const roles = list => list.map(b => `${b.st.uid}:${b.rent ? '借' : ''}${b.ret ? '還' : ''}`);
+  assert.deepEqual(roles(planBikes([{ mode: 'walk' }, ride(A, C), { mode: 'walk' }])), ['A:借', 'C:還']);
+  assert.deepEqual(roles(planBikes([ride(A, B), ride(B, C)])), ['A:借', 'B:借還', 'C:還']);
   assert.deepEqual(planBikes([{ mode: 'bike', from: A, to: C }]), []);
+  const [a, b, c] = planBikes([ride(A, B), ride(B, C)]).map(x => planBikeMarker(x));
+  assert.match(a.html, /借<\/em><b>5<\/b><i>⚡2/);
+  assert.doesNotMatch(a.html, /還/);
+  assert.match(b.html, /還<\/em><b>19<\/b>.*借<\/em><b>5/);
+  assert.match(c.html, /還<\/em><b>0<\/b>/);
+  assert.doesNotMatch(c.html, /借/);
+  // No docks where it goes back: shown as an empty station; live counts win over the plan's.
+  assert.match(c.cls, /none/);
+  assert.match(planBikeMarker({ st: A, rent: true, ret: false }, { ...A, bikes: 1, ebike: 0 }).html, /<b>1<\/b>/);
+  assert.equal(a.id, 'pbike:A');
 });

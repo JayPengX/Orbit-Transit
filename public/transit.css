@@ -344,6 +344,20 @@ main {
   font-size: 10.5px;
   opacity: 0.85;
 }
+/* A trip's own station: what you need there, labelled (借 its bikes, 還 its docks; a swap both). */
+.ot-mk.bike.plan em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+.ot-mk.bike.plan s {
+  width: 1px;
+  height: 12px;
+  margin: 0 3px;
+  background: currentColor;
+  opacity: 0.35;
+}
 .ot-mk.bike.few {
   background: #f59e0b;
 }
