@@ -3268,8 +3268,9 @@ main {
   position: sticky;
   top: 0;
   z-index: 3;
-  margin: 0 -18px;
-  padding: 0 18px 8px;
+  /* Edge to edge over the sheet's own side padding (the kit's margin). */
+  margin: 0 calc(-1 * var(--q-margin));
+  padding: 0 var(--q-margin) 8px;
   background: var(--q-sheet, var(--q-page));
   border-bottom: 0.5px solid var(--ot-line);
 }
@@ -3306,7 +3307,7 @@ main {
   text-align: center;
   box-sizing: border-box;
 }
-.ot-rt-top .ot-rt-top .ot-rt-top .ot-route-sheet .ot-route-stops {
+.ot-route-sheet .ot-route-stops {
   margin: 6px 0 0;
 }
 .ot-route-sheet .ot-route-stops li {
