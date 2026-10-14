@@ -3,7 +3,7 @@
 
 import { packRoute } from './packs.mjs';
 import { tdx, rows } from './api.mjs';
-import { zh, hm, etaAge } from './util.mjs';
+import { zh, hm, etaAge, meters } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 
 // 'InterCity' is 公路客運 and 國道客運 (they belong to no city).
@@ -230,5 +230,40 @@ export function stopSides(stations) {
     if (near) near[1].push(s);
     else sides.push([s]);
   }
-  return sides.map(g => ({ ...g[0], lat: g.reduce((a, x) => a + x.lat, 0) / g.length, lon: g.reduce((a, x) => a + x.lon, 0) / g.length, routes: [...new Set(g.flatMap(x => x.routes))], group: g }));
+  return sides.map(pool);
+}
+// Stations as one: in the middle of them, every route through any, named as
+// most of their routes call it (新竹站, not 火車站 for one city bus).
+const pool = g => {
+  const uses = new Map();
+  for (const x of g) uses.set(x.name, (uses.get(x.name) || 0) + (x.routes?.length || 0));
+  const name = [...uses].sort((a, b) => b[1] - a[1])[0][0];
+  return { ...g[0], name, lat: g.reduce((a, x) => a + x.lat, 0) / g.length, lon: g.reduce((a, x) => a + x.lon, 0) / g.length, routes: [...new Set(g.flatMap(x => x.routes))], group: g };
+};
+// The stations that are one stop (one marker, every bus on its card): one
+// name a street's width apart (its two sides), or one sign whatever each
+// operator calls it (新竹站's front: 火車站 for the city's buses, 新竹火車站
+// for the county's and 新竹站 for 公路客運, a few metres apart). Never
+// spread past a street's width: a hub stays its several stops.
+const ONE_STOP_M = 90;
+const ONE_SIGN_M = 25;
+export function stopGroups(list) {
+  // The nearest first, whatever order they came in: two signs a few metres
+  // apart are one before either joins a stop down the road.
+  const d = (a, b) => meters(a.lat, a.lon, b.lat, b.lon);
+  const pairs = [];
+  for (let i = 0; i < list.length; i++)
+    for (let j = i + 1; j < list.length; j++) {
+      const m = d(list[i], list[j]);
+      if (m < ONE_STOP_M && (m < ONE_SIGN_M || list[i].name === list[j].name)) pairs.push([m, i, j]);
+    }
+  const of = list.map((s, i) => [i]);
+  for (const [, i, j] of pairs.sort((a, b) => a[0] - b[0])) {
+    const [a, b] = [of[i], of[j]];
+    if (a === b || !a.every(x => b.every(y => d(list[x], list[y]) < ONE_STOP_M))) continue;
+    a.push(...b);
+    for (const k of b) of[k] = a;
+  }
+  const groups = [...new Set(of)].map(g => g.sort((x, y) => x - y).map(k => list[k]));
+  return groups.map(pool);
 }

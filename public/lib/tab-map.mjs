@@ -11,7 +11,7 @@ import { createMap } from './map.mjs';
 import { fitNumbers } from '#kit/quadra.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
-import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides } from './bus.mjs';
+import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
@@ -357,17 +357,6 @@ function busMarkers(group, z) {
   const sides = z >= SIDES_ZOOM ? stopSides(group.group || [group]) : [];
   if (sides.length < 2) return [busMarker(group)];
   return sides.map(s => ({ ...busMarker(s), cls: 'bus side' }));
-}
-// The two sides of a street (or a stop's halves) are one stop: one marker,
-// every bus through any of them on its card.
-function stopGroups(list) {
-  const groups = [];
-  for (const s of list) {
-    const g = groups.find(g => g[0].name === s.name && meters(g[0].lat, g[0].lon, s.lat, s.lon) < 90);
-    if (g) g.push(s);
-    else groups.push([s]);
-  }
-  return groups.map(g => ({ ...g[0], lat: g.reduce((a, x) => a + x.lat, 0) / g.length, lon: g.reduce((a, x) => a + x.lon, 0) / g.length, routes: [...new Set(g.flatMap(x => x.routes))], group: g }));
 }
 const railMarker = s => ({ id: s.key, lat: s.lat, lon: s.lon, cls: `rail ${s.sys}`, z: 4, kind: s.sys, data: s, html: `${icon(s.sys === 'hsr' ? 'hsr' : 'tra')}<span>${e(s.name)}</span>` });
 const metroMarker = ({ st, color }) => ({ id: st.key, lat: st.lat, lon: st.lon, cls: 'metro', z: 4, kind: 'metro', data: st, html: `<i style="--c:${e(color || '#3b82f6')}"></i><span>${e(st.name)}</span>` });

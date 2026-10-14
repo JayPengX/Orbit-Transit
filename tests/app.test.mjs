@@ -6,7 +6,7 @@ import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys,
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
-import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides } from '../public/lib/bus.mjs';
+import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides, stopGroups } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
 import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, onTimeWay, offerText, stageView } from '../public/lib/nav.mjs';
@@ -1594,6 +1594,29 @@ test('a stop’s sides by the way its buses go: two signs on one side are one si
   assert.equal(sides[1].bearing, 'W');
   // One side only: one.
   assert.equal(stopSides([st('a', 24.8, 121, 'S', []), st('b', 24.8002, 121, 'S', [])]).length, 1);
+});
+
+test('新竹站’s front is one stop: one sign under three names (火車站, 新竹火車站, 新竹站) a few metres apart, both sides of 中華路; a stop down the road stays its own, and a hub never one blob', () => {
+  const st = (uid, name, lat, lon, bearing, routes) => ({ uid, name, lat, lon, bearing, routes });
+  const list = [
+    st('HSZ130150', '火車站', 24.8024, 120.97239, 'NE', ['182']),
+    st('HSQ144143', '新竹火車站', 24.80278, 120.97265, 'SW', ['5608', '5614']),
+    st('HSQ144144', '新竹火車站', 24.8024, 120.97242, 'NE', ['5608', '5614']),
+    st('THB27678', '新竹站', 24.80243, 120.97239, 'NE', ['1820', '1821', '5615', '5619', '5670']),
+    st('HSZ130191', '火車站', 24.80279, 120.97277, 'SW', ['182']),
+    st('HSQ32952', '東南街口', 24.79966, 120.97259, 'W', ['5608'])
+  ];
+  const groups = stopGroups(list);
+  assert.deepEqual(groups.map(g => g.group.map(x => x.uid).sort()), [['HSQ144143', 'HSQ144144', 'HSZ130150', 'HSZ130191', 'THB27678'], ['HSQ32952']]);
+  assert.equal(groups[0].name, '新竹站', 'named as most of its buses call it');
+  assert.deepEqual(stopSides(groups[0].group).map(x => x.group.length), [3, 2], 'one marker each side of the street, close in');
+  // In any order.
+  assert.deepEqual(stopGroups([...list].reverse()).map(g => g.group.length).sort(), [1, 5]);
+  // Signs of one name every 60 m along a street: never one stop 180 m long.
+  const row = [0, 1, 2, 3].map(k => st(`r${k}`, '火車站', 24.81 + k * 0.00054, 120.97, 'N', ['1']));
+  assert.ok(stopGroups(row).every(g => g.group.length <= 2));
+  // Two names 40 m apart: two stops.
+  assert.equal(stopGroups([st('a', '甲', 24.8, 121, 'N', []), st('b', '乙', 24.80036, 121, 'N', [])]).length, 2);
 });
 
 test('a YouBike station out of bikes or docks while on the way: the ride moved to another, the walk with it', async () => {
