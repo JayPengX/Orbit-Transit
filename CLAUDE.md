@@ -19,6 +19,6 @@ anything else here.
 - The brand (Quadra: Securities, Play, the Pass; Orbit: Class, Weather,
   Transit, Sports, Words) is `Shared-Proxy/kit/brand.mjs`; icons, share
   cards and page tags come from `node brand/generate.mjs`.
-- Notes on the whole family: `Shared-Proxy/docs/HANDOFF.md`; tools (phone
+- The family's state now: `Shared-Proxy/docs/HANDOFF.md`; tools (phone
   screenshots with real data, ESPN probes, word audio):
   `Shared-Proxy/tools/README.md`.
