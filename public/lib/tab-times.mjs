@@ -6,7 +6,6 @@
 
 import * as trainTab from './tab-train.mjs';
 import { cityRoutes, findRoutes, stationsNear, routeCity, INTERCITY } from './bus.mjs';
-import { tpassOf, routeOnPass } from './tpass.mjs';
 import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus-ui.mjs';
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
@@ -156,42 +155,53 @@ async function busLoad() {
   busDraw();
 }
 const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
-// A city bus inside your TPASS's cities (公路客運 runs between them: not marked).
-const onPass = r => routeOnPass(tpassOf(ctx.data.prefs.tpass), r.city, r.name);
-// A route as a strip: its next bus at its stop nearest you (that stop, the
-// way it goes, when it comes); until that's known, or with no position,
-// where it runs between.
+// A route as a strip: its next bus at its stop nearest you (that stop, over
+// the way it goes, and when); with no position, or none found, where it runs
+// between. Still being asked: the strip in its place with bars (no row
+// changes shape or pops in on its own).
 const row = r => {
-  const n = next.get(r.uid)?.x;
-  const tags = `${e(where(r))}${onPass(r) ? ' · <em>TPASS</em>' : ''}`;
+  const n = next.get(r.uid);
   const attrs = `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"`;
-  if (n) return `<div class="ot-strip">${strip({ no: r.name, note: `往 ${e(n.headsign)} · ${tags}`, main: e(n.stop), eta: busWhen(n.v, n.planned), attrs: `${attrs} data-stop="${e(n.stopUID)}" data-stop-name="${e(n.stop)}"` })}</div>`;
+  if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `往 ${e(n.x.headsign)}`, main: e(n.x.stop), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
+  if (ctx.here && !n?.at) return `<div class="ot-strip">${strip({ no: r.name, wait: true, attrs })}</div>`;
   const ends = r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `往 ${r.to}` : where(r));
-  return `<div class="ot-strip">${strip({ no: r.name, note: tags, main: ends, attrs })}</div>`;
+  return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: ends, attrs })}</div>`;
 };
-// Each route's next bus, asked for the strips on screen as each comes into
-// view (a search's 60 routes aren't 60 asks), kept 25 s like the route's sheet.
+// Each route's next bus, asked for the strips on screen (a search's 60
+// routes aren't 60 asks), kept 25 s like the route's sheet. The strips that
+// come into view together are asked together and drawn once, when all are in
+// (8 s at most: a first search reads each route's stops, the long
+// intercity ones taking seconds; one stuck answer doesn't hold the rest
+// longer), not one by one.
 const next = new Map();
 const NEXT_MS = 25_000;
+const BATCH_WAIT_MS = 8000;
 let seen = null;
-let redraw = 0;
 const routeOf = (city, uid, name = '') => bus.list.find(x => x.uid === uid) || recentRoutes().find(x => x.uid === uid) || bus.around?.flatMap(x => x.routes).find(x => x.uid === uid) || { uid, city, name };
-async function askNext(el) {
-  const [city, uid] = el.dataset.r.split('|');
-  const old = next.get(uid);
-  if (!ctx.here || old?.asking || (old && Date.now() - old.at < NEXT_MS)) return;
-  next.set(uid, { ...old, asking: true });
-  let x = old?.x || null;
-  try {
-    x = await nextNear(routeOf(city, uid, el.dataset.name), ctx.here);
-  } catch {}
-  next.set(uid, { at: Date.now(), x });
-  clearTimeout(redraw);
-  redraw = setTimeout(busDraw, 80);
+async function askNext(els) {
+  if (!ctx.here) return;
+  const due = els
+    .map(el => [el, ...el.dataset.r.split('|')])
+    .filter(([, , uid], k, all) => all.findIndex(x => x[2] === uid) === k)
+    .filter(([, , uid]) => {
+      const old = next.get(uid);
+      return !old?.asking && !(old?.at && Date.now() - old.at < NEXT_MS);
+    });
+  if (!due.length) return;
+  for (const [, , uid] of due) next.set(uid, { ...next.get(uid), asking: true });
+  const ask = ([el, city, uid]) =>
+    nextNear(routeOf(city, uid, el.dataset.name), ctx.here)
+      .catch(() => next.get(uid)?.x || null)
+      .then(x => next.set(uid, { at: Date.now(), x }));
+  const all = Promise.all(due.map(ask));
+  const whole = await Promise.race([all.then(() => true), new Promise(r => setTimeout(r, BATCH_WAIT_MS, false))]);
+  busDraw();
+  // (Any still out keep their bars, and are drawn together when they land.)
+  if (!whole) all.then(busDraw);
 }
 function watchRows() {
   seen?.disconnect();
-  seen = new IntersectionObserver(list => list.forEach(x => x.isIntersecting && askNext(x.target)));
+  seen = new IntersectionObserver(list => askNext(list.filter(x => x.isIntersecting).map(x => x.target)));
   for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]')) seen.observe(el);
 }
 // A stop near you: its name and distance, its routes as numbers to tap.

@@ -21,7 +21,6 @@ import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
-import { buyTicket, canBook } from './tickets.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
@@ -668,8 +667,6 @@ async function cardClick(ev) {
   const gm = ev.target.closest('[data-maps]');
   if (gm) return void window.open(gm.dataset.maps, '_blank', 'noopener');
   const act = ev.target.closest('[data-card]')?.dataset.card;
-  const tk = ev.target.closest('[data-ticket]');
-  if (tk) return buyTicket(JSON.parse(tk.dataset.ticket), t => ctx.status(t));
   const bell = ev.target.closest('[data-alert]');
   if (bell && card?.kind === 'bus') return alertSheet(card, JSON.parse(bell.dataset.alert));
   const routeBtn = ev.target.closest('[data-route]');
@@ -1338,16 +1335,6 @@ function togglePick(c, p) {
   ctx.refreshTabs?.();
 }
 
-// 訂票 on a reserved-seat 台鐵 train (自強, 莒光…; a 區間車 has no tickets to
-// book; 高鐵 has no link that works: tickets.mjs).
-function ticketBtn(l) {
-  if (!canBook(l.mode)) return '';
-  const no = l.train?.no || /\d{2,4}/.exec(`${l.short || ''} ${l.name || ''}`)?.[0];
-  const reserved = ['1', '2', '3', '4', '11'].includes(String(l.train?.code ?? '')) || /自強|莒光|普悠瑪|太魯閣/.test(`${l.name || ''}${l.short || ''}`);
-  if (!no || !reserved) return '';
-  const t = { sys: l.mode, no, date: tw(l.dep).date, dep: hm(l.dep), from: String(l.from.name || '').replace(/^高鐵/, ''), to: String(l.to.name || '').replace(/^高鐵/, '') };
-  return ` <span class="ot-pin-train ticket" role="button" data-ticket="${e(JSON.stringify(t))}">${icon('ticket')} 訂票</span>`;
-}
 
 // A YouBike step's two ends, a row each: 借 or 還, the station's whole
 // name, and under it what's there now as small tags (the bikes, the
@@ -1363,7 +1350,7 @@ function stepsHtml(p, c = card) {
           ? `步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(l.to.name)}` : ''}`
           : l.mode === 'bike'
             ? `<b>${l.swap ? '換一台，' : ''}騎 ${l.ebike ? 'YouBike 電輔車' : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-maps="${e(mapsLink(l.to, 'bicycling', l.from))}">${icon('route')}${mapsName()}</span>` : ''}${bikeEnd('借', l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}電輔`, l.rent.ebike]] : [[`${icon('bike')}一般`, l.rent.bikes], [`${icon('bolt')}電輔`, l.rent.ebike || 0]]) : [])}${bikeEnd('還', l.to.name, l.ret ? [['空位', l.ret.ret]] : [])}`
-            : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}</small>${ticketBtn(l)}<span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
+            : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
     .join('')}<li class="end"><span class="ot-step-time">${e(hm(p.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>抵達</b></span></li></ol>

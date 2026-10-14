@@ -2047,12 +2047,3 @@ test('YouBike stations by the streets where known: by 新竹縣體育場 (151 m 
   }
 });
 
-test('訂票: 台鐵 opens its app (iPhone) or booking page, 高鐵 has none (no link reaches T Express)', async () => {
-  const { canBook, bookUrl } = await import('../public/lib/tickets.mjs');
-  assert.equal(canBook('tra'), true);
-  assert.equal(bookUrl('tra', true), 'https://www.railway.gov.tw/tra-tip-web/tip/applink');
-  assert.match(bookUrl('tra', false), /^https:\/\/tip\.railway\.gov\.tw\//);
-  assert.equal(canBook('hsr'), false);
-  assert.equal(bookUrl('hsr', true), null);
-  assert.equal(bookUrl('hsr', false), null);
-});

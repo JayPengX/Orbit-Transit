@@ -6,7 +6,6 @@
 //   釘選交通     bus stops in groups, trains (a connection, or one train)
 //   交通偏好     which ways of moving to use (all public transport, or some
 //                left out), 每 30 分鐘換 YouBike, which TPASS you have
-//   車票         高鐵 T Express and 台鐵 e訂通, to buy tickets
 //   捷運路網圖   each city's metro on the real map, a station's next trains
 
 import * as metroTab from './tab-metro.mjs';
@@ -20,14 +19,6 @@ const $ = id => document.getElementById(id);
 let ctx = null;
 let metroOpen = false;
 
-// Where to buy tickets: 台鐵's booking site (a train found in 查時刻 or a
-// plan opens it with its details copied: tickets.mjs) and its app (台鐵e訂通
-// by railway.gov.tw's app link, which opens it). 高鐵 has no link that works
-// (tickets.mjs), so none here.
-const ios = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-export const TICKETS = [
-  { id: 'tra', name: '台鐵 e訂通', sub: '台鐵訂票、電子票證', app: { ios: 'https://www.railway.gov.tw/tra-tip-web/tip/applink', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E9%90%B5e%E8%A8%82%E9%80%9A&c=apps' }, web: 'https://tip.railway.gov.tw/tra-tip-web/tip' }
-];
 
 // What other tabs ask of this one (交通's pencil, the map's 編輯), set at the
 // start: this tab's init runs only when it's first opened, and a tap before
@@ -67,7 +58,6 @@ function render() {
   const P = D.prefs;
   const pass = tpassOf(P.tpass);
   const allOn = Object.values(P.modes).every(Boolean);
-  const platform = ios() ? 'ios' : 'android';
   $('me-main').innerHTML = `<div class="ot-wrap ot-mine">
     <h3 class="ot-go-h">地點</h3>
     <section class="ot-go-card">${D.places.map((p, i) => `<div class="ot-order-row"><button class="ot-place-name" type="button" data-place-edit="${e(p.id)}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span><b>${e(p.name)}</b>${p.address || ctx.here ? `<small>${e(p.address || `距離 ${distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon))}`)}</small>` : ''}</span>${icon('edit')}</button><button class="q-icon-btn" type="button" data-place-up="${i}" aria-label="上移" ${i ? '' : 'disabled'}>${icon('up')}</button><button class="q-icon-btn" type="button" data-place-del="${e(p.id)}" aria-label="刪除">${icon('trash')}</button></div>`).join('') || '<p class="ot-note">還沒有釘選地點：在地圖上點一個地方，按「釘選」。</p>'}
@@ -95,9 +85,6 @@ function render() {
       <p class="ot-note">${pass ? `${e(pass.name)}：範圍內的公車、台鐵、捷運不另收費${pass.bike ? '，YouBike 前 30 分鐘免費（長程騎車會在半路的站換一台，每段都免費）' : ''}。路線比較會把這些算成 0 元（高鐵不含）。` : '選了 TPASS，路線比較會把月票涵蓋的車資算成 0 元。'}</p>
     </section>
 
-    <h3 class="ot-go-h">車票</h3>
-    <p class="ot-note ot-go-tip">查時刻和路線裡，對號台鐵都有「訂票」：打開台鐵e訂通，車次、日期、起訖站先幫你複製好。</p>
-    <section class="ot-go-card">${TICKETS.map(t => `<div class="ot-ticket"><span>${icon(t.id)}<b>${e(t.name)}</b><small>${e(t.sub)}</small></span><a class="q-btn primary" href="${e(t.web)}" target="_blank" rel="noopener">網頁訂票</a><a class="q-btn" href="${e(t.app[platform])}" target="_blank" rel="noopener">App</a></div>`).join('')}</section>
 
     <h3 class="ot-go-h">工具</h3>
     <section class="ot-go-card"><button class="ot-row-btn" type="button" data-act="metro">${icon('metro')}<span><b>捷運路網圖</b><small>台北・新北、桃園機捷、台中、高雄：車站在真正的地圖上，點車站看下一班</small></span>${icon('chevron')}</button></section>
