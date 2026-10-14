@@ -118,7 +118,14 @@ export function searchSheet() {
 // bus, or it's gone by), and not at k already (that bus rides on k's dot).
 // Drawn on the line between them, so a bus on its way is seen at a glance.
 const coming = v => v?.status === 0 && v.sec != null;
-export const busBetween = (lives, k) => k > 0 && coming(lives[k]) && etaText(lives[k]).tone !== 'now' && (!coming(lives[k - 1]) || lives[k - 1].sec > lives[k].sec + 20);
+// Another bus than the one coming to stop k-1 first: k's live time sooner
+// than k-1's. (The same bus reaches k a minute or two after k-1: one bus
+// pulling in at 地方法院 is 2 分 to 東門市場 and 3 分 to 火車站, not three buses.)
+const nextBus = (lives, k) => k === 0 || !coming(lives[k - 1]) || lives[k - 1].sec > lives[k].sec + 20;
+export const busBetween = (lives, k) => k > 0 && coming(lives[k]) && etaText(lives[k]).tone !== 'now' && nextBus(lives, k);
+// A bus at stop k (進站中, 即將進站), drawn on its dot: only the one bus, at
+// the first stop it reaches; the stops after it say 即將進站 without one.
+export const busAt = (lives, k) => coming(lives[k]) && etaText(lives[k]).tone === 'now' && nextBus(lives, k);
 
 export async function openRoute(c, route, { stopUID = '', stopName = '', dir = null, add = false } = {}) {
   ctx ||= c;
@@ -239,7 +246,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
               const at = boarding ? w.stops.findIndex(x => x.uid === boarding.uid) : -1;
               const pick = boarding ? (k > at ? ' can-off' : k === at ? ' on-here' : ' before') : '';
               // A bus at the stop (進站中, 即將進站) rides on its dot.
-              return `<li class="${t.tone}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span>${between(k) ? `<i class="ot-rs-bus" aria-label="公車在這兩站之間">${icon('bus')}</i>` : ''}<span class="ot-rs-dot">${t.tone === 'now' ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? '<small>上車</small>' : ride?.off ? `<small>${icon('star')} 到 ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? '取消釘選' : '從這站上車，釘選'}">${icon('star')}</button>`}</li>`;
+              return `<li class="${t.tone}${busAt(lives, k) ? ' at' : ''}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span>${between(k) ? `<i class="ot-rs-bus" aria-label="公車在這兩站之間">${icon('bus')}</i>` : ''}<span class="ot-rs-dot">${busAt(lives, k) ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? '<small>上車</small>' : ride?.off ? `<small>${icon('star')} 到 ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? '取消釘選' : '從這站上車，釘選'}">${icon('star')}</button>`}</li>`;
             })
             .join('')}</ol>`;
     const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>從「${e(boarding.name)}」上車</b><small>點你下車的站，回程會自動對調</small></div><button class="q-btn" type="button" data-only="1">只釘這站</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="取消">${icon('x')}</button></div>` : '';

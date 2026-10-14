@@ -1389,7 +1389,7 @@ main {
   background: #0d0f14;
   box-sizing: border-box;
 }
-.ot-route-stops li.now .ot-rs-dot {
+.ot-route-stops li.at .ot-rs-dot {
   background: var(--ot-bad);
   border-color: var(--ot-bad);
   box-shadow: 0 0 0 5px rgba(255, 107, 102, 0.2);
@@ -3355,7 +3355,7 @@ main {
   border: 3px solid #22c55e;
   background: var(--q-sheet, #15171d);
 }
-.ot-route-sheet li.now .ot-rs-dot {
+.ot-route-sheet li.at .ot-rs-dot {
   width: 26px;
   height: 26px;
   margin-left: 2px;
