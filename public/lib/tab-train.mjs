@@ -279,7 +279,7 @@ async function pickStation(which) {
   let list = [];
   const d = sheet(`${sheetHead(which === 'from' ? '出發車站' : '抵達車站')}
     <div class="q-chips ot-sys-tabs"><button class="q-chip" type="button" data-sys="tra">台鐵</button><button class="q-chip" type="button" data-sys="hsr">高鐵</button></div>
-    <div class="ot-search-in"><input id="s-q" type="search" placeholder="站名，例如 竹中、新竹" autocomplete="off"></div>
+    <label class="q-search ot-search-in"><input id="s-q" type="search" placeholder="站名，例如 竹中、新竹" autocomplete="off"><button class="q-search-clear" type="button" aria-label="清除">✕</button></label>
     <div id="s-near"></div>
     <div class="q-chips ot-city-chips" id="s-city"></div>
     <div id="s-list" class="ot-st-grid"></div>`, 'ot-tall-sheet');

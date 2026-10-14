@@ -922,7 +922,7 @@ export function pickPoint(title, { here = false, onMap = true } = {}) {
     };
     const session = uid() + uid();
     const d = sheet(`${sheetHead(e(title))}
-      <form class="ot-pick-form" autocomplete="off"><div class="ot-search-in"><input id="pp-q" type="search" inputmode="search" placeholder="地點、地址、車站" enterkeyhint="search"></div></form>
+      <form class="ot-pick-form" autocomplete="off"><label class="q-search ot-search-in"><input id="pp-q" type="search" inputmode="search" placeholder="地點、地址、車站" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="清除">✕</button></label></form>
       <div class="ot-results ot-pick" id="pp-res"></div>`);
     d.onclosed = () => finish(null);
     const box = d.querySelector('#pp-res');
