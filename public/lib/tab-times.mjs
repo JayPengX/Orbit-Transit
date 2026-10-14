@@ -85,7 +85,7 @@ const openBus = (r, stopUID = '', stopName = '') => {
 function busInit() {
   const box = $('times-bus');
   box.innerHTML = `<div class="ot-wrap ot-bus"><div class="ot-bus-top">
-    <div class="ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、5608" autocomplete="off" enterkeyhint="search"></div>
+    <label class="q-search ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、5608" autocomplete="off" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="清除">✕</button></label>
     <div class="q-chips ot-city-chips ot-scroll-chips" id="tb-city"></div></div>
     <div id="tb-list"></div></div>`;
   box.querySelector('#tb-q').addEventListener('input', busDraw);

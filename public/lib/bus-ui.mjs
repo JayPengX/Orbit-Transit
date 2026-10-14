@@ -62,7 +62,7 @@ export function searchSheet() {
   let list = [];
   let failed = '';
   const d = sheet(`${sheetHead('搜尋公車路線')}
-    <div class="ot-search-in"><input id="r-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、新竹車站" autocomplete="off" enterkeyhint="search"></div>
+    <label class="q-search ot-search-in"><input id="r-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、新竹車站" autocomplete="off" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="清除">✕</button></label>
     <div class="q-chips ot-city-chips" id="r-city"></div>
     <div id="r-list" class="ot-list"></div>`, 'ot-tall-sheet');
   const cities = () =>
@@ -207,8 +207,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // the way and the view stay at the top while the stops scroll under.
     const where = route.city === INTERCITY ? '公路客運' : cityShort(route.city);
     const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${w ? `往 ${e(w.headsign)}` : '路線'}</h2><p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}</p></div></div><button class="q-close" type="button" data-act="close" aria-label="關閉">×</button></div>`;
-    const tabs = ways && ways.length > 1 ? `<div class="ot-segctl ot-dir" role="group" aria-label="方向">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}</button>`).join('')}</div>` : '';
-    const views = `<div class="ot-segctl ot-view" role="group" aria-label="即時或時刻表"><button type="button" data-view="live" aria-pressed="${view === 'live'}">即時到站</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">時刻表</button></div>`;
+    const tabs = ways && ways.length > 1 ? `<div class="q-seg ot-dir" role="group" aria-label="方向">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}</button>`).join('')}</div>` : '';
+    const views = `<div class="q-seg ot-view" role="group" aria-label="即時或時刻表"><button type="button" data-view="live" aria-pressed="${view === 'live'}">即時到站</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">時刻表</button></div>`;
     // Each stop's live time, trusted: a bus 'coming' that the timetable has
     // nowhere near (resting with its tracker on) isn't taken (the
     // timetable's time instead).
