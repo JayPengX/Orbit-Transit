@@ -807,19 +807,16 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       missed();
     }
   };
-  // There: the last step's end (or the place itself) within 60 m, or within
-  // 150 m and no nearer for 45 s (stopped at the door of a place whose point
-  // is mid-block; checked with every position and every 10 s, as a phone
+  // There (arrival: checked with every position and every 10 s, as a phone
   // standing still sends few); then the card says so and, 20 s on, ends.
   const arrive = () => {
     const l = plan.legs[state.i];
     const p = state.pos;
     if (state.done || !p || state.i !== plan.legs.length - 1 || RIDE(l) || l.to?.lat == null) return;
     const to = Math.min(meters(p.lat, p.lon, l.to.lat, l.to.lon), plan.dest?.lat != null ? meters(p.lat, p.lon, plan.dest.lat, plan.dest.lon) : Infinity);
-    const t = Date.now();
-    if (to >= 150) state.near = null;
-    else if (!state.near || to < state.near.d - 15) state.near = { d: to, t };
-    if (!(to < ARRIVED.walk + 25 || (state.near && t - state.near.t > 45_000))) return;
+    const a = arrival(state.near, p, to, state.leftAlong);
+    state.near = a.near;
+    if (!a.done) return;
     state.done = true;
     buzz();
     push?.([]);
@@ -1141,6 +1138,22 @@ export function navStops() {
 // across); waiting, the street itself (~100 m: which side of the road the
 // stop is on, exactly where; the owner, 2026-10-13), wider only to have you
 // in it too. → [{ lat, lon }…]
+// There, on the last walk: within 60 m of the end (and no more than 90 m
+// left along the walk's way, when it's known: a lane passing the door's
+// back is not the door); or stopped near it, at the door of a place whose
+// point is mid-block: within 100 m (90 m along), and not 20 m from where you
+// stood for a minute. Walking on, the stop starts again. (It had ended a walk
+// home still 120 m off, its lane first going round: "no nearer for 45 s"
+// counted the straight line, not whether you were walking; the owner,
+// 2026-10-14.) `near`: where you stood still since, carried between calls.
+export function arrival(near, p, to, along = null, now = Date.now()) {
+  const alongOk = m => along == null || along < m;
+  if (to < ARRIVED.walk + 25 && alongOk(90)) return { near, done: true };
+  if (to >= 100 || !alongOk(90)) return { near: null, done: false };
+  if (!near || meters(near.lat, near.lon, p.lat, p.lon) > 20) near = { lat: p.lat, lon: p.lon, t: now };
+  return { near, done: now - near.t > 60_000 };
+}
+
 export function stageView(plan, i, phase, me, path) {
   const l = plan.legs[i];
   if (!l) return [];
@@ -1159,11 +1172,13 @@ export function stageView(plan, i, phase, me, path) {
   if (l.mode === 'walk' && next?.from?.lat != null) pts.push({ lat: next.from.lat, lon: next.from.lon });
   if (me?.lat != null) pts.push({ lat: me.lat, lon: me.lon });
   if (!pts.length) return pts;
-  // (At least ~400 m across, round its middle; waiting ~100 m.)
+  // (At least ~200 m across on foot, a street or two round you: a walk's
+  // last 120 m home had been framed like a ride, a kilometre on screen once
+  // the map snapped to a whole zoom; on a bike or a ride ~400 m; waiting ~100 m.)
   const lat = pts.map(p => p.lat);
   const lon = pts.map(p => p.lon);
   const c = { lat: (Math.min(...lat) + Math.max(...lat)) / 2, lon: (Math.min(...lon) + Math.max(...lon)) / 2 };
-  const dLat = waiting ? 0.00045 : 0.0018;
+  const dLat = waiting ? 0.00045 : l.mode === 'walk' ? 0.0009 : 0.0018;
   const dLon = dLat / Math.cos((c.lat * Math.PI) / 180);
   pts.push({ lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat + dLat, lon: c.lon + dLon });
   return pts;

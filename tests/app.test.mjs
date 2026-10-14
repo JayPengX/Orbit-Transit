@@ -1833,6 +1833,32 @@ test('a route’s stops: a bus between two stops is where a stop’s live time d
   assert.deepEqual(two.map((_, k) => busAt(two, k)), [true, true, false]);
 });
 
+test('navigation ends at the door, never on the way there: walking a lane round to home 120 m off, the straight line hardly nearer, goes on; stopped at the door, or within 60 m, it’s there (the owner, 2026-10-14)', async () => {
+  const { arrival } = await import('../public/lib/nav.mjs');
+  const home = { lat: 24.8163, lon: 121.0179 };
+  const t0 = T('21:06');
+  // Walking west along the lane, a position every 10 s, 14 m apart, 110–125 m from home in a straight line.
+  let near = null;
+  for (let k = 0; k <= 18; k++) {
+    const p = { lat: 24.8172, lon: 121.0181 - k * 0.00014 };
+    const a = arrival(near, p, meters(p.lat, p.lon, home.lat, home.lon), 140 - k * 2, t0 + k * 10_000);
+    near = a.near;
+    assert.ok(!a.done, `walking, ${k * 10} s in`);
+  }
+  // Stopped at a door 80 m off (the place's point mid-block), the phone sending the same spot.
+  const door = { lat: 24.8170, lon: 121.0179 };
+  near = null;
+  const d = meters(door.lat, door.lon, home.lat, home.lon);
+  assert.ok(d > 60 && d < 100);
+  assert.ok(!(near = arrival(near, door, d, 80, t0).near) || true);
+  assert.equal(arrival(near, door, d, 80, t0 + 30_000).done, false, 'not after half a minute');
+  assert.equal(arrival(near, { lat: door.lat + 0.00005, lon: door.lon }, d, 80, t0 + 61_000).done, true, 'still for a minute (a few metres of GPS drift): there');
+  // Within 60 m: there, unless the way there still goes round the block.
+  assert.equal(arrival(null, home, 40, 30, t0).done, true);
+  assert.equal(arrival(null, home, 40, 160, t0).done, false, 'the lane behind the door');
+  assert.equal(arrival(null, home, 40, null, t0).done, true, 'no way known: the straight line');
+});
+
 test('navigating, the map shows the stage you are at: a bike ride close up (never the whole trip), waiting you and the stop close up, on board the rest of the ride', () => {
   const P = (name, lat, lon) => ({ name, lat, lon });
   const park = P('綠41公園', 24.81614, 121.0171), ny = P('陽明交通大學(六家校區)', 24.81287, 121.02331), st = P('文興嘉興路口', 24.8125, 121.0238), hs = P('竹東高中', 24.7333, 121.0879);
@@ -1850,7 +1876,12 @@ test('navigating, the map shows the stage you are at: a bike ride close up (neve
   assert.ok(!bike.some(p => p.lat < 24.8), 'not on to 竹東');
   const walk = stageView(plan, 2, 'before', P('', 24.8129, 121.0233), path);
   assert.ok(walk.some(p => p.lat === st.lat && p.lon === st.lon), 'a walk: on to the stop');
-  assert.ok(span(walk) >= 350, 'never closer than a street or two');
+  assert.ok(span(walk) >= 250, 'never closer than a street or two');
+  // The last 120 m home: close up, not framed like a ride (the owner, 2026-10-14).
+  const home = { legs: [{ mode: 'bike', from: park, to: P('成功國中', 24.8172, 121.0181) }, { mode: 'walk', from: P('成功國中', 24.8172, 121.0181), to: P('家', 24.8163, 121.0179) }] };
+  const last = stageView(home, 1, 'before', P('', 24.8172, 121.0181), path);
+  assert.ok(span(last) < 350, `the walk home: ${Math.round(span(last))} m`);
+  assert.ok(span(stageView(home, 0, 'before', park, path)) >= 500, 'a ride: wider');
   const wait = stageView(plan, 3, 'before', P('', 24.8126, 121.0236), path);
   assert.ok(span(wait) < 160, `waiting: the street, which side the stop is on, ${Math.round(span(wait))} m`);
   // Still a way off it: you and the stop both.
