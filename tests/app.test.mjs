@@ -1778,8 +1778,8 @@ test('to be there by a time, late in navigation: how late, and the way from here
   assert.equal(offerText(ride), '改騎電輔車，07:55 到');
 });
 
-test('a route’s stops: a bus between two stops is where a stop’s live time drops below the one before (not one at a stop, which rides on its dot)', async () => {
-  const { busBetween } = await import('../public/lib/bus-ui.mjs');
+test('a route’s stops: a bus between two stops is where a stop’s live time drops below the one before (not one at a stop, which rides on its dot); one bus on one dot, not on every stop it reaches in 3 minutes', async () => {
+  const { busBetween, busAt } = await import('../public/lib/bus-ui.mjs');
   const v = sec => ({ status: 0, sec, more: [] });
   // 喜來登飯店 15 分, then 文興嘉興路口 4 分: a bus between them.
   const lives = [v(360), v(420), v(540), v(900), v(240), v(300), v(900)];
@@ -1788,6 +1788,12 @@ test('a route’s stops: a bus between two stops is where a stop’s live time d
   assert.equal(busBetween([v(600), v(30)], 1), false);
   // The stop before has none on its way (gone by): between.
   assert.equal(busBetween([{ status: 3, sec: null }, v(200)], 1), true);
+  // One bus pulling in at 地方法院, then 2 分 to 東門市場 and 3 分 to 火車站: one bus, on 地方法院's dot.
+  const one = [{ status: 0, sec: 1500, more: [] }, v(30), v(120), v(180), v(300)];
+  assert.deepEqual(one.map((_, k) => busAt(one, k)), [false, true, false, false, false]);
+  // Two buses a stop apart: each on its own dot.
+  const two = [v(170), v(30), v(100)];
+  assert.deepEqual(two.map((_, k) => busAt(two, k)), [true, true, false]);
 });
 
 test('navigating, the map shows the stage you are at: a bike ride close up (never the whole trip), waiting you and the stop close up, on board the rest of the ride', () => {
