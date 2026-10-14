@@ -61,11 +61,24 @@ export async function nearStops(h, { r = 350, n = 6 } = {}) {
 // way it goes) the whole width under them, its next bus on the right. Words
 // shrink to their room (fitStrips): never a second line, never cut.
 // (`note` and `main` are HTML, escaped by the caller.)
-export function strip({ no, note = '', main = '', eta = null, attrs = '' }) {
-  const long = eta && !/分|進站/.test(eta.main);
-  return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-top"><span class="ot-strip-no">${e(no)}</span>${note ? `<span class="ot-strip-note"><small>${note}</small></span>` : ''}</span><span class="ot-strip-what"><b>${main}</b></span>${eta ? `<span class="ot-strip-eta ${eta.tone}${long ? ' long' : ''}"><b>${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>` : ''}</button>`;
+// A route as one row, the same wherever routes are listed (查時刻, 交通, a
+// stop's card): its number on the left; the main words (the stop you'd get
+// on at, or where it goes) over a quiet note; the next bus on the right, live
+// minutes in green, a clock time plain, words (末班已過…) small and grey.
+// `wait`: its next bus still being asked: bars in the words' places, the row
+// already its full height (nothing moves when the answer comes).
+const skel = w => `<i class="ot-skel" style="width:${w}"></i>&#8203;`;
+export function strip({ no, note = '', main = '', eta = null, attrs = '', wait = false }) {
+  const when = wait
+    ? `<span class="ot-strip-eta"><b>${skel('46px')}</b><small>${skel('28px')}</small></span>`
+    : eta
+      ? `<span class="ot-strip-eta ${eta.tone}${/\d/.test(eta.main) ? '' : ' words'}${/分|進站/.test(eta.main) ? ' live' : ''}"><b>${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>`
+      : '';
+  const sub = wait ? `<small>${skel('84px')}</small>` : note ? `<small>${note}</small>` : '';
+  return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no"><span>${e(no)}</span></span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
 }
-export const fitStrips = box => fitNumbers([...box.querySelectorAll('.ot-strip-note small, .ot-strip-what b')]);
+// (The number too: its badge one width, so every strip's words start in one column.)
+export const fitStrips = box => fitNumbers([...box.querySelectorAll('.ot-strip-note small, .ot-strip-what b, .ot-strip-no > span')]);
 
 // What a stop's time says: the live time while a bus is on its way, else the
 // timetable's next there (`planned`: { at, day }, its day when not today's).

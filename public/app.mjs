@@ -10,7 +10,7 @@
 //           what you pinned, your places
 //   查時刻  a timetable on purpose: 台鐵 / 高鐵 station to station, a bus route
 //   我的    places, trips, pinned transit, preferences (ways of moving,
-//           TPASS), tickets, the metro maps
+//           TPASS), the metro maps
 
 import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition, permissionState } from './lib/api.mjs';
@@ -138,7 +138,7 @@ const help = () =>
       '路線上方的出發地可以換成釘選地點、搜尋的地點，或在地圖上選；按 ☆ 釘選這個行程（可以設時間、每週固定幾天）。',
       '交通：常用行程接下來的班次、附近的公車火車和 YouBike、你釘選的公車與火車，點一下就導航。',
       '查時刻：台鐵、高鐵站到站（自動找轉乘），或查公車路線的即時到站與時刻表；都可以 ☆ 釘選。',
-      '我的：地點、行程、釘選交通、交通偏好（不搭某些交通工具、每 30 分鐘換 YouBike、TPASS）、買車票、捷運路網圖。'
+      '我的：地點、行程、釘選交通、交通偏好（不搭某些交通工具、每 30 分鐘換 YouBike、TPASS）、捷運路網圖。'
     ]
   });
 
