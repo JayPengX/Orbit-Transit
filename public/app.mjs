@@ -12,8 +12,8 @@
 //   我的    places, trips, pinned transit, preferences (ways of moving,
 //           TPASS), the metro maps
 
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount } from '#kit/quadra.mjs';
-import { useSession, config, townships, getPosition, permissionState } from './lib/api.mjs';
+import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate } from '#kit/quadra.mjs';
+import { useSession, config, townships, getPosition } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
 import { warmRail } from './lib/raildata.mjs';
@@ -64,11 +64,12 @@ export const ctx = {
     saveLocal();
     if (q.active) await q.write({ payload: local.data }).catch(() => {});
   },
-  // Where the device is now (asked again after a minute).
+  // Where the device is now (asked again after a minute). iOS asked
+  // unprompted once (the kit's mayLocate): a phone that would ask again isn't
+  // asked at every open or minute; the last fix kept stands until 我的位置.
   async locate({ force = false } = {}) {
     if (!force && ctx.here && Date.now() - ctx.here.at < 60_000) return ctx.here;
-    const perm = await permissionState();
-    if (perm === 'denied') return ctx.here;
+    if ((await mayLocate('orbit-transit.geo.asked', { force })) !== 'yes') return ctx.here;
     let pos = await getPosition({ high: true, timeout: 8000 });
     if (pos.error === 'timeout') pos = await getPosition({ high: false, timeout: 5000, maximumAge: 10 * 60_000 });
     if (pos.error) return ctx.here;
