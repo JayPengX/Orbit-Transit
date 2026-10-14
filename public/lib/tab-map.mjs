@@ -21,7 +21,7 @@ import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { pickSig, bikeTrip, finish } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
-import { buyTicket } from './tickets.mjs';
+import { buyTicket, canBook } from './tickets.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
@@ -1338,11 +1338,12 @@ function togglePick(c, p) {
   ctx.refreshTabs?.();
 }
 
-// 訂票 on a 高鐵 or a reserved-seat 台鐵 train (自強, 莒光…; a 區間車 has no tickets to book).
+// 訂票 on a reserved-seat 台鐵 train (自強, 莒光…; a 區間車 has no tickets to
+// book; 高鐵 has no link that works: tickets.mjs).
 function ticketBtn(l) {
-  if (l.mode !== 'hsr' && l.mode !== 'tra') return '';
+  if (!canBook(l.mode)) return '';
   const no = l.train?.no || /\d{2,4}/.exec(`${l.short || ''} ${l.name || ''}`)?.[0];
-  const reserved = l.mode === 'hsr' || ['1', '2', '3', '4', '11'].includes(String(l.train?.code ?? '')) || /自強|莒光|普悠瑪|太魯閣/.test(`${l.name || ''}${l.short || ''}`);
+  const reserved = ['1', '2', '3', '4', '11'].includes(String(l.train?.code ?? '')) || /自強|莒光|普悠瑪|太魯閣/.test(`${l.name || ''}${l.short || ''}`);
   if (!no || !reserved) return '';
   const t = { sys: l.mode, no, date: tw(l.dep).date, dep: hm(l.dep), from: String(l.from.name || '').replace(/^高鐵/, ''), to: String(l.to.name || '').replace(/^高鐵/, '') };
   return ` <span class="ot-pin-train ticket" role="button" data-ticket="${e(JSON.stringify(t))}">${icon('ticket')} 訂票</span>`;
