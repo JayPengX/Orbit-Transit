@@ -206,7 +206,8 @@ the phone's position:
 - **The whole trip on the map**: every step in its colours (the one you're
   on boldest, the ones behind you faint). In view, the stage you're at
   (`stageView`): walking or on a bike, you and the rest of that step to
-  where the next one starts, close up; waiting, the street itself (~100 m
+  where the next one starts, close up (on foot at least ~200 m across, a
+  street or two; on a bike ~400 m); waiting, the street itself (~100 m
   across: which side of the road the stop is on), wider only to have you
   in it too, until the ride has you on board; on board, the rest of the ride to your
   stop. A finger on the map stops that for 10 s. Back in the app, the
@@ -285,7 +286,7 @@ the phone's position:
   `metro.mjs metroStops`), dots, where you get off ringed; every ride's
   stops are loaded when navigation starts (`navStops`).
 - **It resumes** after the app is swiped away (`ot.nav.v1`, `savedNav`)
-  until it's over or ended: it ends by itself when you get there, else 90
+  until it's over or ended: it ends by itself when you get there (`arrival`: within 60 m of the end, or stopped a minute within 100 m, at the door of a place whose point is mid-block; never while walking on, nor with more than 90 m left along the walk's way), else 90
   minutes past the planned arrival (a late bus is still being ridden).
 - **The lock screen**: the kit's `transit:nav` notices are handed to the
   Worker: time to leave, your bus nearly here, the train about to leave,
