@@ -20,12 +20,12 @@ const $ = id => document.getElementById(id);
 let ctx = null;
 let metroOpen = false;
 
-// Where to buy tickets: the operators' booking sites (a train found in
-// 查時刻 or a plan opens them with its details copied: tickets.mjs), and
-// their apps (台鐵e訂通 by railway.gov.tw's app link, which opens it, or offers it when it's not on the phone; T Express by its store page, whose 打開 opens it).
+// Where to buy tickets: 台鐵's booking site (a train found in 查時刻 or a
+// plan opens it with its details copied: tickets.mjs) and its app (台鐵e訂通
+// by railway.gov.tw's app link, which opens it). 高鐵 has no link that works
+// (tickets.mjs), so none here.
 const ios = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const TICKETS = [
-  { id: 'hsr', name: '高鐵 T Express', sub: '台灣高鐵行動購票', app: { ios: 'https://apps.apple.com/tw/app/id468963664', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E7%81%A3%E9%AB%98%E9%90%B5%20T%20Express&c=apps' }, web: 'https://irs.thsrc.com.tw/IMINT/?locale=tw' },
   { id: 'tra', name: '台鐵 e訂通', sub: '台鐵訂票、電子票證', app: { ios: 'https://www.railway.gov.tw/tra-tip-web/tip/applink', android: 'https://play.google.com/store/search?q=%E5%8F%B0%E9%90%B5e%E8%A8%82%E9%80%9A&c=apps' }, web: 'https://tip.railway.gov.tw/tra-tip-web/tip' }
 ];
 
@@ -96,7 +96,7 @@ function render() {
     </section>
 
     <h3 class="ot-go-h">車票</h3>
-    <p class="ot-note ot-go-tip">查時刻和路線裡，每班台鐵、高鐵都有「訂票」：開訂票頁，車次、日期、起訖站先幫你複製好。</p>
+    <p class="ot-note ot-go-tip">查時刻和路線裡，對號台鐵都有「訂票」：打開台鐵e訂通，車次、日期、起訖站先幫你複製好。</p>
     <section class="ot-go-card">${TICKETS.map(t => `<div class="ot-ticket"><span>${icon(t.id)}<b>${e(t.name)}</b><small>${e(t.sub)}</small></span><a class="q-btn primary" href="${e(t.web)}" target="_blank" rel="noopener">網頁訂票</a><a class="q-btn" href="${e(t.app[platform])}" target="_blank" rel="noopener">App</a></div>`).join('')}</section>
 
     <h3 class="ot-go-h">工具</h3>

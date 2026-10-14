@@ -11,7 +11,7 @@ import { CITIES, cityShort } from './city.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, PREMIUM } from './tpass.mjs';
-import { buyTicket } from './tickets.mjs';
+import { buyTicket, canBook } from './tickets.mjs';
 import { sheet, sheetHead, icon } from './ui.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText } from './util.mjs';
 
@@ -147,7 +147,7 @@ function detailHtml(j) {
     const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no && p.sys === t.sys);
     out.push(`<li class="ride ${t.sys}"><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what">
       <b>${e(t.typeFull || t.type)} ${e(t.no)} 次</b> 往 ${e(t.headsign)}${d ? ` <span class="warn">晚 ${d} 分</span>` : ''}
-      <span class="ot-train-acts"><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')} ${pinned ? '已釘選' : '釘選這班'}</span>${onPass(l) ? '' : `<span class="ot-pin-train ticket" role="button" data-ticket="${e(JSON.stringify({ sys: t.sys, no: t.no, date: tw(l.dep).date, dep: hm(l.dep), from: nameOf(l.from), to: nameOf(l.to) }))}">${icon('ticket')} 訂票</span>`}</span>
+      <span class="ot-train-acts"><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')} ${pinned ? '已釘選' : '釘選這班'}</span>${onPass(l) || !canBook(t.sys) ? '' : `<span class="ot-pin-train ticket" role="button" data-ticket="${e(JSON.stringify({ sys: t.sys, no: t.no, date: tw(l.dep).date, dep: hm(l.dep), from: nameOf(l.from), to: nameOf(l.to) }))}">${icon('ticket')} 訂票</span>`}</span>
       <span class="ot-leg-times"><span><b>${e(hm(l.dep))}</b> ${e(nameOf(l.from))}</span><span><b>${e(hm(l.arr))}</b> ${e(nameOf(l.to))}</span></span>
       <small>${l.stops} 站 · ${e(minsText((l.arr - l.dep) / 1000))}${onPass(l) ? ' · TPASS' : state.fares.get(fareKey(l)) ? ` · NT$${state.fares.get(fareKey(l))}` : ''}${t.bike ? ' · 可攜自行車' : ''}</small></span></li>`);
   });
