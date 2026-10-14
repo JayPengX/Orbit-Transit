@@ -681,6 +681,24 @@ test('YouBike fills gaps: two short rides around a train beat one long ride, eve
   assert.equal(rank([buses, short], { now: T('06:00') })[0].legs[0].mode, 'bike');
 });
 
+test('巨城 → 成功九街: two short rides around the train to 竹北 are gap-fillers, not riding most of the way; one long ride after a bus is', () => {
+  const o = { name: '巨城', lat: 24.8098, lon: 120.9747 };
+  const d = { name: '成功九街', lat: 24.8176, lon: 121.0165 };
+  const hsinchu = { name: '新竹', lat: 24.8016, lon: 120.9716 };
+  const zhubei = { name: '竹北', lat: 24.8392, lon: 121.0095 };
+  const stop = { name: '站牌', lat: 24.812, lon: 120.98 };
+  const bike = (from, to, dep, arr, dist, x = {}) => ({ mode: 'bike', from, to, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist, ...x });
+  const all = finish({ bike: true, legs: [bike(o, d, '20:15', '20:45', 5300)] });
+  const train = finish({ bike: true, legs: [bike(o, hsinchu, '20:20', '20:27', 1200), { mode: 'tra', short: '區間 1272', train: { sys: 'tra', no: '1272' }, from: hsinchu, to: zhubei, dep: T('20:35'), arr: T('20:43'), dur: 480 }, bike(zhubei, d, '20:45', '21:00', 2800)] });
+  // A bus a little way, then most of it on the bike: ride it all.
+  const bus = finish({ bike: true, legs: [{ mode: 'bus', short: '81', from: o, to: stop, dep: T('20:18'), arr: T('20:22'), dur: 240 }, bike(stop, d, '20:23', '20:45', 2200), bike(d, d, '20:45', '20:48', 900, { swap: true })] });
+  const out = rank([all, train, bus], { now: T('20:15'), o, d });
+  const of = f => out.find(p => p.legs.some(f));
+  assert.ok(!of(l => l.mode === 'tra').weak, 'the train to 竹北 is a choice');
+  assert.ok(of(l => l.mode === 'tra').top);
+  assert.ok(of(l => l.mode === 'bus').weak, 'the bus, then 25 minutes on a bike (one ride, swapped): ride it all');
+});
+
 test('a pinned recommendation: known by its lines (trains by their stations), shown first in 交通', async () => {
   const { pickSig } = await import('../public/lib/plan.mjs');
   const { tripPlans } = await import('../public/lib/tab-go.mjs');

@@ -160,7 +160,8 @@ Each falls back to TDX's own search when the packs can't be had.
      **less bother** (a bike to the train instead of a walk and a bus);
    - more changes than a way no later (5 minutes) and no more bother;
    - a change for a hop a walk or a bike would do;
-   - it rides most of what riding all the way would;
+   - one of its rides is most of what riding all the way would (two short
+     rides around a train are gap-fillers, not that);
    - a walk over 2 km to a bus or train, while a way without one is there;
    - it's far behind the best (never riding it all: a choice of its own;
      by a time, never kept for getting in sooner).

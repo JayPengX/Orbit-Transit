@@ -650,8 +650,9 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   //   - another way is no worse in every way: leaves no earlier, there no
   //     later, less bother (walking 10 minutes to a bus to the train, when a
   //     bike gets you to the same train or a later one);
-  //   - it rides most of what riding all the way would (a bus north, then 25
-  //     minutes on a bike: then ride it all);
+  //   - one of its rides is most of what riding all the way would (a bus
+  //     north, then 25 minutes on a bike: then ride it all; two short rides
+  //     around a train are not);
   //   - it's far behind the best.
   // Only when bikes are allowed do bike plans exist to set others aside.
   const group = () => {
@@ -684,6 +685,17 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // Riding it all.
   const allBike = list.filter(p => p.bike && !vehicles(p).length).map(rideM);
   const bikeAll = allBike.length ? Math.min(...allBike) : null;
+  // A plan's longest ride (one swapped bike to the next one ride): two short
+  // rides around a train are gap-fillers, not riding most of the way
+  // (巨城 → 成功九街: 7 minutes to 新竹站 and 15 from 竹北, not one 30).
+  const longRideM = p => {
+    let [run, most] = [0, 0];
+    for (const l of p.legs) {
+      if (l.mode !== 'bike') run = 0;
+      else most = Math.max(most, (run = (l.swap ? run : 0) + (l.dist || 0)));
+    }
+    return most;
+  };
   const best = list[0].score;
   const weak = new Set();
   // The ride a plan is for: its longest bus or train.
@@ -742,7 +754,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // (Short by its distance: 5 minutes of metro across 3 km is no hop.)
     const short = l => (l.from?.lat != null && l.to?.lat != null ? meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) < 1500 : (l.stops != null && l.stops <= 2) || (l.dur || 0) <= 6 * 60);
     const hop = n > 1 && vehicles(p).some(l => l !== m && short(l));
-    const mostlyRidden = bikeAll != null && vehicles(p).length && rideM(p) >= Math.max(3000, bikeAll * 0.6);
+    const mostlyRidden = bikeAll != null && vehicles(p).length && longRideM(p) >= Math.max(3000, bikeAll * 0.6);
     // The same first bus or train, then on further (or onto another) only to
     // ride a little less after it, or no less, home no sooner (offSooner):
     // the extra train is for nothing. (However each sets out for that first
