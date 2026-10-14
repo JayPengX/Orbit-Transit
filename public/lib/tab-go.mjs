@@ -12,9 +12,8 @@
 // What's recommended is never pinned by itself: ☆ pins it.
 
 import { errorText, liveMs } from './api.mjs';
-import { stopsEta, etaText, routeSchedule, routeStops, routeCity } from './bus.mjs';
-import { nextRun } from './live.mjs';
-import { nearStops, etaRank, openRoute, chooseGroup, useBusCtx } from './bus-ui.mjs';
+import { stopsEta, etaRank } from './bus.mjs';
+import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
 import { railNetwork, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
@@ -145,7 +144,6 @@ function trips(now = Date.now()) {
 // timetable's next at that stop, as the route's own sheet says it (its stops
 // and times from the bus packs, no proxy read), not 「尚未發車」.
 async function plannedTimes(items) {
-  const now = Date.now();
   const todo = items.filter(r => {
     const v = S.pinned.get(r.stopUID);
     return !(v?.status === 0 && v.sec != null) && r.routeUID;
@@ -153,13 +151,11 @@ async function plannedTimes(items) {
   await Promise.all(
     todo.map(async r => {
       try {
-        const route = { uid: r.routeUID, name: r.route, city: r.city || routeCity(r.routeUID) };
-        const near = r.lat != null ? { lat: r.lat, lon: r.lon } : null;
-        const [ways, sched] = await Promise.all([routeStops(route, near), routeSchedule(route, near)]);
-        const w = ways.find(x => x.dir === r.dir && x.stops.some(y => y.uid === r.stopUID)) || ways.find(x => x.stops.some(y => y.uid === r.stopUID));
-        const p = w && sched?.length ? nextRun(sched, w, w.stops.findIndex(y => y.uid === r.stopUID), now) : null;
+        const p = await plannedAt(r, r.lat != null ? { lat: r.lat, lon: r.lon } : null);
+        // (A timetable's time doesn't change: one already known stays until
+        // it's gone by, whatever a later read that failed says.)
         if (p) S.planned.set(r.stopUID, p);
-        else S.planned.delete(r.stopUID);
+        else if (!(S.planned.get(r.stopUID)?.at > Date.now())) S.planned.delete(r.stopUID);
       } catch {}
     })
   );
@@ -313,6 +309,9 @@ async function loadPlace(id) {
   try {
     const [stops, bikes] = await Promise.all([nearStops(p, { n: 2, r: 400 }), bikesAround(p.lat, p.lon).catch(() => [])]);
     S.places.set(id, { at: Date.now(), stops, bikes: bikes.map(s => ({ ...s, d: meters(p.lat, p.lon, s.lat, s.lon) })).filter(s => s.d <= 500).sort((a, b) => a.d - b.d).slice(0, 2) });
+    // The buses shown with none on their way: the timetable's next there.
+    const quiet = placeBuses(stops).filter(x => !(x.v?.status === 0 && x.v.sec != null) && !S.planned.has(x.stopUID));
+    if (quiet.length) Promise.all(quiet.map(x => plannedAt({ routeUID: x.uid, route: x.route, city: x.city, dir: x.dir, stopUID: x.stopUID }, x).then(q => q && S.planned.set(x.stopUID, q), () => {}))).then(render);
   } catch (err) {
     S.places.set(id, { at: Date.now(), error: errorText(err), stops: old?.stops || [], bikes: old?.bikes || [] });
   }
@@ -324,10 +323,16 @@ const leave = t => {
   const m = Math.round((t - Date.now()) / 60_000);
   return m <= 0 ? '現在' : m < 60 ? `${m} 分後` : hm(t);
 };
-const busRow = (x, { pin = true, stopName = '' } = {}) => {
-  const t = etaText(x.v);
+// The buses shown near a pinned place: the three soonest at each of its
+// stops, the five soonest of those.
+const placeBuses = stops =>
+  stops
+    .flatMap(st => st.rows.slice(0, 3).map(r => ({ ...r, lat: st.lat, lon: st.lon })))
+    .sort((a, b) => etaRank(a.v) - etaRank(b.v))
+    .slice(0, 5);
+const busRow = x => {
   const pinned = ctx.data.groups.some(g => g.items.some(i => i.stopUID === x.stopUID));
-  return `<div class="ot-go-row"><button class="ot-go-main" type="button" data-route="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"><span class="ot-route-no">${e(x.route)}</span><span class="ot-go-what"><b>${e(stopName || x.stop || '')}</b><small>${x.dir ? '返程' : '去程'}</small></span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(t.sub)}</small></span></button>${pin ? `<button class="q-icon-btn${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="釘選" ${pinned ? 'disabled' : ''}>${icon('star')}</button>` : ''}</div>`;
+  return `<div class="ot-strip">${strip({ no: x.route, note: x.dir ? '返程' : '去程', main: e(x.stop || ''), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: `data-route="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"` })}<button class="q-icon-btn ot-strip-act${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="釘選" ${pinned ? 'disabled' : ''}>${icon('star')}</button></div>`;
 };
 
 // A trip's plans to show: the ways you pinned first (their next
@@ -378,18 +383,14 @@ function pinnedHtml() {
     .map(({ it, r, v }) => {
       // No bus on its way: the timetable's next there (with its day, not today's); else what TDX says.
       const p = !(v?.status === 0 && v.sec != null) ? S.planned.get(r.stopUID) : null;
-      const t = p ? { main: hm(p.at), sub: p.day ? dayLabel(tw(p.at).date) : '預計', tone: 'wait' } : etaText(v);
+      const t = busWhen(v, p);
       // Two lines, like a card in Maps: the line and which way, the time on
       // the right; then where you get on → off, the whole width. ☆ to unpin
       // is in the route's sheet (a tap away) and 我的.
       // (A loop's sign naming where you get on, 往 火車站 at 火車站: where you get off says the way.)
-      const short = /分|進站/.test(t.main);
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
-      return `<div class="ot-ride"><button class="ot-ride-main" type="button" data-route="${route}">
-        <span class="ot-ride-top"><span class="ot-ride-no">${e(it.route)}</span><small>往 ${e((r.headsign === r.stop && r.off?.stop) || r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}</small></span>
-        <span class="ot-ride-stops">${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}</span>
-        <span class="ot-ride-eta ${t.tone}${short ? '' : ' long'}"><b>${e(t.main)}</b>${t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>
-      </button>${it.back ? `<button class="ot-ride-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;
+      const note = `往 ${e((r.headsign === r.stop && r.off?.stop) || r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}`;
+      return `<div class="ot-strip">${strip({ no: it.route, note, main: `${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}`, eta: t, attrs: `data-route="${route}"` })}${it.back ? `<button class="ot-strip-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
@@ -418,10 +419,7 @@ function placesHtml() {
         ? ''
         : !d
           ? '<p class="ot-note">載入…</p>'
-          : `${d.error ? `<p class="ot-note">${e(d.error)}</p>` : ''}${d.stops
-              .flatMap(st => st.rows.slice(0, 3).map(r => ({ ...r, lat: st.lat, lon: st.lon })))
-              .sort((a, b) => etaRank(a.v) - etaRank(b.v))
-              .slice(0, 5)
+          : `${d.error ? `<p class="ot-note">${e(d.error)}</p>` : ''}${placeBuses(d.stops)
               .map(x => busRow(x))
               .join('')}${d.bikes.length ? `<div class="ot-go-bikes">${d.bikes.map(b => `<span class="ot-go-bike">${icon('bike')}<b>${e(b.name)}</b><small>一般 ${b.bikes}・⚡${b.ebike}・空位 ${b.ret}</small></span>`).join('')}</div>` : ''}`;
       return `<section class="ot-go-card"><header class="ot-go-head"><button class="ot-go-title" type="button" data-place="${e(p.id)}">${PLACE_ICONS[p.icon] || '📍'} <b>${e(p.name)}</b>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button><button class="q-btn" type="button" data-go-place="${e(p.id)}">${icon('route')} 怎麼去</button></header>${body}</section>`;
@@ -441,6 +439,7 @@ function render() {
     ${pinnedHtml()}
     ${placesHtml()}
   </div>`;
+  fitStrips(box);
   box.scrollTop = keep;
 }
 

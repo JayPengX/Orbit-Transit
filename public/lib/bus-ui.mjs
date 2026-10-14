@@ -4,12 +4,13 @@
 // (常用, 上班, 回家…), managing the groups, and the stops around a point with
 // every bus due.
 
-import { cityRoutes, findRoutes, routeStops, routeEta, routeEtaPath, etaText, etaOf, routeSchedule, stopTimes, stationsNear, INTERCITY } from './bus.mjs';
+import { routeStops, routeEta, routeEtaPath, etaText, etaOf, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
+import { fitNumbers } from '#kit/quadra.mjs';
 import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
-import { CITIES, CITY_CODES, cityName, cityShort, NEAR_CITIES } from './city.mjs';
+import { CITY_CODES, cityShort } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
-import { e, uid, meters, tw, twAt, zh, addDays, hm } from './util.mjs';
+import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel } from './util.mjs';
 import { nextRun, liveTrusted } from './live.mjs';
 
 const WEEK = '日一二三四五六';
@@ -49,66 +50,61 @@ export async function nearStops(h, { r = 350, n = 6 } = {}) {
     .sort((a, b) => a.dist - b.dist)
     .slice(0, n);
 }
-// A bus's place in a list: due soonest first, not out yet after, not running last.
-export const etaRank = v => (!v ? 3e6 : v.sec != null ? v.sec : v.status === 1 ? 1e6 + ((v.next || 0) - Date.now()) / 1000 : 2e6);
 
 // ---- Finding a route --------------------------------------------------------------------------------
 
-export function searchSheet() {
-  const home = ctx.city || 'Taipei';
-  // 附近: your city, its neighbours and 公路客運 together; or one city.
-  const NEAR = 'near';
-  let city = NEAR;
-  let list = [];
-  let failed = '';
-  const d = sheet(`${sheetHead('搜尋公車路線')}
-    <label class="q-search ot-search-in"><input id="r-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、新竹車站" autocomplete="off" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="清除">✕</button></label>
-    <div class="q-chips ot-city-chips" id="r-city"></div>
-    <div id="r-list" class="ot-list"></div>`, 'ot-tall-sheet');
-  const cities = () =>
-    (d.querySelector('#r-city').innerHTML = [[NEAR, `${cityShort(home)}附近`], [INTERCITY, '公路客運'], ...CITIES.map(([k]) => [k, cityShort(k)])]
-      .map(([k, n]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(n)}</button>`)
-      .join(''));
-  const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
-  const draw = () => {
-    const t = d.querySelector('#r-q').value;
-    const found = t ? findRoutes(list, t) : [];
-    d.querySelector('#r-list').innerHTML = !list.length
-      ? failed
-        ? `<p class="ot-note bad">${e(failed)}</p>`
-        : '<p class="ot-note">載入路線中…</p>'
-      : !t
-        ? `<p class="ot-note">${e(city === NEAR ? `${cityShort(home)}、鄰近縣市與公路客運` : city === INTERCITY ? '公路客運與國道客運' : cityName(city))}共 ${list.length} 條路線，輸入號碼或站名。</p>`
-        : found.map(r => `<button class="ot-row-btn" type="button" data-r="${e(`${r.city}|${r.uid}`)}"><span class="ot-route-no">${e(r.name)}</span><span><b>${e(r.from)} ↔ ${e(r.to)}</b><small>${e(where(r))}</small></span>${icon('chevron')}</button>`).join('') || '<p class="ot-note">沒有符合的路線，試試其他縣市。</p>';
-  };
-  const load = async () => {
-    list = [];
-    failed = '';
-    draw();
-    const want = city === NEAR ? [home, ...(NEAR_CITIES[home] || []), INTERCITY] : [city];
-    const got = await Promise.all(want.map(c => cityRoutes(c).catch(err => ((failed = errorText(err)), []))));
-    // What loaded is searched; one city failing doesn't hide the rest.
-    list = got.flat();
-    draw();
-  };
-  cities();
-  load();
-  d.querySelector('#r-q').addEventListener('input', draw);
-  d.addEventListener('click', ev => {
-    const c = ev.target.closest('[data-city]');
-    if (c) {
-      city = c.dataset.city;
-      cities();
-      return load();
-    }
-    const r = ev.target.closest('[data-r]');
-    if (r) {
-      const route = list.find(x => `${x.city}|${x.uid}` === r.dataset.r);
-      d.close();
-      openRoute(ctx, route, { add: true });
-    }
-  });
-  setTimeout(() => d.querySelector('#r-q').focus(), 50);
+
+// ---- A bus route as a strip: one look wherever a route is listed --------------------------------------
+// (查時刻's routes, 交通's pinned rides and the buses near a pinned place, a
+// stop's card on the map.) Like a card in Maps: the route's number and a
+// note (its way, its city) on top, the main words (where you get on, or the
+// way it goes) the whole width under them, its next bus on the right. Words
+// shrink to their room (fitStrips): never a second line, never cut.
+// (`note` and `main` are HTML, escaped by the caller.)
+export function strip({ no, note = '', main = '', eta = null, attrs = '' }) {
+  const long = eta && !/分|進站/.test(eta.main);
+  return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-top"><span class="ot-strip-no">${e(no)}</span>${note ? `<span class="ot-strip-note"><small>${note}</small></span>` : ''}</span><span class="ot-strip-what"><b>${main}</b></span>${eta ? `<span class="ot-strip-eta ${eta.tone}${long ? ' long' : ''}"><b>${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>` : ''}</button>`;
+}
+export const fitStrips = box => fitNumbers([...box.querySelectorAll('.ot-strip-note small, .ot-strip-what b')]);
+
+// What a stop's time says: the live time while a bus is on its way, else the
+// timetable's next there (`planned`: { at, day }, its day when not today's).
+export const busWhen = (v, planned) => (planned && !(v?.status === 0 && v.sec != null) ? { main: hm(planned.at), sub: planned.day ? dayLabel(tw(planned.at).date) : '預計', tone: 'wait' } : etaText(v));
+// The timetable's next bus at a stop with none on its way (`r`: routeUID,
+// route, city, dir, stopUID; `near`: where, for the route's pack): its stops
+// and times from the bus packs, no proxy read. → { at, day } or null.
+export async function plannedAt(r, near = null) {
+  const route = { uid: r.routeUID, name: r.route, city: r.city || routeCity(r.routeUID) };
+  const [ways, sched] = await Promise.all([routeStops(route, near), routeSchedule(route, near)]);
+  const w = ways.find(x => x.dir === r.dir && x.stops.some(y => y.uid === r.stopUID)) || ways.find(x => x.stops.some(y => y.uid === r.stopUID));
+  return w && sched?.length ? nextRun(sched, w, w.stops.findIndex(y => y.uid === r.stopUID), Date.now()) : null;
+}
+// A route's next bus near you: at each way's stop nearest you (not its last,
+// where its buses end), the sooner of the ways whose stop is about as near
+// (a street's two sides; 300 m); with no bus on its way, the timetable's.
+// → { stop, stopUID, dir, headsign, v, planned } or null.
+export async function nextNear(route, here) {
+  if (!here) return null;
+  const [ways, live] = await Promise.all([routeStops(route, here), routeEta(route)]);
+  const near = [];
+  for (const dir of new Set(ways.map(w => w.dir))) {
+    const w = ways.find(x => x.dir === dir);
+    const [d, i] = w.stops
+      .slice(0, -1)
+      .map((x, k) => [Number.isFinite(x.lat) ? meters(here.lat, here.lon, x.lat, x.lon) : Infinity, k])
+      .sort((a, b) => a[0] - b[0])[0] || [Infinity, -1];
+    if (i >= 0 && d < Infinity) near.push({ d, w, i, stop: w.stops[i].name, stopUID: w.stops[i].uid, dir, headsign: w.headsign, v: live.get(w.stops[i].uid) || null });
+  }
+  if (!near.length) return null;
+  const nearest = Math.min(...near.map(x => x.d));
+  const close = near.filter(x => x.d <= nearest + 300);
+  if (!close.some(x => x.v?.status === 0 && x.v.sec != null)) {
+    const sched = await routeSchedule(route, here).catch(() => null);
+    for (const x of close) x.planned = sched?.length ? nextRun(sched, x.w, x.i, Date.now()) : null;
+  }
+  const at = x => (x.v?.status === 0 && x.v.sec != null ? Date.now() + x.v.sec * 1000 : x.planned?.at ?? Infinity);
+  const { w, i, ...best } = close.sort((a, b) => at(a) - at(b) || a.d - b.d)[0];
+  return best;
 }
 
 // ---- A route: its stops each way, the buses on them ----------------------------------------------------
