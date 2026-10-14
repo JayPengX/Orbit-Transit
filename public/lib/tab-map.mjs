@@ -11,7 +11,7 @@ import { createMap } from './map.mjs';
 import { fitNumbers } from '#kit/quadra.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
-import { stationsNear, stationEta, etaText, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
+import { stationsNear, stationEta, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
@@ -25,7 +25,8 @@ import { buyTicket } from './tickets.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
-import { openRoute } from './bus-ui.mjs';
+import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
+const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
 import * as kit from '#kit/quadra.mjs';
 
 const $ = id => document.getElementById(id);
@@ -480,6 +481,12 @@ function refreshCard() {
         c.live = all
           .filter(r => !seen.has(`${r.routeUID}|${r.dir}`) && seen.add(`${r.routeUID}|${r.dir}`))
           .map(r => ({ ...r, toward: (Number(r.dir) === 1 ? routes.get(r.routeUID)?.from : routes.get(r.routeUID)?.to) || '' }));
+        // No bus on its way: the timetable's next there, as 交通 and 查時刻
+        // say it (kept on the card: its refreshes don't ask again).
+        c.planned ||= new Map();
+        const todo = c.live.filter(r => !(r.status === 0 && r.sec != null) && !c.planned.has(plannedKey(r)));
+        for (const r of todo) c.planned.set(plannedKey(r), null);
+        if (todo.length) Promise.all(todo.map(r => plannedAt(r, c.item).then(p => c.planned.set(plannedKey(r), p), () => {}))).then(() => card === c && renderCard());
       }
       else if (c.kind === 'tra') c.live = await traBoard(c.item.id);
       else if (c.kind === 'hsr') c.live = await hsrBoard(c.item.id);
@@ -594,12 +601,12 @@ function renderCard() {
     const sideOf = r => (sides.length > 1 ? Math.max(0, sides.findIndex(x => x.group.some(st => st.uid === r.st?.uid))) : 0);
     const rowsHtml = live
       ? live
-          .map(r => ({ r, t: etaText(r), side: sideOf(r) }))
+          .map(r => ({ r, t: busWhen(r, c.planned?.get(plannedKey(r))), side: sideOf(r) }))
           .sort((a, b) => a.side - b.side || (a.r.sec ?? 1e9) - (b.r.sec ?? 1e9))
           .map(({ r, t, side }, i, all) => {
             const heading = sides.length > 1 && (i === 0 || all[i - 1].side !== side) ? `<p class="ot-eta-side">${e(BEARING[sides[side].bearing] || '另一側')}</p>` : '';
             const al = alertFor(r.st || s, r.routeUID, r.dir);
-            return `${heading}<div class="ot-eta-wrap"><button class="ot-eta-row" type="button" data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"><span class="ot-route-no">${e(r.route)}</span><span class="ot-eta-to">${r.toward ? `往 ${e(r.toward)}` : ''}</span><span class="ot-eta ${t.tone}"><b>${e(t.main)}</b><small>${e(al ? `${al.min} 分前提醒你` : t.sub)}</small></span></button><button class="q-icon-btn ot-bell${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir }))}" aria-label="到站提醒">${icon('bell')}</button></div>`;
+            return `${heading}<div class="ot-strip">${strip({ no: r.route, main: r.toward ? `往 ${e(r.toward)}` : '', eta: { ...t, sub: al ? `${al.min} 分前提醒你` : t.sub }, attrs: `data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"` })}<button class="q-icon-btn ot-bell ot-strip-act${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir }))}" aria-label="到站提醒">${icon('bell')}</button></div>`;
           })
           .join('') || '<p class="ot-note">這個站牌現在沒有公車資料。</p>'
       : '<p class="ot-note">載入中…</p>';
@@ -631,6 +638,7 @@ function renderCard() {
   box.innerHTML = html;
   // A long station name shrinks to its row (never a second row, never cut).
   fitNumbers([...box.querySelectorAll('.ot-bike-name')]);
+  fitStrips(box);
   // The plans keep most of the map in view; the grip grows the card.
   box.classList.toggle('plans', c.kind === 'plans');
   box.classList.toggle('tall', box.classList.contains('grown'));

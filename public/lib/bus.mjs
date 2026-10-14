@@ -114,6 +114,8 @@ export async function routeEta(route) {
   const j = await tdx(routeEtaPath(route), { fresh: 'live' });
   return etaMap(j);
 }
+// A bus's place in a list: due soonest first, not out yet after, not running last.
+export const etaRank = v => (!v ? 3e6 : v.sec != null ? v.sec : v.status === 1 ? 1e6 + ((v.next || 0) - Date.now()) / 1000 : 2e6);
 // The stops of a group, one ask per city.
 export async function stopsEta(items) {
   const byCity = new Map();

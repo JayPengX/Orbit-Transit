@@ -1619,6 +1619,20 @@ test('新竹站’s front is one stop: one sign under three names (火車站, �
   assert.equal(stopGroups([st('a', '甲', 24.8, 121, 'N', []), st('b', '乙', 24.80036, 121, 'N', [])]).length, 2);
 });
 
+test('a bus route as a strip, one look everywhere: its number, a note, the main words, the next bus (live while one is on its way, else the timetable’s, with its day)', async () => {
+  const { strip, busWhen } = await import('../public/lib/bus-ui.mjs');
+  const live = { status: 0, sec: 240, more: [] };
+  assert.deepEqual(busWhen(live, { at: T('22:10'), day: 0 }), etaText(live), 'a bus on its way: its live time');
+  const tomorrow = twAt('2026-10-06', '06:10');
+  const gone = busWhen({ status: 3, sec: null, more: [] }, { at: tomorrow, day: 1 });
+  assert.equal(gone.main, '06:10');
+  assert.equal(gone.tone, 'wait');
+  assert.equal(busWhen({ status: 3, sec: null, more: [] }, null).main, '末班已過', 'no timetable: what TDX says');
+  const html = strip({ no: '快捷8號支', note: '往 台大竹東分院 · 新竹縣', main: '文興嘉興路口', eta: etaText(live), attrs: 'data-r="x"' });
+  for (const k of ['ot-strip-no', 'ot-strip-note', 'ot-strip-what', 'ot-strip-eta soon']) assert.ok(html.includes(k), k);
+  assert.ok(!strip({ no: '182', main: '往 北大橋' }).includes('ot-strip-eta'), 'no time known: none shown');
+});
+
 test('a YouBike station out of bikes or docks while on the way: the ride moved to another, the walk with it', async () => {
   const { moveRide } = await import('../public/lib/nav.mjs');
   const A = { name: 'A', lat: 24.8, lon: 120.97 };

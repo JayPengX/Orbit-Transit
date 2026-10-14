@@ -733,7 +733,6 @@ main {
 .ot-eta-side:first-child {
   margin-top: 0;
 }
-.ot-eta-row,
 .ot-board-row {
   display: flex;
   align-items: center;
@@ -747,56 +746,6 @@ main {
   color: inherit;
   font: inherit;
   text-align: left;
-}
-.ot-route-no {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  min-width: 46px;
-  height: 30px;
-  padding: 0 8px;
-  box-sizing: border-box;
-  border-radius: 9px;
-  background: rgba(34, 197, 94, 0.14);
-  color: #7ee2a8;
-  font: 800 15px/1 var(--q-font);
-  white-space: nowrap;
-}
-.ot-route-no.big {
-  min-width: 60px;
-  height: 40px;
-  font-size: 18px;
-  border-radius: 12px;
-}
-.ot-eta {
-  display: grid;
-  justify-items: end;
-  margin-left: auto;
-  text-align: right;
-}
-.ot-eta b {
-  font-size: 17px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ot-eta small {
-  color: var(--q-muted);
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-.ot-eta.now b {
-  color: var(--ot-bad);
-}
-.ot-eta.soon b {
-  color: var(--ot-warn);
-}
-.ot-eta.wait b {
-  color: var(--q-text);
-}
-.ot-eta.off b {
-  color: var(--q-muted);
-  font-size: 14px;
-  font-weight: 600;
 }
 .ot-time {
   flex: none;
@@ -1170,7 +1119,7 @@ main {
   font: inherit;
   text-align: left;
 }
-.ot-row-btn > span:not(.ot-route-no) {
+.ot-row-btn > span {
   display: grid;
   flex: 1;
   min-width: 0;
@@ -1323,9 +1272,6 @@ main {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.ot-stop-card .ot-eta b {
-  font-size: 22px;
-}
 .ot-empty-card {
   display: grid;
   justify-items: center;
@@ -1370,13 +1316,6 @@ main {
 }
 .ot-route-stops li:last-child::before {
   bottom: 50%;
-}
-.ot-route-stops .ot-eta {
-  justify-items: end;
-  padding-right: 10px;
-}
-.ot-route-stops .ot-eta b {
-  font-size: 14px;
 }
 .ot-rs-dot {
   position: relative;
@@ -1838,9 +1777,6 @@ main {
   color: var(--q-muted, #8a92a3);
   font-size: 12px;
 }
-.ot-near-row .ot-eta {
-  margin-left: auto;
-}
 
 /* ---- Plans: the map mostly in view ---- */
 .ot-card.plans {
@@ -2039,8 +1975,7 @@ main {
   color: var(--q-muted);
   font-size: 12px;
 }
-.ot-go-plan,
-.ot-go-main {
+.ot-go-plan {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2103,10 +2038,6 @@ main {
   align-items: center;
   gap: 6px;
 }
-.ot-go-row + .ot-go-row .ot-go-main,
-.ot-go-row:first-child .ot-go-main {
-  border-top: 0;
-}
 .ot-go-row {
   border-top: 1px solid var(--ot-line);
 }
@@ -2121,9 +2052,6 @@ main {
   gap: 2px;
   flex: 1;
   min-width: 0;
-}
-.ot-go-main .ot-eta {
-  margin-left: auto;
 }
 .ot-go-sub {
   display: flex;
@@ -2417,7 +2345,6 @@ main {
   margin: 6px 0 2px;
   font-size: 12.5px;
 }
-
 
 /* Fields: one look for text, time, date and choices. */
 .ot-field > span {
@@ -2774,15 +2701,6 @@ main {
   width: 17px;
   height: 17px;
 }
-.ot-eta-wrap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.ot-eta-wrap .ot-eta-row {
-  flex: 1;
-  min-width: 0;
-}
 .ot-bell {
   flex: none;
   color: var(--q-muted);
@@ -2887,18 +2805,6 @@ main {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.025);
 }
-.ot-eta-to {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--q-text-2);
-  font-size: 13.5px;
-}
-.ot-eta-row .ot-eta {
-  margin-left: auto;
-}
 
 /* ---- Round 4: 捷運路網圖 above the solid header (its city buttons were under it) ---- */
 #panel-metro {
@@ -2964,75 +2870,8 @@ main {
   border-radius: 16px;
   background: var(--ot-card);
 }
-.ot-bus-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 60px;
-  padding: 10px 12px;
-  border: 0;
-  border-bottom: 1px solid var(--ot-line);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-.ot-bus-row:last-child {
-  border-bottom: 0;
-}
-.ot-bus-row:active,
 .ot-bus-chip:active {
   background: rgba(255, 255, 255, 0.06);
-}
-.ot-bus-row > .ot-i {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  color: var(--q-muted);
-}
-.ot-bus-no {
-  flex: none;
-  min-width: 52px;
-  max-width: 96px;
-  padding: 7px 9px;
-  border-radius: 10px;
-  background: #16a34a;
-  color: #fff;
-  font: 800 15px/1.1 var(--q-font);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ot-bus-ends {
-  display: grid;
-  grid-template-columns: minmax(0, auto) auto minmax(0, auto);
-  align-items: center;
-  column-gap: 6px;
-  flex: 1;
-  min-width: 0;
-  justify-content: start;
-}
-.ot-bus-ends b {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 14.5px;
-}
-.ot-bus-ends i {
-  font-style: normal;
-  color: var(--q-muted);
-}
-.ot-bus-ends small {
-  grid-column: 1 / -1;
-  color: var(--q-muted);
-  font-size: 12px;
-}
-.ot-bus-ends em {
-  font-style: normal;
-  color: #86efac;
-  font-weight: 700;
 }
 .ot-times-l.wide {
   width: 92px;
@@ -3482,27 +3321,27 @@ main {
 .ot-route-sheet .ot-rs-name small .ot-i {
   color: #4ade80;
 }
-.ot-ride-arrow {
-  color: var(--q-muted);
-  font-style: normal;
-  font-weight: 500;
-}
 
 /* A pinned ride in 交通: the line and its way, the time on the right; where
    you get on → off underneath, the whole width; 去程/回程 to turn it round. */
-.ot-ride {
+
+/* A bus route as a strip, one look wherever a route is listed (查時刻, 交通,
+   a stop's card): the route's number and a note on top, the main words the
+   whole width under them, the next bus on the right; a ☆, 🔔 or 去程/回程
+   beside it. Words shrink to their room (fitStrips), never wrap or cut. */
+.ot-strip {
   display: flex;
   align-items: stretch;
   border-bottom: 0.5px solid var(--ot-line);
 }
-.ot-ride:last-child {
+.ot-strip:last-child {
   border-bottom: 0;
 }
-.ot-ride-main {
+.ot-strip-main {
   display: grid;
   flex: 1;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: 'top eta' 'stops eta';
+  grid-template-areas: 'top eta' 'what eta';
   align-items: center;
   gap: 4px 12px;
   min-width: 0;
@@ -3513,76 +3352,96 @@ main {
   font: inherit;
   text-align: left;
 }
-.ot-ride-top {
+.ot-bus-group .ot-strip-main {
+  padding: 12px 14px;
+}
+.ot-bus-group .ot-strip-main:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+.ot-strip-top {
   grid-area: top;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-.ot-ride-no {
+.ot-strip-no {
   flex: none;
-  max-width: 60%;
-  overflow: hidden;
   padding: 2px 8px;
   border-radius: 7px;
   background: rgba(34, 197, 94, 0.16);
   color: #4ade80;
   font: 700 14px/1.4 var(--q-font);
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
-.ot-ride-top small {
+.ot-strip-note {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+}
+.ot-strip-note small {
+  display: inline-block;
   color: var(--q-muted);
   font-size: 12.5px;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
-.ot-ride-stops {
-  grid-area: stops;
+.ot-strip-note em {
+  color: #86efac;
+  font-style: normal;
+  font-weight: 700;
+}
+.ot-strip-what {
+  grid-area: what;
+  min-width: 0;
   overflow: hidden;
+}
+.ot-strip-what b {
+  display: inline-block;
   font-size: 16px;
   font-weight: 600;
   line-height: 1.35;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
-.ot-ride-stops i {
+.ot-strip-what i {
   margin: 0 6px;
   color: var(--q-muted);
   font-style: normal;
   font-weight: 400;
 }
-.ot-ride-eta {
+.ot-strip-eta {
   grid-area: eta;
   display: grid;
   justify-items: end;
   text-align: right;
 }
-.ot-ride-eta b {
+.ot-strip-eta b {
   font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.ot-ride-eta small {
+.ot-strip-eta small {
   color: var(--q-muted);
   font-size: 11.5px;
   white-space: nowrap;
 }
-.ot-ride-eta.long b {
+.ot-strip-eta.long b,
+.ot-strip-eta.off b {
   color: var(--q-muted);
   font-size: 13px;
   font-weight: 600;
 }
-.ot-ride-eta.now b {
+.ot-strip-eta.now b {
   color: var(--ot-bad);
 }
-.ot-ride-eta.soon b {
+.ot-strip-eta.soon b {
   color: var(--ot-warn);
 }
-.ot-ride-flip {
+.ot-strip-act {
+  flex: none;
+  align-self: center;
+}
+.ot-strip-flip {
   display: grid;
   flex: none;
   place-content: center;
@@ -3596,7 +3455,7 @@ main {
   color: var(--q-muted);
   font: 600 10.5px/1.2 var(--q-font);
 }
-.ot-ride-flip .ot-i {
+.ot-strip-flip .ot-i {
   width: 18px;
   height: 18px;
   color: var(--q-text-2);

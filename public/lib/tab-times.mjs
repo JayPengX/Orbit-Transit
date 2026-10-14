@@ -7,7 +7,7 @@
 import * as trainTab from './tab-train.mjs';
 import { cityRoutes, findRoutes, stationsNear, routeCity, INTERCITY } from './bus.mjs';
 import { tpassOf, routeOnPass } from './tpass.mjs';
-import { openRoute, useBusCtx } from './bus-ui.mjs';
+import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus-ui.mjs';
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
@@ -98,8 +98,7 @@ function busInit() {
     const r = ev.target.closest('[data-r]');
     if (r) {
       const [city, uid] = r.dataset.r.split('|');
-      const route = bus.list.find(x => x.uid === uid) || recentRoutes().find(x => x.uid === uid) || bus.around?.flatMap(x => x.routes).find(x => x.uid === uid) || { uid, city, name: r.dataset.name || '' };
-      return openBus(route, r.dataset.stop || '', r.closest('.ot-bus-stop')?.querySelector('.ot-bus-stop-h b')?.textContent || '');
+      return openBus(routeOf(city, uid, r.dataset.name || ''), r.dataset.stop || '', r.dataset.stopName || r.closest('.ot-bus-stop')?.querySelector('.ot-bus-stop-h b')?.textContent || '');
     }
     if (ev.target.closest('[data-clear-routes]')) {
       try {
@@ -109,7 +108,11 @@ function busInit() {
     }
   });
 }
+// The next buses again every 30 s while the list is on screen (only the
+// strips in view are asked).
+let ticking = 0;
 function busShow() {
+  ticking ||= setInterval(() => !$('times-bus').hidden && $('times-bus').offsetParent && document.visibilityState === 'visible' && busDraw(), 30_000);
   const home = ctx.city || 'Taipei';
   if (bus.loaded !== `${bus.city}:${home}`) busLoad();
   else busDraw();
@@ -155,8 +158,42 @@ async function busLoad() {
 const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
 // A city bus inside your TPASS's cities (公路客運 runs between them: not marked).
 const onPass = r => routeOnPass(tpassOf(ctx.data.prefs.tpass), r.city, r.name);
-// A route as a row: its number, then where it runs.
-const row = r => `<button class="ot-bus-row" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"><span class="ot-bus-no">${e(r.name)}</span><span class="ot-bus-ends">${r.from && r.to ? `<b>${e(r.from)}</b><i>↔</i><b>${e(r.to)}</b>` : `<b>${e(r.to ? `往 ${r.to}` : where(r))}</b>`}<small>${e(where(r))}${onPass(r) ? ' · <em>TPASS</em>' : ''}</small></span>${icon('chevron')}</button>`;
+// A route as a strip: its next bus at its stop nearest you (that stop, the
+// way it goes, when it comes); until that's known, or with no position,
+// where it runs between.
+const row = r => {
+  const n = next.get(r.uid)?.x;
+  const tags = `${e(where(r))}${onPass(r) ? ' · <em>TPASS</em>' : ''}`;
+  const attrs = `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"`;
+  if (n) return `<div class="ot-strip">${strip({ no: r.name, note: `往 ${e(n.headsign)} · ${tags}`, main: e(n.stop), eta: busWhen(n.v, n.planned), attrs: `${attrs} data-stop="${e(n.stopUID)}" data-stop-name="${e(n.stop)}"` })}</div>`;
+  const ends = r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `往 ${r.to}` : where(r));
+  return `<div class="ot-strip">${strip({ no: r.name, note: tags, main: ends, attrs })}</div>`;
+};
+// Each route's next bus, asked for the strips on screen as each comes into
+// view (a search's 60 routes aren't 60 asks), kept 25 s like the route's sheet.
+const next = new Map();
+const NEXT_MS = 25_000;
+let seen = null;
+let redraw = 0;
+const routeOf = (city, uid, name = '') => bus.list.find(x => x.uid === uid) || recentRoutes().find(x => x.uid === uid) || bus.around?.flatMap(x => x.routes).find(x => x.uid === uid) || { uid, city, name };
+async function askNext(el) {
+  const [city, uid] = el.dataset.r.split('|');
+  const old = next.get(uid);
+  if (!ctx.here || old?.asking || (old && Date.now() - old.at < NEXT_MS)) return;
+  next.set(uid, { ...old, asking: true });
+  let x = old?.x || null;
+  try {
+    x = await nextNear(routeOf(city, uid, el.dataset.name), ctx.here);
+  } catch {}
+  next.set(uid, { at: Date.now(), x });
+  clearTimeout(redraw);
+  redraw = setTimeout(busDraw, 80);
+}
+function watchRows() {
+  seen?.disconnect();
+  seen = new IntersectionObserver(list => list.forEach(x => x.isIntersecting && askNext(x.target)));
+  for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]')) seen.observe(el);
+}
 // A stop near you: its name and distance, its routes as numbers to tap.
 const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${Math.round(s.dist / 10) * 10} 公尺</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
 function busDraw() {
@@ -172,11 +209,14 @@ function busDraw() {
       (recent.length ? `<h3 class="ot-go-h">最近查看<button class="ot-res-clear" type="button" data-clear-routes="1">清除</button></h3><div class="ot-bus-group">${recent.slice(0, 5).map(row).join('')}</div>` : '') +
       (around.length ? `<h3 class="ot-go-h">${icon('pin')} 你附近的站牌</h3><div class="ot-bus-near">${around.map(nearStop).join('')}</div>` : bus.around ? '' : '<p class="ot-note">找你附近的站牌…</p>') +
       (bus.failed && !bus.list.length ? `<p class="ot-note bad">${e(bus.failed)}</p>` : '');
-    return;
+  } else {
+    const found = findRoutes(bus.list, t);
+    $('tb-list').innerHTML = !bus.list.length
+      ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || '載入路線中…')}</p>`
+      : found.length
+        ? `<div class="ot-bus-group">${found.map(row).join('')}</div>`
+        : '<p class="ot-note">沒有符合的路線，試試其他縣市。</p>';
   }
-  const found = findRoutes(bus.list, t);
-  $('tb-list').innerHTML = !bus.list.length
-    ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || '載入路線中…')}</p>`
-    : `<div class="ot-bus-group">${found.map(row).join('')}</div>`;
-  if (bus.list.length && !found.length) $('tb-list').innerHTML = '<p class="ot-note">沒有符合的路線，試試其他縣市。</p>';
+  fitStrips($('tb-list'));
+  watchRows();
 }
