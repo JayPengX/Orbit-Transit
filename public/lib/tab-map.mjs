@@ -90,10 +90,14 @@ export async function init(c) {
     $('map').innerHTML = `<p class="ot-empty">地圖載入失敗：${e(err.message)}</p>`;
     return isReady();
   }
-  // The first time the device's position is known (before the map was ready
-  // or after), the map goes there, unless it opened where it was left, or
-  // you've gone somewhere already (a search picked before the first fix).
-  centered = centered || Boolean(view);
+  // Each opening, the map goes to where you are now once the phone says
+  // (its first fresh fix, before the map was ready or after), as a phone's
+  // own maps do: it opens where it was left or at the last fix kept, and
+  // moves when the new one comes (it had stayed where it was left, so after
+  // moving it opened somewhere else). Not when you've gone somewhere already
+  // (a search picked, a finger on the map before the fix) or a ride is
+  // being followed again (it keeps the trip in view).
+  centered = centered || Boolean(savedNav());
   const arrived = here => {
     drawMe(here);
     nearBikes();
@@ -1643,9 +1647,10 @@ function navView(plan, i, tries = 0) {
 let navFollow = true;
 let followBack = 0;
 function dragged() {
-  // Not navigating (or shrunk): a finger on the map means you're looking somewhere else; it stays there.
+  // Not navigating (or shrunk): a finger on the map means you're looking somewhere else; it stays there (a late first fix included).
   if (!navFull()) {
     following = false;
+    centered = true;
     return;
   }
   navFollow = false;

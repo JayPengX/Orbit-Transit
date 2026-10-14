@@ -171,13 +171,6 @@ export async function townships() {
 
 // ---- Where the device is ---------------------------------------------------------------------
 
-export async function permissionState(nav = globalThis.navigator) {
-  try {
-    return (await nav?.permissions?.query({ name: 'geolocation' }))?.state || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
 export function getPosition({ timeout = 8000, maximumAge = 60_000, high = true } = {}, nav = globalThis.navigator) {
   return new Promise(resolve => {
     if (!nav?.geolocation) return resolve({ error: 'unsupported' });
