@@ -12,7 +12,7 @@
 //   我的    places, trips, pinned transit, preferences (ways of moving,
 //           TPASS), the metro maps
 
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate, keepOffline, onlineOnly } from '#kit/quadra.mjs';
+import { quadraSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate, keepOffline, onlineOnly } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
@@ -130,23 +130,10 @@ function select(id, { again = false } = {}) {
 
 // ---- Start ---------------------------------------------------------------------------------------
 
-const help = () =>
-  tell({
-    title: 'Orbit Transit',
-    body: '台灣的公車、火車、高鐵、捷運和 YouBike，一個 App。',
-    points: [
-      '地圖：搜尋地點，或點地圖上的店家、車站、YouBike；按「路線」看從你現在的位置過去的推薦方案（公車的即時位置都算進去了），點方案再按「開始導航」。',
-      '路線上方的出發地可以換成釘選地點、搜尋的地點，或在地圖上選；按 ☆ 釘選這個行程（可以設時間、每週固定幾天）。',
-      '交通：常用行程接下來的班次、附近的公車火車和 YouBike、你釘選的公車與火車，點一下就導航。',
-      '查時刻：台鐵、高鐵站到站（自動找轉乘），或查公車路線的即時到站與時刻表；都可以 ☆ 釘選。',
-      '我的：地點、行程、釘選交通、交通偏好（不搭某些交通工具、每 30 分鐘換 YouBike、TPASS）、捷運路網圖。'
-    ]
-  });
-
 window.__fxStarted = true;
 const gated = installGate('transit', 'zh');
 watchUpdates({ current: VERSION, key: 'orbitTransit', cachePrefix: 'orbit-transit-', busy: () => Boolean(document.querySelector('dialog[open]')) });
-topActions(q, { help });
+topActions(q);
 
 async function boot() {
   bar = tabBar({ tabs: TABS, onSelect: (id, o) => select(id, o), label: '分頁' });
