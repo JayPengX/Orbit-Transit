@@ -1056,3 +1056,16 @@ export function keepBike(o, places, bikes, dep, { have = false } = {}) {
   }
   return out;
 }
+
+// A trip with stops: one YouBike kept is the recommendation (the owner,
+// 2026-10-15: buses between stops are poor, the bike works best overall),
+// unless a stop is far (a ride over 20 minutes to it) or walking it all
+// gets there sooner. `keep`: keepBike's stretches; `whole`: the recommended
+// way, each stretch's plan.
+export const KEEP_RIDE_MAX = 20 * 60;
+export function keepWins(keep, whole) {
+  if (!keep?.length) return false;
+  if (keep.some(q => q.legs.some(l => l.mode === 'bike' && l.dur > KEEP_RIDE_MAX))) return false;
+  const walked = whole?.length && whole.every(q => q.legs.every(l => l.mode === 'walk'));
+  return !(walked && whole.at(-1).arr <= keep.at(-1).arr);
+}
