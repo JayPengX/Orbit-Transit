@@ -985,3 +985,26 @@ export function bikePoints(plans, o, d) {
   for (const p of pts) if (!out.some(q => meters(p.lat, p.lon, q.lat, q.lon) < 400)) out.push({ lat: p.lat, lon: p.lon });
   return out.slice(0, 16);
 }
+
+// A trip with stops, whole: after a way to the first stop, each next
+// stretch's way from when you're there (the owner, 2026-10-15: the first
+// stretch alone made a 3′ walk the trip). `rests`: each later stretch's
+// plans as ranked; a walk or a ride of its own goes whenever you're there, a
+// bus or train only while it's still to leave; its recommendation first,
+// else the soonest there. → the later stretches' plans, or null while one
+// isn't planned (or nothing gets there).
+export function chainOn(p, rests) {
+  const out = [];
+  let t = p.arr;
+  for (const plans of rests) {
+    const fit = (plans || [])
+      .map(q => (vehicles(q).length ? q : shiftPlan(q, t - q.dep)))
+      .filter(q => q.dep >= t - 60_000);
+    const q = fit.find(x => x.top) || fit.filter(x => !x.weak).sort((a, b) => a.arr - b.arr)[0] || fit.sort((a, b) => a.arr - b.arr)[0];
+    if (!q) return null;
+    out.push(q);
+    t = q.arr;
+  }
+  return out;
+}
+const shiftPlan = (q, d) => (d ? { ...q, dep: q.dep + d, arr: q.arr + d, legs: q.legs.map(l => ({ ...l, dep: l.dep + d, arr: l.arr + d })) } : q);

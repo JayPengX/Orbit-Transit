@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides, stopGroups } from '../public/lib/bus.mjs';
@@ -2053,3 +2053,18 @@ test('YouBike stations by the streets where known: by 新竹縣體育場 (151 m 
   }
 });
 
+
+test('a trip with stops, whole: each later stretch from when you’re at its start (a walk moved there, a bus only still to leave)', () => {
+  const T = Date.parse('2026-10-15T12:00:00Z');
+  const m = n => T + n * 60_000;
+  const walkP = (a, b, extra = {}) => ({ dep: m(a), arr: m(b), legs: [{ mode: 'walk', dep: m(a), arr: m(b) }], ...extra });
+  const busP = (a, b, extra = {}) => ({ dep: m(a), arr: m(b), legs: [{ mode: 'bus', name: '1', dep: m(a), arr: m(b) }], ...extra });
+  const first = walkP(0, 3);
+  // Stretch 2: a 5′ walk planned for now, moved to 3′ from now; stretch 3: the bus gone by then skipped, the next one taken.
+  const ch = chainOn(first, [[walkP(0, 5, { top: true })], [busP(5, 20, { top: true }), busP(15, 30)]]);
+  assert.deepEqual(ch.map(q => [q.dep, q.arr].map(x => (x - T) / 60_000)), [[3, 8], [15, 30]]);
+  assert.equal(ch[0].legs[0].dep, m(3));
+  // A stretch not planned yet, or nothing that gets there: no whole trip.
+  assert.equal(chainOn(first, [[walkP(0, 5)], undefined]), null);
+  assert.equal(chainOn(first, [[busP(0, 2)]]), null);
+});
