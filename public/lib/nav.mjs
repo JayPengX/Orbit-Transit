@@ -279,7 +279,8 @@ function stepText(plan, i, phase) {
     const last = i === plan.legs.length - 1;
     return { title: `走到 ${last && !l.to?.name ? '目的地' : where}`, sub: next?.mode === 'bike' ? `在這裡借 ${next.ebike ? '電輔車' : 'YouBike'}` : RIDE(next) ? `搭 ${rideName(next)}` : '' };
   }
-  if (l.mode === 'bike') return { title: `騎到 ${l.to.name}`, sub: l.swap ? '還車再借一台（每 30 分鐘換一次車）' : `${l.ebike ? '電輔車' : 'YouBike'}・在 ${l.from.name} 借車` };
+  // (One bike kept the whole trip with stops: ridden on from each, parked, not returned, at each.)
+  if (l.mode === 'bike') return { title: `騎到 ${l.to.name}`, sub: l.swap ? '還車再借一台（每 30 分鐘換一次車）' : `${l.kept ? '騎同一台' : `${l.ebike ? '電輔車' : 'YouBike'}・在 ${l.from.name} 借車`}${l.park ? '・到了先停好，不還車' : ''}` };
   if (phase === 'on') return { title: `坐到 ${l.to.name} 下車`, sub: `${rideName(l)}${wayText(l) ? ` ${wayText(l)}` : ''}` };
   return { title: `搭 ${rideName(l)}`, sub: `${l.from.name}${wayText(l) ? `・${wayText(l)}` : ''}${l.train?.platform ? `・${l.train.platform} 月台` : ''}` };
 }
@@ -362,10 +363,12 @@ const chipText = l => (l.mode === 'walk' ? `${Math.max(1, Math.round((l.dur || 0
 function bikesText(bk, plan, i, pos) {
   if (!bk || bk.k < i) return '';
   const from = plan.legs[bk.k].from;
+  const kept = plan.legs[bk.k].kept, park = plan.legs[bk.k].park;
+  if (kept && park) return '';
   const out = [];
   if (bk.moved) out.push(`<span class="note warn">${icon('bike')}${e(bk.moved)}</span>`);
   if (bk.none) out.push(`<span class="note bad">${icon('bike')}${e(bk.none)}，按「換一條路」重新規劃</span>`);
-  const taking = bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150;
+  const taking = !kept && (park || bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150);
   if (bk.rent && taking) out.push(`<span>${icon('bike')}可借 ${bk.rent.bikes}${bk.rent.ebike ? `・⚡${bk.rent.ebike}` : ''}</span>`);
   if (bk.ret) out.push(`<span>還車空位 ${bk.ret.ret}</span>`);
   const btn = (end, text) => `<button class="ot-nav-gm" type="button" data-nav-bike="${end}">${icon('route')}${text}</button>`;
