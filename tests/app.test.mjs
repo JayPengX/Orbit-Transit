@@ -2064,7 +2064,9 @@ test('a trip with stops, whole: each later stretch from when you’re at its sta
   const ch = chainOn(first, [[walkP(0, 5, { top: true })], [busP(5, 20, { top: true }), busP(15, 30)]]);
   assert.deepEqual(ch.map(q => [q.dep, q.arr].map(x => (x - T) / 60_000)), [[3, 8], [15, 30]]);
   assert.equal(ch[0].legs[0].dep, m(3));
-  // A stretch not planned yet, or nothing that gets there: no whole trip.
+  // A stretch not planned yet: no whole trip; nothing that gets there: the stretches before it, and which.
   assert.equal(chainOn(first, [[walkP(0, 5)], undefined]), null);
-  assert.equal(chainOn(first, [[busP(0, 2)]]), null);
+  const cut = chainOn(first, [[walkP(0, 5)], [busP(0, 2)]]);
+  assert.equal(cut.length, 1);
+  assert.equal(cut.short, 1);
 });

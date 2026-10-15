@@ -1216,7 +1216,7 @@ async function planRest(c) {
   let prev = c.to;
   for (const x of c.then) {
     const rec = c.plans.find(p => p.tags?.includes('推薦')) || c.plans[0];
-    const at = (c.rest.length ? chainOn(rec, c.rest)?.at(-1)?.arr : rec.arr) || rec.arr;
+    const at = chainOn(rec, c.rest)?.at(-1)?.arr || rec.arr;
     let plans = [];
     try {
       const o = await planTrip(ctx.data, prev, x, { at: Math.max(at, Date.now()), by: 'depart', modes: tripModes });
@@ -1316,13 +1316,19 @@ function plansHtml(c) {
     const all = [p, ...(later || [])];
     const arr = all.at(-1).arr;
     const sum = k => all.reduce((a, q) => a + (q[k] || 0), 0);
-    const facts = later
-      ? [leaveText(p), sum('transfers') ? `轉乘 ${sum('transfers')} 次` : '不必轉乘', sum('walk') > 50 ? `步行 ${distText(sum('walk'))}` : '', sum('fare') ? `NT$${sum('fare')}` : '']
-      : [leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : ''), c.then?.length ? `到第 1 站，後面 ${c.then.length} 段規劃中…` : ''];
+    const facts = !c.then?.length
+      ? [leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')]
+      : !later
+        ? [leaveText(p), `後面 ${c.then.length} 段規劃中…`]
+        : [leaveText(p), sum('transfers') ? `轉乘 ${sum('transfers')} 次` : '不必轉乘', sum('walk') > 50 ? `步行 ${distText(sum('walk'))}` : '', sum('fare') ? `NT$${sum('fare')}` : ''];
+    // (Nothing gets there from one stop on: said, the time up to it.)
+    const short = later?.short != null ? `${[c.to, ...c.then][later.short].name || '這一站'}之後找不到方案` : '';
+    // With stops, each stretch short so the whole trip is one line: its rides, or its walk or ride all of it.
+    const chips = q => (c.then?.length ? stretchChips(q) : legChips(q.legs));
     return `<button class="ot-plan${on ? ' on' : ''}${mini ? ' mini' : ''}" type="button" data-plan="${i}">
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText((arr - p.dep) / 1000))}</b><span class="ot-plan-time">${e(timeRange(p.dep, arr))}</span>${mini ? '' : p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
-        <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="第 ${k} 站">${k}</span>` : ''}${legChips(q.legs)}`).join('')}</div>${on ? deps(lead, i) : ''}
-        ${mini ? '' : `<div class="ot-plan-sub">${facts.filter(Boolean).map(e).join(' · ')}</div>`}
+        <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="第 ${k} 站">${k}</span>` : ''}${chips(q)}`).join('')}</div>${on ? deps(lead, i) : ''}
+        ${mini ? '' : `<div class="ot-plan-sub">${facts.filter(Boolean).map(e).join(' · ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}
         ${!mini && (p.miss || p.off || p.late || p.rivers?.length) ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
@@ -1334,6 +1340,11 @@ function plansHtml(c) {
   const rest = leads.filter(([p]) => !p.top && !picked(c, p));
   return `${top}<div class="ot-plans">${tops.map(card_).join('')}</div>
     ${rest.length ? `<button class="q-btn ot-wide ot-more" type="button" data-card="more">${c.more ? '收起其他方案' : `其他 ${rest.length} 個方案`}</button>${c.more ? `<div class="ot-plans">${rest.map(card_).join('')}</div>` : ''}` : ''}`;
+}
+// A stretch of a trip with stops, short: its rides (YouBike too), or a walk of all its minutes.
+function stretchChips(q) {
+  const rides = q.legs.filter(l => l.mode !== 'walk');
+  return legChips(rides.length ? rides : [{ mode: 'walk', dur: (q.arr - q.dep) / 1000 }]);
 }
 // When to leave: 「12 分後出發」 soon, else 「建議 06:05 出發」; and when you're there.
 function leaveText(p) {
@@ -1386,7 +1397,7 @@ function stepsHtml(p, c = card) {
   // With stops: each stretch's steps, 抵達 each stop between them.
   const later = restOf(c, p) || [];
   const stopAt = (q, k) => `<li class="stop"><span class="ot-step-time">${e(hm(q.arr))}</span><span class="ot-step-i">${k + 1}</span><span class="ot-step-what"><b>抵達 ${e([c.to, ...c.then][k]?.name || '')}</b></span></li>`;
-  return `<ol class="ot-steps">${[p, ...later].map((q, k) => `${k ? stopAt([p, ...later][k - 1], k - 1) : ''}${stepItems(q.legs)}`).join('')}<li class="end"><span class="ot-step-time">${e(hm((later.at(-1) || p).arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>抵達${later.length ? ` ${e(c.then.at(-1).name || '')}` : ''}</b></span></li></ol>
+  return `<ol class="ot-steps">${[p, ...later].map((q, k) => `${k ? stopAt([p, ...later][k - 1], k - 1) : ''}${stepItems(q.legs)}`).join('')}<li class="end"><span class="ot-step-time">${e(hm((later.at(-1) || p).arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>抵達${c.then?.length ? ` ${e([c.to, ...c.then][later.length].name || '')}` : ''}</b></span></li></ol>
     <span class="ot-plan-acts">${canNav(p) ? `<span class="q-btn primary" role="button" data-card="nav">${icon('route')} 開始導航</span>` : `<span class="ot-nav-later">${e(hm(p.dep - NAV_LEAD))} 起可以開始導航</span>`}<span class="q-btn${picked(c, p) ? ' on' : ''}" role="button" data-card="pick">${icon('star')} ${picked(c, p) ? '已釘選' : '釘選這個方案'}</span></span>`;
 }
 function stepItems(legs) {
@@ -1502,7 +1513,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
   // A way on a card with stops: the whole trip, to its last place.
   const later = lit < 0 && card?.plans?.includes(p) ? restOf(card, p) : null;
-  if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: card.then.at(-1) };
+  if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: card.then[later.length - 1] };
   // (Its own YouBike stations, only: drawLayers.)
   if (!navFull()) drawLayers();
   const lines = [];
