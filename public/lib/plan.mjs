@@ -734,6 +734,20 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const trek = x => vehicles(x).length && x.legs.some(l => l.mode === 'walk' && (l.dist || 0) > TREK_M);
   const noTrek = list.some(q => !trek(q) && !q.off);
   for (const p of leads) if (noTrek && trek(p)) over.add(groups.get(pickSig(p)));
+  // Of those, one by train and one by bus stay listed under the
+  // recommendations, never one themselves: the fewest trains and buses, then
+  // the best (the owner, 2026-10-15: the train to 竹中 and a ride home is a
+  // choice to see, 竹東高中 → 成功九街).
+  // (Riding two thirds of what riding it all would, it's riding it all: a
+  // bus a little way, then 25 minutes on the bike.)
+  const kind = p => (vehicles(p).some(l => l.mode === 'bus') ? 'bus' : 'rail');
+  const rideMin = p => p.legs.reduce((a, l) => a + (l.mode === 'bike' ? l.dur || 0 : 0), 0);
+  const allMin = Math.min(...list.filter(p => p.bike && !vehicles(p).length).map(rideMin));
+  const river = new Set();
+  for (const k of ['rail', 'bus']) {
+    const g = [...over].map(x => x[0]).filter(p => kind(p) === k && !busChain(p) && !trek(p) && rideMin(p) <= allMin * 2 / 3).sort((a, b) => vehicles(a).length - vehicles(b).length || a.score - b.score)[0];
+    if (g) river.add(groups.get(pickSig(g)));
+  }
   const other = (q, p) => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && !over.has(groups.get(pickSig(q)));
   for (const p of leads) {
     // Another way onto the same bus or train (a bike to it, not a walk and a
@@ -775,7 +789,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // (Riding it all is a choice of its own however it scores: the owner,
     // 2026-10-12, wants it under the rest, 成功九街 → 竹東高中 by 電輔車.)
     const far = p.score > best + Math.max(45, best) && !(sooner && p.score <= best + 2 * Math.max(45, best)) && !(p.bike && !vehicles(p).length);
-    if (beaten || changes || hop || mostlyRidden || further || feeder || overByBike || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    if (beaten || changes || hop || mostlyRidden || further || feeder || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // Never nothing: the best way stays when every way was set aside.
   if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
@@ -800,8 +814,10 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const mains = new Set();
   const lines = new Set();
   const shown = leads.filter(p => !weak.has(p));
+  const behind = p => river.has(groups.get(pickSig(p)));
   for (const p of shown) {
     if (picked.size >= top) break;
+    if (behind(p)) continue;
     if (mains.has(mainLine(p))) continue;
     mains.add(mainLine(p));
     lines.add(ridesSig(p));
@@ -809,17 +825,25 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   }
   for (const p of shown) {
     if (picked.size >= top) break;
-    if (picked.has(p) || lines.has(ridesSig(p))) continue;
+    if (picked.has(p) || behind(p) || lines.has(ridesSig(p))) continue;
     lines.add(ridesSig(p));
     picked.add(p);
   }
+  // And only when it gets there 5 minutes sooner than the recommendations
+  // of its kind (of any, when none is): what it's for (竹中 and a ride, 18:54, over the
+  // 六家線's 19:04; never north on the bus and back over the river for 新竹站).
+  for (const p of shown.filter(behind)) {
+    const tops = [...picked].filter(q => vehicles(q).length);
+    const mine = tops.filter(q => kind(q) === kind(p));
+    if ((mine.length ? mine : tops).some(q => q.arr < p.arr + 5 * 60_000)) for (const q of groups.get(pickSig(p))) weak.add(q);
+  }
   const label = new Map(list.map(p => [p, []]));
-  const pool = shown.length ? shown : leads;
+  const pool = shown.length ? shown.filter(p => !weak.has(p)) : leads;
   const by_ = (f, name) => {
     const best = pool.reduce((a, b) => (f(b) < f(a) ? b : a));
     if (pool.filter(p => f(p) === f(best)).length < pool.length) label.get(best).push(name);
   };
-  label.get(pool[0]).push('推薦');
+  label.get(pool.find(p => picked.has(p)) || pool[0]).push('推薦');
   by_(p => p.arr, '最快抵達');
   by_(p => p.transfers, '最少轉乘');
   by_(p => p.walk, '最少步行');

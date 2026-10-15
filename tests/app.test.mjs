@@ -1712,7 +1712,7 @@ test('navigation knows the step you are at from where you are: a step’s end mi
   assert.equal(tripAt(plan, zhudong, 2, T('17:11')), null, 'at the station, waiting: still the walk to it');
 });
 
-test('over the river on the bike after a train is set aside when a train over it gets there in a quarter of an hour; and what’s set aside sets nothing else aside', () => {
+test('over the river on the bike after a train, when a train over it gets there in a quarter of an hour: one such way listed when it gets there sooner, never recommended, the rest set aside; and none sets anything else aside', () => {
   // 新竹站 → 成功九街: the train to 竹北 and a ride, over the train to 千甲 and a ride over 頭前溪.
   const o = { lat: 24.8016, lon: 120.9716 };
   const d = { lat: 24.8176, lon: 121.0165 };
@@ -1723,9 +1723,15 @@ test('over the river on the bike after a train is set aside when a train over it
   const bike = (from, dep, min) => ({ mode: 'bike', from, to: d, dep: T(dep), arr: T(dep) + min * 60_000, dur: min * 60, dist: min * 230 });
   const viaQ = finish({ legs: [tr('1798', qianjia, '18:45', '18:51'), bike(qianjia, '18:52', 15)] });
   const viaZ = finish({ legs: [tr('1242', zhubei, '18:37', '18:47'), bike(zhubei, '18:48', 15)] });
-  const out = rank([viaQ, viaZ], { now: T('18:30'), o, d });
-  assert.ok(out.find(p => p.legs[0].to.name === '千甲').weak, 'the ride over 頭前溪 after the train: set aside');
-  assert.ok(!out.find(p => p.legs[0].to.name === '竹北').weak);
+  const viaZlate = finish({ legs: [tr('1244', zhubei, '18:47', '18:57'), bike(zhubei, '18:58', 15)] });
+  const viaS = finish({ legs: [tr('1798', { name: '新莊', lat: 24.7887, lon: 121.0213 }, '18:45', '18:55'), bike({ name: '新莊', lat: 24.7887, lon: 121.0213 }, '18:56', 19)] });
+  assert.ok(rank([viaQ, viaZ], { now: T('18:30'), o, d }).find(p => p.legs[0].to.name === '千甲').weak, 'there no sooner than the train to 竹北: set aside');
+  const out = rank([viaQ, viaS, viaZlate], { now: T('18:30'), o, d });
+  const q = out.find(p => p.legs[0].to.name === '千甲');
+  assert.ok(!q.weak && !q.top, 'there sooner: listed, not recommended');
+  assert.ok(!q.tags.includes('推薦'), '推薦 only on a recommendation');
+  assert.ok(out.find(p => p.legs[0].to.name === '新莊').weak, 'one such way only');
+  assert.ok(!out.find(p => p.legs[0].to.name === '竹北').weak && out.find(p => p.legs[0].to.name === '竹北').top);
 });
 
 test('the same first train, then on to 北新竹 and back up to 竹北, with the same ride home: set aside for the change to the 六家線, home sooner', () => {

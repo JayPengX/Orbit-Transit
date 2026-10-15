@@ -13,7 +13,12 @@ const shown = r => r.filter(p => p.lead && !p.weak);
 const rides = p => p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
 const busChain = p => rides(p).some((l, i, a) => i > 0 && l.mode === 'bus' && a[i - 1].mode === 'bus');
 const bikeOverRiver = p => rides(p).length && p.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to));
-const firstTrain = r => shown(r).find(p => rides(p).some(l => l.mode === 'tra'));
+const firstTrain = r => shown(r).find(p => p.top && rides(p).some(l => l.mode === 'tra'));
+// A ride over 頭前溪 after a bus or train: never recommended, one by train and one by bus listed at most (the owner, 2026-10-15).
+const riverOnce = r => {
+  assert.deepEqual(r.filter(p => p.top && bikeOverRiver(p)).map(sayPlan), [], 'a ride over 頭前溪 after a train never recommended');
+  for (const k of [true, false]) assert.ok(shown(r).filter(p => bikeOverRiver(p) && rides(p).some(l => l.mode === 'bus') === k).length <= 1, say(shown(r).filter(bikeOverRiver)));
+};
 const say = list => list.map(sayPlan).join('\n');
 
 // What holds for every trip the owner judged.
@@ -26,12 +31,12 @@ function always(name, r) {
 }
 
 const CASES = {};
-CASES['竹東高中 → 成功九街 at 16:35: the train is 1831 to 竹中 and the 六家線, never on to 新莊 and back; no ride over 頭前溪 after a train; not on to 北新竹 and back up to 竹北'] = opts => {
+CASES['竹東高中 → 成功九街 at 16:35: the train is 1831 to 竹中 and the 六家線, never on to 新莊 and back; a ride over 頭前溪 after a train listed once at most (and once after a bus), never recommended; not on to 北新竹 and back up to 竹北'] = opts => {
   const r = rankSaved('zhudonghs-chenggong-1635', opts);
   always('1635', r);
   assert.match(sayPlan(firstTrain(r)), /1831:竹東>竹中 tra:區間1758:竹中>六家/, say(shown(r)));
   assert.ok(firstTrain(r).top, 'and it’s recommended');
-  assert.deepEqual(shown(r).filter(bikeOverRiver).map(sayPlan), []);
+  riverOnce(r);
   assert.deepEqual(shown(r).filter(p => /新莊>六家|北新竹>竹北|新竹>竹北/.test(sayPlan(p))).map(sayPlan), []);
 };
 
@@ -44,13 +49,13 @@ CASES['竹東高中 → 成功九街 at 16:45, YouBike on and off: no 5673 then 
   assert.match(sayPlan(firstTrain(rankSaved('zhudonghs-chenggong-1645', opts))), /竹東>竹中 tra:區間1758:竹中>六家/);
 };
 
-CASES['新竹站 → 成功九街: the train to 竹北 (or a bus, or riding it all) first, never the train to 千甲 and a ride over 頭前溪'] = opts => {
+CASES['新竹站 → 成功九街: the train to 竹北 (or a bus, or riding it all) first, the train to 千甲 and a ride over 頭前溪 only listed, never first'] = opts => {
   const r = rankSaved('hsinchu-chenggong-1830', opts);
   always('hsinchu', r);
   const top = r.filter(p => p.top);
   assert.ok(!bikeOverRiver(top[0]), sayPlan(top[0]));
   assert.ok(rides(top[0]).every(l => l.mode === 'bus' || /竹北/.test(l.to?.name || '')), `first: ${sayPlan(top[0])}`);
-  assert.deepEqual(shown(r).filter(bikeOverRiver).map(sayPlan), []);
+  riverOnce(r);
 };
 
 CASES['竹東站 → 縣體育場: the change to the 六家線 first, never on to 新竹 and back up to 竹北'] = opts => {

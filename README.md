@@ -154,6 +154,10 @@ Each falls back to TDX's own search when the packs can't be had.
      way whose bus or train crosses it, or riding the whole way (40 minutes
      at most), gets there within 20 minutes (新竹站 → 成功九街: the 竹北 train
      and a ride, not to 千甲 and a ride over 頭前溪);
+     but one such way by train and one by bus stay listed under the
+     recommendations (never one) when they get there sooner than the
+     recommendations of their kind (竹東高中 → 成功九街: the train to 竹中
+     and a 25′ ride, 18:54, under the 六家線's 19:04);
    - **the same last train from another first one**: out no earlier, there
      no later, less bother (the 六家線 to 竹中 for the 1804, not 竹北 and a
      change at 北新竹 for it);
