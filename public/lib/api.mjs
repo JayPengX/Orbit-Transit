@@ -250,25 +250,40 @@ async function osmWalks(from, tos) {
 // paths, it never makes one up (Google's 210 m by the lane to 成功國中 where
 // OpenStreetMap goes round the block, 485; OpenStreetMap's 344 m into 縣體育場
 // where Google goes round to an entrance, 748).
+// (A walk already being asked is waited for, not asked again: a trip asks
+// for the walks to its YouBike stations as it starts, and again to rank.)
+const walking = new Map(); // walkKey → the ask it's in (walks without their lines)
 export async function walksTo(from, tos, { line = false } = {}) {
-  const need = tos.map((t, i) => (walksKept.get(walkKey(from, t)) && (!line || walksKept.get(walkKey(from, t)).poly) ? -1 : i)).filter(i => i >= 0);
+  const have = t => walksKept.get(walkKey(from, t)) && (!line || walksKept.get(walkKey(from, t)).poly);
+  const waits = new Set(line ? [] : tos.map(t => !have(t) && walking.get(walkKey(from, t))).filter(Boolean));
+  const need = tos.map((t, i) => (have(t) || (!line && walking.has(walkKey(from, t))) ? -1 : i)).filter(i => i >= 0);
   if (need.length) {
-    const [asked, osm] = await Promise.all([get(`/transit/walk?from=${p5(from)}&to=${need.map(i => p5(tos[i])).join(';')}${line ? '&line=1' : ''}`).catch(() => null), osmWalks(from, need.map(i => tos[i]))]);
-    await Promise.all(
-      need.map(async (i, k) => {
-        const g = asked?.walks?.[k];
-        const o = osm[k];
-        // Google's, unless OpenStreetMap's is shorter (or Google's isn't there: past its cap).
-        if (g && (o == null || g.dist <= o)) return walksKept.set(walkKey(from, tos[i]), paced(g.dist, g.poly ? { poly: g.poly } : {}));
-        // (Its line, when one's wanted: OpenStreetMap's route.)
-        const r = line || o == null ? await roadPath('walk', from, tos[i]) : null;
-        const dist = o ?? r?.dist;
-        if (dist != null) walksKept.set(walkKey(from, tos[i]), paced(dist, r?.poly ? { poly: r.poly } : {}));
-      })
-    );
-    keepWalks();
+    const job = askWalks(from, tos, need, line);
+    if (!line) {
+      const keys = need.map(i => walkKey(from, tos[i]));
+      for (const k of keys) walking.set(k, job);
+      job.finally(() => keys.forEach(k => walking.get(k) === job && walking.delete(k))).catch(() => {});
+    }
+    waits.add(job);
   }
+  await Promise.all(waits);
   return tos.map(t => walksKept.get(walkKey(from, t)) || null);
+}
+async function askWalks(from, tos, need, line) {
+  const [asked, osm] = await Promise.all([get(`/transit/walk?from=${p5(from)}&to=${need.map(i => p5(tos[i])).join(';')}${line ? '&line=1' : ''}`).catch(() => null), osmWalks(from, need.map(i => tos[i]))]);
+  await Promise.all(
+    need.map(async (i, k) => {
+      const g = asked?.walks?.[k];
+      const o = osm[k];
+      // Google's, unless OpenStreetMap's is shorter (or Google's isn't there: past its cap).
+      if (g && (o == null || g.dist <= o)) return walksKept.set(walkKey(from, tos[i]), paced(g.dist, g.poly ? { poly: g.poly } : {}));
+      // (Its line, when one's wanted: OpenStreetMap's route.)
+      const r = line || o == null ? await roadPath('walk', from, tos[i]) : null;
+      const dist = o ?? r?.dist;
+      if (dist != null) walksKept.set(walkKey(from, tos[i]), paced(dist, r?.poly ? { poly: r.poly } : {}));
+    })
+  );
+  keepWalks();
 }
 export const walkTo = (from, to, opts) => walksTo(from, [to], opts).then(r => r[0]);
 

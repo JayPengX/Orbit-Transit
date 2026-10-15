@@ -236,6 +236,17 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
   let miss = '';
   let off = '';
   let done = 0;
+  // Both buses' stops asked at once (one ask a city, not one a bus, one after
+  // the other); a second bus moved past the 90 minutes just isn't used.
+  const asked = new Map();
+  for (const [i, l] of legs.entries()) {
+    if (asked.size === 2) break;
+    if (l.mode !== 'bus' || !l.from?.lat || l.dep == null) continue;
+    if (l.dep > now + 120 * MIN || l.dep < now - 2 * MIN) break;
+    const p = near(l.from.lat, l.from.lon, 150);
+    p.catch(() => {});
+    asked.set(i, p);
+  }
   for (let i = 0; i < legs.length && done < 2; i++) {
     const l = legs[i];
     if (l.mode !== 'bus' || !l.from?.lat || l.dep == null) continue;
@@ -243,7 +254,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     done++;
     let list;
     try {
-      list = await near(l.from.lat, l.from.lon, 150);
+      list = await (asked.get(i) ?? near(l.from.lat, l.from.lon, 150));
     } catch {
       continue;
     }
@@ -346,19 +357,15 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
   if (trace) Object.assign(trace, { near: [...new Set(boards.flatMap(s => s.stops.map(x => x.route)))], there: [...new Set(alights.flatMap(s => s.stops.map(x => x.route)))], both: [...cands.values()].map(c => c.route), kept: [], why: [] });
   if (!cands.size) return [];
   // The buses due at the stops you'd board (from the packs: those stops, one ask; else around you).
+  // (Asked beside each line's stops and timetable, not before them.)
   const boardStops = boards.flatMap(s => s.stops.filter(x => cands.has(x.routeUID) && x.scope).map(x => ({ uid: x.stopUID, scope: x.scope })));
-  const live = at - now >= 90 * MIN ? [] : await (boardStops.length ? etaStops([...new Map(boardStops.map(x => [x.uid, x])).values()]) : etaNear(a.lat, a.lon, fromM)).catch(() => []);
+  const liveAsk = at - now >= 90 * MIN ? Promise.resolve([]) : (boardStops.length ? etaStops([...new Map(boardStops.map(x => [x.uid, x])).values()]) : etaNear(a.lat, a.lon, fromM)).catch(() => []);
   const out = [];
   // Each line looked at side by side (its stops and timetable are asks of their own).
   await Promise.all([...cands.values()].slice(0, routes).map(async c => {
     const route = { uid: c.uid, name: c.route, city: routeCity(c.uid) };
-    let ways;
-    try {
-      ways = await routeStops(route, a);
-    } catch {
-      return void trace?.why.push(`${c.route}: no stops`);
-    }
-    const sched = await routeSchedule(route, a).catch(() => []);
+    const [ways, sched] = await Promise.all([routeStops(route, a).catch(() => null), routeSchedule(route, a).catch(() => [])]);
+    if (!ways) return void trace?.why.push(`${c.route}: no stops`);
     const boardUIDs = new Set(boards.flatMap(s => s.stops.filter(x => x.routeUID === c.uid).map(x => x.stopUID)));
     const alightUIDs = new Set(there.get(c.uid).map(x => x.stopUID));
     let best = null;
@@ -383,6 +390,7 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     // When the bus comes: TDX's estimate, else today's timetable at that stop.
     let dep = null;
     let isLive = false;
+    const live = await liveAsk;
     const lt = liveTimes(live, c.route, now, { dir: w.dir, routeUID: c.uid });
     // (A bus 'coming' the timetable has nowhere near: resting with its tracker on.)
     lt.times = lt.times.filter(x => liveTrusted(sched, w, i, x.at));

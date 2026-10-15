@@ -79,8 +79,15 @@ export function expand(p, uid) {
 }
 
 // A route's pack: its city's, or (公路客運) the square of a point on it (`near`).
+// (Each route made into TDX's shapes once a pack: a trip asks for its stops and timetable often.)
+const expanded = new WeakMap();
 export async function packRoute(route, near = null) {
   const name = route.city === 'InterCity' ? (near?.lat != null ? `InterCity/${squareOf(near.lat, near.lon)}` : null) : route.city;
   if (!name) return null;
-  return expand(await pack(name).catch(() => null), route.uid);
+  const p = await pack(name).catch(() => null);
+  if (!p) return null;
+  if (!expanded.has(p)) expanded.set(p, new Map());
+  const routes = expanded.get(p);
+  if (!routes.has(route.uid)) routes.set(route.uid, expand(p, route.uid));
+  return routes.get(route.uid);
 }
