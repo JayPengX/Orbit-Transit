@@ -6,6 +6,8 @@
 // reloads itself when a newer deploy is out. Run by the deploy workflow only.
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { join, dirname, relative } from 'node:path';
+import { existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const version = process.argv[2];
 if (!version) throw new Error('usage: node scripts/stamp-version.mjs <version>');
@@ -40,6 +42,10 @@ const entries = [...indexHtml.matchAll(/<script type="module" src="\.\/([^"?]+)"
 const modules = new Set();
 for (const entry of entries) for (const f of await graph(entry)) if (!entries.includes(f)) modules.add(f);
 const preloads = [...modules].map(f => `<link rel="modulepreload" href="./${relative(root, f)}" />`).join('\n');
+// …and the kit modules they import, at the kit's address (the kit's build
+// tool, kit/preload.mjs: .kit in CI, the checkout beside this one here).
+const kitDir = [new URL('../.kit/', import.meta.url).pathname, new URL('../../Shared-Proxy/kit/', import.meta.url).pathname].find(d => existsSync(join(d, 'preload.mjs')));
+const kitLinks = kitDir ? await (await import(pathToFileURL(join(kitDir, 'preload.mjs')).href)).kitPreloads(entries, kitDir) : '';
 for (const path of await files(root)) {
   const text = await readFile(path, 'utf8');
   const stamped = text.replace(LOCAL, (_, before, file, after) => `${before}${file}?v=${version}${after}`);
@@ -48,6 +54,6 @@ for (const path of await files(root)) {
 
 // The page's own version, and the latest one, fetched past every cache.
 const index = join(root, 'index.html');
-const page = (await readFile(index, 'utf8')).replace('content="dev"', `content="${version}"`);
+const page = (await readFile(index, 'utf8')).replace('content="dev"', `content="${version}"`).replace('<!-- /kit:head -->', `<!-- /kit:head -->${kitLinks ? `\n${kitLinks}` : ''}`);
 await writeFile(index, preloads ? page.replace('</head>', `${preloads.replaceAll('" />', `?v=${version}" />`)}\n</head>`) : page);
 await writeFile(join(root, 'version.json'), JSON.stringify({ version }) + '\n');
