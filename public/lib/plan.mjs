@@ -643,6 +643,10 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // from it), or arriving after it, is no plan, unless it's all there is.
   const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 : p.dep >= now - 2 * 60_000));
   const ok = fits.length ? fits : all;
+  // By a time already out of reach (07:21 for 08:00): ranked as leaving now,
+  // the soonest there first; "how long before the time you leave" would put
+  // the one leaving latest first (16:20, the owner's 上學, 2026-10-16).
+  if (by === 'arrive' && deadline && !fits.length) [by, now, deadline] = ['depart', clock, null];
   // One plan per way (sameWay): walking or riding to the same bus, boarding
   // the same train a station up the line, 電輔車 or not: only the best of them.
   const scored = [];
@@ -1026,7 +1030,14 @@ const shiftPlan = (q, d) => (d ? { ...q, dep: q.dep + d, arr: q.arr + d, legs: q
 // (navigating, at a stop): it rides from o. → each stretch's plan (the bike
 // taken at the first, returned at the last), or null with no bike near o, no
 // dock near the last place, or a ride too long.
-export function keepBike(o, places, bikes, dep, { have = false } = {}) {
+// `swap` (TPASS's free half hour, or 每 30 分鐘換車): still the one bike
+// through the stops, but before a ride would take the rental past half an
+// hour (from `since`, when it was taken: a stop's stay counts, so
+// navigating it's the real one) it's returned at a dock by the stop it
+// leaves and another taken there; a ride over half an hour itself changed
+// on the way (swapRides). → each stretch's plan; the first has `rentAt`,
+// when the rental it ends with began.
+export function keepBike(o, places, bikes, dep, { have = false, swap = false, since = dep } = {}) {
   const last = places.at(-1);
   const rent = have ? null : rentNear(o, bikes, { to: places[0], first: true });
   const ret = returnNear(last, bikes, { from: places.at(-2) || rent || o });
@@ -1034,7 +1045,7 @@ export function keepBike(o, places, bikes, dep, { have = false } = {}) {
   // (The station nearest the bike's way at the first stop rather than here: there on foot, the bike from there.)
   if (rent && places.length > 1 && meters(rent.lat, rent.lon, places[0].lat, places[0].lon) < meters(rent.lat, rent.lon, o.lat, o.lon)) {
     const w = walkLeg(o, places[0], dep);
-    const rest = keepBike(places[0], places.slice(1), bikes, w.arr);
+    const rest = keepBike(places[0], places.slice(1), bikes, w.arr, { swap });
     return rest && [finish({ src: 'keep', keep: true, legs: [w] }), ...rest];
   }
   // (A ride from or to a place, not a station: no docking there.)
@@ -1046,22 +1057,40 @@ export function keepBike(o, places, bikes, dep, { have = false } = {}) {
   const out = [];
   let at = have ? o : rent;
   let t = dep;
+  let rentAt = have ? since : null;
   for (const [k, pl] of places.entries()) {
     const legs = [];
     if (!k && !have) {
       const w = walkLeg(o, rent, t);
       if (w.dist > 20) legs.push(w), (t = w.arr);
+      rentAt = t;
     }
     const end = k === places.length - 1;
-    const r = ride(at, end ? ret : pl, t, { take: !k && !have, give: end });
+    let r = ride(at, end ? ret : pl, t, { take: !k && !have, give: end });
     if (r.dist > BIKE_MAX_M) return null;
-    legs.push(r);
-    t = r.arr;
+    // Past the half hour on this ride: back at a dock by this stop, another bike from it.
+    const dock = swap && (have || k > 0) && (t - rentAt) / 1000 + r.dur > SWAP_SEC - 120 ? returnNear(at, bikes) : null;
+    if (dock) {
+      const back = ride(at, dock, t, { give: true });
+      legs.push({ ...back, park: undefined });
+      t = back.arr;
+      r = { ...ride(dock, end ? ret : pl, t, { take: true, give: end }), swap: true };
+      rentAt = t;
+    }
+    const long = swap ? swapRides([{ ...r, rent: r.rent || { ...r.from }, ret: r.ret || { ...r.to } }], bikes) : [r];
+    if (long.length > 1) {
+      // (Its first part as the ride was: on the bike you had, or the one taken.)
+      legs.push({ ...long[0], rent: r.rent, kept: r.kept }, ...long.slice(1, -1));
+      const tail = long.at(-1);
+      legs.push({ ...r, ...tail, rent: tail.rent, ret: r.ret, park: r.park, kept: undefined });
+      rentAt = tail.dep;
+    } else legs.push(r);
+    t = legs.at(-1).arr;
     if (end) {
       const w = walkLeg(ret, last, t);
       if (w.dist > 20) legs.push(w), (t = w.arr);
     }
-    out.push(finish({ src: 'keep', keep: true, legs }));
+    out.push(finish({ src: 'keep', keep: true, legs, rentAt }));
     at = pl;
   }
   return out;
@@ -1079,3 +1108,4 @@ export function keepWins(keep, whole) {
   const walked = whole?.length && whole.every(q => q.legs.every(l => l.mode === 'walk'));
   return !(walked && whole.at(-1).arr <= keep.at(-1).arr);
 }
+

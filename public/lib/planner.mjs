@@ -323,5 +323,18 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           lap('later', t3);
           return { plans: await finishOff(list, 2), sources: res.sources || {}, error: null };
         })().catch(() => null);
+  // By a time nothing gets you there for any more (07:21 for 08:00, the
+  // owner's 上學): the ways leaving now (the buses, the rides, each one's
+  // next times), each saying how late, not the trains of the day after it.
+  // The direct buses come in the second round: one of them in time, the
+  // arrival-time plans after all (竹東站 → 縣體育場 by 09:00 at 07:40).
+  const inTime = p => p.lead !== false && !p.weak && p.arr <= at + 2 * 60_000 && p.dep >= now - 2 * 60_000;
+  if (by === 'arrive' && at && !first.some(inTime)) {
+    const r = await planTrip(data, from, to, { modes: only });
+    const mark = list => list.map(p => ({ ...p, deadline: at }));
+    const nowLater = r.later?.then(o => (o ? { ...o, plans: mark(o.plans) } : o)) || Promise.resolve(null);
+    const after = (later || Promise.resolve(null)).then(o => (o?.plans?.some(inTime) ? o : nowLater));
+    return { ...r, plans: mark(r.plans), later: after };
+  }
   return { plans: first, sources: res.sources || {}, error: first.length ? null : res.err || null, later, ms };
 }

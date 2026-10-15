@@ -7,6 +7,7 @@
 //                     at the same moment, and what changed between them
 //   --all             every plan's card, not only the recommendations
 //   --at <ms>         leaving then (default: in 5 minutes)
+//   --by arrive       getting there by --at (a trip's 抵達 time; with --at HH:MM, today's)
 // Only public places here: a trip from home stays in captures/ (git-ignored).
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, symlinkSync, rmSync } from 'node:fs';
@@ -34,9 +35,11 @@ const BATCH = [
 const args = process.argv.slice(2);
 const opt = k => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
 const against = opt('--against');
-const at = Number(opt('--at')) || Date.now() + 5 * 60_000;
+const by = opt('--by') || 'depart';
+const atOpt = opt('--at');
+const at = /^\d\d?:\d\d$/.test(atOpt || '') ? (() => { const d = new Date(Date.now() + 8 * 3600_000); const [h, m] = atOpt.split(':').map(Number); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h - 8, m); })() : Number(atOpt) || Date.now() + 5 * 60_000;
 const all = args.includes('--all');
-const named = args.filter((a, i) => !a.startsWith('--') && !['--against', '--at'].includes(args[i - 1]));
+const named = args.filter((a, i) => !a.startsWith('--') && !['--against', '--at', '--by'].includes(args[i - 1]));
 const point = s => {
   const ll = PLACES[s] || s.split(',').map(Number);
   if (!(ll.length === 2 && ll.every(Number.isFinite))) throw new Error(`unknown place ${s} (a name above, or lat,lon)`);
@@ -51,7 +54,7 @@ if (against) {
   execFileSync('git', ['-C', here, 'worktree', 'add', '--detach', dir, against], { stdio: 'ignore' });
   try {
     symlinkSync(resolve(here, '.kit'), join(dir, '.kit'));
-    const run = cwd => execFileSync('node', [join(cwd, 'scripts/live.mjs'), ...named, '--at', String(at), ...(all ? ['--all'] : [])], { cwd, encoding: 'utf8', maxBuffer: 1 << 26 });
+    const run = cwd => execFileSync('node', [join(cwd, 'scripts/live.mjs'), ...named, '--at', String(at), '--by', by, ...(all ? ['--all'] : [])], { cwd, encoding: 'utf8', maxBuffer: 1 << 26 });
     // (The script itself from here: a ref from before it existed runs it too.)
     execFileSync('cp', [fileURLToPath(import.meta.url), join(dir, 'scripts/live.mjs')]);
     const [old, now] = [run(dir), run(here)];
@@ -86,7 +89,7 @@ const { hm } = await import('../public/lib/util.mjs');
 const leg = x =>
   x.mode === 'walk' ? `走${Math.round(x.dur / 60)}′` : x.mode === 'bike' ? `🚲${Math.round(x.dur / 60)}′→${x.to?.name || ''}` : `${x.mode}:${x.short || x.name || ''} ${x.from?.name || ''}→${x.to?.name || ''}`;
 for (const [a, b] of trips) {
-  const r = await planTrip(emptyData(), point(a), point(b), { at });
+  const r = await planTrip(emptyData(), point(a), point(b), { at, by });
   const res = (await r.later) || r;
   const shown = res.plans.filter(p => (all ? p.lead : p.top));
   console.log(`${a} → ${b}`);

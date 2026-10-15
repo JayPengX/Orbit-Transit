@@ -19,7 +19,7 @@ import { railNetwork, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
 import { pickSig } from './plan.mjs';
-import { canNav } from './nav.mjs';
+import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { icon, legChips, depChips } from './ui.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
@@ -363,13 +363,15 @@ function tripCard({ t, w }) {
     const deps = depChips(all, times, i, j => `data-go-dep="${e(w.id)}" data-lead="${at}" data-i="${j}"`).replace('ot-plan-deps', 'ot-plan-deps ot-go-deps');
     return `<div class="ot-go-plan-row"><button class="ot-go-plan" type="button" data-nav-trip="${e(w.id)}" data-i="${i}">
       <span class="ot-go-leave"><b>${e(leave(p.dep))}</b><small>${p.dep - Date.now() < 60 * 60_000 ? `${e(hm(p.dep))} 出發` : tw(p.dep).date !== tw().date ? `${e(dayLabel(tw(p.dep).date))}出發` : '建議出發'}</small></span>
-      <span class="ot-go-legs"><span class="ot-legs">${legChips(p.legs)}</span><small>${p.live ? '預計 ' : ''}${e(hm(p.arr))} 抵達 · ${e(minsText(p.dur))}${p.transfers ? ` · 轉乘 ${p.transfers}` : ''}${p.fareText ? ` · ${e(p.fareText)}` : ''}${p.live ? ' · <i class="ot-livedot"></i>即時' : ''}</small>${p.miss || p.off || p.late || p.rivers?.length ? `<small class="warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}`)}</small>` : ''}</span>
+      <span class="ot-go-legs"><span class="ot-legs">${legChips(p.legs)}</span><small>${p.live ? '預計 ' : ''}${e(hm(p.arr))} 抵達 · ${e(minsText(p.dur))}${p.transfers ? ` · 轉乘 ${p.transfers}` : ''}${p.fareText ? ` · ${e(p.fareText)}` : ''}${p.live ? ' · <i class="ot-livedot"></i>即時' : ''}</small>${p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length ? `<small class="warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? `比 ${hm(p.deadline)} 晚 ${lateBy(p, p.arr)} 分到` : '') || `${p.riverBy || '騎車'}過${p.rivers.join('、')}`)}</small>` : ''}</span>
       ${icon(canNav(p) ? 'route' : 'chevron')}</button><button class="q-icon-btn${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? '取消釘選這個方案' : '釘選這個方案'}">${icon('star')}</button>${deps}</div>`;
   };
+  // (By a time nothing reaches any more: said once, the ways below leaving now.)
+  const behind = w.by === 'arrive' && w.at && first.length && first.every(p => lateBy(p, p.arr)) ? `<p class="ot-note warn">${e(hm(w.at))} 前到不了了，現在出發最快的方式：</p>` : '';
   const more = S.more.has(w.id);
   const plans = first.map(row).join('') + (rest.length ? (more ? rest.map(row).join('') : '') + `<button class="ot-go-link" type="button" data-more-trip="${e(w.id)}">${more ? '收起' : `更多方案（${rest.length}）`}</button>` : '');
   const hint = all.length && !t.picks.length ? '<p class="ot-note ot-go-tip">按 ☆ 釘選你常搭的方案，它的下一班會排在最前面。</p>' : '';
-  return `<section class="ot-go-card">${head}${plans}${hint}${st.loading && !all.length ? '<p class="ot-note">找班次…</p>' : ''}${st.error && !all.length ? `<p class="ot-note">${e(st.error)}</p>` : ''}<button class="ot-go-link" type="button" data-all-trip="${e(w.id)}">在地圖上看所有方案 ${icon('chevron')}</button></section>`;
+  return `<section class="ot-go-card">${head}${behind}${plans}${hint}${st.loading && !all.length ? '<p class="ot-note">找班次…</p>' : ''}${st.error && !all.length ? `<p class="ot-note">${e(st.error)}</p>` : ''}<button class="ot-go-link" type="button" data-all-trip="${e(w.id)}">在地圖上看所有方案 ${icon('chevron')}</button></section>`;
 }
 
 function pinnedHtml() {
@@ -384,13 +386,15 @@ function pinnedHtml() {
       // No bus on its way: the timetable's next there (with its day, not today's); else what TDX says.
       const p = !(v?.status === 0 && v.sec != null) ? S.planned.get(r.stopUID) : null;
       const t = busWhen(v, p);
-      // Two lines, like a card in Maps: the line and which way, the time on
-      // the right; then where you get on → off, the whole width. ☆ to unpin
-      // is in the route's sheet (a tap away) and 我的.
-      // (A loop's sign naming where you get on, 往 火車站 at 火車站: where you get off says the way.)
+      // One row, as every bus here, the times in one column: the line, where
+      // you get on and (under it) where you get off; a ride with a way back
+      // has its 去程/回程 tag first on that line, a tap turning it round.
+      // ☆ to unpin is in the route's sheet (a tap away) and 我的.
+      // (A stop pinned alone: which way its buses go.)
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
-      const note = `往 ${e((r.headsign === r.stop && r.off?.stop) || r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}`;
-      return `<div class="ot-strip">${strip({ no: it.route, note, main: `${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}`, eta: t, wide: !!r.off, attrs: `data-route="${route}"` })}${it.back ? `<button class="ot-strip-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;
+      const dir = it.back ? `<span class="ot-strip-dir" role="button" data-flip="${e(it.id)}" aria-label="${r.back ? '回程，改看去程' : '去程，改看回程'}">${icon('swap')}${r.back ? '回程' : '去程'}</span>` : '';
+      const note = r.off ? `${dir}到 ${e(r.off.stop)}${it.n ? ` · ${it.n} 站` : ''}` : `往 ${e(r.headsign || '—')}`;
+      return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: t, attrs: `data-route="${route}"` })}</div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
@@ -446,17 +450,18 @@ function render() {
 // ---- Taps ---------------------------------------------------------------------------------------------
 
 function onClick(ev) {
-  const r = ev.target.closest('[data-route]');
-  if (r) {
-    const x = JSON.parse(r.dataset.route);
-    return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
-  }
+  // (The 去程/回程 tag is inside its row: turned round, not the route opened.)
   const fl = ev.target.closest('[data-flip]');
   if (fl) {
     const id = fl.dataset.flip;
     S.flip.has(id) ? S.flip.delete(id) : S.flip.add(id);
     render();
     return refresh();
+  }
+  const r = ev.target.closest('[data-route]');
+  if (r) {
+    const x = JSON.parse(r.dataset.route);
+    return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
   }
   const ub = ev.target.closest('[data-unpin-bus]');
   if (ub) {

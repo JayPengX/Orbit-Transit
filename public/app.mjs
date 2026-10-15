@@ -65,23 +65,17 @@ export const ctx = {
     if (q.active) await q.write({ payload: local.data }).catch(() => {});
   },
   // Where the device is now (asked again after a minute). iOS asked
-  // unprompted once (the kit's mayLocate): a phone that would ask again isn't
-  // asked at every open or minute; the last fix kept stands until 我的位置.
-  async locate({ force = false } = {}) {
-    if (!force && ctx.here && Date.now() - ctx.here.at < 60_000) return ctx.here;
-    if ((await mayLocate('orbit-transit.geo.asked', { force })) !== 'yes') return ctx.here;
-    let pos = await getPosition({ high: true, timeout: 8000 });
-    if (pos.error === 'timeout') pos = await getPosition({ high: false, timeout: 5000, maximumAge: 10 * 60_000 });
-    if (pos.error) return ctx.here;
-    ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: Date.now() };
-    local.here = ctx.here;
-    try {
-      const c = cityAt(await townships(), pos.lat, pos.lon);
-      if (c?.city) ctx.city = local.city = c.city;
-    } catch {}
-    saveLocal();
-    for (const fn of ctx.moved) fn(ctx.here);
-    return ctx.here;
+  // unprompted once (the kit's mayLocate), and again at each opening once it
+  // gave a fix (you allowed it: 2026-10-15, the owner, the map didn't go to
+  // where they were at launch). A quick Wi-Fi or cell fix first, GPS behind
+  // it (each one moves the map's dot).
+  locate({ force = false } = {}) {
+    if (!force && ctx.here && Date.now() - ctx.here.at < 60_000) return Promise.resolve(ctx.here);
+    // (One ask at a time: the map and the opening both ask at launch.)
+    if (!force && locating) return locating;
+    const p = (locating = locateNow(force));
+    p.finally(() => locating === p && (locating = null));
+    return p;
   },
   moved: [],
   // The TDX city of a point.
@@ -100,6 +94,37 @@ export const ctx = {
   onRefresh: [],
   refreshTabs: () => ctx.onRefresh.forEach(f => f())
 };
+let locating = null;
+async function locateNow(force) {
+  if ((await mayLocate('orbit-transit.geo.asked', { force: force || Boolean(local.here) })) !== 'yes') return ctx.here;
+  let got = null;
+  const fixed = pos => {
+    got = ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: Date.now() };
+    local.here = ctx.here;
+    saveLocal();
+    for (const fn of ctx.moved) fn(ctx.here);
+    towns.then(t => {
+      const c = t && cityAt(t, pos.lat, pos.lon);
+      if (c?.city) ctx.city = local.city = c.city;
+      saveLocal();
+    });
+  };
+  const towns = townships().catch(() => null);
+  const gps = getPosition({ high: true, timeout: 10_000, maximumAge: 10_000 }).then(pos => {
+    if (!pos.error && !(got && got.acc < pos.acc)) fixed(pos);
+    return pos;
+  });
+  const quick = await Promise.race([getPosition({ high: false, timeout: 3000, maximumAge: 60_000 }), gps]);
+  if (!quick.error) {
+    if (!got) fixed(quick);
+    return ctx.here;
+  }
+  if ((await gps).error) {
+    const late = await getPosition({ high: false, timeout: 5000, maximumAge: 10 * 60_000 });
+    if (!late.error) fixed(late);
+  }
+  return ctx.here;
+}
 // (A walk or a ride handed to Google's or Apple's Maps, as 我的 says.)
 useMapsApp(() => ctx.data.prefs?.maps);
 
