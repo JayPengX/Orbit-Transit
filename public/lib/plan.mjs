@@ -992,16 +992,18 @@ export function bikePoints(plans, o, d) {
 // plans as ranked; a walk or a ride of its own goes whenever you're there, a
 // bus or train only while it's still to leave; its recommendation first,
 // else the soonest there. → the later stretches' plans, or null while one
-// isn't planned (or nothing gets there).
+// isn't planned; where nothing gets there, those before it, `short` that
+// stretch's number (0: the first after p).
 export function chainOn(p, rests) {
   const out = [];
   let t = p.arr;
   for (const plans of rests) {
+    if (!plans) return null;
     const fit = (plans || [])
       .map(q => (vehicles(q).length ? q : shiftPlan(q, t - q.dep)))
       .filter(q => q.dep >= t - 60_000);
     const q = fit.find(x => x.top) || fit.filter(x => !x.weak).sort((a, b) => a.arr - b.arr)[0] || fit.sort((a, b) => a.arr - b.arr)[0];
-    if (!q) return null;
+    if (!q) return Object.assign(out, { short: out.length });
     out.push(q);
     t = q.arr;
   }

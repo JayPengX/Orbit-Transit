@@ -4853,3 +4853,34 @@ button.ot-nav-gm {
   font-size: 13px;
   font-weight: 800;
 }
+/* The trip's places the card's whole width: only 出發 shares its row with
+   對調, ☆ and ×; the places after it run under them (a stop's name had been
+   cut to two words beside the empty space under the buttons). */
+.ot-card-head:has(> .ot-od) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  column-gap: 12px;
+  row-gap: 6px;
+}
+.ot-card-head > .ot-od {
+  display: contents;
+}
+.ot-card-head > .ot-od > :first-child {
+  grid-column: 2;
+  grid-row: 1;
+}
+.ot-card-head > .ot-od > :not(:first-child) {
+  grid-column: 2 / -1;
+}
+.ot-card-head:has(> .ot-od) > :first-child {
+  grid-area: 1 / 1;
+}
+.ot-card-head:has(> .ot-od) > :nth-child(3) {
+  grid-area: 1 / 3;
+}
+.ot-card-head:has(> .ot-od) > :nth-child(4) {
+  grid-area: 1 / 4;
+}
+.ot-card-head:has(> .ot-od) > :nth-child(5) {
+  grid-area: 1 / 5;
+}
