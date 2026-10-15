@@ -17,8 +17,10 @@ import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
-import { setNavPush } from './alerts.mjs';
+import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
+import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
+import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
@@ -39,6 +41,12 @@ let stopWatch = () => {};
 let following = false;
 // The map placed: where it was left, at you, or where you went (arrive): the device's first fix doesn't move it then.
 let centered = false;
+let reopened = () => {};
+let leftAt = Infinity;
+const REOPEN_MS = 5 * 60_000;
+globalThis.document?.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') leftAt = Date.now();
+});
 
 // What other tabs use before the map was ever opened: saving and editing trips.
 export function register(c) {
@@ -103,11 +111,17 @@ export async function init(c) {
     drawMe(here);
     nearBikes();
     if (!centered) {
+      // (And keeps you in the middle as you move, as 我的位置 does, until a finger moves the map.)
       centered = true;
       map.setView(here.lat, here.lon, 16);
+      follow();
     } else if (following) map.setView(here.lat, here.lon);
   };
   ctx.moved.push(arrived);
+  reopened = () => {
+    centered = false;
+    ctx.locate().then(h => h && !centered && arrived(h));
+  };
   if (ctx.here) arrived(ctx.here);
   else ctx.locate();
   wireSearch();
@@ -121,6 +135,12 @@ export async function init(c) {
     if (card) renderCard();
   });
   onAlerts(() => card?.kind === 'bus' && renderCard());
+  // A YouBike rental timed: its chip ticking, its notice sent, the station's card saying what you can do there.
+  onRental(() => {
+    rentalTick();
+    if (card?.kind === 'bike') renderCard();
+  });
+  rentalTick();
   $('near-bikes').addEventListener('click', ev => {
     const b = ev.target.closest('[data-nb]');
     const s = shownBikes.find(x => x.uid === b?.dataset.nb);
@@ -186,8 +206,10 @@ function takePending() {
   pendingTrip = null;
   return t.nav ? showPlan(t.nav, t.from, t.to, t.resume) : plan(t.from, t.to, t.opts);
 }
-export function show() {
+export function show({ back = false } = {}) {
   map?.resize();
+  // Back after a while with nothing open: an opening again, the map on where you are now.
+  if (back && map && Date.now() - leftAt > REOPEN_MS && !card && !navFull() && !pendingTrip && !ctx.mapFocus) reopened();
   if (pendingTrip && map) return takePending();
   // Back to the app while navigating: the stage you're at again, once the page has its size.
   if (map && navFull()) setTimeout(() => {
@@ -270,6 +292,9 @@ async function locateMe() {
   const h = await ctx.locate({ force: true });
   if (!h) return ctx.status('無法取得位置：請在設定允許定位');
   map.setView(h.lat, h.lon, Math.max(map.zoom(), 16));
+  follow();
+}
+function follow() {
   following = true;
   stopWatch();
   stopWatch = watchPosition(p => {
@@ -595,7 +620,7 @@ function renderCard() {
         <div class="e"><b>${s.ebike}</b><span>⚡ 電輔車</span></div>
         <div class="d"><b>${s.ret}</b><span>可還空位</span></div>
       </div>
-      <p class="ot-note">${s.ok === false ? '暫停營運 · ' : ''}${s.cap ? `共 ${s.cap} 柱 · ` : ''}${e(ago(s.at))}</p>${err}${goThere(c, { bike: false })}${actions(c)}`;
+      <p class="ot-note">${s.ok === false ? '暫停營運 · ' : ''}${s.cap ? `共 ${s.cap} 柱 · ` : ''}${e(ago(s.at))}</p>${err}${goThere(c, { bike: false })}${rentButtons()}${actions(c)}`;
   } else if (c.kind === 'bus') {
     const s = c.item;
     const live = Array.isArray(c.live) ? c.live : null;
@@ -716,6 +741,16 @@ async function cardClick(ev) {
     return plan(null, placeOf(card));
   }
   if (act === 'pin') return pinSheet(placeOf(card));
+  if (act === 'rent-start' || act === 'rent-swap') {
+    const s = card.live || card.item;
+    startRental(s);
+    return ctx.status(act === 'rent-swap' ? `換了一台：重新計時${bikeSwap(ctx.data.prefs) ? '，又有 30 分鐘免費' : ''}` : `開始計時：${s.name} 借車`);
+  }
+  if (act === 'rent-end') {
+    const r = rental();
+    endRental();
+    return ctx.status(r ? `已還車，騎了 ${rentClock(Date.now() - r.at)}` : '已還車');
+  }
   if (act === 'walk-there' || act === 'bike-there') return directTo(card, act === 'walk-there' ? 'walk' : 'bike');
   if (act === 'edit-pin') return ctx.editPlace?.(ev.target.closest('[data-id]').dataset.id);
   if (act === 'back') return card.back ? openCard(card.back) : closeCard();
@@ -1045,12 +1080,114 @@ function drawPlaces() {
   map?.layer('places').set(navFull() ? [] : ctx.data.places.map(placeMarker));
 }
 
+// ---- A YouBike rental timed (rental.mjs) -------------------------------------------------------------
+
+const rentClock = ms => {
+  const m = Math.max(0, Math.floor(ms / 60_000));
+  return m >= 60 ? `${Math.floor(m / 60)} 小時 ${m % 60} 分` : `${m} 分`;
+};
+// The chip first in the row above the map: how long you've had it; with
+// TPASS, the free minutes left (amber the last 5, red past them).
+function rentalChip() {
+  const r = rental();
+  if (!r) return '';
+  const ms = Date.now() - r.at;
+  const swap = bikeSwap(ctx.data.prefs);
+  const left = FREE_MS - ms;
+  const cls = swap ? (left <= 0 ? ' over' : ms >= WARN_MS ? ' warn' : '') : '';
+  return `<button class="q-chip ot-rent-chip${cls}" type="button" data-chip="rental" aria-label="YouBike 計時">${icon('bike')}<b>${e(rentClock(ms))}</b>${swap ? `<small>${left > 0 ? `免費剩 ${Math.ceil(left / 60_000)} 分` : '已過 30 分'}</small>` : ''}</button>`;
+}
+let rentTimer = 0;
+function rentalTick() {
+  const r = rental();
+  const swap = bikeSwap(ctx.data.prefs);
+  setBikePush(rentalPush(r, swap));
+  clearInterval(rentTimer);
+  rentTimer = 0;
+  const paint = () => {
+    const chip = $('map-chips').querySelector('[data-chip="rental"]');
+    const html = rentalChip();
+    if (chip && html) chip.outerHTML = html;
+    else drawChips();
+    const now = rental();
+    if (now && swap && !now.warned && Date.now() - now.at >= WARN_MS) {
+      markWarned();
+      notifyLocal('YouBike 已騎 25 分鐘', '5 分鐘內還車再借一台，下一段仍免費（點地圖上的計時看附近的站）', `transit:bike:${now.at}`);
+    }
+  };
+  // (The timer first: a notice marked from paint redraws through here.)
+  if (r) rentTimer = setInterval(paint, 20_000);
+  paint();
+}
+// On a station's card: 我在這裡借車了, or (renting) 在這裡還車 and, with TPASS, 在這裡換一台.
+function rentButtons() {
+  const r = rental();
+  return `<div class="ot-go-there">${
+    r
+      ? `<button class="q-btn" type="button" data-card="rent-end">${icon('dock')} 在這裡還車</button>${bikeSwap(ctx.data.prefs) ? `<button class="q-btn" type="button" data-card="rent-swap">${icon('bike')} 在這裡換一台</button>` : ''}`
+      : `<button class="q-btn" type="button" data-card="rent-start">${icon('bike')} 我在這裡借車了</button>`
+  }</div>`;
+}
+// The timer's sheet: since when, until when it's free, and (TPASS) the
+// stations near you to return it at and take another, the way you're
+// going first; one tapped opens on the map.
+async function rentalSheet() {
+  const r = rental();
+  if (!r) return drawChips();
+  const swap = bikeSwap(ctx.data.prefs);
+  const d = sheet(`${sheetHead('YouBike 計時', e(`${hm(r.at)} 借車${r.station?.name ? `・${r.station.name}` : ''}`))}<div class="ot-rent-body"></div>`);
+  const body = d.querySelector('.ot-rent-body');
+  let near = [];
+  const paint = (loading = false) => {
+    const ms = Date.now() - r.at;
+    const free = swap ? (FREE_MS - ms > 0 ? `免費到 ${hm(r.at + FREE_MS)}` : '已超過免費的 30 分鐘') : '';
+    const docks = !swap
+      ? ''
+      : `<h4 class="ot-res-h">還車再借一台，又有 30 分鐘免費</h4>${
+          loading ? '<p class="ot-note">找附近的站…</p>' : near.length ? near.map(({ s, d: m }) => `<button class="ot-row-btn" type="button" data-rent-st="${e(s.uid)}">${icon('dock')}<span><b>${e(s.name)}</b><small>${e(distText(m))}・空位 ${s.ret}・可借 ${s.bikes + (s.ebike || 0)}</small></span></button>`).join('') : `<p class="ot-note">${ctx.here ? '附近 800 公尺內沒有可還又可借的站' : '需要你的位置，才找得到附近的站'}</p>`
+        }`;
+    body.innerHTML = `<p class="ot-rent-now"><b>${e(rentClock(ms))}</b>${free ? `<span>${e(free)}</span>` : ''}</p>${docks}<div class="ot-rent-acts"><button class="q-btn" type="button" data-rent="swap">換了一台</button><button class="q-btn primary" type="button" data-rent="end">已還車</button></div>`;
+  };
+  paint(swap);
+  d.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-rent]');
+    if (b) {
+      d.close();
+      if (b.dataset.rent === 'end') {
+        endRental();
+        ctx.status(`已還車，騎了 ${rentClock(Date.now() - r.at)}`);
+      } else {
+        startRental(r.station);
+        ctx.status(`換了一台：重新計時${swap ? '，又有 30 分鐘免費' : ''}`);
+      }
+      return;
+    }
+    const st = near.find(x => x.s.uid === ev.target.closest('[data-rent-st]')?.dataset.rentSt)?.s;
+    if (st) {
+      d.close();
+      arrive({ kind: 'bike', item: st, lat: st.lat, lon: st.lon });
+    }
+  });
+  if (!swap) return;
+  try {
+    const h = ctx.here;
+    const city = h && (await ctx.cityOf(h.lat, h.lon));
+    const list = city ? await cityBikes(city).catch(() => []) : [];
+    // (Navigating: the way you're going.)
+    const n = navNow();
+    near = swapDocks(h, list, { toward: n?.plan?.dest || n?.plan?.legs?.at(-1)?.to || null });
+  } catch {}
+  if (d.open) paint();
+}
+
 function drawChips() {
   drawPlaces();
   $('map-chips').innerHTML =
+    rentalChip() +
     ctx.data.places.map(p => `<button class="q-chip" type="button" data-place="${e(p.id)}">${PLACE_ICONS[p.icon] || '📍'} ${e(p.name)}</button>`).join('') +
     `<button class="q-chip ot-chip-muted" type="button" data-chip="pin">${icon('plus')} 釘選地點</button>`;
   $('map-chips').onclick = ev => {
+    if (ev.target.closest('[data-chip="rental"]')) return rentalSheet();
     const pl = ev.target.closest('[data-place]');
     if (pl) {
       const p = ctx.data.places.find(x => x.id === pl.dataset.place);
@@ -1156,7 +1293,7 @@ async function plan(from, to, opts = {}) {
   // `then`: the places after this one, in order (a trip with stops: here to
   // the first, and on from each to the next once there).
   const then = (opts.then || []).filter(x => x?.lat != null).slice(0, MAX_STOPS);
-  card = { kind: 'plans', from: fromPt, fromHere: !from, to: dest, then, have: Boolean(opts.keep), lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
+  card = { kind: 'plans', from: fromPt, fromHere: !from, to: dest, then, have: Boolean(opts.keep || rental()), since: opts.since ?? rental()?.at ?? null, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
   ctx.status('');
   document.body.classList.add('ot-planning');
   renderCard();
@@ -1248,7 +1385,7 @@ async function planRest(c) {
     const cities = [...new Set(await Promise.all(pts.map(x => ctx.cityOf(x.lat, x.lon))))].filter(Boolean);
     const bikes = (await Promise.all(cities.map(x => cityBikes(x).catch(() => [])))).flat();
     const first = c.plans.find(p => p.tags?.includes('推薦')) || c.plans[0];
-    const k = card === c && keepBike(c.from, [c.to, ...c.then], bikes, c.have ? Date.now() : first.dep, { have: c.have });
+    const k = card === c && keepBike(c.from, [c.to, ...c.then], bikes, c.have ? Date.now() : first.dep, { have: c.have, swap: bikeSwap(ctx.data.prefs), since: c.since ?? Date.now() });
     if (k) {
       const whole = restOf(c, first);
       // (The recommendation unless a stop is far or it's all a short walk: keepWins.)
@@ -1365,8 +1502,8 @@ function plansHtml(c) {
     return `<button class="ot-plan${on ? ' on' : ''}${mini ? ' mini' : ''}" type="button" data-plan="${i}">
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText((arr - p.dep) / 1000))}</b><span class="ot-plan-time">${e(timeRange(p.dep, arr))}</span>${mini ? '' : p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
         <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="第 ${k} 站">${k}</span>` : ''}${chips(q)}`).join('')}</div>${on ? deps(lead, i) : ''}
-        ${mini ? '' : `<div class="ot-plan-sub">${facts.filter(Boolean).map(e).join(' · ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${c.then.length ? '同一台騎到最後才還，停留時也在計費' : '騎著的這台，到這裡還'}</div>` : ''}
-        ${!mini && (p.miss || p.off || p.late || p.rivers?.length) ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
+        ${mini ? '' : `<div class="ot-plan-sub">${facts.filter(Boolean).map(e).join(' · ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then.length ? '騎著的這台，到這裡還' : bikeSwap(ctx.data.prefs) ? '同一台騎到底，快滿 30 分鐘時在站旁換一台' : '同一台騎到最後才還，停留時也在計費'}</div>` : ''}
+        ${!mini && (p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length) ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? `比 ${hm(p.deadline)} 晚 ${lateBy(p, p.arr)} 分到` : '') || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
   };
@@ -1696,7 +1833,11 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       if (next) {
         closeCard();
         when = { by: 'now', at: null };
-        return plan(null, next[0], { then: next.slice(1), keep: how.plan?.keep && how.plan.legs.some(l => l.mode === 'bike') });
+        // (On one YouBike kept, parked here: it rides on from here; its rental from when it really began, a stay included.)
+        const kp = how.plan;
+        const parked = Boolean(kp?.keep && kp.legs.some(l => l.park));
+        const since = parked && kp.rentAt != null ? (kp.rentAt >= kp.dep ? Date.now() - (kp.arr - kp.rentAt) : kp.rentAt) : null;
+        return plan(null, next[0], { then: next.slice(1), keep: parked, since });
       }
       if (how.arrived || !card) return closeCard();
       // (Ended by hand: the trip's way off the map, whatever card is open; the plans it came from draw theirs again.

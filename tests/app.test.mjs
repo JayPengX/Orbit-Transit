@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
+import { swapDocks, rentalPush } from '../public/lib/rental.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike, keepWins } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
@@ -657,6 +658,12 @@ test('by a departure time: a plan that has you leave before it sinks out; riding
   // By an arrival time: what arrives late goes, what arrives before stays.
   const arr = rank([early, after], { now: T('06:30'), by: 'arrive', deadline: T('06:30'), clock: T('05:00'), o, d });
   assert.deepEqual(arr.map(p => p.legs[0].short), ['YouBike']);
+  // Nothing gets there by the time any more (07:21 for 08:00): the soonest
+  // there from now first, never the one leaving latest (16:20, the owner's 上學).
+  const soonL = finish({ legs: [leg('bus', '快捷8號', '07:45', '08:35')] });
+  const lateL = finish({ legs: [leg('tra', '區間 1828', '16:20', '17:15')] });
+  const out = rank([lateL, soonL], { now: T('08:00'), by: 'arrive', deadline: T('08:00'), clock: T('07:21'), o, d });
+  assert.equal(out[0].legs[0].short, '快捷8號');
   // 55 minutes on a bike against 50 by bus with a change: the bus first.
   const ride = finish({ legs: [leg('bike', 'YouBike', '06:05', '07:00')] });
   const mid = { name: '竹東', lat: 24.777, lon: 121.053 };
@@ -2113,4 +2120,36 @@ test('a trip with stops: one YouBike kept is recommended over buses, unless a st
   assert.equal(keepWins(keep, [q('walk', 0, 6), q('walk', 6, 14)]), false);
   assert.equal(keepWins(keep, [q('walk', 0, 10), q('walk', 10, 25)]), true);
   assert.equal(keepWins(null, []), false);
+});
+
+test('one YouBike the whole trip with TPASS’s free half hour: kept through close stops, swapped at a stop’s dock before the rental passes 30 minutes', () => {
+  const st = (uid, lat, lon) => ({ uid, name: uid, lat, lon, bikes: 5, ebike: 0, ret: 5, open: true });
+  const T = Date.parse('2026-10-15T12:00:00Z');
+  const bikes = [st('A', 24.8030, 120.9700), st('M', 24.8101, 120.9951), st('Z', 24.8131, 121.0051)];
+  const o = { name: '', lat: 24.8026, lon: 120.9702 };
+  const places = [{ name: '一', lat: 24.8040, lon: 120.9720 }, { name: '二', lat: 24.8100, lon: 120.9950 }, { name: '家', lat: 24.8130, lon: 121.0050 }];
+  // Rides of minutes, no stay: one bike, parked at each stop.
+  const k = keepBike(o, places, bikes, T, { swap: true });
+  assert.deepEqual(k.flatMap(q => q.legs.filter(l => l.mode === 'bike').map(l => l.rent?.uid || (l.kept ? 'kept' : '?'))), ['A', 'kept', 'kept']);
+  // On it at 二 since 25 minutes ago (a long stay at 一): returned at M by 二, another taken there.
+  const h = keepBike(places[1], places.slice(2), bikes, T, { have: true, swap: true, since: T - 25 * 60_000 });
+  const rides = h[0].legs.filter(l => l.mode === 'bike');
+  assert.equal(rides[0].ret.uid, 'M');
+  assert.equal(rides[1].rent.uid, 'M');
+  assert.equal(h[0].rentAt, rides[1].dep);
+  // Without TPASS: kept, whatever the stay.
+  assert.ok(keepBike(places[1], places.slice(2), bikes, T, { have: true, since: T - 25 * 60_000 })[0].legs[0].kept);
+});
+
+test('a YouBike rental timed: with TPASS a notice at 25 minutes; where to return it and take another, a dock and a bike there, the way you’re going first', () => {
+  const T = Date.now();
+  assert.deepEqual(rentalPush({ at: T }, true).map(x => x.at), [T + 25 * 60_000]);
+  assert.deepEqual(rentalPush({ at: T }, false), []);
+  assert.deepEqual(rentalPush({ at: T - 40 * 60_000 }, true), []);
+  const st = (uid, lat, lon, x = {}) => ({ uid, name: uid, lat, lon, bikes: 3, ebike: 0, ret: 3, ok: true, ...x });
+  const here = { lat: 24.8000, lon: 120.9700 };
+  const bikes = [st('behind', 24.7990, 120.9700), st('ahead', 24.8011, 120.9700), st('full', 24.8001, 120.9700, { ret: 0 }), st('empty', 24.8002, 120.9700, { bikes: 0 }), st('far', 24.8200, 120.9700)];
+  assert.deepEqual(swapDocks(here, bikes).map(x => x.s.uid), ['behind', 'ahead']);
+  assert.deepEqual(swapDocks(here, bikes, { toward: { lat: 24.81, lon: 120.97 } }).map(x => x.s.uid), ['ahead', 'behind']);
+  assert.deepEqual(swapDocks(null, bikes), []);
 });
