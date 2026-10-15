@@ -2114,3 +2114,22 @@ test('a trip with stops: one YouBike kept is recommended over buses, unless a st
   assert.equal(keepWins(keep, [q('walk', 0, 10), q('walk', 10, 25)]), true);
   assert.equal(keepWins(null, []), false);
 });
+
+test('one YouBike the whole trip with TPASS’s free half hour: kept through close stops, swapped at a stop’s dock before the rental passes 30 minutes', () => {
+  const st = (uid, lat, lon) => ({ uid, name: uid, lat, lon, bikes: 5, ebike: 0, ret: 5, open: true });
+  const T = Date.parse('2026-10-15T12:00:00Z');
+  const bikes = [st('A', 24.8030, 120.9700), st('M', 24.8101, 120.9951), st('Z', 24.8131, 121.0051)];
+  const o = { name: '', lat: 24.8026, lon: 120.9702 };
+  const places = [{ name: '一', lat: 24.8040, lon: 120.9720 }, { name: '二', lat: 24.8100, lon: 120.9950 }, { name: '家', lat: 24.8130, lon: 121.0050 }];
+  // Rides of minutes, no stay: one bike, parked at each stop.
+  const k = keepBike(o, places, bikes, T, { swap: true });
+  assert.deepEqual(k.flatMap(q => q.legs.filter(l => l.mode === 'bike').map(l => l.rent?.uid || (l.kept ? 'kept' : '?'))), ['A', 'kept', 'kept']);
+  // On it at 二 since 25 minutes ago (a long stay at 一): returned at M by 二, another taken there.
+  const h = keepBike(places[1], places.slice(2), bikes, T, { have: true, swap: true, since: T - 25 * 60_000 });
+  const rides = h[0].legs.filter(l => l.mode === 'bike');
+  assert.equal(rides[0].ret.uid, 'M');
+  assert.equal(rides[1].rent.uid, 'M');
+  assert.equal(h[0].rentAt, rides[1].dep);
+  // Without TPASS: kept, whatever the stay.
+  assert.ok(keepBike(places[1], places.slice(2), bikes, T, { have: true, since: T - 25 * 60_000 })[0].legs[0].kept);
+});
