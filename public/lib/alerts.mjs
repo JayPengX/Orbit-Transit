@@ -31,7 +31,7 @@ function keep() {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {}
   listeners.forEach(f => f());
-  push?.schedule([...list.map(pushItem), ...navItems]);
+  push?.schedule([...list.map(pushItem), ...navItems, ...bikeItems]);
   if (list.length && !timer) timer = setInterval(check, 20_000);
   if (!list.length && timer) {
     clearInterval(timer);
@@ -58,6 +58,17 @@ export function setNavPush(items) {
   navItems = items || [];
   keep();
 }
+
+// A YouBike rental's notice (rental.mjs), sent with them too.
+let bikeItems = [];
+export function setBikePush(items) {
+  const next = items || [];
+  if (JSON.stringify(next) === JSON.stringify(bikeItems)) return;
+  bikeItems = next;
+  keep();
+}
+// Told now: the status line, a buzz, a notification when they're allowed.
+export const notifyLocal = (text, body, tag) => notify(text, body, tag);
 
 export const alerts = () => list;
 export const onAlerts = f => listeners.add(f);

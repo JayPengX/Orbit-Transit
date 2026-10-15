@@ -4884,3 +4884,43 @@ button.ot-nav-gm {
 .ot-card-head:has(> .ot-od) > :nth-child(5) {
   grid-area: 1 / 5;
 }
+/* A YouBike rental timed: its chip first above the map (amber its last 5 free minutes, red past them), its sheet. */
+.ot-map-chips .ot-rent-chip {
+  gap: 6px;
+  border-color: color-mix(in srgb, var(--q-accent) 45%, transparent);
+}
+.ot-rent-chip b {
+  font-variant-numeric: tabular-nums;
+}
+.ot-rent-chip small {
+  color: var(--q-text-2);
+  font-size: 12px;
+}
+.ot-map-chips .ot-rent-chip.warn {
+  border-color: #f59e0b;
+  background: rgba(60, 40, 8, 0.95);
+}
+.ot-map-chips .ot-rent-chip.over {
+  border-color: #ef4444;
+  background: rgba(64, 14, 14, 0.95);
+}
+.ot-rent-now {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+.ot-rent-now b {
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.ot-rent-now span {
+  color: var(--q-text-2);
+  font-size: 15px;
+}
+.ot-rent-acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
