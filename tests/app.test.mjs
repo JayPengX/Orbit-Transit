@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
+import { swapDocks, rentalPush } from '../public/lib/rental.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike, keepWins } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
@@ -2132,4 +2133,17 @@ test('one YouBike the whole trip with TPASS’s free half hour: kept through clo
   assert.equal(h[0].rentAt, rides[1].dep);
   // Without TPASS: kept, whatever the stay.
   assert.ok(keepBike(places[1], places.slice(2), bikes, T, { have: true, since: T - 25 * 60_000 })[0].legs[0].kept);
+});
+
+test('a YouBike rental timed: with TPASS a notice at 25 minutes; where to return it and take another, a dock and a bike there, the way you’re going first', () => {
+  const T = Date.now();
+  assert.deepEqual(rentalPush({ at: T }, true).map(x => x.at), [T + 25 * 60_000]);
+  assert.deepEqual(rentalPush({ at: T }, false), []);
+  assert.deepEqual(rentalPush({ at: T - 40 * 60_000 }, true), []);
+  const st = (uid, lat, lon, x = {}) => ({ uid, name: uid, lat, lon, bikes: 3, ebike: 0, ret: 3, ok: true, ...x });
+  const here = { lat: 24.8000, lon: 120.9700 };
+  const bikes = [st('behind', 24.7990, 120.9700), st('ahead', 24.8011, 120.9700), st('full', 24.8001, 120.9700, { ret: 0 }), st('empty', 24.8002, 120.9700, { bikes: 0 }), st('far', 24.8200, 120.9700)];
+  assert.deepEqual(swapDocks(here, bikes).map(x => x.s.uid), ['behind', 'ahead']);
+  assert.deepEqual(swapDocks(here, bikes, { toward: { lat: 24.81, lon: 120.97 } }).map(x => x.s.uid), ['ahead', 'behind']);
+  assert.deepEqual(swapDocks(null, bikes), []);
 });
