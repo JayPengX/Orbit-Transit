@@ -8,7 +8,7 @@
 // starts navigation.
 
 import { createMap } from './map.mjs';
-import { fitNumbers } from '#kit/quadra.mjs';
+import { fitNumbers, netState } from '#kit/quadra.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, stationEta, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
@@ -87,7 +87,8 @@ export async function init(c) {
   try {
     map = await createMap($('map'), { provider: cfg.provider, key: cfg.key, center, zoom: view?.z || 16, onPick: pick, onTap: tap, onIdle: idle, onPlace: googlePlace, onDrag: dragged });
   } catch (err) {
-    $('map').innerHTML = `<p class="ot-empty">地圖載入失敗：${e(err.message)}</p>`;
+    // (No connection the first time, before the phone kept the map: said plainly, not a script's address.)
+    $('map').innerHTML = `<p class="ot-empty">${netState() === 'online' ? `地圖載入失敗：${e(err.message)}` : '沒有網路連線，地圖連上網路後載入'}</p>`;
     return isReady();
   }
   // Each opening, the map goes to where you are now once the phone says

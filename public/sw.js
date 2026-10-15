@@ -36,7 +36,20 @@ async function keep(request, response) {
   await cache.put(request, response);
 }
 
+// A poor connection: the network gets this long before a kept copy answers
+// (the network's copy still saved for next time). It had no limit: on a slow
+// connection each file the page imports waited out the network in turn.
+const PATIENCE_MS = 2500;
 async function networkFirst(request) {
+  const kept = request.mode === 'navigate' ? null : await caches.match(request);
+  if (kept) {
+    const fresh = networkFirstNow(request);
+    const late = new Promise(done => setTimeout(() => done(kept), PATIENCE_MS));
+    return Promise.race([fresh.catch(() => kept), late]);
+  }
+  return networkFirstNow(request);
+}
+async function networkFirstNow(request) {
   try {
     // The page itself is checked with the server every time (a cheap 304
     // when unchanged): GitHub Pages lets browsers keep it 10 minutes, which
@@ -46,7 +59,8 @@ async function networkFirst(request) {
     await keep(request, response.clone());
     return response;
   } catch (error) {
-    const cached = (await caches.match(request, { ignoreSearch: request.mode === 'navigate' })) || (request.mode === 'navigate' && (await caches.match('./')));
+    // Offline: this file as kept, else any version of it kept (the kit's ?v= changes with each of its deploys).
+    const cached = (await caches.match(request)) || (await caches.match(request, { ignoreSearch: true })) || (request.mode === 'navigate' && (await caches.match('./')));
     if (cached) return cached;
     throw error;
   }
@@ -67,9 +81,16 @@ async function pageFirst(event) {
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
-  const response = await fetch(request);
-  await keep(request, response.clone());
-  return response;
+  try {
+    const response = await fetch(request);
+    await keep(request, response.clone());
+    return response;
+  } catch (error) {
+    // Offline with another version kept (the kit noted a newer one): that one, rather than no app at all.
+    const other = await caches.match(request, { ignoreSearch: true });
+    if (other) return other;
+    throw error;
+  }
 }
 
 self.addEventListener('fetch', event => {

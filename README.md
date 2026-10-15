@@ -24,6 +24,8 @@ A change to how plans are recommended follows TRUTH §4's six steps (see
 it live, find the rule, a failing test, the case live again, the whole
 batch old against new, say what moved).
 
+**Without a connection** (the kit's `onlineOnly`): live arrivals and plans need it, so the app is covered (沒有網路連線, 即時到站和路線規劃需要網路連線, 重試) rather than showing old bus times; back by itself once online. The map, if it can't load, says 沒有網路連線 rather than a script's address.
+
 ## Contents
 
 - [The tabs](#the-tabs)
