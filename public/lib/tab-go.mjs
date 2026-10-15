@@ -390,7 +390,7 @@ function pinnedHtml() {
       // (A loop's sign naming where you get on, 往 火車站 at 火車站: where you get off says the way.)
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
       const note = `往 ${e((r.headsign === r.stop && r.off?.stop) || r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}`;
-      return `<div class="ot-strip">${strip({ no: it.route, note, main: `${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}`, eta: t, attrs: `data-route="${route}"` })}${it.back ? `<button class="ot-strip-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;
+      return `<div class="ot-strip">${strip({ no: it.route, note, main: `${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}`, eta: t, wide: !!r.off, attrs: `data-route="${route}"` })}${it.back ? `<button class="ot-strip-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
