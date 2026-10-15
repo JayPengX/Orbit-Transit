@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides, stopGroups } from '../public/lib/bus.mjs';
@@ -2069,4 +2069,33 @@ test('a trip with stops, whole: each later stretch from when you’re at its sta
   const cut = chainOn(first, [[walkP(0, 5)], [busP(0, 2)]]);
   assert.equal(cut.length, 1);
   assert.equal(cut.short, 1);
+});
+
+test('a trip with stops by one YouBike kept to the last place: taken near you, parked at each stop, returned near the last', () => {
+  const st = (uid, lat, lon) => ({ uid, name: uid, lat, lon, bikes: 5, ebike: 0, ret: 5, open: true });
+  const bikes = [st('A', 24.8030, 120.9700), st('Z', 24.8180, 121.0160)];
+  const o = { name: '', lat: 24.8026, lon: 120.9702 };
+  const places = [{ name: '一', lat: 24.8060, lon: 120.9800 }, { name: '二', lat: 24.8100, lon: 120.9950 }, { name: '家', lat: 24.8176, lon: 121.0165 }];
+  const T = Date.parse('2026-10-15T12:00:00Z');
+  const k = keepBike(o, places, bikes, T);
+  assert.equal(k.length, 3);
+  assert.equal(k[0].legs.find(l => l.mode === 'bike').rent.uid, 'A');
+  assert.ok(k[0].legs.at(-1).park && k[1].legs[0].kept && k[1].legs[0].park);
+  assert.equal(k[2].legs.find(l => l.mode === 'bike').ret.uid, 'Z');
+  assert.ok(k[1].dep >= k[0].arr && k[2].dep >= k[1].arr);
+  // On it already: no walk to a station, no bike taken.
+  const h = keepBike(places[0], places.slice(1), bikes, T, { have: true });
+  assert.equal(h[0].legs[0].mode, 'bike');
+  assert.ok(h[0].legs[0].kept);
+  // No dock near the last place: none.
+  assert.equal(keepBike(o, places, bikes.slice(0, 1), T), null);
+});
+
+test('one YouBike kept: its station at the first stop, not near you: there on foot, the bike from there', () => {
+  const st = (uid, lat, lon) => ({ uid, name: uid, lat, lon, bikes: 5, ebike: 0, ret: 5, open: true });
+  const o = { name: '', lat: 24.8000, lon: 120.9700 };
+  const places = [{ name: '一', lat: 24.8030, lon: 120.9700 }, { name: '家', lat: 24.8176, lon: 121.0165 }];
+  const k = keepBike(o, places, [st('A', 24.8031, 120.9701), st('Z', 24.8180, 121.0160)], Date.parse('2026-10-15T12:00:00Z'));
+  assert.deepEqual(k[0].legs.map(l => l.mode), ['walk']);
+  assert.equal(k[1].legs.find(l => l.mode === 'bike').rent.uid, 'A');
 });

@@ -1010,3 +1010,49 @@ export function chainOn(p, rests) {
   return out;
 }
 const shiftPlan = (q, d) => (d ? { ...q, dep: q.dep + d, arr: q.arr + d, legs: q.legs.map(l => ({ ...l, dep: l.dep + d, arr: l.arr + d })) } : q);
+
+// A trip with stops by one YouBike, kept (locked by each place) and returned
+// only near the last (the owner, 2026-10-15). `have`: you're on it already
+// (navigating, at a stop): it rides from o. → each stretch's plan (the bike
+// taken at the first, returned at the last), or null with no bike near o, no
+// dock near the last place, or a ride too long.
+export function keepBike(o, places, bikes, dep, { have = false } = {}) {
+  const last = places.at(-1);
+  const rent = have ? null : rentNear(o, bikes, { to: places[0], first: true });
+  const ret = returnNear(last, bikes, { from: places.at(-2) || rent || o });
+  if ((!have && !rent) || !ret) return null;
+  // (The station nearest the bike's way at the first stop rather than here: there on foot, the bike from there.)
+  if (rent && places.length > 1 && meters(rent.lat, rent.lon, places[0].lat, places[0].lon) < meters(rent.lat, rent.lon, o.lat, o.lon)) {
+    const w = walkLeg(o, places[0], dep);
+    const rest = keepBike(places[0], places.slice(1), bikes, w.arr);
+    return rest && [finish({ src: 'keep', keep: true, legs: [w] }), ...rest];
+  }
+  // (A ride from or to a place, not a station: no docking there.)
+  const ride = (a, b, t, { take = false, give = false } = {}) => {
+    const dist = Math.round(roadM(a, b));
+    const dur = rideSec(dist / 1.25) + (take + give) * DOCK_SEC;
+    return { mode: 'bike', name: 'YouBike', from: { name: a.name || '', lat: a.lat, lon: a.lon }, to: { name: b.name || '', lat: b.lat, lon: b.lon }, dur, dist, dep: t, arr: t + dur * 1000, ...(take ? { rent: a } : { kept: true }), ...(give ? { ret: b } : { park: true }) };
+  };
+  const out = [];
+  let at = have ? o : rent;
+  let t = dep;
+  for (const [k, pl] of places.entries()) {
+    const legs = [];
+    if (!k && !have) {
+      const w = walkLeg(o, rent, t);
+      if (w.dist > 20) legs.push(w), (t = w.arr);
+    }
+    const end = k === places.length - 1;
+    const r = ride(at, end ? ret : pl, t, { take: !k && !have, give: end });
+    if (r.dist > BIKE_MAX_M) return null;
+    legs.push(r);
+    t = r.arr;
+    if (end) {
+      const w = walkLeg(ret, last, t);
+      if (w.dist > 20) legs.push(w), (t = w.arr);
+    }
+    out.push(finish({ src: 'keep', keep: true, legs }));
+    at = pl;
+  }
+  return out;
+}
