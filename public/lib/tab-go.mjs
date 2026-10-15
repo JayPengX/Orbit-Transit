@@ -386,13 +386,13 @@ function pinnedHtml() {
       // No bus on its way: the timetable's next there (with its day, not today's); else what TDX says.
       const p = !(v?.status === 0 && v.sec != null) ? S.planned.get(r.stopUID) : null;
       const t = busWhen(v, p);
-      // Two lines, like a card in Maps: the line and which way, the time on
-      // the right; then where you get on → off, the whole width. ☆ to unpin
-      // is in the route's sheet (a tap away) and 我的.
-      // (A loop's sign naming where you get on, 往 火車站 at 火車站: where you get off says the way.)
+      // One row, as every bus here: the line, where you get on and (under it)
+      // where you get off, the time on the right; ⇅ beside it turns the ride
+      // round. ☆ to unpin is in the route's sheet (a tap away) and 我的.
+      // (A stop pinned alone: which way its buses go.)
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
-      const note = `往 ${e((r.headsign === r.stop && r.off?.stop) || r.headsign || '—')}${it.n ? ` · ${it.n} 站` : ''}`;
-      return `<div class="ot-strip">${strip({ no: it.route, note, main: `${e(r.stop)}${r.off ? `<i>→</i>${e(r.off.stop)}` : ''}`, eta: t, wide: !!r.off, attrs: `data-route="${route}"` })}${it.back ? `<button class="ot-strip-flip" type="button" data-flip="${e(it.id)}" aria-label="反方向">${icon('swap')}<span>${r.back ? '回程' : '去程'}</span></button>` : ''}</div>`;
+      const note = r.off ? `到 ${e(r.off.stop)}${it.n ? ` · ${it.n} 站` : ''}` : `往 ${e(r.headsign || '—')}`;
+      return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: t, attrs: `data-route="${route}"` })}${it.back ? `<button class="q-icon-btn ot-strip-flip" type="button" data-flip="${e(it.id)}" aria-label="${r.back ? '回程：改看去程' : '去程：改看回程'}">${icon('swap')}</button>` : ''}</div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
