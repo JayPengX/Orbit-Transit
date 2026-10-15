@@ -1503,7 +1503,7 @@ function plansHtml(c) {
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText((arr - p.dep) / 1000))}</b><span class="ot-plan-time">${e(timeRange(p.dep, arr))}</span>${mini ? '' : p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
         <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="第 ${k} 站">${k}</span>` : ''}${chips(q)}`).join('')}</div>${on ? deps(lead, i) : ''}
         ${mini ? '' : `<div class="ot-plan-sub">${facts.filter(Boolean).map(e).join(' · ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then.length ? '騎著的這台，到這裡還' : bikeSwap(ctx.data.prefs) ? '同一台騎到底，快滿 30 分鐘時在站旁換一台' : '同一台騎到最後才還，停留時也在計費'}</div>` : ''}
-        ${!mini && (p.miss || p.off || p.late || p.rivers?.length) ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
+        ${!mini && (p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length) ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? `比 ${hm(p.deadline)} 晚 ${lateBy(p, p.arr)} 分到` : '') || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
   };

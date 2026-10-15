@@ -633,6 +633,10 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // from it), or arriving after it, is no plan, unless it's all there is.
   const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 : p.dep >= now - 2 * 60_000));
   const ok = fits.length ? fits : all;
+  // By a time already out of reach (07:21 for 08:00): ranked as leaving now,
+  // the soonest there first; "how long before the time you leave" would put
+  // the one leaving latest first (16:20, the owner's 上學, 2026-10-16).
+  if (by === 'arrive' && deadline && !fits.length) [by, now, deadline] = ['depart', clock, null];
   // One plan per way (sameWay): walking or riding to the same bus, boarding
   // the same train a station up the line, 電輔車 or not: only the best of them.
   const scored = [];

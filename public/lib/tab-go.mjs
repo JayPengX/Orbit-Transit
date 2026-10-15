@@ -19,7 +19,7 @@ import { railNetwork, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
 import { pickSig } from './plan.mjs';
-import { canNav } from './nav.mjs';
+import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { icon, legChips, depChips } from './ui.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
@@ -363,13 +363,15 @@ function tripCard({ t, w }) {
     const deps = depChips(all, times, i, j => `data-go-dep="${e(w.id)}" data-lead="${at}" data-i="${j}"`).replace('ot-plan-deps', 'ot-plan-deps ot-go-deps');
     return `<div class="ot-go-plan-row"><button class="ot-go-plan" type="button" data-nav-trip="${e(w.id)}" data-i="${i}">
       <span class="ot-go-leave"><b>${e(leave(p.dep))}</b><small>${p.dep - Date.now() < 60 * 60_000 ? `${e(hm(p.dep))} 出發` : tw(p.dep).date !== tw().date ? `${e(dayLabel(tw(p.dep).date))}出發` : '建議出發'}</small></span>
-      <span class="ot-go-legs"><span class="ot-legs">${legChips(p.legs)}</span><small>${p.live ? '預計 ' : ''}${e(hm(p.arr))} 抵達 · ${e(minsText(p.dur))}${p.transfers ? ` · 轉乘 ${p.transfers}` : ''}${p.fareText ? ` · ${e(p.fareText)}` : ''}${p.live ? ' · <i class="ot-livedot"></i>即時' : ''}</small>${p.miss || p.off || p.late || p.rivers?.length ? `<small class="warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}`)}</small>` : ''}</span>
+      <span class="ot-go-legs"><span class="ot-legs">${legChips(p.legs)}</span><small>${p.live ? '預計 ' : ''}${e(hm(p.arr))} 抵達 · ${e(minsText(p.dur))}${p.transfers ? ` · 轉乘 ${p.transfers}` : ''}${p.fareText ? ` · ${e(p.fareText)}` : ''}${p.live ? ' · <i class="ot-livedot"></i>即時' : ''}</small>${p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length ? `<small class="warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? `比 ${hm(p.deadline)} 晚 ${lateBy(p, p.arr)} 分到` : '') || `${p.riverBy || '騎車'}過${p.rivers.join('、')}`)}</small>` : ''}</span>
       ${icon(canNav(p) ? 'route' : 'chevron')}</button><button class="q-icon-btn${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? '取消釘選這個方案' : '釘選這個方案'}">${icon('star')}</button>${deps}</div>`;
   };
+  // (By a time nothing reaches any more: said once, the ways below leaving now.)
+  const behind = w.by === 'arrive' && w.at && first.length && first.every(p => lateBy(p, p.arr)) ? `<p class="ot-note warn">${e(hm(w.at))} 前到不了了，現在出發最快的方式：</p>` : '';
   const more = S.more.has(w.id);
   const plans = first.map(row).join('') + (rest.length ? (more ? rest.map(row).join('') : '') + `<button class="ot-go-link" type="button" data-more-trip="${e(w.id)}">${more ? '收起' : `更多方案（${rest.length}）`}</button>` : '');
   const hint = all.length && !t.picks.length ? '<p class="ot-note ot-go-tip">按 ☆ 釘選你常搭的方案，它的下一班會排在最前面。</p>' : '';
-  return `<section class="ot-go-card">${head}${plans}${hint}${st.loading && !all.length ? '<p class="ot-note">找班次…</p>' : ''}${st.error && !all.length ? `<p class="ot-note">${e(st.error)}</p>` : ''}<button class="ot-go-link" type="button" data-all-trip="${e(w.id)}">在地圖上看所有方案 ${icon('chevron')}</button></section>`;
+  return `<section class="ot-go-card">${head}${behind}${plans}${hint}${st.loading && !all.length ? '<p class="ot-note">找班次…</p>' : ''}${st.error && !all.length ? `<p class="ot-note">${e(st.error)}</p>` : ''}<button class="ot-go-link" type="button" data-all-trip="${e(w.id)}">在地圖上看所有方案 ${icon('chevron')}</button></section>`;
 }
 
 function pinnedHtml() {

@@ -658,6 +658,12 @@ test('by a departure time: a plan that has you leave before it sinks out; riding
   // By an arrival time: what arrives late goes, what arrives before stays.
   const arr = rank([early, after], { now: T('06:30'), by: 'arrive', deadline: T('06:30'), clock: T('05:00'), o, d });
   assert.deepEqual(arr.map(p => p.legs[0].short), ['YouBike']);
+  // Nothing gets there by the time any more (07:21 for 08:00): the soonest
+  // there from now first, never the one leaving latest (16:20, the owner's 上學).
+  const soonL = finish({ legs: [leg('bus', '快捷8號', '07:45', '08:35')] });
+  const lateL = finish({ legs: [leg('tra', '區間 1828', '16:20', '17:15')] });
+  const out = rank([lateL, soonL], { now: T('08:00'), by: 'arrive', deadline: T('08:00'), clock: T('07:21'), o, d });
+  assert.equal(out[0].legs[0].short, '快捷8號');
   // 55 minutes on a bike against 50 by bus with a change: the bus first.
   const ride = finish({ legs: [leg('bike', 'YouBike', '06:05', '07:00')] });
   const mid = { name: '竹東', lat: 24.777, lon: 121.053 };
