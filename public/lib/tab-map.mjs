@@ -41,6 +41,12 @@ let stopWatch = () => {};
 let following = false;
 // The map placed: where it was left, at you, or where you went (arrive): the device's first fix doesn't move it then.
 let centered = false;
+let reopened = () => {};
+let leftAt = Infinity;
+const REOPEN_MS = 5 * 60_000;
+globalThis.document?.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') leftAt = Date.now();
+});
 
 // What other tabs use before the map was ever opened: saving and editing trips.
 export function register(c) {
@@ -105,11 +111,17 @@ export async function init(c) {
     drawMe(here);
     nearBikes();
     if (!centered) {
+      // (And keeps you in the middle as you move, as 我的位置 does, until a finger moves the map.)
       centered = true;
       map.setView(here.lat, here.lon, 16);
+      follow();
     } else if (following) map.setView(here.lat, here.lon);
   };
   ctx.moved.push(arrived);
+  reopened = () => {
+    centered = false;
+    ctx.locate().then(h => h && !centered && arrived(h));
+  };
   if (ctx.here) arrived(ctx.here);
   else ctx.locate();
   wireSearch();
@@ -194,8 +206,10 @@ function takePending() {
   pendingTrip = null;
   return t.nav ? showPlan(t.nav, t.from, t.to, t.resume) : plan(t.from, t.to, t.opts);
 }
-export function show() {
+export function show({ back = false } = {}) {
   map?.resize();
+  // Back after a while with nothing open: an opening again, the map on where you are now.
+  if (back && map && Date.now() - leftAt > REOPEN_MS && !card && !navFull() && !pendingTrip && !ctx.mapFocus) reopened();
   if (pendingTrip && map) return takePending();
   // Back to the app while navigating: the stage you're at again, once the page has its size.
   if (map && navFull()) setTimeout(() => {
@@ -278,6 +292,9 @@ async function locateMe() {
   const h = await ctx.locate({ force: true });
   if (!h) return ctx.status('無法取得位置：請在設定允許定位');
   map.setView(h.lat, h.lon, Math.max(map.zoom(), 16));
+  follow();
+}
+function follow() {
   following = true;
   stopWatch();
   stopWatch = watchPosition(p => {
