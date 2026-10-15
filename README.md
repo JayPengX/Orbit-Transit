@@ -397,8 +397,8 @@ node ../Shared-Proxy/tools/preview.mjs transit go --webkit
   on old and new code at the same moment.
 - **The preview tool**: made-up TDX around 新竹車站, the NLSC map. Tabs:
   `go`, `times`, `me`.
-- **Deploy**: a push to `main` runs the tests, stamps versions and
-  deploys `public/`; the kit puts a new deploy in place at once.
+- **Deploy**: a push to `main` runs the tests, stamps versions
+  (`scripts/stamp-version.mjs`; the kit modules its first screen imports are listed as modulepreload (the kit's `preload.mjs`)) and deploys `public/`; the kit puts a new deploy in place at once.
 
 ## What depends on what
 
