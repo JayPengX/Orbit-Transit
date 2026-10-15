@@ -3293,8 +3293,8 @@ main {
 
 /* A bus route as a row, one look wherever a route is listed (查時刻, 交通,
    a stop's card; bus-ui.mjs strip): its number in a badge on the left, the
-   main words over a quiet note, the next bus on the right; a ☆, 🔔 or
-   ⇅ (a pinned ride turned round) beside it. Words shrink to their room (fitStrips), never wrap or
+   main words over a quiet note, the next bus on the right; a ☆ or 🔔
+   beside it (a pinned ride's 去程/回程 is a tag in its note). Words shrink to their room (fitStrips), never wrap or
    cut. While its time is asked, bars hold each line's place (.ot-skel). */
 .ot-strip {
   display: flex;
@@ -3425,16 +3425,30 @@ main {
   flex: none;
   align-self: center;
 }
-.ot-strip-flip.q-icon-btn {
-  flex: none;
-  align-self: center;
-  width: 36px;
-  height: 36px;
-  margin-left: 8px;
+.ot-strip-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 6px;
+  padding: 1px 7px 1px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--q-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: 1px;
 }
-.ot-strip-flip .ot-i {
-  width: 17px;
-  height: 17px;
+.ot-strip-dir .ot-i {
+  width: 12px;
+  height: 12px;
+}
+:root[data-theme='light'] .ot-strip-dir {
+  background: rgba(0, 0, 0, 0.06);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .ot-strip-dir {
+    background: rgba(0, 0, 0, 0.06);
+  }
 }
 .ot-note.ot-off-note {
   margin: 4px 0 8px;

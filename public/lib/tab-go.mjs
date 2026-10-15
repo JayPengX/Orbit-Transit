@@ -386,13 +386,15 @@ function pinnedHtml() {
       // No bus on its way: the timetable's next there (with its day, not today's); else what TDX says.
       const p = !(v?.status === 0 && v.sec != null) ? S.planned.get(r.stopUID) : null;
       const t = busWhen(v, p);
-      // One row, as every bus here: the line, where you get on and (under it)
-      // where you get off, the time on the right; ⇅ beside it turns the ride
-      // round. ☆ to unpin is in the route's sheet (a tap away) and 我的.
+      // One row, as every bus here, the times in one column: the line, where
+      // you get on and (under it) where you get off; a ride with a way back
+      // has its 去程/回程 tag first on that line, a tap turning it round.
+      // ☆ to unpin is in the route's sheet (a tap away) and 我的.
       // (A stop pinned alone: which way its buses go.)
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
-      const note = r.off ? `到 ${e(r.off.stop)}${it.n ? ` · ${it.n} 站` : ''}` : `往 ${e(r.headsign || '—')}`;
-      return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: t, attrs: `data-route="${route}"` })}${it.back ? `<button class="q-icon-btn ot-strip-flip" type="button" data-flip="${e(it.id)}" aria-label="${r.back ? '回程：改看去程' : '去程：改看回程'}">${icon('swap')}</button>` : ''}</div>`;
+      const dir = it.back ? `<span class="ot-strip-dir" role="button" data-flip="${e(it.id)}" aria-label="${r.back ? '回程，改看去程' : '去程，改看回程'}">${icon('swap')}${r.back ? '回程' : '去程'}</span>` : '';
+      const note = r.off ? `${dir}到 ${e(r.off.stop)}${it.n ? ` · ${it.n} 站` : ''}` : `往 ${e(r.headsign || '—')}`;
+      return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: t, attrs: `data-route="${route}"` })}</div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
@@ -448,17 +450,18 @@ function render() {
 // ---- Taps ---------------------------------------------------------------------------------------------
 
 function onClick(ev) {
-  const r = ev.target.closest('[data-route]');
-  if (r) {
-    const x = JSON.parse(r.dataset.route);
-    return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
-  }
+  // (The 去程/回程 tag is inside its row: turned round, not the route opened.)
   const fl = ev.target.closest('[data-flip]');
   if (fl) {
     const id = fl.dataset.flip;
     S.flip.has(id) ? S.flip.delete(id) : S.flip.add(id);
     render();
     return refresh();
+  }
+  const r = ev.target.closest('[data-route]');
+  if (r) {
+    const x = JSON.parse(r.dataset.route);
+    return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
   }
   const ub = ev.target.closest('[data-unpin-bus]');
   if (ub) {
