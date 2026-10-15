@@ -1605,11 +1605,15 @@ async function navigate(p, resume = null, { swap = false } = {}) {
         when = { by: 'now', at: null };
         return plan(null, next[0], { then: next.slice(1) });
       }
-      if (how.arrived) closeCard();
-      else if (card === c && c) {
-        $('card').hidden = false;
-        renderCard();
-      }
+      if (how.arrived || !card) return closeCard();
+      // (Ended by hand: the trip's way off the map, whatever card is open; the plans it came from draw theirs again.
+      // Reopened mid-trip, no card came with it: the line and its end had stayed.)
+      map.lines('plan', []);
+      planDraw++;
+      map.layer('plan').set([]);
+      $('card').hidden = false;
+      renderCard();
+      if (card.plans?.length) drawPlan(card.plans[card.sel >= 0 ? card.sel : 0], { fit: false });
     }
   });
   // (Only the way on the map now.)
