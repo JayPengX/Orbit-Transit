@@ -12,7 +12,7 @@
 //   我的    places, trips, pinned transit, preferences (ways of moving,
 //           TPASS), the metro maps
 
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate } from '#kit/quadra.mjs';
+import { quadraSession, topActions, installGate, watchUpdates, tabBar, tell, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate, keepOffline, onlineOnly } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
@@ -226,4 +226,7 @@ document.addEventListener('visibilitychange', () => {
   TABS.find(t => t.id === bar.current)?.mod.show?.({ again: false, back: true });
 });
 
-if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js').catch(() => {});
+// Opens without a connection: the kit registers the worker and has it keep every file loaded.
+keepOffline();
+// Every screen is live (an old copy would read as now): no connection, the kit's cover, not the saved copy.
+onlineOnly({ zh: '即時到站和路線規劃需要網路連線', en: 'Live arrivals and trips need a connection.' });
