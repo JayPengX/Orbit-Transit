@@ -19,7 +19,7 @@ import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
-import { pickSig, bikeTrip, finish, chainOn, keepBike } from './plan.mjs';
+import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
@@ -1198,7 +1198,10 @@ async function plan(from, to, opts = {}) {
     if (!o?.plans?.length || card !== c || navFull() || Object.keys(c.choice || {}).length) return;
     const open = c.plans[c.sel];
     c.plans = walkHereNow(o.plans);
-    if (c.keepPlan) c.have ? c.plans.unshift(c.keepPlan) : c.plans.push(c.keepPlan);
+    if (c.keepPlan?.tags.includes('推薦')) {
+      for (const q of c.plans) q.tags = (q.tags || []).filter(t => t !== '推薦');
+      c.plans.unshift(c.keepPlan);
+    } else if (c.keepPlan) c.plans.push(c.keepPlan);
     c.sel = open ? c.plans.findIndex(p => pickSig(p) === pickSig(open) && Math.abs(p.dep - open.dep) < 60_000) : -1;
     renderCard();
     if (c.sel < 0 && c.plans.length) {
@@ -1248,10 +1251,13 @@ async function planRest(c) {
     const k = card === c && keepBike(c.from, [c.to, ...c.then], bikes, c.have ? Date.now() : first.dep, { have: c.have });
     if (k) {
       const whole = restOf(c, first);
-      const p = { ...k[0], later: k.slice(1), lead: true, weak: false, times: [], tags: ['全程 YouBike'] };
-      p.top = c.have || !whole || k.at(-1).arr < (whole.at(-1) || first).arr;
+      // (The recommendation unless a stop is far or it's all a short walk: keepWins.)
+      const wins = c.have || keepWins(k, whole && [first, ...whole]);
+      const p = { ...k[0], later: k.slice(1), lead: true, weak: false, times: [], tags: wins ? ['推薦', '全程 YouBike'] : ['全程 YouBike'] };
+      p.top = wins || !whole || k.at(-1).arr < (whole.at(-1) || first).arr;
       c.keepPlan = p;
-      if (c.have) {
+      if (wins) for (const q of c.plans) q.tags = (q.tags || []).filter(t => t !== '推薦');
+      if (wins) {
         c.plans.unshift(p);
         if (c.sel >= 0) c.sel++;
       } else c.plans.push(p);

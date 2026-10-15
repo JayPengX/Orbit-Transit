@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike, keepWins } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides, stopGroups } from '../public/lib/bus.mjs';
@@ -2098,4 +2098,19 @@ test('one YouBike kept: its station at the first stop, not near you: there on fo
   const k = keepBike(o, places, [st('A', 24.8031, 120.9701), st('Z', 24.8180, 121.0160)], Date.parse('2026-10-15T12:00:00Z'));
   assert.deepEqual(k[0].legs.map(l => l.mode), ['walk']);
   assert.equal(k[1].legs.find(l => l.mode === 'bike').rent.uid, 'A');
+});
+
+test('a trip with stops: one YouBike kept is recommended over buses, unless a stop is far or walking it all is sooner', () => {
+  const T = Date.parse('2026-10-15T12:00:00Z');
+  const m = n => T + n * 60_000;
+  const q = (mode, a, b) => ({ dep: m(a), arr: m(b), legs: [{ mode, dep: m(a), arr: m(b), dur: (b - a) * 60 }] });
+  const keep = [q('bike', 0, 8), q('bike', 8, 15)];
+  // Buses sooner: still the bike.
+  assert.equal(keepWins(keep, [q('bus', 0, 6), q('bus', 6, 12)]), true);
+  // A stop far away (a 25′ ride): not.
+  assert.equal(keepWins([q('bike', 0, 8), q('bike', 8, 33)], [q('bus', 0, 6), q('bus', 6, 20)]), false);
+  // Walking it all, sooner: not; slower: the bike.
+  assert.equal(keepWins(keep, [q('walk', 0, 6), q('walk', 6, 14)]), false);
+  assert.equal(keepWins(keep, [q('walk', 0, 10), q('walk', 10, 25)]), true);
+  assert.equal(keepWins(null, []), false);
 });
