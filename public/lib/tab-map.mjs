@@ -19,7 +19,7 @@ import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush } from './alerts.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
-import { pickSig, bikeTrip, finish } from './plan.mjs';
+import { pickSig, bikeTrip, finish, chainOn } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange } from './ui.mjs';
@@ -1190,6 +1190,7 @@ async function plan(from, to, opts = {}) {
       roadLegs(c.plans[0], { roads: false });
     }
     if (opts.nav && c.plans[opts.index || 0]) navigate(c.plans[opts.index || 0]);
+    if (c.then.length && c.plans.length) planRest(c);
   }
   // The direct buses and every bus's times come a moment later: the list
   // ranked again, the plan open (if one is) kept open, unless a time was picked.
@@ -1205,6 +1206,33 @@ async function plan(from, to, opts = {}) {
     }
   });
 }
+
+// A trip with stops: each later stretch planned too, from when the
+// recommended way gets you to its start, so every way on the card is the
+// whole trip (the owner, 2026-10-15: planned to the first stop alone, a 3′
+// walk was the trip). Navigating, each stretch is planned again once there.
+async function planRest(c) {
+  c.rest = [];
+  let prev = c.to;
+  for (const x of c.then) {
+    const rec = c.plans.find(p => p.tags?.includes('推薦')) || c.plans[0];
+    const at = (c.rest.length ? chainOn(rec, c.rest)?.at(-1)?.arr : rec.arr) || rec.arr;
+    let plans = [];
+    try {
+      const o = await planTrip(ctx.data, prev, x, { at: Math.max(at, Date.now()), by: 'depart', modes: tripModes });
+      const later = await o.later?.catch(() => null);
+      plans = later?.plans?.length ? later.plans : o.plans;
+    } catch {}
+    if (card !== c) return;
+    c.rest.push(plans);
+    prev = x;
+  }
+  renderCard();
+  drawPlan(c.plans[c.sel >= 0 ? c.sel : 0], { fit: false });
+}
+// A way on a card with stops, the whole trip: its later stretches (null
+// while they're being planned, or nothing gets there).
+const restOf = (c, p) => (c?.then?.length && c.rest?.length === c.then.length ? chainOn(p, c.rest) : null);
 
 // 出發時間 / 抵達時間: a day (today, tomorrow…) and a time, for this trip
 // (its other ways of moving, its stops, turned round); a new trip is from
@@ -1283,10 +1311,18 @@ function plansHtml(c) {
   const row = (p, i, lead = i) => {
     const on = i === c.sel;
     const mini = open && !on;
+    // With stops: the whole trip, each stretch after its stop's number (the time and the facts all of it).
+    const later = restOf(c, p);
+    const all = [p, ...(later || [])];
+    const arr = all.at(-1).arr;
+    const sum = k => all.reduce((a, q) => a + (q[k] || 0), 0);
+    const facts = later
+      ? [leaveText(p), sum('transfers') ? `轉乘 ${sum('transfers')} 次` : '不必轉乘', sum('walk') > 50 ? `步行 ${distText(sum('walk'))}` : '', sum('fare') ? `NT$${sum('fare')}` : '']
+      : [leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : ''), c.then?.length ? `到第 1 站，後面 ${c.then.length} 段規劃中…` : ''];
     return `<button class="ot-plan${on ? ' on' : ''}${mini ? ' mini' : ''}" type="button" data-plan="${i}">
-        <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText(p.dur))}</b><span class="ot-plan-time">${e(timeRange(p.dep, p.arr))}</span>${mini ? '' : p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
-        <div class="ot-legs">${legChips(p.legs)}</div>${on ? deps(lead, i) : ''}
-        ${mini ? '' : `<div class="ot-plan-sub">${[leaveText(p), p.transfers ? `轉乘 ${p.transfers} 次` : '不必轉乘', p.walk > 50 ? `步行 ${distText(p.walk)}` : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')].filter(Boolean).map(e).join(' · ')}</div>`}
+        <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="釘選的方案">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText((arr - p.dep) / 1000))}</b><span class="ot-plan-time">${e(timeRange(p.dep, arr))}</span>${mini ? '' : p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(t)}</span>`).join('')}</div>
+        <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="第 ${k} 站">${k}</span>` : ''}${legChips(q.legs)}`).join('')}</div>${on ? deps(lead, i) : ''}
+        ${mini ? '' : `<div class="ot-plan-sub">${facts.filter(Boolean).map(e).join(' · ')}</div>`}
         ${!mini && (p.miss || p.off || p.late || p.rivers?.length) ? `<div class="ot-plan-sub warn">${e(p.off || p.miss || p.late || `${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`)}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
@@ -1347,7 +1383,14 @@ function togglePick(c, p) {
 const bikeEnd = (k, name, tags) =>
   `<span class="ot-bike-end"><i class="ot-bike-k">${k}</i><span class="ot-bike-at"><span class="ot-bike-name">${e(name)}</span>${tags.length ? `<span class="ot-bike-tags">${tags.map(([a, n]) => `<span class="ot-bike-tag${Number(n) ? '' : ' none'}">${a}<b>${e(String(n))}</b></span>`).join('')}</span>` : ''}</span></span>`;
 function stepsHtml(p, c = card) {
-  return `<ol class="ot-steps">${p.legs
+  // With stops: each stretch's steps, 抵達 each stop between them.
+  const later = restOf(c, p) || [];
+  const stopAt = (q, k) => `<li class="stop"><span class="ot-step-time">${e(hm(q.arr))}</span><span class="ot-step-i">${k + 1}</span><span class="ot-step-what"><b>抵達 ${e([c.to, ...c.then][k]?.name || '')}</b></span></li>`;
+  return `<ol class="ot-steps">${[p, ...later].map((q, k) => `${k ? stopAt([p, ...later][k - 1], k - 1) : ''}${stepItems(q.legs)}`).join('')}<li class="end"><span class="ot-step-time">${e(hm((later.at(-1) || p).arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>抵達${later.length ? ` ${e(c.then.at(-1).name || '')}` : ''}</b></span></li></ol>
+    <span class="ot-plan-acts">${canNav(p) ? `<span class="q-btn primary" role="button" data-card="nav">${icon('route')} 開始導航</span>` : `<span class="ot-nav-later">${e(hm(p.dep - NAV_LEAD))} 起可以開始導航</span>`}<span class="q-btn${picked(c, p) ? ' on' : ''}" role="button" data-card="pick">${icon('star')} ${picked(c, p) ? '已釘選' : '釘選這個方案'}</span></span>`;
+}
+function stepItems(legs) {
+  return legs
     .map(l => {
       const c = legColor(l);
       const what =
@@ -1358,8 +1401,7 @@ function stepsHtml(p, c = card) {
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(l.from.name)} → ${e(l.to.name)}${l.stops ? ` · ${l.stops} 站` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
       return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="即時"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
-    .join('')}<li class="end"><span class="ot-step-time">${e(hm(p.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>抵達</b></span></li></ol>
-    <span class="ot-plan-acts">${canNav(p) ? `<span class="q-btn primary" role="button" data-card="nav">${icon('route')} 開始導航</span>` : `<span class="ot-nav-later">${e(hm(p.dep - NAV_LEAD))} 起可以開始導航</span>`}<span class="q-btn${picked(c, p) ? ' on' : ''}" role="button" data-card="pick">${icon('star')} ${picked(c, p) ? '已釘選' : '釘選這個方案'}</span></span>`;
+    .join('');
 }
 
 function selectPlan(i) {
@@ -1458,6 +1500,9 @@ export const bikeReturns = legs =>
 let planDraw = 0;
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
+  // A way on a card with stops: the whole trip, to its last place.
+  const later = lit < 0 && card?.plans?.includes(p) ? restOf(card, p) : null;
+  if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: card.then.at(-1) };
   // (Its own YouBike stations, only: drawLayers.)
   if (!navFull()) drawLayers();
   const lines = [];

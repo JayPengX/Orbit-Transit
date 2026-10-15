@@ -4831,3 +4831,25 @@ button.ot-nav-gm {
 
 /* The kit's segmented control in a sheet. */
 .ot-dir, .ot-view { margin: 10px 0; }
+/* A trip with stops: each stretch after its stop's number, in the green of the stops' dots. */
+.ot-leg-stop {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 4px;
+  border: 2px solid var(--q-accent);
+  border-radius: 50%;
+  color: var(--q-text);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ot-steps li.stop .ot-step-i {
+  border: 2px solid var(--q-accent);
+  border-radius: 50%;
+  background: none;
+  color: var(--q-text);
+  font-size: 13px;
+  font-weight: 800;
+}
