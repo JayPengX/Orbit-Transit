@@ -526,7 +526,17 @@ export const ridesSig = p =>
 // A pinned recommendation's way, whatever the day's train numbers and each
 // planner's names for things (快捷8號 / 快捷8, 竹北車站 / 竹北): the buses
 // and metro by their line, the trains by where you get on and off.
-const norm = x => String(x || '').replace(/\s+/g, '').replace(/[號线線]/g, '').replace(/[（(].*$/, '').replace(/^高鐵/, '').replace(/(火車站|車站|站)$/, '').replace(/台/g, '臺').toUpperCase();
+// (Each name worked out once: the ranking compares every plan with every other.)
+const normed = new Map();
+const norm = x => {
+  const k = String(x || '');
+  let v = normed.get(k);
+  if (v === undefined) {
+    if (normed.size > 2000) normed.clear();
+    normed.set(k, (v = k.replace(/\s+/g, '').replace(/[號线線]/g, '').replace(/[（(].*$/, '').replace(/^高鐵/, '').replace(/(火車站|車站|站)$/, '').replace(/台/g, '臺').toUpperCase()));
+  }
+  return v;
+};
 // A station however a source writes it: 竹北火車站, 臺鐵竹北車站 and 竹北 are one.
 const station = n => norm(n).replace(/^(臺鐵|高鐵)/, '').replace(/(火車站|車站|站)$/, '') || norm(n);
 // A plan's rides, a train changed for another train one ride (竹東 → 新竹

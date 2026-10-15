@@ -12,9 +12,16 @@ export function tw(t = Date.now()) {
   return { date: iso.slice(0, 10), hm: iso.slice(11, 16), min: d.getUTCHours() * 60 + d.getUTCMinutes(), dow: d.getUTCDay() };
 }
 // A Taiwan date and 'HH:MM[:SS]' (hours may pass 24 for after midnight) → ms.
+// (Each date's midnight worked out once: a trip reads timetables thousands of times.)
+const midnights = new Map();
 export function twAt(date, hm) {
   const [h, m, s = 0] = String(hm).split(':').map(Number);
-  return Date.parse(`${date}T00:00:00+08:00`) + ((h * 60 + m) * 60 + s) * 1000;
+  let day = midnights.get(date);
+  if (day === undefined) {
+    if (midnights.size > 60) midnights.clear();
+    midnights.set(date, (day = Date.parse(`${date}T00:00:00+08:00`)));
+  }
+  return day + ((h * 60 + m) * 60 + s) * 1000;
 }
 export const hm = t => (t == null ? '' : tw(t).hm);
 export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00+08:00`) + n * 86_400_000 + TPE).toISOString().slice(0, 10);

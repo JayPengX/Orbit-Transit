@@ -51,9 +51,10 @@ export async function cityFinder() {
   };
 }
 
-// Our train plans that end far from the place, finished by a direct bus.
+// Our train plans that end far from the place, finished by a direct bus
+// (each train's looked for side by side).
 async function trainThenBus(plans, to, now) {
-  const out = [];
+  const jobs = [];
   const tried = new Set();
   for (const p of plans) {
     const k = p.legs.findLastIndex(l => RAIL.has(l.mode));
@@ -63,10 +64,9 @@ async function trainThenBus(plans, to, now) {
     const key = `${off.to.name}|${Math.round(off.arr / 600_000)}`;
     if (tried.has(key) || tried.size >= 3) continue;
     tried.add(key);
-    const links = await busLink(off.to, to, off.arr + 2 * 60_000, { now }).catch(() => []);
-    for (const b of links) out.push(finish({ ...p, src: 'rail+bus', legs: [...p.legs.slice(0, k + 1), ...b.legs], live: b.live }));
+    jobs.push(busLink(off.to, to, off.arr + 2 * 60_000, { now }).then(links => links.map(b => finish({ ...p, src: 'rail+bus', legs: [...p.legs.slice(0, k + 1), ...b.legs], live: b.live })), () => []));
   }
-  return out;
+  return (await Promise.all(jobs)).flat();
 }
 
 // A bus to the station where a bike won't do: without YouBike, to each
@@ -130,6 +130,19 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // To be there by a time: our own trains and buses looked for from two
   // hours before it (four for a long trip); the ranking keeps what gets in.
   const tS = by === 'arrive' ? Math.max(now, t0 - (meters(from.lat, from.lon, to.lat, to.lon) > 60_000 ? 2 : 1) * ARRIVE_EARLY) : t0;
+  // The planners (Google's in a tenth of a second, TDX's in seconds for a
+  // long trip, by YouBike most) and the day's trains asked first: nothing
+  // they need waits on the township list (a first trip's fifth of a second).
+  let t = performance.now();
+  const ask = src =>
+    routePlans(from, to, { at, by, modes: modeList(prefs), src })
+      .catch(err => ({ plans: [], sources: {}, err }))
+      .finally(() => lap(`planners:${src}`, t));
+  let tdxIn = null;
+  const tdxAsk = ask('tdx').then(r => (tdxIn = r));
+  const googleAsk = ask('google');
+  const netAsk = useRail ? railNetwork(tw(tS).date, { next: by !== 'arrive' && tw(t0).min >= 21 * 60 }) : null;
+  netAsk?.catch(() => {});
   const findCity = await cityFinder();
   // Each point's city as it was looked up, for the 除錯紀錄 (a replay needs no township list).
   const cities = {};
@@ -140,32 +153,25 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const useTrain = x => modes[x.sys] !== false && (!passTrip || (x.sys === 'tra' && !PREMIUM.has(String(x.code))));
   // While the planners think (a second or two): the packs and bikes near
   // both ends, and the buses due at the stops near you, so what comes after
-  // finds them here.
+  // finds them here; and the walks to the YouBike stations near each end
+  // (the ranking waits for those, 1.5 s at most: asked now, they're in).
   const soonish = by !== 'arrive' && t0 - now < 90 * 60_000;
-  if (modes.bike) for (const p of [from, to]) bikesAround(p.lat, p.lon).catch(() => {});
+  if (modes.bike) Promise.all([from, to].map(p => bikesAround(p.lat, p.lon).catch(() => []))).then(x => streetWalks(x.flat(), from, to)).catch(() => {});
   if (modes.bus) {
     stopsAround(to.lat, to.lon, 1100).catch(() => {});
     if (soonish) stopsAround(from.lat, from.lon, 900).then(list => list?.length && etaStops(list.map(s => ({ uid: s.uid, scope: s.scope })))).catch(() => {});
   }
   let net = null;
-  let t = performance.now();
-  // The planners asked apart: Google's (a tenth of a second) with our trains
-  // for the first plans; TDX's (seconds for a long trip, by YouBike most)
-  // with them when they're in by then, else with the second round's.
-  const ask = src =>
-    routePlans(from, to, { at, by, modes: modeList(prefs), src })
-      .catch(err => ({ plans: [], sources: {}, err }))
-      .finally(() => lap(`planners:${src}`, t));
-  let tdxIn = null;
-  const tdxAsk = ask('tdx').then(r => (tdxIn = r));
+  // Google's plans with our trains for the first plans; TDX's with them when
+  // they're in by then, else with the second round's.
   const [gRes, trains, metros] = await Promise.all([
-    ask('google'),
+    googleAsk,
     // (To be there by a time: the trains from the window's start; the
     // ranking takes the latest that gets in. The planners leave out the
     // 六家線 then 內灣線 to 竹東, 2026-10-12.)
     !useRail
       ? []
-      : railNetwork(tw(tS).date, { next: by !== 'arrive' && tw(t0).min >= 21 * 60 })
+      : netAsk
           .then(n => railPlans((net = n), from, to, tS, { n: by === 'arrive' ? 8 : 4, bike: modes.bike, bus: modes.bus, use: useTrain }))
           .catch(() => [])
           .finally(() => lap('trains', t)),
@@ -196,6 +202,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // now (trips leaving now or soon), side by side.
   const t1 = performance.now();
   let busTrace = null;
+  // (Its buses looked for now, beside the official names below.)
+  const linkedAsk = modes.bus ? trainThenBus(trains, to, now) : [];
   // The planners' buses as the official routes (their names, ids, timetables).
   plans = await Promise.all(plans.map(p => (/^(google|tdx)/.test(p.src || '') ? officialPlan(p, now).catch(() => p) : p)));
   lap('official', t1);
@@ -211,7 +219,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   //      (`later`). Asking TDX for every line's stops and timetable is the
   //      slow part (the proxy lets 4 asks a second through).
   const [linked, done] = await Promise.all([
-    modes.bus ? trainThenBus(trains, to, now) : [],
+    linkedAsk,
     Promise.all(soon.map(p => adjustPlan(p, now, { start: by === 'arrive' ? null : t0 }).catch(() => p)))
   ]);
   plans = plans.map(p => done[soon.indexOf(p)] || p);
@@ -265,26 +273,34 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
       ? null
       : (async () => {
           const t3 = performance.now();
-          // TDX's plans, come since the first round: as the planners' were (their buses the official routes, the soon ones live).
-          if (tdxLate) {
-            const late = await tdxLate;
-            const known = new Set(plans.map(planSig));
-            const extra = late.plans.map(tidy).filter(p => allowed(p, { ...modes, bike: true }) && !known.has(planSig(p)));
-            const official = await Promise.all(extra.map(p => officialPlan(p, now).catch(() => p)));
-            const live = await Promise.all(official.map(p => (by !== 'arrive' && t0 - now < 60 * 60_000 && p.legs.some(l => l.mode === 'bus' && !l.live) ? adjustPlan(p, now, { start: t0 }).catch(() => p) : p)));
-            plans.push(...live.filter(bused));
-            res.sources = joinPlanners(res, late).sources;
-          }
-          const direct = await busLink(from, to, tS, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: (busTrace = {}) }).catch(err => ((busTrace.error = String(err?.message || err)), []));
-          let list = [...plans, ...direct.filter(p => allowed(p, { ...modes, bike: true }))];
-          // Buses to the stations too far to walk (or, with YouBike, ride) to, and on from the last one.
-          if (useRail && net) {
-            // (By a time: the buses from the start of the window and from half way through it.)
-            const starts = by === 'arrive' ? [tS, (tS + t0) / 2] : [t0];
-            const toRail = (await Promise.all(starts.map(s => busToRail(net, from, to, s, { use: useTrain, now, bike: modes.bike, trace: (busTrace.rail ||= []) }).catch(() => [])))).flat();
-            const on = await trainThenBus(toRail, to, now).catch(() => []);
-            list.push(...[...toRail, ...on].filter(bused).filter(p => allowed(p, { ...modes, bike: true })));
-          }
+          busTrace = {};
+          // Side by side: TDX's plans come since the first round (as the
+          // planners' were: their buses the official routes, the soon ones
+          // live), the direct buses, and the buses to the stations too far to
+          // walk (or, with YouBike, ride) to, and on from the last one.
+          const [lateLive, direct, toTrains] = await Promise.all([
+            tdxLate
+              ? tdxLate.then(async late => {
+                  const known = new Set(plans.map(planSig));
+                  const extra = late.plans.map(tidy).filter(p => allowed(p, { ...modes, bike: true }) && !known.has(planSig(p)));
+                  const official = await Promise.all(extra.map(p => officialPlan(p, now).catch(() => p)));
+                  res.sources = joinPlanners(res, late).sources;
+                  return Promise.all(official.map(p => (by !== 'arrive' && t0 - now < 60 * 60_000 && p.legs.some(l => l.mode === 'bus' && !l.live) ? adjustPlan(p, now, { start: t0 }).catch(() => p) : p)));
+                })
+              : [],
+            busLink(from, to, tS, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: busTrace }).catch(err => ((busTrace.error = String(err?.message || err)), [])),
+            useRail && net
+              ? (async () => {
+                  // (By a time: the buses from the start of the window and from half way through it.)
+                  const starts = by === 'arrive' ? [tS, (tS + t0) / 2] : [t0];
+                  const toRail = (await Promise.all(starts.map(s => busToRail(net, from, to, s, { use: useTrain, now, bike: modes.bike, trace: (busTrace.rail ||= []) }).catch(() => [])))).flat();
+                  const on = await trainThenBus(toRail, to, now).catch(() => []);
+                  return [...toRail, ...on].filter(bused).filter(p => allowed(p, { ...modes, bike: true }));
+                })()
+              : []
+          ]);
+          plans.push(...lateLive.filter(bused));
+          let list = [...plans, ...direct.filter(p => allowed(p, { ...modes, bike: true })), ...toTrains];
           // (Once a line and stop: many plans board the same bus at the same stop.)
           const once = new Map();
           const key = p => {
