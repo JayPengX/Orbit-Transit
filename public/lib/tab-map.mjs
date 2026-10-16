@@ -11,11 +11,12 @@ import { createMap } from './map.mjs';
 import { fitNumbers, netState } from '#kit/quadra.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
-import { stationsNear, stationEta, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
+import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
+import { stationEta } from './near.mjs';
 import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
@@ -45,7 +46,9 @@ let reopened = () => {};
 let leftAt = Infinity;
 const REOPEN_MS = 5 * 60_000;
 globalThis.document?.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') leftAt = Date.now();
+  if (document.visibilityState !== 'hidden') return;
+  leftAt = Date.now();
+  pause();
 });
 
 // What other tabs use before the map was ever opened: saving and editing trips.
@@ -232,7 +235,13 @@ export function hide() {
   closeResults();
   stopWatch();
   following = false;
+  pause();
+}
+// Nothing on the map read again while it isn't seen (another tab, the app
+// away): show() reads the card and the strip again and starts them over.
+function pause() {
   clearInterval(bikeTimer);
+  clearInterval(cardTimer);
 }
 
 // ---- The YouBike stations nearest you, along the bottom of the map --------------------------------
@@ -503,7 +512,7 @@ function refreshCard() {
         c.live = list.find(s => s.uid === c.item.uid) || c.item;
       } else if (c.kind === 'bus') {
         // Every bus through the stop (both sides of the street), once each way.
-        const all = (await Promise.all((c.item.group || [c.item]).map(st => stationEta(st).then(r => r.map(x => ({ ...x, st })))))).flat();
+        const all = await stationEta(c.item.group || [c.item]);
         const seen = new Set();
         // Which way each goes (往 the route's last stop that way).
         const routes = new Map((await Promise.all([...new Set(all.map(r => r.city))].map(ct => cityRoutes(ct).catch(() => [])))).flat().map(r => [r.uid, r]));
@@ -635,7 +644,7 @@ function renderCard() {
           .map(({ r, t, side }, i, all) => {
             const heading = sides.length > 1 && (i === 0 || all[i - 1].side !== side) ? `<p class="ot-eta-side">${e(BEARING[sides[side].bearing] || '另一側')}</p>` : '';
             const al = alertFor(r.st || s, r.routeUID, r.dir);
-            return `${heading}<div class="ot-strip">${strip({ no: r.route, main: r.toward ? `往 ${e(r.toward)}` : '', eta: { ...t, sub: al ? `${al.min} 分前提醒你` : t.sub }, attrs: `data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"` })}<button class="q-icon-btn ot-bell ot-strip-act${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir }))}" aria-label="到站提醒">${icon('bell')}</button></div>`;
+            return `${heading}<div class="ot-strip">${strip({ no: r.route, main: r.toward ? `往 ${e(r.toward)}` : '', eta: { ...t, sub: al ? `${al.min} 分前提醒你` : t.sub }, attrs: `data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"` })}<button class="q-icon-btn ot-bell ot-strip-act${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir, stop: r.stopUID }))}" aria-label="到站提醒">${icon('bell')}</button></div>`;
           })
           .join('') || '<p class="ot-note">這個站牌現在沒有公車資料。</p>'
       : '<p class="ot-note">載入中…</p>';
@@ -828,7 +837,7 @@ function alertSheet(c, x) {
   d.addEventListener('click', ev => {
     const m = ev.target.closest('[data-min]');
     if (m) {
-      addAlert({ station: st, routeUID: x.routeUID, route: x.route, dir: x.dir, min: Number(m.dataset.min) });
+      addAlert({ station: st, routeUID: x.routeUID, route: x.route, dir: x.dir, min: Number(m.dataset.min), stopUID: x.stop });
       ctx.status(`${x.route} 到站前 ${m.dataset.min} 分鐘會提醒你`);
     } else if (ev.target.closest('[data-off]')) removeAlert(on.id);
     else return;
