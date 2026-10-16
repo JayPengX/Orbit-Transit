@@ -64,10 +64,11 @@ export const ctx = {
     saveLocal();
     if (q.active) await q.write({ payload: local.data }).catch(() => {});
   },
-  // Where the device is now (asked again after a minute). iOS asked
-  // unprompted once (the kit's mayLocate), and again at each opening once it
-  // gave a fix (you allowed it: 2026-10-15, the owner, the map didn't go to
-  // where they were at launch). A quick Wi-Fi or cell fix first, GPS behind
+  // Where the device is now (asked again after a minute). Unprompted only
+  // when the phone lets it be read without asking (allowed in iOS's
+  // settings), or the very first time (the kit's mayLocate): a phone that
+  // would ask isn't asked at every launch and update (2026-10-16, the owner:
+  // it asked at every launch). A quick Wi-Fi or cell fix first, GPS behind
   // it (each one moves the map's dot).
   locate({ force = false } = {}) {
     if (!force && ctx.here && Date.now() - ctx.here.at < 60_000) return Promise.resolve(ctx.here);
@@ -96,7 +97,7 @@ export const ctx = {
 };
 let locating = null;
 async function locateNow(force) {
-  if ((await mayLocate('orbit-transit.geo.asked', { force: force || Boolean(local.here) })) !== 'yes') return ctx.here;
+  if ((await mayLocate('orbit-transit.geo.asked', { force })) !== 'yes') return ctx.here;
   let got = null;
   const fixed = pos => {
     got = ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: Date.now() };
