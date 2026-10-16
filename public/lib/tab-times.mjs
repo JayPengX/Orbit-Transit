@@ -87,7 +87,12 @@ function busInit() {
     <label class="q-search ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、5608" autocomplete="off" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="清除">✕</button></label>
     <div class="q-chips ot-city-chips ot-scroll-chips" id="tb-city"></div></div>
     <div id="tb-list"></div></div>`;
-  box.querySelector('#tb-q').addEventListener('input', busDraw);
+  // (Drawn once the typing pauses: each letter asked for every route it matched.)
+  let typing = 0;
+  box.querySelector('#tb-q').addEventListener('input', ev => {
+    clearTimeout(typing);
+    typing = setTimeout(() => busDraw(ev), 200);
+  });
   box.addEventListener('click', ev => {
     const c = ev.target.closest('[data-city]');
     if (c) {

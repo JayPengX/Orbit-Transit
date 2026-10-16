@@ -563,10 +563,14 @@ const placeOf = c => ({ name: c.item.name || '', lat: c.item.lat ?? c.lat, lon: 
 // stations, a card's 距離 and 走過去, and the walk it starts (api walksTo:
 // Google's streets). From where you were when it was last asked, until
 // you're 50 m from there: every one of them from the same spot, so they
-// agree, and Google is asked once each 50 m, not each step.
+// agree, and Google is asked once each 50 m, not each step. The spot is
+// held to a ~40 m grid, so home and school are the same spot every day and
+// the proxy's month-long walks are found there (the exact fix was new at
+// each opening, and a phone drifting indoors spent Google's cap).
 let anchor = null;
+const GRID = 0.0004;
 const fromHere = h => {
-  if (!anchor || meters(anchor.lat, anchor.lon, h.lat, h.lon) > 20) anchor = { lat: Math.round(h.lat * 1e5) / 1e5, lon: Math.round(h.lon * 1e5) / 1e5 };
+  if (!anchor || meters(anchor.lat, anchor.lon, h.lat, h.lon) > 50) anchor = { lat: Number((Math.round(h.lat / GRID) * GRID).toFixed(5)), lon: Number((Math.round(h.lon / GRID) * GRID).toFixed(5)) };
   return anchor;
 };
 const walkKnown = (h, p) => walkKnownAt(fromHere(h), p);
