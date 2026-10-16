@@ -690,13 +690,13 @@ main {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin: 14px 0 6px;
+  margin: 10px 0 4px;
 }
 .ot-bike-now > div {
   display: grid;
   justify-items: center;
-  gap: 2px;
-  padding: 12px 6px;
+  gap: 1px;
+  padding: 8px 6px;
   border-radius: 16px;
   background: rgba(245, 179, 1, 0.1);
 }
@@ -2673,6 +2673,13 @@ main {
 .ot-go-there .ot-i {
   width: 17px;
   height: 17px;
+}
+/* (What the YouBike timer does, under its button: small, the card not scrolling.) */
+.ot-note.ot-rent-note {
+  margin: -4px 0 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
 }
 .ot-bell {
   flex: none;

@@ -585,7 +585,11 @@ async function walkHere(plans) {
   return plans.map((p, k) => (ws[k] ? asWalk(p, ws[k]) : p));
 }
 // To a stop (or a bike station) on foot or by YouBike only, navigated at once.
-function goThere(c, { bike = true } = {}) {
+function goThere(c, opts) {
+  const b = goButtons(c, opts);
+  return b ? `<div class="ot-go-there">${b}</div>` : '';
+}
+function goButtons(c, { bike = true } = {}) {
   const h = ctx.here;
   if (!h) return '';
   const d = meters(h.lat, h.lon, c.lat, c.lon);
@@ -593,7 +597,7 @@ function goThere(c, { bike = true } = {}) {
   const w = walkKnown(h, c);
   if (!w) walkFrom(h, c).then(x => x && card === c && renderCard());
   const walkMin = Math.max(1, Math.round((w ? w.sec : walkSec(d)) / 60));
-  return `<div class="ot-go-there"><button class="q-btn" type="button" data-card="walk-there">${icon('walk')} 走過去 · ${walkMin} 分</button>${bike && d > 600 ? `<button class="q-btn" type="button" data-card="bike-there">${icon('bike')} 騎 YouBike</button>` : ''}</div>`;
+  return `<button class="q-btn" type="button" data-card="walk-there">${icon('walk')} 走過去 · ${walkMin} 分</button>${bike && d > 600 ? `<button class="q-btn" type="button" data-card="bike-there">${icon('bike')} 騎 YouBike</button>` : ''}`;
 }
 async function directTo(c, mode) {
   const h = await ctx.locate();
@@ -644,7 +648,7 @@ function renderCard() {
         <div class="e"><b>${s.ebike}</b><span>⚡ 電輔車</span></div>
         <div class="d"><b>${s.ret}</b><span>可還空位</span></div>
       </div>
-      <p class="ot-note">${s.ok === false ? '暫停營運 · ' : ''}${s.cap ? `共 ${s.cap} 柱 · ` : ''}${e(ago(s.at))}</p>${err}${goThere(c, { bike: false })}${rentButtons()}${actions(c)}`;
+      <p class="ot-note">${s.ok === false ? '暫停營運 · ' : ''}${s.cap ? `共 ${s.cap} 柱 · ` : ''}${e(ago(s.at))}</p>${err}${rentButtons(c)}${actions(c)}`;
   } else if (c.kind === 'bus') {
     const s = c.item;
     const live = Array.isArray(c.live) ? c.live : null;
@@ -1143,14 +1147,21 @@ function rentalTick() {
   if (r) rentTimer = setInterval(paint, 20_000);
   paint();
 }
-// On a station's card: 我在這裡借車了, or (renting) 在這裡還車 and, with TPASS, 在這裡換一台.
-function rentButtons() {
+// A station's card: 走過去 and the timer's button side by side (one row,
+// the card not scrolling), and a line saying what the timer does and when
+// it starts: from the tap, nothing found out by itself (the owner,
+// 2026-10-16: when it starts wasn't said).
+function rentButtons(c) {
   const r = rental();
-  return `<div class="ot-go-there">${
-    r
-      ? `<button class="q-btn" type="button" data-card="rent-end">${icon('dock')} 在這裡還車</button>${bikeSwap(ctx.data.prefs) ? `<button class="q-btn" type="button" data-card="rent-swap">${icon('bike')} 在這裡換一台</button>` : ''}`
-      : `<button class="q-btn" type="button" data-card="rent-start">${icon('bike')} 我在這裡借車了</button>`
-  }</div>`;
+  const swap = bikeSwap(ctx.data.prefs);
+  if (r) {
+    const min = Math.floor((Date.now() - r.at) / 60_000);
+    const left = Math.ceil((r.at + FREE_MS - Date.now()) / 60_000);
+    return `<div class="ot-go-there"><button class="q-btn" type="button" data-card="rent-end">${icon('dock')} 在這裡還車</button>${swap ? `<button class="q-btn" type="button" data-card="rent-swap">${icon('bike')} 換一台</button>` : ''}</div>
+      <p class="ot-note ot-rent-note">計時中：${hm(r.at)} 借的車，已騎 ${min} 分${swap ? (left > 0 ? `，免費剩 ${left} 分` : '，已超過免費 30 分') : ''}。</p>`;
+  }
+  return `<div class="ot-go-there">${goButtons(c, { bike: false })}<button class="q-btn" type="button" data-card="rent-start">${icon('bike')} 借車計時</button></div>
+    <p class="ot-note ot-rent-note">借到車後按「借車計時」，從按下時開始算${swap ? '；第 25 分鐘提醒你還車再借，下一段仍免費' : ''}。</p>`;
 }
 // The timer's sheet: since when, until when it's free, and (TPASS) the
 // stations near you to return it at and take another, the way you're
