@@ -15,6 +15,7 @@ import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt } from './live
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
 import { rideSec, DOCK_SEC } from './plan.mjs';
+import { rental, startRental, endRental, rentalStep, FREE_MS } from './rental.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
@@ -538,13 +539,13 @@ export function offerText(p) {
 // plan: a ranked plan; `draw(plan, i)` shows it on the map with leg i lit;
 // `follow(pos)` keeps the map on you; `onEnd()` when it's closed; `dest`:
 // the place the trip is to (Google's, for its own navigation to it).
-export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, here = null, resume = null, push = null, dest = null }) {
+export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, here = null, resume = null, push = null, dest = null, swap30 = false }) {
   // Started by a tap (mostly): the iPhone's chime may sound from now on.
   primeBuzz();
   stopNav();
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
   // (`i`: the step shown; `reached`: the furthest step the trip has got to by itself, where you are, the arrivals, getting off: the steps before it are done, never a tap's.)
-  const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min) };
+  const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min), swap30 };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
   const notices = () => nav === state && push?.(navNotices(plan, state.i, state.info));
@@ -568,6 +569,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const left = state.pos && l.to?.lat ? (state.leftAlong ?? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon)) : null;
     let title = state.done ? `已抵達 ${plan.legs.at(-1).to?.name || '目的地'}` : t.title;
     let sub = state.done ? '' : t.sub;
+    // On a bike with the timer running: how long you've had it (and with TPASS, the free minutes left).
+    // (A line of its own under the step, amber the last 5 free minutes, red past them.)
+    const rent = l.mode === 'bike' && !state.done && state.i <= state.reached ? rental() : null;
+    const rms = rent ? now - rent.at : 0;
+    const rentLine = rent ? `<div class="ot-nav-rent${state.swap30 ? (rms >= FREE_MS ? ' over' : rms >= FREE_MS - 5 * 60_000 ? ' warn' : '') : ''}">${icon('bike')}<span>已騎 ${Math.floor(rms / 60_000)} 分${state.swap30 ? (rms < FREE_MS ? `・免費剩 ${Math.ceil((FREE_MS - rms) / 60_000)} 分` : '・已超過免費 30 分') : ''}</span></div>` : '';
     // Yours the next stop (no stops known: under 600 m): the card turned round to say so.
     const offNext = on && !state.done && (rs && state.next != null ? state.next >= rs.j : left != null && left < NEXT_STOP_M);
     if (offNext) {
@@ -644,6 +650,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           <div class="ot-nav-text"><b>${e(title)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>
           ${big ? `<span class="ot-nav-big"${cd}>${big}</span>` : ''}
         </div>
+        ${rentLine}
         ${fold.top ? '' : `${track}${board}`}
         ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map((x, k, a) => `<span>${e(x)}${k < a.length - 1 ? '・' : ''}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}重新規劃</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
         ${bikeLine && !fold.top ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
@@ -712,7 +719,19 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // that step is where you've got to. (A tap only shows a step: go.)
   const reach = (i, phase = 'before', off = false) => {
     state.reached = Math.max(0, Math.min(plan.legs.length - 1, i));
+    bikeTimer(state.reached);
     go(i, phase, off);
+  };
+  // YouBike's timer kept by the trip itself: at the station, the bike's ride
+  // starts it (換一台 starts it over); walking on from a bike returned ends
+  // it. Once a step (a step seen again, a relaunch: not started over).
+  const bikeTimer = i => {
+    const what = rentalStep(plan, i);
+    const key = `${plan.dep}:${i}`;
+    if (what === 'start' && rental()?.key !== key) {
+      const l = plan.legs[i];
+      startRental(l.rent || l.from, Date.now(), key);
+    } else if (what === 'end' && rental()) endRental();
   };
   // What's live: the ride to catch (this step's, or the next one's) — a bus,
   // when it really comes to the stop at the time you'll be there and where it
@@ -821,6 +840,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.near = a.near;
     if (!a.done) return;
     state.done = true;
+    // (There on the bike: returned at the last station.)
+    if (l.mode === 'bike' && !l.park && rental()) endRental();
     buzz();
     push?.([]);
     dropNav();
@@ -1108,6 +1129,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   const start = here0 && (here0.i > from.i || (here0.i === from.i && here0.phase === 'on')) ? here0 : from;
   // (Opened again: as far as it had got, the step shown as it was.)
   state.reached = start === from && resume?.reached != null ? Math.min(Number(resume.reached) || 0, start.i) : start.i;
+  // (Started where you are already riding a bike the trip takes: its timer too.)
+  if (start === here0 && start.i > 0) bikeTimer(state.reached);
   go(start.i, start.phase);
   // Every ride's stops, for the map (each stop a dot on its line), ahead of
   // reaching it; refreshLive finds them kept.

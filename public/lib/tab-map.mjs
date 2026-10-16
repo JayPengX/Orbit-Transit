@@ -1148,20 +1148,14 @@ function rentalTick() {
   paint();
 }
 // A station's card: 走過去 and the timer's button side by side (one row,
-// the card not scrolling), and a line saying what the timer does and when
-// it starts: from the tap, nothing found out by itself (the owner,
-// 2026-10-16: when it starts wasn't said).
+// the card not scrolling). Started by the tap, or by navigation reaching a
+// bike's ride (nav.mjs rentalStep).
 function rentButtons(c) {
   const r = rental();
   const swap = bikeSwap(ctx.data.prefs);
-  if (r) {
-    const min = Math.floor((Date.now() - r.at) / 60_000);
-    const left = Math.ceil((r.at + FREE_MS - Date.now()) / 60_000);
-    return `<div class="ot-go-there"><button class="q-btn" type="button" data-card="rent-end">${icon('dock')} 在這裡還車</button>${swap ? `<button class="q-btn" type="button" data-card="rent-swap">${icon('bike')} 換一台</button>` : ''}</div>
-      <p class="ot-note ot-rent-note">計時中：${hm(r.at)} 借的車，已騎 ${min} 分${swap ? (left > 0 ? `，免費剩 ${left} 分` : '，已超過免費 30 分') : ''}。</p>`;
-  }
-  return `<div class="ot-go-there">${goButtons(c, { bike: false })}<button class="q-btn" type="button" data-card="rent-start">${icon('bike')} 借車計時</button></div>
-    <p class="ot-note ot-rent-note">借到車後按「借車計時」，從按下時開始算${swap ? '；第 25 分鐘提醒你還車再借，下一段仍免費' : ''}。</p>`;
+  if (r)
+    return `<div class="ot-go-there"><button class="q-btn" type="button" data-card="rent-end">${icon('dock')} 在這裡還車</button>${swap ? `<button class="q-btn" type="button" data-card="rent-swap">${icon('bike')} 換一台</button>` : ''}</div>`;
+  return `<div class="ot-go-there">${goButtons(c, { bike: false })}<button class="q-btn" type="button" data-card="rent-start">${icon('bike')} 借車計時</button></div>`;
 }
 // The timer's sheet: since when, until when it's free, and (TPASS) the
 // stations near you to return it at and take another, the way you're
@@ -1839,6 +1833,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
     dest: c?.to,
     resume,
     push: setNavPush,
+    swap30: bikeSwap(ctx.data.prefs),
     draw: (plan, i) => {
       // (Shrunk: the map is yours; the way comes back with the card.)
       if (navNow()?.min) return;
