@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
-import { swapDocks, rentalPush } from '../public/lib/rental.mjs';
+import { swapDocks, rentalPush, rentalStep } from '../public/lib/rental.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike, keepWins } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
@@ -2170,4 +2170,20 @@ test('a YouBike rental timed: with TPASS a notice at 25 minutes; where to return
   assert.deepEqual(swapDocks(here, bikes).map(x => x.s.uid), ['behind', 'ahead']);
   assert.deepEqual(swapDocks(here, bikes, { toward: { lat: 24.81, lon: 120.97 } }).map(x => x.s.uid), ['ahead', 'behind']);
   assert.deepEqual(swapDocks(null, bikes), []);
+});
+
+test('navigating, the YouBike timer follows the trip: a bike taken starts it (a swap starts it over), parked at a stop it runs on, returned it ends', () => {
+  const walk = { mode: 'walk' };
+  const plan = { legs: [walk, { mode: 'bike' }, walk, { mode: 'bus' }] };
+  assert.equal(rentalStep(plan, 0), null);
+  assert.equal(rentalStep(plan, 1), 'start', 'at the station: the ride starts it');
+  assert.equal(rentalStep(plan, 2), 'end', 'walking on from the bike returned');
+  assert.equal(rentalStep(plan, 3), null);
+  const kept = { legs: [walk, { mode: 'bike', rent: {}, park: true }, { mode: 'bike', kept: true, park: true }, { mode: 'bike', swap: true, ret: {} }, walk] };
+  assert.equal(rentalStep(kept, 1), 'start');
+  assert.equal(rentalStep(kept, 2), null, 'the bike kept from a stop: the same rental');
+  assert.equal(rentalStep(kept, 3), 'start', '換一台: started over');
+  assert.equal(rentalStep(kept, 4), 'end');
+  const parked = { legs: [{ mode: 'bike', park: true }, walk] };
+  assert.equal(rentalStep(parked, 1), null, 'parked at a stop, not returned: it runs on');
 });

@@ -2674,13 +2674,6 @@ main {
   width: 17px;
   height: 17px;
 }
-/* (What the YouBike timer does, under its button: small, the card not scrolling.) */
-.ot-note.ot-rent-note {
-  margin: -4px 0 10px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  text-align: left;
-}
 .ot-bell {
   flex: none;
   color: var(--q-muted);
@@ -4041,6 +4034,30 @@ main {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* The YouBike timer on a bike's step: how long you've had it (TPASS: the free minutes left). */
+.ot-nav-rent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 18px 4px;
+  color: var(--q-text-2);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ot-nav-rent .ot-i {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: #f5b301;
+}
+.ot-nav-rent.warn {
+  color: var(--ot-warn);
+}
+.ot-nav-rent.over {
+  color: var(--ot-bad, #ef4444);
 }
 
 /* The bus pulling in, the train at the platform: the card glows green. */

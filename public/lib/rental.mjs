@@ -35,9 +35,22 @@ function keep() {
 export const rental = () => (cur && Date.now() - cur.at < TTL ? cur : null);
 export const onRental = f => listeners.add(f);
 // `station`: where the bike was taken ({ uid, name, lat, lon }), or none.
-export function startRental(station = null, at = Date.now()) {
-  cur = { at, station: station ? { uid: station.uid || '', name: station.name || '', lat: station.lat, lon: station.lon } : null, n: (cur?.n || 0) + 1 };
+// `key`: what started it (navigation: the trip's step), so a step seen again doesn't start it over.
+export function startRental(station = null, at = Date.now(), key = '') {
+  cur = { at, station: station ? { uid: station.uid || '', name: station.name || '', lat: station.lat, lon: station.lon } : null, n: (cur?.n || 0) + 1, ...(key ? { key } : {}) };
   keep();
+}
+
+// Navigating, the trip got to step `i`: the timer as the steps say. A ride
+// on a bike just taken (not the one kept from a stop) starts it, or starts
+// it over (換一台); off a bike that was returned (not parked at a stop) to
+// walk or ride something else ends it. → 'start' | 'end' | null.
+export function rentalStep(plan, i) {
+  const l = plan.legs[i];
+  const prev = plan.legs[i - 1];
+  if (l?.mode === 'bike' && !l.kept) return 'start';
+  if (prev?.mode === 'bike' && !prev.park && l?.mode !== 'bike') return 'end';
+  return null;
 }
 export function markWarned() {
   if (!cur) return;
