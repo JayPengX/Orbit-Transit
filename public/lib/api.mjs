@@ -168,8 +168,13 @@ export const routePlans = (from, to, { at = null, by = 'depart', modes = null, s
 // Taiwan's townships (the weather route's open list), kept a month.
 const TOWNS_KEY = 'orbit-transit.towns';
 let towns = null;
-export async function townships() {
-  if (towns) return towns;
+// (One ask at a time: a first trip's parts asked for it three or four times at once.)
+let townsAsk = null;
+export function townships() {
+  if (towns) return Promise.resolve(towns);
+  return (townsAsk ||= readTownships().finally(() => (townsAsk = null)));
+}
+async function readTownships() {
   try {
     const k = JSON.parse(localStorage.getItem(TOWNS_KEY) || 'null');
     if (k && Date.now() - k.at < 30 * 86_400_000) return (towns = k.data);
