@@ -539,6 +539,7 @@ export function offerText(p) {
 // plan: a ranked plan; `draw(plan, i)` shows it on the map with leg i lit;
 // `follow(pos)` keeps the map on you; `onEnd()` when it's closed; `dest`:
 // the place the trip is to (Google's, for its own navigation to it).
+const END_MS = 6000;
 export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, here = null, resume = null, push = null, dest = null, swap30 = false }) {
   // Started by a tap (mostly): the iPhone's chime may sound from now on.
   primeBuzz();
@@ -830,7 +831,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     }
   };
   // There (arrival: checked with every position and every 10 s, as a phone
-  // standing still sends few); then the card says so and, 20 s on, ends.
+  // standing still sends few); then the card says so and, 6 s on, ends (finish).
   const arrive = () => {
     const l = plan.legs[state.i];
     const p = state.pos;
@@ -845,11 +846,17 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     buzz();
     push?.([]);
     dropNav();
-    state.endTimer = setTimeout(() => {
-      if (nav !== state) return;
-      stopNav();
-      onEnd?.({ arrived: plan.dest?.name || l.to?.name || '目的地', plan });
-    }, 20_000);
+    state.doneAt = Date.now();
+    state.endTimer = setTimeout(finish, END_MS);
+  };
+  // Ended a few seconds after 已抵達 (it waited 20 s, and with the phone
+  // locked or the app away its timer waited too: the owner, 2026-10-16, there
+  // and still navigating); checked again each second and on coming back.
+  const finish = () => {
+    if (nav !== state || !state.done) return;
+    stopNav();
+    const l = plan.legs.at(-1);
+    onEnd?.({ arrived: plan.dest?.name || l.to?.name || '目的地', plan });
   };
   const moved = p => {
     state.pos = p;
@@ -1046,6 +1053,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   state.timer = setInterval(refreshLive, liveMs());
   // The countdown to the second; everything else said (to set out, till you're there) every 10 s.
   state.tick = setInterval(() => {
+    if (state.done && Date.now() - state.doneAt >= END_MS) return finish();
     if (Date.now() - state.drawn >= 10_000) {
       arrive();
       return render();
@@ -1100,6 +1108,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // Back from the background (an iPhone pauses the page): where you are now, the buses again.
   state.onShow = () => {
     if (document.visibilityState !== 'visible' || nav !== state) return;
+    if (state.done && Date.now() - state.doneAt >= END_MS) return finish();
     if (plan.arr < Date.now() - NAV_KEEP) {
       stopNav();
       return onEnd?.();
