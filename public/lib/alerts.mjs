@@ -1,12 +1,14 @@
 // One-time bus alerts: "tell me when the 5608 is 5 minutes from my stop".
-// Checked every 20 s while the app is open (TDX's estimates at that stop),
+// Checked every 20 s while the app is open (TDX's estimates at that stop,
+// every alert's stops in one ask a city: near.mjs etaStops),
 // told by a notification (and a buzz, a chime on an iPhone, and the status line), then gone. Kept
 // on this device for two hours, so a reload doesn't lose one.
 // The Worker gets the list too (the kit's schedulePush, check `bus` in
 // push.js) and checks each 2 minutes itself: an iPhone stops the app once
 // it's locked or in the background, so that's what tells you then.
 
-import { stationEta, stationEtaAsk } from './bus.mjs';
+import { stationEtaAsk, etaOf, routeCity } from './bus.mjs';
+import { etaStops } from './near.mjs';
 import { uid } from './util.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 
@@ -74,11 +76,11 @@ export const alerts = () => list;
 export const onAlerts = f => listeners.add(f);
 export const alertFor = (station, routeUID, dir) => list.find(a => a.station.uid === station.uid && a.routeUID === routeUID && a.dir === dir) || null;
 
-// `station`: the map's stop ({ uid, id, cityCode, name }); the bus by its route and way.
-export async function addAlert({ station, routeUID, route, dir, min }) {
+// `station`: the map's stop ({ uid, id, cityCode, name }); the bus by its route and way, at its sign (`stopUID`).
+export async function addAlert({ station, routeUID, route, dir, min, stopUID }) {
   primeBuzz();
   list = list.filter(a => !(a.station.uid === station.uid && a.routeUID === routeUID && a.dir === dir));
-  list.push({ id: uid(), station: { uid: station.uid, id: station.id, cityCode: station.cityCode || '', name: station.name }, routeUID, route, dir, min, at: Date.now() });
+  list.push({ id: uid(), station: { uid: station.uid, id: station.id, cityCode: station.cityCode || '', name: station.name }, stop: { uid: stopUID, scope: routeCity(stopUID) }, routeUID, route, dir, min, at: Date.now() });
   try {
     if (globalThis.Notification?.permission === 'default') await Notification.requestPermission();
   } catch {}
@@ -118,22 +120,15 @@ async function check() {
   checking = true;
   try {
     list = list.filter(a => Date.now() - a.at < TTL);
-    const byStop = new Map();
-    for (const a of list) byStop.set(a.station.uid, a.station);
-    for (const st of byStop.values()) {
-      let rows;
-      try {
-        rows = await stationEta(st);
-      } catch {
-        continue;
-      }
-      for (const a of list.filter(x => x.station.uid === st.uid)) {
-        const r = rows.find(x => x.routeUID === a.routeUID && Number(x.dir) === Number(a.dir) && x.sec != null);
-        if (!r || r.sec > a.min * 60) continue;
-        const m = Math.max(0, Math.round(r.sec / 60));
-        await notify(`${a.route} ${m <= 1 ? '即將進站' : `${m} 分後到站`}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''} · 該出發了`, `transit:bus:${a.id}`);
-        list = list.filter(x => x !== a);
-      }
+    // (An alert set before its sign was kept is the Worker's to tell.)
+    const stops = [...new Map(list.filter(a => a.stop?.uid).map(a => [a.stop.uid, a.stop])).values()];
+    const rows = stops.length ? await etaStops(stops).catch(() => []) : [];
+    for (const a of list.filter(x => x.stop?.uid)) {
+      const r = rows.filter(x => x.StopUID === a.stop.uid && x.RouteUID === a.routeUID && Number(x.Direction) === Number(a.dir)).map(x => etaOf(x)).find(x => x.sec != null);
+      if (!r || r.sec > a.min * 60) continue;
+      const m = Math.max(0, Math.round(r.sec / 60));
+      await notify(`${a.route} ${m <= 1 ? '即將進站' : `${m} 分後到站`}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''} · 該出發了`, `transit:bus:${a.id}`);
+      list = list.filter(x => x !== a);
     }
   } finally {
     checking = false;
