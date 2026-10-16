@@ -215,6 +215,8 @@ export function show({ back = false } = {}) {
   map?.resize();
   // Back after a while with nothing open: an opening again, the map on where you are now.
   if (back && map && Date.now() - leftAt > REOPEN_MS && !card && !navFull() && !pendingTrip && !ctx.mapFocus) reopened();
+  // (Following you, back from away: the watch started again, as iOS's can stay silent.)
+  else if (back && map && following && !navigating()) follow();
   if (pendingTrip && map) return takePending();
   // Back to the app while navigating: the stage you're at again, once the page has its size.
   if (map && navFull()) setTimeout(() => {

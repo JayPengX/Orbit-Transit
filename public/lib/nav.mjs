@@ -9,7 +9,7 @@
 // when you get there.
 
 import * as kit from '#kit/quadra.mjs';
-import { watchPosition, roadPath, liveMs } from './api.mjs';
+import { watchPosition, getPosition, roadPath, liveMs } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt } from './live.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
@@ -1049,11 +1049,22 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   };
   state.go = go;
   state.render = render;
-  state.stopWatch = watchPosition(moved);
+  // Followed where you are; started again on coming back to the app, and
+  // after 30 s with no position while it's seen: iOS's watch can stay
+  // silent after the app was away (the owner, 2026-10-16: back in the app,
+  // the dot where it was left). Each start asks for a fix at once too.
+  const watch = () => {
+    state.stopWatch?.();
+    state.stopWatch = watchPosition(moved);
+    state.watchAt = Date.now();
+    getPosition({ high: false, timeout: 4000, maximumAge: 5000 }).then(p => !p.error && nav === state && moved(p));
+  };
+  watch();
   state.timer = setInterval(refreshLive, liveMs());
   // The countdown to the second; everything else said (to set out, till you're there) every 10 s.
   state.tick = setInterval(() => {
     if (state.done && Date.now() - state.doneAt >= END_MS) return finish();
+    if (document.visibilityState === 'visible' && Date.now() - Math.max(state.posAt || 0, state.watchAt || 0) > 30_000) watch();
     if (Date.now() - state.drawn >= 10_000) {
       arrive();
       return render();
@@ -1109,6 +1120,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   state.onShow = () => {
     if (document.visibilityState !== 'visible' || nav !== state) return;
     if (state.done && Date.now() - state.doneAt >= END_MS) return finish();
+    watch();
     if (plan.arr < Date.now() - NAV_KEEP) {
       stopNav();
       return onEnd?.();
