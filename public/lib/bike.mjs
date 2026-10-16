@@ -42,7 +42,7 @@ const merged = new WeakMap();
 // A whole city's stations (the map), live counts refreshed each minute.
 export async function cityBikes(city) {
   if (!BIKE_CITIES.has(city)) return [];
-  const [st, live] = await Promise.all([tdx(`basic/v2/Bike/Station/City/${city}?${STATION_FIELDS}`, { fresh: 86_400_000, persist: true }), tdx(`basic/v2/Bike/Availability/City/${city}?${LIVE_FIELDS}`, { fresh: 'bike' })]);
+  const [st, live] = await Promise.all([tdx(`basic/v2/Bike/Station/City/${city}?${STATION_FIELDS}`, { fresh: 86_400_000, persist: true }), tdx(`basic/v2/Bike/Availability/City/${city}?${LIVE_FIELDS}`, { fresh: 'bike', swr: 20 * 60_000 })]);
   // (Merged once a copy: a trip asks for its city's bikes at a dozen points.)
   const m = merged.get(live);
   if (m?.st === st) return m.list;

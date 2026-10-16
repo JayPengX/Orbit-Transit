@@ -91,7 +91,13 @@ export const stale = new Map();
 // second less, so each beat asks the Worker (whose own cache follows tdxLive).
 export const liveMs = () => dev('transitLive') * 1000;
 export const bikeMs = () => dev('transitBike') * 1000;
-export async function tdx(path, { fresh = 30_000, persist = false, store = true } = {}) {
+// `swr` (ms): no copy here yet (a launch), the device's copy that old at
+// most answers at once, the fresh one asked behind it; `onFresh` tells who
+// drew from it (YouBike's counts: the map opens on the last ones, swapped
+// for the new a second later, not a strip waiting on the network).
+const freshers = new Set();
+export const onFresh = f => freshers.add(f);
+export async function tdx(path, { fresh = 30_000, persist = false, store = true, swr = 0 } = {}) {
   if (fresh === 'live') fresh = liveMs() - 1000;
   else if (fresh === 'bike') fresh = bikeMs() - 1000;
   const now = Date.now();
@@ -102,6 +108,14 @@ export async function tdx(path, { fresh = 30_000, persist = false, store = true 
     if (k) {
       memory.set(path, k);
       if (now - k.at < fresh) return k.data;
+    }
+  }
+  if (swr && !mem && !inflight.has(path)) {
+    const k = await kept(path);
+    if (k && now - k.at < swr && !memory.has(path)) {
+      memory.set(path, k);
+      tdx(path, { fresh, persist, store }).then(() => freshers.forEach(f => f(path)), () => {});
+      return k.data;
     }
   }
   if (inflight.has(path)) return inflight.get(path);

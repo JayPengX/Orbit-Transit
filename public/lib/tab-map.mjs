@@ -9,7 +9,7 @@
 
 import { createMap } from './map.mjs';
 import { fitNumbers, netState } from '#kit/quadra.mjs';
-import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs } from './api.mjs';
+import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
@@ -138,6 +138,8 @@ export async function init(c) {
     if (card) renderCard();
   });
   onAlerts(() => card?.kind === 'bus' && renderCard());
+  // (Opened on the counts kept on the phone: the new ones, once in, drawn over them.)
+  onFresh(path => path.includes('Bike/Availability') && bikesAgain());
   // A YouBike rental timed: its chip ticking, its notice sent, the station's card saying what you can do there.
   onRental(() => {
     rentalTick();
@@ -226,9 +228,22 @@ export function show({ back = false } = {}) {
     return arrive({ kind: st.sys, item: st, lat: st.lat, lon: st.lon });
   }
   if (card) refreshCard();
+  bikesBeat();
+}
+// YouBike's counts read again while the map is seen (every 30 s, 開發's
+// transitBike): the strip, the stations on the map and an open station's
+// card, each number swapped in place (the owner, 2026-10-16: they stayed
+// as they were when the map was drawn).
+function bikesBeat() {
   nearBikes();
   clearInterval(bikeTimer);
-  bikeTimer = setInterval(nearBikes, bikeMs());
+  bikeTimer = setInterval(bikesAgain, bikeMs());
+}
+function bikesAgain() {
+  if (document.visibilityState === 'hidden') return;
+  nearBikes();
+  if (map && ctx.data.layers.bike && map.zoom() >= 15 && !navFull()) drawLayers();
+  if (card?.kind === 'bike') refreshCard();
 }
 export function hide() {
   // (An open search list doesn't follow you to another tab, or into navigation.)
