@@ -172,7 +172,7 @@ async function refresh() {
     const items = ctx.data.groups.flatMap(g => g.items).map(sideOf);
     if (items.length) jobs.push(stopsEta(items).then(m => (S.pinned = m)).then(() => plannedTimes(items)).catch(() => {}));
     jobs.push(trainPins());
-    // The two trips that matter most get their plans at once (a planner call each, kept 4 minutes).
+    // The two trips that matter most get their plans at once (planned once, their times kept up: `loadTrip`).
     for (const { w } of trips().slice(0, 2)) jobs.push(loadTrip(w));
     for (const id of S.open) jobs.push(loadPlace(id));
     render();
@@ -210,22 +210,83 @@ async function trainPins() {
   } catch {}
 }
 
-// A trip's plans kept on the phone: opening the app again soon (from about
-// the same place, the same version, the same settings) shows them at once
-// with the buses' times read again, instead of planning it all anew. Planned
-// again after TRIP_KEEP_MS, or when too few of its ways are still to come.
-const TRIP_CACHE = 'ot.trips.v1';
-const TRIP_KEEP_MS = 30 * 60_000;
-const buildOf = () => document.querySelector('meta[name="build-version"]')?.content || 'dev';
-const tripKey = (w, from) => JSON.stringify([w.id, w.at || 0, w.by || '', Math.round(from.lat * 300), Math.round(from.lon * 300), Math.round(w.to.lat * 300), Math.round(w.to.lon * 300), buildOf(), JSON.stringify(ctx.data.prefs || {})]);
+// A trip's plans are planned once and used again: which ways go there
+// (the lines, the stations, the changes) hardly change from one hour to
+// the next; their times do, and those come from the timetables and the
+// buses now, not from the planners (Google's and TDX's, each a billed ask).
+// So the ways are kept (on the phone too, for the next opening), each
+// way's next departure taking its place as one leaves, the buses due soon
+// timed again from what they're doing now. Planned again only when the
+// ways could be different (`replanWhy`):
+//   - the trip changed (its ends, its time, the settings);
+//   - from where you are, and you're 250 m from where it was planned (other
+//     stops in reach);
+//   - two hours on (by a time ahead: until that time, twelve at most): the
+//     buses and trains running change through the day (a rush hour's
+//     expresses, the last trains);
+//   - the ways run out: a way you pinned, or all but one of the ways
+//     recommended, with no departure left in the times kept;
+//   - by an arrival time, the way to leave first gone (the way left late).
+const TRIP_CACHE = 'ot.trips.v2';
+const KEEP_MS = 2 * 3_600_000;
+const KEEP_AHEAD_MS = 12 * 3_600_000;
+const MOVED_M = 250;
+const RETIME_MS = 60_000;
 // What a trip's plans were made for: its ends and its time. A trip changed
 // in its sheet (another end, another time) is planned again at once, not
 // shown with the plans of the trip it was.
 const tripSig = w => JSON.stringify([w.from ? [w.from.lat, w.from.lon] : null, w.to.lat, w.to.lon, w.at || 0, w.by || '']);
+const tripKey = w => JSON.stringify([w.id, tripSig(w), ctx.data.prefs || {}]);
 const tripOf = w => {
   const st = S.trips.get(w.id);
   return st && st.sig === tripSig(w) ? st : null;
 };
+// A way with no ride to wait for (walking, a YouBike ride) leaves whenever you do.
+const anytime = p => p.legs.every(l => l.mode === 'walk' || l.mode === 'bike');
+const shiftPlan = (p, d) => ({ ...p, dep: p.dep + d, arr: p.arr + d, legs: p.legs.map(l => ({ ...l, dep: l.dep + d, arr: l.arr + d })) });
+
+// The kept plans now: a way whose departure has gone hands its card (its
+// place among the recommendations, its tags, its times) to its next
+// departure; a way you can leave on whenever leaves now. The list keeps its
+// order (a card's times point into it).
+export function rollPlans(plans, now = Date.now()) {
+  const gone = p => p.dep < now - 2 * 60_000;
+  const out = plans.map(p => (anytime(p) && p.dep < now ? shiftPlan(p, now - p.dep) : p));
+  out.forEach((p, i) => {
+    if (!p.lead || !gone(p)) return;
+    // (Its times: the departures its card offers.)
+    const sig = pickSig(p);
+    const mates = p.times?.length ? p.times : out.map((q, j) => (pickSig(q) === sig ? j : -1));
+    let next = -1;
+    for (const j of mates) if (j !== i && out[j] && !out[j].lead && !gone(out[j]) && (next < 0 || out[j].dep < out[next].dep)) next = j;
+    if (next < 0) return;
+    const q = out[next];
+    out[next] = { ...q, lead: true, top: p.top, weak: p.weak, tags: p.tags, score: p.score, times: p.times };
+    out[i] = { ...p, lead: false, top: false };
+  });
+  return out;
+}
+
+// Why a kept trip's ways have to be found again, or '' when they're good.
+// `kept`: { at, from, plans } (the plans as planned); `here`: where you are.
+export function replanWhy(kept, { w, here = null, picks = [], now = Date.now() }) {
+  if (!kept?.plans?.length) return 'none';
+  const ahead = w.at && w.by !== 'arrive' && w.at > now;
+  if (now - kept.at > (ahead ? Math.min(KEEP_AHEAD_MS, Math.max(KEEP_MS, w.at - kept.at)) : KEEP_MS)) return 'old';
+  if (!w.from && (!here || !kept.from || meters(here.lat, here.lon, kept.from.lat, kept.from.lon) > MOVED_M)) return 'moved';
+  const live = p => p.dep >= now - 2 * 60_000;
+  const good = kept.plans.filter(p => p.lead && !p.weak);
+  if (w.by === 'arrive') return good.some(p => !live(p)) ? 'gone' : '';
+  // Each way's departures still ahead, as rolling on would show them.
+  const ways = new Set(kept.plans.filter(live).map(pickSig));
+  if (picks.some(k => kept.plans.some(p => pickSig(p) === k) && !ways.has(k))) return 'pinned gone';
+  // (The recommendations, the ways shown first.)
+  const top = good.filter(p => p.top);
+  const shown = new Set(top.map(pickSig));
+  const left = [...shown].filter(k => ways.has(k) || top.some(p => pickSig(p) === k && anytime(p))).length;
+  return left < Math.min(2, shown.size) ? 'run out' : '';
+}
+
 function readTrips() {
   try {
     return JSON.parse(localStorage.getItem(TRIP_CACHE) || '{}') || {};
@@ -233,31 +294,25 @@ function readTrips() {
     return {};
   }
 }
-function keepTrip(key, plans) {
+function keepTrip(key, kept) {
   try {
+    localStorage.removeItem('ot.trips.v1');
     const all = readTrips();
     const now = Date.now();
-    for (const k of Object.keys(all)) if (now - all[k].at > TRIP_KEEP_MS) delete all[k];
+    for (const k of Object.keys(all)) if (now - all[k].at > KEEP_AHEAD_MS) delete all[k];
     // (Promises, the later buses on their way, aren't kept.)
-    all[key] = { at: now, plans: JSON.parse(JSON.stringify(plans, (k, v) => (v instanceof Promise ? undefined : v))) };
+    all[key] = JSON.parse(JSON.stringify({ at: kept.at, from: kept.from, plans: kept.plans }, (k, v) => (v instanceof Promise ? undefined : v)));
     localStorage.setItem(TRIP_CACHE, JSON.stringify(all));
   } catch {}
 }
-async function keptTrip(key, w) {
-  const hit = readTrips()[key];
+// The kept plans as they are now: rolled on, the buses due soon timed by what they're doing.
+async function retimed(base, w) {
   const now = Date.now();
-  if (!hit || now - hit.at > TRIP_KEEP_MS) return null;
-  // Every way shown still to come; else planned again.
-  // (The list stays whole: a card's times point into it.)
-  const plans = hit.plans;
-  const shown = plans.filter(p => p.lead && !p.weak);
-  // (By an arrival time too: a way whose time to set out has gone is planned again.)
-  if (!shown.length || shown.some(p => p.dep < now - 60_000)) return null;
-  // The buses due soon: their times now.
   const { adjustPlan } = await import('./live.mjs');
   // (From when you can set out: now, or the trip's time; by an arrival time, as planned.)
   const start = w.by === 'arrive' ? null : Math.max(now, w.at || now);
-  return Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000) ? adjustPlan(p, now, { start }).catch(() => p) : p)));
+  const plans = w.by === 'arrive' ? base : rollPlans(base, now);
+  return Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000 && l.dep >= now - 2 * 60_000) ? adjustPlan(p, now, { start }).catch(() => p) : p)));
 }
 
 async function loadTrip(w, { force = false } = {}) {
@@ -267,36 +322,45 @@ async function loadTrip(w, { force = false } = {}) {
     S.trips.delete(w.id);
     for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
   }
-  if (!force && old && (old.loading || Date.now() - old.at < 4 * 60_000)) return;
-  // Opened again soon after: the plans kept on the phone.
-  const here0 = w.from || (ctx.here ? { lat: ctx.here.lat, lon: ctx.here.lon } : null);
-  if (!force && !old && here0) {
-    const key = tripKey(w, here0);
-    const kept = await keptTrip(key, w).catch(() => null);
-    if (kept) {
-      S.trips.set(w.id, { sig, at: Date.now(), from: w.from || { name: '目前位置', ...here0 }, plans: kept, error: '', kept: true });
+  if (old?.loading) return;
+  const here = ctx.here ? { lat: ctx.here.lat, lon: ctx.here.lon } : null;
+  const picks = ctx.data.saved.find(t => w.id.startsWith(`${t.id}:`))?.picks || [];
+  // The ways found before (this session's, else the phone's): their times now.
+  const kept = force ? null : old?.base ? { at: old.at, from: old.from, plans: old.base } : readTrips()[tripKey(w)];
+  if (kept && !replanWhy(kept, { w, here, picks })) {
+    if (old?.base && Date.now() - old.timed < RETIME_MS) return;
+    const plans = await retimed(kept.plans, w).catch(() => null);
+    if (plans) {
+      const cur = S.trips.get(w.id);
+      // (A way's card moved on to its next departure: the time picked on it with it.)
+      if (cur?.plans && cur.plans.some((p, i) => p.lead !== plans[i]?.lead)) for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
+      S.trips.set(w.id, { sig, at: kept.at, from: w.from || { name: '目前位置', ...kept.from }, base: kept.plans, timed: Date.now(), plans, error: '', kept: true });
       return render();
     }
   }
-  S.trips.set(w.id, { ...(old || {}), sig, loading: true, at: Date.now() });
+  S.trips.set(w.id, { ...(old || {}), sig, loading: true });
   render();
   try {
-    const from = w.from || (ctx.here ? { name: '目前位置', lat: ctx.here.lat, lon: ctx.here.lon } : null);
+    const from = w.from || (here ? { name: '目前位置', ...here } : null);
     if (!from) throw Object.assign(new Error('nohere'), { code: 'NO_HERE' });
+    const at = Date.now();
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
     for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
-    S.trips.set(w.id, { sig, at: Date.now(), from, plans: out.plans, error: out.plans.length ? '' : out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
-    if (out.plans.length) keepTrip(tripKey(w, from), out.plans);
+    const done = plans => {
+      S.trips.set(w.id, { sig, at, from, base: plans, timed: Date.now(), plans, error: '' });
+      keepTrip(tripKey(w), { at, from: { lat: from.lat, lon: from.lon }, plans });
+    };
+    if (out.plans.length) done(out.plans);
+    else S.trips.set(w.id, { sig, at, from, plans: [], error: out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
     // The direct buses and every bus's times, a moment later (unless a time was picked meanwhile).
     out.later?.then(o => {
       const cur = S.trips.get(w.id);
       if (!o?.plans?.length || cur?.plans !== out.plans || [...S.choice.keys()].some(k => k.startsWith(`${w.id}:`))) return;
-      S.trips.set(w.id, { ...cur, plans: o.plans, error: '' });
-      keepTrip(tripKey(w, from), o.plans);
+      done(o.plans);
       render();
     });
   } catch (err) {
-    S.trips.set(w.id, { sig, at: Date.now(), plans: old?.plans || [], error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
+    S.trips.set(w.id, { sig, at: Date.now(), plans: old?.plans || [], base: old?.base, timed: old?.timed, error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
   }
   render();
 }

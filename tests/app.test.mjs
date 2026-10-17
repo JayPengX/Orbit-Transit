@@ -646,6 +646,42 @@ test('a saved trip’s way now: out from home, back from its far end, the time t
   assert.equal(tripNow(t, home, T('09:00')).at, twAt('2026-10-06', '07:30'), 'past today: tomorrow’s');
 });
 
+test('a pinned trip planned once: each way’s next departure takes its card; planned again only when its ways could differ', async () => {
+  const { rollPlans, replanWhy } = await import('../public/lib/tab-go.mjs');
+  const { pickSig } = await import('../public/lib/plan.mjs');
+  const bus = (k, dep, extra = {}) => ({ legs: [{ mode: 'bus', short: k, dep: T(dep), arr: T(dep) + 600_000 }], dep: T(dep), arr: T(dep) + 600_000, ...extra });
+  const ride = dep => ({ legs: [{ mode: 'bike', dep: T(dep), arr: T(dep) + 900_000 }], dep: T(dep), arr: T(dep) + 900_000, lead: true, top: true, tags: ['YouBike'], times: [0] });
+  // 0 the ride, 1-3 快捷8 (its card at 07:05, then 07:25, 07:45), 4-5 5608 (07:10, 08:30).
+  const plans = [ride('07:00'), bus('快捷8', '07:05', { lead: true, top: true, tags: ['推薦'], times: [1, 2, 3] }), bus('快捷8', '07:25', { lead: false, times: [1, 2, 3] }), bus('快捷8', '07:45', { lead: false, times: [1, 2, 3] }), bus('5608', '07:10', { lead: true, top: true, times: [4, 5] }), bus('5608', '08:30', { lead: false, times: [4, 5] })];
+  const now = T('07:15');
+  const out = rollPlans(plans, now);
+  assert.equal(out.length, plans.length, 'the list keeps its order: a card’s times point into it');
+  assert.ok(out[2].lead && out[2].top && out[2].tags.includes('推薦') && !out[1].lead, '快捷8’s 07:25 has its card now');
+  assert.ok(out[5].lead && out[5].top, '5608’s next, 08:30');
+  assert.equal(out[0].dep, now, 'a ride leaves when you do');
+  const home = { lat: 24.821, lon: 121.018 };
+  const w = { id: 's1:f', from: null, to: { lat: 24.733, lon: 121.088 }, at: null, by: 'depart' };
+  const kept = { at: T('07:00'), from: home, plans };
+  assert.equal(replanWhy(kept, { w, here: home, now }), '', 'the same ways a quarter of an hour on');
+  assert.equal(replanWhy(kept, { w, here: { lat: 24.8215, lon: 121.0185 }, now }), '', 'a few metres off (the fix drifting indoors)');
+  assert.equal(replanWhy(kept, { w, here: { lat: 24.826, lon: 121.018 }, now }), 'moved', 'half a kilometre away: other stops in reach');
+  assert.equal(replanWhy(kept, { w: { ...w, from: home }, here: { lat: 24.9, lon: 121.1 }, now }), '', 'from the trip’s own start: where you are doesn’t matter');
+  assert.equal(replanWhy(kept, { w, here: home, now: T('09:01') }), 'old', 'two hours on: the buses running change through the day');
+  assert.equal(replanWhy(kept, { w, here: home, now: T('07:50'), picks: [] }), '', '5608 still to come at 08:30, and the ride');
+  assert.equal(replanWhy(kept, { w, here: home, now: T('07:50'), picks: [pickSig(plans[1])] }), 'pinned gone', 'the way you pinned has no departure left');
+  const noRide = { ...kept, plans: plans.slice(1).map(p => ({ ...p, times: p.times.map(j => j - 1) })) };
+  assert.equal(replanWhy(noRide, { w, here: home, now: T('08:40') }), 'run out', 'every way’s times gone');
+  const slow = bus('5600', '09:00', { lead: true, top: false, times: [5] });
+  assert.equal(replanWhy({ ...noRide, plans: [...noRide.plans, slow] }, { w, here: home, now: T('08:40') }), 'run out', 'the recommendations gone, only a way that wasn’t one left');
+  // By a time ahead (tomorrow 07:30): kept until then, twelve hours at most.
+  const D = 86_400_000;
+  const ahead = { ...w, at: T('07:30') + D };
+  const tonight = { at: T('21:00'), from: home, plans: plans.map(p => ({ ...p, dep: p.dep + D, arr: p.arr + D })) };
+  assert.equal(replanWhy(tonight, { w: ahead, here: home, now: T('21:00') + 9 * 3_600_000 }), '');
+  assert.equal(replanWhy(tonight, { w: ahead, here: home, now: T('21:00') + 13 * 3_600_000 }), 'old');
+  assert.equal(replanWhy({ ...kept, plans: [] }, { w, here: home, now }), 'none');
+});
+
 test('by a departure time: a plan that has you leave before it sinks out; riding most of the way sinks', () => {
   const o = { lat: 24.821, lon: 121.018 };
   const d = { lat: 24.733, lon: 121.088 };
