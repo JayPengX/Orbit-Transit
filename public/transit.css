@@ -3406,6 +3406,20 @@ main {
 .ot-strip-eta.live.words b {
   color: #4ade80;
 }
+/* 進站中 / 即將進站 breathe, as a Live Activity's does: the bus is there. */
+.ot-strip-eta.now b {
+  animation: ot-breathe 1.8s ease-in-out infinite;
+}
+@keyframes ot-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ot-strip-eta.now b {
+    animation: none;
+  }
+}
 .ot-skel {
   display: inline-block;
   height: 0.75em;
