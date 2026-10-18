@@ -1661,7 +1661,9 @@ test('search results: one row a place (the same name at the same spot, or the sa
     { kind: 'google', id: 'g5', name: '八方雲集', sub: '新竹市北區' },
     { kind: 'google', id: 'g6', name: '八方雲集', sub: '新竹市東區' }
   ]);
-  assert.deepEqual(rows.map(r => r.id || r.kind), ['trip', 'g3', 'g4', 'g5', 'g6']);
+  // (The full name kept in the first one's place: 巨城購物中心 Big City.)
+  assert.deepEqual(rows.map(r => r.id || r.kind), ['g2', 'g3', 'g4', 'g5', 'g6']);
+  assert.deepEqual(uniqueResults([{ kind: 'geo', id: 'a', name: '巨城購物', lat: 24.8096, lon: 120.9748 }, { kind: 'geo', id: 'b', name: 'Big City遠東巨城購物中心', lat: 24.8094, lon: 120.9751 }, { kind: 'place', name: '巨城', lat: 24.8096, lon: 120.9748 }]).map(r => r.name), ['Big City遠東巨城購物中心', '巨城']);
   const { shortAddress } = await import('../public/lib/tab-map.mjs');
   assert.equal(shortAddress('新竹市東區復中里中央路229 號4 樓'), '新竹市東區中央路229號4樓');
   assert.equal(shortAddress('新竹市東區南市里西大路323號'), '新竹市東區西大路323號');
