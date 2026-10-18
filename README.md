@@ -258,7 +258,13 @@ the phone's position:
 - **Each step** moves on by itself when you get there, by where you are
   (`tripAt`): a step's end reached, or the next step's way already under
   you (an end a fix skipped), a bus or train once its first stop is behind
-  you. Started (or opened again) half way, it begins at the step you're at.
+  you and two fixes say you're going its way (one fix on its road while
+  walking to the stop is no ride). Off a ride only near your stop along its
+  own way (a loop or a one-way pair passes near it long before; a walk that
+  goes back along the bus's road doesn't take you off early). A rough fix
+  (100 m and more out, a cell tower's) moves the dot, never the trip.
+  Started (or opened again) half way, it begins at the step you're at;
+  started a few minutes late at the walk's start, on the walk.
 - **Another departure**: tap the countdown (or ⋯ → 改搭別班) for the bus's
   or train's next departures (live, or the timetable's), one tap to take
   one; what follows moves with it, and a train it would now miss is said.
@@ -289,7 +295,16 @@ the phone's position:
   A change to the places after it only changes the list.
 - **Stayed on past your stop**: taken as off at it, but still going along
   the bus's or train's way 300 m and more past it, you're back on it, off at
-  the next stop, the rest planned from there (`state.passed`, `stayedOn`).
+  the next stop, the rest planned from there (`state.passed`, `stayedOn`);
+  only at a ride's speed (walking on along its road isn't staying on), and
+  that stop is the one watched until the new plan is in (never back and
+  forth).
+- **Looking ahead on a ride** (a tap on a later step): the ride is still
+  followed, and when your stop is next it's back on the ride, buzzed.
+- **The YouBike timer** starts at the station on a trip that begins with the
+  bike, and a bike behind you (the phone locked past its step) is ended.
+- **Left open** with the screen on, it ends 90 minutes past the planned
+  arrival, as it does on coming back.
 - **Each ride's stops on its line** (a bus's, a train's, the metro's:
   `metro.mjs metroStops`), dots, where you get off ringed; every ride's
   stops are loaded when navigation starts (`navStops`).
@@ -391,7 +406,9 @@ node ../Shared-Proxy/tools/preview.mjs transit go --webkit
 ```
 
 - **Tests**: `npm test` runs `tests/app.test.mjs` (planning, ranking,
-  routers, packs, navigation on a small made-up network) and
+  routers, packs, navigation on a small made-up network),
+  `tests/nav-drive.test.mjs` (navigation followed fix by fix with the clock
+  and the position watch stood in for, `tests/navsim.mjs`) and
   `tests/shapes.test.mjs`.
 - **Live checks**: `scripts/live.mjs` plans a trip on today's real buses,
   trains and bikes through the dev door. `--against` runs the same trips
