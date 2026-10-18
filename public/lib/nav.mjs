@@ -1125,8 +1125,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
     if (a === 'end') {
       // Asked first: 結束 sits where a thumb lands, and an ended ride can't be had back.
-      const ask = kit.ask || (o => Promise.resolve(globalThis.confirm(`${o.title}\n${o.body}`)));
-      ask({ title: W('結束導航？', 'End navigation?'), body: W(`到 ${plan.dest?.name || plan.legs.at(-1)?.to?.name || '目的地'} 的導航會停止。`, `Directions to ${plan.dest?.name || plan.legs.at(-1)?.to?.name || 'your destination'} stop.`), ok: W('結束導航', 'End'), cancel: W('繼續導航', 'Keep going'), danger: true }).then(ok => {
+      kit.ask({ title: W('結束導航？', 'End navigation?'), body: W(`到 ${plan.dest?.name || plan.legs.at(-1)?.to?.name || '目的地'} 的導航會停止。`, `Directions to ${plan.dest?.name || plan.legs.at(-1)?.to?.name || 'your destination'} stop.`), ok: W('結束導航', 'End'), cancel: W('繼續導航', 'Keep going'), danger: true }).then(ok => {
         if (!ok || nav !== state) return;
         stopNav();
         onEnd?.();

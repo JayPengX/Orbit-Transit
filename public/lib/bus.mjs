@@ -3,7 +3,7 @@
 
 import { packRoute } from './packs.mjs';
 import { tdx, rows } from './api.mjs';
-import { zh, hm, etaAge, meters } from './util.mjs';
+import { zh, hm, etaAge, meters, TDX_DAYS } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 
 import { W, en } from './lang.mjs';
@@ -74,7 +74,6 @@ export async function routeSchedule(route, near = null) {
   const j = await tdx(`basic/v2/Bus/Schedule/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}`, { fresh: 6 * 3_600_000, persist: true });
   return rows(j);
 }
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 // Does a trip run on a Taiwan date ('YYYY-MM-DD', dow 0 = Sunday)? Its special days decide first.
 export function runsOn(trip, date, dow) {
   for (const sp of trip.SpecialDays || []) {
@@ -83,7 +82,7 @@ export function runsOn(trip, date, dow) {
     const inPeriod = p && date >= p.StartDate && date <= p.EndDate;
     if (inDates || inPeriod) return Number(sp.ServiceStatus) === 1;
   }
-  return trip.ServiceDay ? Number(trip.ServiceDay[DAYS[dow]]) === 1 : true;
+  return trip.ServiceDay ? Number(trip.ServiceDay[TDX_DAYS[dow]]) === 1 : true;
 }
 // The day's times at one stop (by StopUID, else by its name), one direction:
 // { times: ['06:00', …] } from the trips, or { every: [{ from, to, min, max }] }.
@@ -98,7 +97,7 @@ export function stopTimes(sched, { stopUID, name, dir }, date, dow) {
       if (st?.DepartureTime || st?.ArrivalTime) times.add(st.DepartureTime || st.ArrivalTime);
     }
     for (const f of r.Frequencys || []) {
-      if (f.ServiceDay && Number(f.ServiceDay[DAYS[dow]]) !== 1) continue;
+      if (f.ServiceDay && Number(f.ServiceDay[TDX_DAYS[dow]]) !== 1) continue;
       every.push({ from: f.StartTime, to: f.EndTime, min: Number(f.MinHeadwayMins) || null, max: Number(f.MaxHeadwayMins) || null });
     }
   }

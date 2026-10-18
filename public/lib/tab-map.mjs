@@ -1133,10 +1133,7 @@ function drawPlaces() {
 
 // ---- A YouBike rental timed (rental.mjs) -------------------------------------------------------------
 
-const rentClock = ms => {
-  const m = Math.max(0, Math.floor(ms / 60_000));
-  return m >= 60 ? W(`${Math.floor(m / 60)} 小時 ${m % 60} 分`, `${Math.floor(m / 60)} h ${m % 60} min`) : W(`${m} 分`, `${m} min`);
-};
+const rentClock = ms => minsText(Math.floor(ms / 60_000) * 60);
 // The chip first in the row above the map: how long you've had it; with
 // TPASS, the free minutes left (amber the last 5, red past them).
 function rentalChip() {
@@ -1861,8 +1858,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   // for from it (重新規劃, 改目的地).
   if (!resume && !swap && navigating() && !(card && card.to === replanTo)) {
     const n = navNow();
-    const ask = kit.ask || (o => Promise.resolve(globalThis.confirm(`${o.title}\n${o.body}`)));
-    const ok = await ask({ title: W('取代目前的導航？', 'Replace current directions?'), body: W(`正在導航到 ${navDest(n).name || '目的地'}，開始新的會結束它。`, `You’re heading to ${navDest(n).name || 'a destination'}; starting new ones ends that.`), ok: W('開始新的導航', 'Start new'), cancel: W('繼續原本的', 'Keep current') });
+    const ok = await kit.ask({ title: W('取代目前的導航？', 'Replace current directions?'), body: W(`正在導航到 ${navDest(n).name || '目的地'}，開始新的會結束它。`, `You’re heading to ${navDest(n).name || 'a destination'}; starting new ones ends that.`), ok: W('開始新的導航', 'Start new'), cancel: W('繼續原本的', 'Keep current') });
     if (!ok) return;
   }
   replanTo = null;
