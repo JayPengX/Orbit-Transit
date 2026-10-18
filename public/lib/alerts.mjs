@@ -12,6 +12,7 @@ import { etaStops } from './near.mjs';
 import { uid } from './util.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 
+import { W, en } from './lang.mjs';
 const KEY = 'orbit-transit.alerts';
 const TTL = 2 * 60 * 60_000;
 let list = load();
@@ -46,7 +47,7 @@ function keep() {
 export const pushItem = a => ({
   at: a.at,
   until: a.at + TTL,
-  title: `${a.route} 快到了`,
+  title: W(`${a.route} 快到了`, `${a.route} is almost here`),
   body: `{result}（${a.station.name}）`,
   tag: `bus:${a.id}`,
   kind: 'bus',
@@ -127,7 +128,7 @@ async function check() {
       const r = rows.filter(x => x.StopUID === a.stop.uid && x.RouteUID === a.routeUID && Number(x.Direction) === Number(a.dir)).map(x => etaOf(x)).find(x => x.sec != null);
       if (!r || r.sec > a.min * 60) continue;
       const m = Math.max(0, Math.round(r.sec / 60));
-      await notify(`${a.route} ${m <= 1 ? '即將進站' : `${m} 分後到站`}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''} · 該出發了`, `transit:bus:${a.id}`);
+      await notify(`${a.route} ${m <= 1 ? W('即將進站', 'arriving') : W(`${m} 分後到站`, `in ${m} min`)}`, `${a.station.name}${r.plate ? ` · ${r.plate}` : ''} · ${W('該出發了', 'time to go')}`, `transit:bus:${a.id}`);
       list = list.filter(x => x !== a);
     }
   } finally {

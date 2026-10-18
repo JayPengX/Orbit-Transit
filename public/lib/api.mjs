@@ -6,6 +6,7 @@
 import { dev } from '#kit/quadra.mjs';
 import { WALK_M_MIN } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 export const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
 const DATA_CACHE = 'orbit-transit-data';
 
@@ -210,18 +211,18 @@ export function watchPosition(fn, nav = globalThis.navigator) {
 // What went wrong, said plainly: the network here, the data source there, or busy.
 export const errorText = err =>
   err?.code === 'OFFLINE'
-    ? '沒有網路連線，連上後會自動更新。'
+    ? W('沒有網路連線，連上後會自動更新。', 'Offline. It updates once you’re back.')
     : err?.code === 'TDX_BUSY' || err?.status === 429
-      ? '查詢的人有點多，稍後自動再試。'
+      ? W('查詢的人有點多，稍後自動再試。', 'Busy right now. Retrying shortly.')
       : err?.code === 'TDX_NO_KEY'
-        ? '交通資料尚未開通（TDX 金鑰還沒設定）。'
+        ? W('交通資料尚未開通（TDX 金鑰還沒設定）。', 'Transit data isn’t set up yet (no TDX key).')
         : err?.code === 'SIGNED_OUT'
-          ? '請先登入 Quadra Pass。'
+          ? W('請先登入 Quadra Pass。', 'Sign in to Quadra Pass first.')
           : err?.code === 'TIMEOUT'
-            ? '資料來源回應太慢，稍後自動再試。'
+            ? W('資料來源回應太慢，稍後自動再試。', 'The source is slow. Retrying shortly.')
             : err?.code === 'TDX_FAILED' || err?.status >= 500
-              ? '交通部 TDX 暫時沒有回應，稍後自動再試。'
-              : '暫時無法取得資料，稍後自動再試。';
+              ? W('交通部 TDX 暫時沒有回應，稍後自動再試。', 'TDX isn’t answering. Retrying shortly.')
+              : W('暫時無法取得資料，稍後自動再試。', 'Can’t get data right now. Retrying shortly.');
 
 // ---- Walks ---------------------------------------------------------------------------------------
 // One walk wherever it's shown (the strip of nearest stations, a card's 距離

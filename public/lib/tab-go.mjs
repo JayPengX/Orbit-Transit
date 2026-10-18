@@ -21,9 +21,10 @@ import { planTrip } from './planner.mjs';
 import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { icon, legChips, depChips } from './ui.mjs';
+import { icon, legChips, depChips, tagText, trainKind } from './ui.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 let timer = 0;
@@ -89,7 +90,7 @@ export function tripNow(t, here, now = Date.now()) {
     const other = p === t.to ? t.from : t.to;
     return d(p) <= NEAR_END_M || (other && d(p) <= span * 0.3 && d(p) < d(other));
   };
-  const back = { from: t.to, to: t.from, label: `${t.name || t.to.name} 回程`, key: 'back', rev: true };
+  const back = { from: t.to, to: t.from, label: W(`${t.name || t.to.name} 回程`, `${t.name || t.to.name}: return`), key: 'back', rev: true };
   const fwd = { from: t.from, to: t.to, label: t.name || t.to.name, key: 'time', rev: false };
   let way = fwd;
   if (near(t.to) && t.from) way = back;
@@ -204,7 +205,7 @@ async function trainPins() {
         const runs = net.trips.filter(t => t.sys === p.sys && t.no === p.no);
         const times = runs.map(t => ({ a: t.stops.find(x => x.st === from), b: t.stops.find(x => x.st === to) })).filter(x => x.a && x.b && x.a.dep > now - 60_000);
         const x = times[0];
-        S.trains.set(p.id, [{ dep: x ? x.a.dep : null, arr: x ? x.b.arr : null, label: x ? `${p.type || ''} ${p.no} 次`.trim() : `${p.no} 次今天不開或已過`, delay: p.sys === 'tra' ? delays.get(p.no) || 0 : 0 }]);
+        S.trains.set(p.id, [{ dep: x ? x.a.dep : null, arr: x ? x.b.arr : null, label: x ? W(`${p.type || ''} ${p.no} 次`, `${trainKind(p.type || '')} ${p.no}`).trim() : W(`${p.no} 次今天不開或已過`, `Train ${p.no}: none today or gone`), delay: p.sys === 'tra' ? delays.get(p.no) || 0 : 0 }]);
       }
     }
   } catch {}
@@ -334,14 +335,14 @@ async function loadTrip(w, { force = false } = {}) {
       const cur = S.trips.get(w.id);
       // (A way's card moved on to its next departure: the time picked on it with it.)
       if (cur?.plans && cur.plans.some((p, i) => p.lead !== plans[i]?.lead)) for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
-      S.trips.set(w.id, { sig, at: kept.at, from: w.from || { name: '目前位置', ...kept.from }, base: kept.plans, timed: Date.now(), plans, error: '', kept: true });
+      S.trips.set(w.id, { sig, at: kept.at, from: w.from || { name: W('目前位置', 'Here'), ...kept.from }, base: kept.plans, timed: Date.now(), plans, error: '', kept: true });
       return render();
     }
   }
   S.trips.set(w.id, { ...(old || {}), sig, loading: true });
   render();
   try {
-    const from = w.from || (here ? { name: '目前位置', ...here } : null);
+    const from = w.from || (here ? { name: W('目前位置', 'Here'), ...here } : null);
     if (!from) throw Object.assign(new Error('nohere'), { code: 'NO_HERE' });
     const at = Date.now();
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
@@ -351,7 +352,7 @@ async function loadTrip(w, { force = false } = {}) {
       keepTrip(tripKey(w), { at, from: { lat: from.lat, lon: from.lon }, plans });
     };
     if (out.plans.length) done(out.plans);
-    else S.trips.set(w.id, { sig, at, from, plans: [], error: out.error ? errorText(out.error) : '找不到大眾運輸方案。' });
+    else S.trips.set(w.id, { sig, at, from, plans: [], error: out.error ? errorText(out.error) : W('找不到大眾運輸方案。', 'No transit route found.') });
     // The direct buses and every bus's times, a moment later (unless a time was picked meanwhile).
     out.later?.then(o => {
       const cur = S.trips.get(w.id);
@@ -360,7 +361,7 @@ async function loadTrip(w, { force = false } = {}) {
       render();
     });
   } catch (err) {
-    S.trips.set(w.id, { sig, at: Date.now(), plans: old?.plans || [], base: old?.base, timed: old?.timed, error: err.code === 'NO_HERE' ? '需要你的位置。' : errorText(err) });
+    S.trips.set(w.id, { sig, at: Date.now(), plans: old?.plans || [], base: old?.base, timed: old?.timed, error: err.code === 'NO_HERE' ? W('需要你的位置。', 'Needs your location.') : errorText(err) });
   }
   render();
 }
@@ -385,7 +386,7 @@ async function loadPlace(id) {
 
 const leave = t => {
   const m = Math.round((t - Date.now()) / 60_000);
-  return m <= 0 ? '現在' : m < 60 ? `${m} 分後` : hm(t);
+  return m <= 0 ? W('現在', 'Now') : m < 60 ? W(`${m} 分後`, `in ${m} min`) : hm(t);
 };
 // The buses shown near a pinned place: the three soonest at each of its
 // stops, the five soonest of those.
@@ -396,7 +397,7 @@ const placeBuses = stops =>
     .slice(0, 5);
 const busRow = x => {
   const pinned = ctx.data.groups.some(g => g.items.some(i => i.stopUID === x.stopUID));
-  return `<div class="ot-strip">${strip({ no: x.route, note: x.dir ? '返程' : '去程', main: e(x.stop || ''), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: `data-route="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"` })}<button class="q-icon-btn ot-strip-act${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="釘選" ${pinned ? 'disabled' : ''}>${icon('star')}</button></div>`;
+  return `<div class="ot-strip">${strip({ no: x.route, note: x.dir ? W('返程', 'Return') : W('去程', 'Outbound'), main: e(x.stop || ''), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: `data-route="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"` })}<button class="q-icon-btn ot-strip-act${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="${W('釘選', 'Pin')}" ${pinned ? 'disabled' : ''}>${icon('star')}</button></div>`;
 };
 
 // A trip's plans to show: the ways you pinned first (their next
@@ -413,8 +414,8 @@ export function tripPlans(plans, picks = [], now = Date.now()) {
 
 function tripCard({ t, w }) {
   const st = tripOf(w);
-  const head = `<header class="ot-go-head"><span class="ot-go-title">${icon(w.recurring ? 'clock' : 'route')}<b>${e(w.label)}</b></span><small>${e(w.from ? w.from.name : '目前位置')} → ${e(w.to.name)}${w.at ? ` · ${tw(w.at).date !== tw().date ? e(dayLabel(tw(w.at).date)) + ' ' : ''}${w.by === 'arrive' ? '抵達' : '出發'} ${hm(w.at)}` : ''}</small><button class="q-icon-btn" type="button" data-edit-trip="${e(t.id)}" aria-label="編輯">${icon('edit')}</button></header>`;
-  if (!st) return `<section class="ot-go-card">${head}<button class="q-btn ot-wide" type="button" data-load-trip="${e(t.id)}">看接下來的班次</button></section>`;
+  const head = `<header class="ot-go-head"><span class="ot-go-title">${icon(w.recurring ? 'clock' : 'route')}<b>${e(w.label)}</b></span><small>${e(w.from ? w.from.name : W('目前位置', 'Here'))} → ${e(w.to.name)}${w.at ? ` · ${tw(w.at).date !== tw().date ? e(dayLabel(tw(w.at).date)) + ' ' : ''}${w.by === 'arrive' ? W('抵達', 'arrive') : W('出發', 'leave')} ${hm(w.at)}` : ''}</small><button class="q-icon-btn" type="button" data-edit-trip="${e(t.id)}" aria-label="${W('編輯', 'Edit')}">${icon('edit')}</button></header>`;
+  if (!st) return `<section class="ot-go-card">${head}<button class="q-btn ot-wide" type="button" data-load-trip="${e(t.id)}">${W('看接下來的班次', 'See the next rides')}</button></section>`;
   const all = st.plans || [];
   const { first, rest } = tripPlans(all, t.picks);
   // One row per way: the departure picked from its times (the first shown at first), the leave and arrival times its own.
@@ -426,16 +427,16 @@ function tripCard({ t, w }) {
     const times = (lead.times || []).filter(j => all[j] && all[j].dep >= Date.now() - 2 * 60_000);
     const deps = depChips(all, times, i, j => `data-go-dep="${e(w.id)}" data-lead="${at}" data-i="${j}"`).replace('ot-plan-deps', 'ot-plan-deps ot-go-deps');
     return `<div class="ot-go-plan-row"><button class="ot-go-plan" type="button" data-nav-trip="${e(w.id)}" data-i="${i}">
-      <span class="ot-go-leave"><b>${e(leave(p.dep))}</b><small>${p.dep - Date.now() < 60 * 60_000 ? `${e(hm(p.dep))} 出發` : tw(p.dep).date !== tw().date ? `${e(dayLabel(tw(p.dep).date))}出發` : '建議出發'}</small></span>
-      <span class="ot-go-legs"><span class="ot-legs">${legChips(p.legs)}</span><small>${p.live ? '預計 ' : ''}${e(hm(p.arr))} 抵達 · ${e(minsText(p.dur))}${p.transfers ? ` · 轉乘 ${p.transfers}` : ''}${p.fareText ? ` · ${e(p.fareText)}` : ''}${p.live ? ' · <i class="ot-livedot"></i>即時' : ''}</small>${p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length ? `<small class="warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? `比 ${hm(p.deadline)} 晚 ${lateBy(p, p.arr)} 分到` : '') || `${p.riverBy || '騎車'}過${p.rivers.join('、')}`)}</small>` : ''}</span>
-      ${icon(canNav(p) ? 'route' : 'chevron')}</button><button class="q-icon-btn${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? '取消釘選這個方案' : '釘選這個方案'}">${icon('star')}</button>${deps}</div>`;
+      <span class="ot-go-leave"><b>${e(leave(p.dep))}</b><small>${p.dep - Date.now() < 60 * 60_000 ? W(`${e(hm(p.dep))} 出發`, `Leave ${e(hm(p.dep))}`) : tw(p.dep).date !== tw().date ? W(`${e(dayLabel(tw(p.dep).date))}出發`, `Leave ${e(dayLabel(tw(p.dep).date))}`) : W('建議出發', 'Leave then')}</small></span>
+      <span class="ot-go-legs"><span class="ot-legs">${legChips(p.legs)}</span><small>${p.live ? W('預計 ', '') : ''}${W(`${e(hm(p.arr))} 抵達`, `Arrive ${e(hm(p.arr))}`)} · ${e(minsText(p.dur))}${p.transfers ? ` · ${W('轉乘', 'changes')} ${p.transfers}` : ''}${p.fareText ? ` · ${e(p.fareText)}` : ''}${p.live ? ` · <i class="ot-livedot"></i>${W('即時', 'Live')}` : ''}</small>${p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length ? `<small class="warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? W(`比 ${hm(p.deadline)} 晚 ${lateBy(p, p.arr)} 分到`, `${lateBy(p, p.arr)} min after ${hm(p.deadline)}`) : '') || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')}`))}</small>` : ''}</span>
+      ${icon(canNav(p) ? 'route' : 'chevron')}</button><button class="q-icon-btn${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? W('取消釘選這個方案', 'Unpin this route') : W('釘選這個方案', 'Pin this route')}">${icon('star')}</button>${deps}</div>`;
   };
   // (By a time nothing reaches any more: said once, the ways below leaving now.)
-  const behind = w.by === 'arrive' && w.at && first.length && first.every(p => lateBy(p, p.arr)) ? `<p class="ot-note warn">${e(hm(w.at))} 前到不了了，現在出發最快的方式：</p>` : '';
+  const behind = w.by === 'arrive' && w.at && first.length && first.every(p => lateBy(p, p.arr)) ? `<p class="ot-note warn">${W(`${e(hm(w.at))} 前到不了了，現在出發最快的方式：`, `Can’t make ${e(hm(w.at))}. Fastest from now:`)}</p>` : '';
   const more = S.more.has(w.id);
-  const plans = first.map(row).join('') + (rest.length ? (more ? rest.map(row).join('') : '') + `<button class="ot-go-link" type="button" data-more-trip="${e(w.id)}">${more ? '收起' : `更多方案（${rest.length}）`}</button>` : '');
-  const hint = all.length && !t.picks.length ? '<p class="ot-note ot-go-tip">按 ☆ 釘選你常搭的方案，它的下一班會排在最前面。</p>' : '';
-  return `<section class="ot-go-card">${head}${behind}${plans}${hint}${st.loading && !all.length ? '<p class="ot-note">找班次…</p>' : ''}${st.error && !all.length ? `<p class="ot-note">${e(st.error)}</p>` : ''}<button class="ot-go-link" type="button" data-all-trip="${e(w.id)}">在地圖上看所有方案 ${icon('chevron')}</button></section>`;
+  const plans = first.map(row).join('') + (rest.length ? (more ? rest.map(row).join('') : '') + `<button class="ot-go-link" type="button" data-more-trip="${e(w.id)}">${more ? W('收起', 'Less') : W(`更多方案（${rest.length}）`, `More routes (${rest.length})`)}</button>` : '');
+  const hint = all.length && !t.picks.length ? `<p class="ot-note ot-go-tip">${W('按 ☆ 釘選你常搭的方案，它的下一班會排在最前面。', 'Tap ☆ on a route you take: its next ride goes first.')}</p>` : '';
+  return `<section class="ot-go-card">${head}${behind}${plans}${hint}${st.loading && !all.length ? `<p class="ot-note">${W('找班次…', 'Finding rides…')}</p>` : ''}${st.error && !all.length ? `<p class="ot-note">${e(st.error)}</p>` : ''}<button class="ot-go-link" type="button" data-all-trip="${e(w.id)}">${W('在地圖上看所有方案', 'All routes on the map')} ${icon('chevron')}</button></section>`;
 }
 
 function pinnedHtml() {
@@ -456,41 +457,41 @@ function pinnedHtml() {
       // ☆ to unpin is in the route's sheet (a tap away) and 我的.
       // (A stop pinned alone: which way its buses go.)
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
-      const dir = it.back ? `<span class="ot-strip-dir" role="button" data-flip="${e(it.id)}" aria-label="${r.back ? '回程，改看去程' : '去程，改看回程'}">${icon('swap')}${r.back ? '回程' : '去程'}</span>` : '';
-      const note = r.off ? `${dir}到 ${e(r.off.stop)}${it.n ? ` · ${it.n} 站` : ''}` : `往 ${e(r.headsign || '—')}`;
+      const dir = it.back ? `<span class="ot-strip-dir" role="button" data-flip="${e(it.id)}" aria-label="${r.back ? W('回程，改看去程', 'Return; show outbound') : W('去程，改看回程', 'Outbound; show return')}">${icon('swap')}${r.back ? W('回程', 'Return') : W('去程', 'Out')}</span>` : '';
+      const note = r.off ? `${dir}${W('到', 'to')} ${e(r.off.stop)}${it.n ? ` · ${W(`${it.n} 站`, `${it.n} stops`)}` : ''}` : `${W('往', 'to')} ${e(r.headsign || '—')}`;
       return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: t, attrs: `data-route="${route}"` })}</div>`;
     })
     .join('');
-  const name = s => (s.sys === 'hsr' ? `高鐵${s.name}` : s.name);
+  const name = s => (s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
   const tr = trains
     .map(p => {
       const list = S.trains.get(p.id) || [];
       const rowsHtml = list
         .filter(x => x.dep == null || x.dep > Date.now() - 60_000 || p.kind === 'trainNo')
-        .map(x => `<span class="ot-go-tr"><b>${e(hm(x.dep))}</b>${x.arr ? `→${e(hm(x.arr))}` : ''} <small>${e(x.label)}</small>${x.delay ? `<i class="warn">晚 ${x.delay} 分</i>` : ''}</span>`)
+        .map(x => `<span class="ot-go-tr"><b>${e(hm(x.dep))}</b>${x.arr ? `→${e(hm(x.arr))}` : ''} <small>${e(x.label)}</small>${x.delay ? `<i class="warn">${W(`晚 ${x.delay} 分`, `${x.delay} min late`)}</i>` : ''}</span>`)
         .join('');
-      return `<div class="ot-go-row train"><span class="ot-go-what"><b>${e(name(p.from))} → ${e(name(p.to))}</b><small>${p.kind === 'trainNo' ? '釘選的車次' : '接下來的車'}</small><span class="ot-go-trs">${rowsHtml || '<small>載入中…</small>'}</span></span><button class="q-icon-btn on" type="button" data-unpin-train="${e(p.id)}" aria-label="取消釘選">${icon('star')}</button><button class="q-icon-btn" type="button" data-times="${e(p.id)}" aria-label="查時刻">${icon('chevron')}</button></div>`;
+      return `<div class="ot-go-row train"><span class="ot-go-what"><b>${e(name(p.from))} → ${e(name(p.to))}</b><small>${p.kind === 'trainNo' ? W('釘選的車次', 'Pinned train') : W('接下來的車', 'Next trains')}</small><span class="ot-go-trs">${rowsHtml || `<small>${W('載入中…', 'Loading…')}</small>`}</span></span><button class="q-icon-btn on" type="button" data-unpin-train="${e(p.id)}" aria-label="${W('取消釘選', 'Unpin')}">${icon('star')}</button><button class="q-icon-btn" type="button" data-times="${e(p.id)}" aria-label="${W('查時刻', 'Times')}">${icon('chevron')}</button></div>`;
     })
     .join('');
-  return `<h3 class="ot-go-h">釘選的公車・火車</h3><section class="ot-go-card">${buses}${tr}</section>`;
+  return `<h3 class="ot-go-h">${W('釘選的公車・火車', 'Pinned buses and trains')}</h3><section class="ot-go-card">${buses}${tr}</section>`;
 }
 
 function placesHtml() {
   const here = ctx.here;
   const list = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
   if (!list.length) return '';
-  return `<h3 class="ot-go-h">釘選地點</h3>${list
+  return `<h3 class="ot-go-h">${W('釘選地點', 'Pinned places')}</h3>${list
     .map(p => {
       const open = S.open.has(p.id);
       const d = S.places.get(p.id);
       const body = !open
         ? ''
         : !d
-          ? '<p class="ot-note">載入…</p>'
+          ? `<p class="ot-note">${W('載入…', 'Loading…')}</p>`
           : `${d.error ? `<p class="ot-note">${e(d.error)}</p>` : ''}${placeBuses(d.stops)
               .map(x => busRow(x))
-              .join('')}${d.bikes.length ? `<div class="ot-go-bikes">${d.bikes.map(b => `<span class="ot-go-bike">${icon('bike')}<b>${e(b.name)}</b><small>一般 ${b.bikes}・⚡${b.ebike}・空位 ${b.ret}</small></span>`).join('')}</div>` : ''}`;
-      return `<section class="ot-go-card"><header class="ot-go-head"><button class="ot-go-title" type="button" data-place="${e(p.id)}">${PLACE_ICONS[p.icon] || '📍'} <b>${e(p.name)}</b>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button><button class="q-btn" type="button" data-go-place="${e(p.id)}">${icon('route')} 怎麼去</button></header>${body}</section>`;
+              .join('')}${d.bikes.length ? `<div class="ot-go-bikes">${d.bikes.map(b => `<span class="ot-go-bike">${icon('bike')}<b>${e(b.name)}</b><small>${W('一般', 'Bikes')} ${b.bikes}・⚡${b.ebike}・${W('空位', 'Docks')} ${b.ret}</small></span>`).join('')}</div>` : ''}`;
+      return `<section class="ot-go-card"><header class="ot-go-head"><button class="ot-go-title" type="button" data-place="${e(p.id)}">${PLACE_ICONS[p.icon] || '📍'} <b>${e(p.name)}</b>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button><button class="q-btn" type="button" data-go-place="${e(p.id)}">${icon('route')} ${W('怎麼去', 'Directions')}</button></header>${body}</section>`;
     })
     .join('')}`;
 }
@@ -503,7 +504,7 @@ function render() {
   const box = $('panel-go');
   const keep = box.scrollTop;
   box.innerHTML = `<div class="ot-wrap ot-go">
-    ${ts.length ? `<h3 class="ot-go-h">${ts.some(x => x.w.recurring && x.w.today) ? '常用行程' : '釘選行程'}</h3>${ts.map(tripCard).join('')}` : `<section class="ot-go-card ot-go-hint"><b>釘選常去的行程</b><p>在地圖上查路線，按 ☆ 釘選（例如 家 → 學校，平日早上）。這裡會列出接下來最好的幾班，回程也會自動出現。</p><button class="q-btn" type="button" data-go-me="trip">${icon('plus')} 新增行程</button></section>`}
+    ${ts.length ? `<h3 class="ot-go-h">${ts.some(x => x.w.recurring && x.w.today) ? W('常用行程', 'Usual trips') : W('釘選行程', 'Pinned trips')}</h3>${ts.map(tripCard).join('')}` : `<section class="ot-go-card ot-go-hint"><b>${W('釘選常去的行程', 'Pin the trips you take')}</b><p>${W('在地圖上查路線，按 ☆ 釘選（例如 家 → 學校，平日早上）。這裡會列出接下來最好的幾班，回程也會自動出現。', 'Find a route on the map and tap ☆ (say Home → School, weekday mornings). The best next rides show here, and the way back too.')}</p><button class="q-btn" type="button" data-go-me="trip">${icon('plus')} ${W('新增行程', 'Add a trip')}</button></section>`}
     ${pinnedHtml()}
     ${placesHtml()}
   </div>`;
@@ -532,14 +533,14 @@ function onClick(ev) {
     const id = ub.dataset.unpinBus;
     ctx.data.groups = ctx.data.groups.map(g => ({ ...g, items: g.items.filter(i => i.id !== id) }));
     ctx.save();
-    ctx.status('已取消釘選');
+    ctx.status(W('已取消釘選', 'Unpinned'));
     return render();
   }
   const ut = ev.target.closest('[data-unpin-train]');
   if (ut) {
     ctx.data.pins = ctx.data.pins.filter(p => p.id !== ut.dataset.unpinTrain);
     ctx.save();
-    ctx.status('已取消釘選');
+    ctx.status(W('已取消釘選', 'Unpinned'));
     return render();
   }
   const pb = ev.target.closest('[data-pinbus]');
@@ -565,7 +566,7 @@ function onClick(ev) {
       const on = x.t.picks.includes(k);
       ctx.data.saved = ctx.data.saved.map(y => (y.id === x.t.id ? { ...y, picks: on ? y.picks.filter(z => z !== k) : [k, ...y.picks].slice(0, 6) } : y));
       ctx.save();
-      ctx.status(on ? '已取消釘選這個方案' : '已釘選：這個方案的下一班會排在最前面');
+      ctx.status(on ? W('已取消釘選這個方案', 'Unpinned this route') : W('已釘選：這個方案的下一班會排在最前面', 'Pinned: its next ride goes first'));
       return render();
     }
   }
@@ -617,7 +618,7 @@ export function pinTrain(c, pin) {
   const same = x => x.kind === clean.kind && x.from.id === clean.from.id && x.to.id === clean.to.id && (x.kind !== 'trainNo' || x.no === clean.no);
   if (c.data.pins.some(same)) return true;
   if (c.data.pins.length >= MAX_PINS) {
-    c.status(`最多 ${MAX_PINS} 個釘選`);
+    c.status(W(`最多 ${MAX_PINS} 個釘選`, `Up to ${MAX_PINS} pins`));
     return false;
   }
   c.data.pins = [...c.data.pins, clean];

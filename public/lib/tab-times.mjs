@@ -12,6 +12,7 @@ import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
 import { e, meters } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 const $ = id => document.getElementById(id);
 const KEY = 'orbit-transit.times';
 let ctx = null;
@@ -84,7 +85,7 @@ const openBus = (r, stopUID = '', stopName = '') => {
 function busInit() {
   const box = $('times-bus');
   box.innerHTML = `<div class="ot-wrap ot-bus"><div class="ot-bus-top">
-    <label class="q-search ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="路線或站名，如 藍1、5608" autocomplete="off" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="清除">✕</button></label>
+    <label class="q-search ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="${W('路線或站名，如 藍1、5608', 'Route or stop, e.g. 307')}" autocomplete="off" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
     <div class="q-chips ot-city-chips ot-scroll-chips" id="tb-city"></div></div>
     <div id="tb-list"></div></div>`;
   // (Drawn once the typing pauses: each letter asked for every route it matched.)
@@ -159,7 +160,7 @@ async function busLoad() {
   bus.list = got.flat();
   busDraw();
 }
-const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
+const where = r => (r.city === INTERCITY ? W('公路客運', 'Intercity') : cityShort(r.city));
 // A route as a strip: its next bus at its stop nearest you (that stop, over
 // the way it goes, and when); with no position, or none found, where it runs
 // between. Still being asked: the strip in its place with bars (no row
@@ -167,9 +168,9 @@ const where = r => (r.city === INTERCITY ? '公路客運' : cityShort(r.city));
 const row = r => {
   const n = next.get(r.uid);
   const attrs = `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"`;
-  if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `往 ${e(n.x.headsign)}`, main: e(n.x.stop), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
+  if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `${W('往', 'to')} ${e(n.x.headsign)}`, main: e(n.x.stop), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
   if (ctx.here && !n?.at) return `<div class="ot-strip">${strip({ no: r.name, wait: true, attrs })}</div>`;
-  const ends = r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `往 ${r.to}` : where(r));
+  const ends = r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `${W('往', 'to')} ${r.to}` : where(r));
   return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: ends, attrs })}</div>`;
 };
 // Each route's next bus, asked for the strips on screen (a search's 60
@@ -210,10 +211,10 @@ function watchRows() {
   for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]')) seen.observe(el);
 }
 // A stop near you: its name and distance, its routes as numbers to tap.
-const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${Math.round(s.dist / 10) * 10} 公尺</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
+const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${Math.round(s.dist / 10) * 10} ${W('公尺', 'm')}</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
 function busDraw() {
   const home = ctx.city || 'Taipei';
-  $('tb-city').innerHTML = [[NEAR, `${cityShort(home)}附近`], [INTERCITY, '公路客運'], ...CITIES.map(([k]) => [k, cityShort(k)])]
+  $('tb-city').innerHTML = [[NEAR, W(`${cityShort(home)}附近`, `Near ${cityShort(home)}`)], [INTERCITY, W('公路客運', 'Intercity')], ...CITIES.map(([k]) => [k, cityShort(k)])]
     .map(([k, n]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === bus.city}">${e(n)}</button>`)
     .join('');
   const t = $('tb-q').value;
@@ -221,16 +222,16 @@ function busDraw() {
     const recent = recentRoutes();
     const around = bus.around || [];
     $('tb-list').innerHTML =
-      (recent.length ? `<h3 class="ot-go-h">最近查看<button class="ot-res-clear" type="button" data-clear-routes="1">清除</button></h3><div class="ot-bus-group">${recent.slice(0, 5).map(row).join('')}</div>` : '') +
-      (around.length ? `<h3 class="ot-go-h">${icon('pin')} 你附近的站牌</h3><div class="ot-bus-near">${around.map(nearStop).join('')}</div>` : bus.around ? '' : '<p class="ot-note">找你附近的站牌…</p>') +
+      (recent.length ? `<h3 class="ot-go-h">${W('最近查看', 'Recent')}<button class="ot-res-clear" type="button" data-clear-routes="1">${W('清除', 'Clear')}</button></h3><div class="ot-bus-group">${recent.slice(0, 5).map(row).join('')}</div>` : '') +
+      (around.length ? `<h3 class="ot-go-h">${icon('pin')} ${W('你附近的站牌', 'Stops near you')}</h3><div class="ot-bus-near">${around.map(nearStop).join('')}</div>` : bus.around ? '' : `<p class="ot-note">${W('找你附近的站牌…', 'Finding stops near you…')}</p>`) +
       (bus.failed && !bus.list.length ? `<p class="ot-note bad">${e(bus.failed)}</p>` : '');
   } else {
     const found = findRoutes(bus.list, t);
     $('tb-list').innerHTML = !bus.list.length
-      ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || '載入路線中…')}</p>`
+      ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || W('載入路線中…', 'Loading routes…'))}</p>`
       : found.length
         ? `<div class="ot-bus-group">${found.map(row).join('')}</div>`
-        : '<p class="ot-note">沒有符合的路線，試試其他縣市。</p>';
+        : `<p class="ot-note">${W('沒有符合的路線，試試其他縣市。', 'No matching route. Try another city.')}</p>`;
   }
   fitStrips($('tb-list'));
   watchRows();

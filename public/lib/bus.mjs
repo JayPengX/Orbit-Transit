@@ -6,6 +6,7 @@ import { tdx, rows } from './api.mjs';
 import { zh, hm, etaAge, meters } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 
+import { W, en } from './lang.mjs';
 // 'InterCity' is 公路客運 and 國道客運 (they belong to no city).
 export const INTERCITY = 'InterCity';
 const scope = city => (city === INTERCITY ? 'InterCity' : `City/${city}`);
@@ -168,17 +169,17 @@ export function etaMap(j) {
 export function etaText(v, now = Date.now()) {
   if (!v) return { main: '—', sub: '', tone: 'off' };
   if (v.status === 0 && v.sec != null) {
-    if (v.sec <= 60) return { main: '進站中', sub: v.last ? '末班車' : '', tone: 'now' };
-    if (v.sec <= 180) return { main: '即將進站', sub: v.last ? '末班車' : `${Math.ceil(v.sec / 60)} 分`, tone: 'now' };
+    if (v.sec <= 60) return { main: W('進站中', 'Arriving'), sub: v.last ? W('末班車', 'Last bus') : '', tone: 'now' };
+    if (v.sec <= 180) return { main: W('即將進站', 'Due'), sub: v.last ? W('末班車', 'Last bus') : W(`${Math.ceil(v.sec / 60)} 分`, `${Math.ceil(v.sec / 60)} min`), tone: 'now' };
     const m = Math.floor(v.sec / 60);
     const then = v.more.find(x => x > v.sec + 60);
-    return { main: `${m} 分`, sub: v.last ? '末班車' : then != null ? `下一班 ${Math.floor(then / 60)} 分` : '', tone: m <= 6 ? 'soon' : 'wait' };
+    return { main: W(`${m} 分`, `${m} min`), sub: v.last ? W('末班車', 'Last bus') : then != null ? W(`下一班 ${Math.floor(then / 60)} 分`, `then ${Math.floor(then / 60)} min`) : '', tone: m <= 6 ? 'soon' : 'wait' };
   }
-  if (v.status === 1) return { main: v.next ? `${hm(v.next)} 發車` : '尚未發車', sub: v.next && v.next - now > 0 ? `${Math.round((v.next - now) / 60_000)} 分後` : '', tone: 'wait' };
-  if (v.status === 2) return { main: '交管不停靠', sub: '', tone: 'off' };
-  if (v.status === 3) return { main: '末班已過', sub: '', tone: 'off' };
-  if (v.status === 4) return { main: '今日未營運', sub: '', tone: 'off' };
-  if (v.next) return { main: `${hm(v.next)}`, sub: '預計', tone: 'wait' };
+  if (v.status === 1) return { main: v.next ? W(`${hm(v.next)} 發車`, `Leaves ${hm(v.next)}`) : W('尚未發車', 'Not yet out'), sub: v.next && v.next - now > 0 ? W(`${Math.round((v.next - now) / 60_000)} 分後`, `in ${Math.round((v.next - now) / 60_000)} min`) : '', tone: 'wait' };
+  if (v.status === 2) return { main: W('交管不停靠', 'Not stopping'), sub: '', tone: 'off' };
+  if (v.status === 3) return { main: W('末班已過', 'Last one gone'), sub: '', tone: 'off' };
+  if (v.status === 4) return { main: W('今日未營運', 'Not today'), sub: '', tone: 'off' };
+  if (v.next) return { main: `${hm(v.next)}`, sub: W('預計', 'planned'), tone: 'wait' };
   return { main: '—', sub: '', tone: 'off' };
 }
 
@@ -205,7 +206,7 @@ export async function stationsNear(lat, lon) {
 // A route's city from its UID (HSQ0747 → 新竹縣's; THB… is 公路客運).
 export const routeCity = uid => CITY_CODES[/^[A-Z]{3}/.exec(uid || '')?.[0]] || INTERCITY;
 
-export const BEARING = { E: '往東', W: '往西', S: '往南', N: '往北', SE: '往東南', NE: '往東北', SW: '往西南', NW: '往西北' };
+export const BEARING = en ? { E: 'Eastbound', W: 'Westbound', S: 'Southbound', N: 'Northbound', SE: 'To SE', NE: 'To NE', SW: 'To SW', NW: 'To NW' } : { E: '往東', W: '往西', S: '往南', N: '往北', SE: '往東南', NE: '往東北', SW: '往西南', NW: '往西北' };
 // A stop's stations (one name, a street's both sides, sometimes two signs a
 // side) as its sides: by the way their buses leave (each station's
 // bearing; 45° or less apart is one side), not by how far apart they stand

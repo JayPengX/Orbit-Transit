@@ -8,20 +8,21 @@
 
 import { uid } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 export const MAX_GROUPS = 12;
 export const MAX_ITEMS = 16;
 export const MAX_PLACES = 20;
 export const MAX_SAVED = 20;
 export const MAX_PINS = 24;
 // The ways of moving the planner may use (我的 → 交通偏好).
-export const MODES = { bus: '公車', tra: '台鐵', hsr: '高鐵', metro: '捷運・輕軌', bike: 'YouBike' };
+export const MODES = { bus: W('公車', 'Bus'), tra: W('台鐵', 'TRA'), hsr: W('高鐵', 'HSR'), metro: W('捷運・輕軌', 'Metro'), bike: 'YouBike' };
 export const DAYS = '日一二三四五六';
-export const LAYERS = { bike: 'YouBike', bus: '公車站', rail: '火車・高鐵', metro: '捷運' };
+export const LAYERS = { bike: 'YouBike', bus: W('公車站', 'Bus stops'), rail: W('火車・高鐵', 'Trains'), metro: W('捷運', 'Metro') };
 export const PLACE_ICONS = { home: '🏠', work: '💼', school: '🎓', pin: '📍', star: '⭐' };
 
 export const emptyData = () => ({
   v: 1,
-  groups: [{ id: 'g' + uid(), name: '常用', items: [] }],
+  groups: [{ id: 'g' + uid(), name: W('常用', 'Favorites'), items: [] }],
   places: [],
   trips: [],
   trains: [],
@@ -64,7 +65,7 @@ export function cleanPlace(p) {
   const lat = coord(p?.lat);
   const lon = coord(p?.lon);
   if (!p || lat == null || lon == null || !(lat > 21 && lat < 27 && lon > 118 && lon < 123)) return null;
-  return { id: str(p.id, 20) || 'p' + uid(), name: str(p.name, 30) || '我的地點', icon: PLACE_ICONS[p.icon] ? p.icon : 'pin', lat, lon, address: str(p.address, 80), ...gidOf(p) };
+  return { id: str(p.id, 20) || 'p' + uid(), name: str(p.name, 30) || W('我的地點', 'My place'), icon: PLACE_ICONS[p.icon] ? p.icon : 'pin', lat, lon, address: str(p.address, 80), ...gidOf(p) };
 }
 // A place's id at Google (for Google Maps' own navigation to the place
 // itself), when it's one of Google's.
@@ -74,7 +75,7 @@ export function cleanEnd(p) {
   const lat = coord(p?.lat);
   const lon = coord(p?.lon);
   if (!p || lat == null || lon == null || !(lat > 21 && lat < 27 && lon > 118 && lon < 123)) return null;
-  return { name: str(p.name, 30) || '地點', lat, lon, ...gidOf(p) };
+  return { name: str(p.name, 30) || W('地點', 'Place'), lat, lon, ...gidOf(p) };
 }
 const hhmm = v => (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : '');
 // A saved trip: { id, name, from (null: 目前位置), to, time ('HH:MM' or ''),
@@ -144,7 +145,7 @@ export function cleanData(d) {
   if (!d || typeof d !== 'object') return emptyData();
   const groups = (Array.isArray(d.groups) ? d.groups : [])
     .slice(0, MAX_GROUPS)
-    .map(g => ({ id: str(g?.id, 20) || 'g' + uid(), name: str(g?.name, 16) || '群組', items: (Array.isArray(g?.items) ? g.items : []).map(cleanItem).filter(Boolean).slice(0, MAX_ITEMS) }));
+    .map(g => ({ id: str(g?.id, 20) || 'g' + uid(), name: str(g?.name, 16) || W('群組', 'Group'), items: (Array.isArray(g?.items) ? g.items : []).map(cleanItem).filter(Boolean).slice(0, MAX_ITEMS) }));
   return {
     v: 1,
     groups: groups.length ? groups : emptyData().groups,

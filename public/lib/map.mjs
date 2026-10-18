@@ -6,6 +6,7 @@
 
 import { TAIWAN_BOX } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
 const NLSC = 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
 
@@ -295,7 +296,7 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   // (Taiwan only, as the Google map.)
   const map = L.map(el, { zoomControl: false, attributionControl: true, center: [center.lat, center.lon], zoom, maxZoom: 19, minZoom: 7, maxBounds: [[TAIWAN_BOX.s, TAIWAN_BOX.w], [TAIWAN_BOX.n, TAIWAN_BOX.e]], maxBoundsViscosity: 1 });
   map.attributionControl.setPrefix('');
-  const layer = L.tileLayer(NLSC, { maxZoom: 19, maxNativeZoom: 19, attribution: '© 內政部國土測繪中心', className: 'ot-tiles' });
+  const layer = L.tileLayer(NLSC, { maxZoom: 19, maxNativeZoom: 19, attribution: W('© 內政部國土測繪中心', '© NLSC'), className: 'ot-tiles' });
   const tiles = new Promise(r => layer.once('load', r));
   layer.addTo(map);
   map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
