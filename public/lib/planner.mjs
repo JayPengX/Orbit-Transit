@@ -117,7 +117,22 @@ function joinPlanners(a, b) {
   return { plans, sources: { ...(a.sources || {}), ...(b.sources || {}), ms: { ...(a.sources?.ms || {}), ...(b.sources?.ms || {}) } }, err: a.err && b.err ? a.err : (!plans.length && (a.err || b.err)) || null };
 }
 const ARRIVE_EARLY = 2 * 3_600_000;
-export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null } = {}) {
+// A deadline further off than this (08:00 tomorrow, asked at 22:00): when
+// nothing in the usual window gets there, the search goes back further from
+// the deadline, not "leave now" (tonight's trains).
+const FAR_AHEAD = 6 * 3_600_000;
+// Where our own search starts: a departure's time, or for an arrive-by two
+// hours before it (four for a long trip, six searched again wide), not
+// before now.
+export function searchFrom(t0, now, { by = 'depart', far = false, wide = false } = {}) {
+  if (by !== 'arrive') return t0;
+  return Math.max(now, t0 - (wide ? 3 : far ? 2 : 1) * ARRIVE_EARLY);
+}
+// Nothing arrives in time: search again 'wide' for a deadline far ahead,
+// else the ways leaving 'now' (the deadline is too close); a wide search
+// already done stands (null).
+export const missedRetry = (at, now, wide = false) => (wide ? null : at - now > FAR_AHEAD ? 'wide' : 'now');
+export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null, wide = false } = {}) {
   const prefs = only ? { ...data.prefs, modes: { ...data.prefs.modes, ...only } } : data.prefs;
   const modes = prefs.modes;
   const now = Date.now();
@@ -129,7 +144,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const useRail = modes.tra || modes.hsr;
   // To be there by a time: our own trains and buses looked for from two
   // hours before it (four for a long trip); the ranking keeps what gets in.
-  const tS = by === 'arrive' ? Math.max(now, t0 - (meters(from.lat, from.lon, to.lat, to.lon) > 60_000 ? 2 : 1) * ARRIVE_EARLY) : t0;
+  const tS = searchFrom(t0, now, { by, far: by === 'arrive' && meters(from.lat, from.lon, to.lat, to.lon) > 60_000, wide });
   // The planners (Google's in a tenth of a second, TDX's in seconds for a
   // long trip, by YouBike most) and the day's trains asked first: nothing
   // they need waits on the township list (a first trip's fifth of a second).
@@ -330,7 +345,11 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // The direct buses come in the second round: one of them in time, the
   // arrival-time plans after all (竹東站 → 縣體育場 by 09:00 at 07:40).
   const inTime = p => p.lead !== false && !p.weak && p.arr <= at + 2 * 60_000 && p.dep >= now - 2 * 60_000;
-  if (by === 'arrive' && at && !first.some(inTime)) {
+  // A deadline hours off (08:00 tomorrow) is searched again from six hours
+  // before it instead: leaving now would be tonight's trains.
+  const retry = by === 'arrive' && at && !first.some(inTime) ? missedRetry(at, now, wide) : null;
+  if (retry === 'wide') return planTrip(data, from, to, { at, by, modes: only, wide: true });
+  if (retry === 'now') {
     const r = await planTrip(data, from, to, { modes: only });
     const mark = list => list.map(p => ({ ...p, deadline: at }));
     const nowLater = r.later?.then(o => (o ? { ...o, plans: mark(o.plans) } : o)) || Promise.resolve(null);
