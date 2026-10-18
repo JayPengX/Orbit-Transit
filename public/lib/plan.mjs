@@ -192,6 +192,19 @@ export function tidy(p) {
   return legs === p.legs ? p : finish({ ...p, legs });
 }
 
+// Legs that overlap the one before them (a walk added after a ride) moved on
+// after it, as far as a fixed time allows: a bus or train after them keeps
+// its time, and a plan that then can't be done is left to inOrder.
+const later = legs => {
+  const out = [];
+  for (const l of legs) {
+    const prev = out.at(-1);
+    const late = prev ? prev.arr - l.dep : 0;
+    out.push(late > 0 && (l.mode === 'walk' || l.mode === 'bike') ? { ...l, dep: l.dep + late, arr: l.arr + late } : l);
+  }
+  return out;
+};
+
 // All the way by bike (and by 電輔車 when one is there and it's worth it).
 export function bikeOnly(o, d, bikes, now, { swap = false } = {}) {
   const dist = meters(o.lat, o.lon, d.lat, d.lon);
@@ -601,6 +614,10 @@ function sameVehicle(l, m) {
   // (Or boarded a stop apart: the train ours left 竹東 on is TDX's from 竹東.)
   const at = (x, y) => station(x?.name) === station(y.from?.name) && Math.abs((x.dep || 0) - (y.dep || 0)) <= 2 * 60_000;
   if (n || k) return at(l.from && { ...l.from, dep: l.dep }, m) || (l.prev && at(l.prev, m)) || (m.prev && at(m.prev, l));
+  // A train or metro with no number by either name (機場線普通車 / 桃園機場捷運線,
+  // 高鐵 / 南港-左營): by where and when it leaves, as a numbered one is.
+  const near = (a, b) => station(a?.name) === station(b?.name) || (a?.lat != null && b?.lat != null && meters(a.lat, a.lon, b.lat, b.lon) < 300);
+  if (RAIL.has(l.mode) && near(l.from, m.from) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 2 * 60_000) return true;
   return sameRoute(l.short || l.name, m.short || m.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 8 * 60_000;
 }
 
@@ -654,7 +671,8 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const all = plans.filter(p => p && p.legs?.length && p.arr != null && (by === 'arrive' && deadline ? p.dep > clock - 2 * 60_000 : p.arr > now - 60_000));
   // Leaving before the time asked (a ride to the train worked out backwards
   // from it), or arriving after it, is no plan, unless it's all there is.
-  const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 : p.dep >= now - 2 * 60_000));
+  // (By a time, in by it and not hours before: a way in 10 hours early, the evening before, is no way to be there by 07:30.)
+  const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 && p.arr >= deadline - 4 * 3_600_000 : p.dep >= now - 2 * 60_000));
   const ok = fits.length ? fits : all;
   // By a time already out of reach (07:21 for 08:00): ranked as leaving now,
   // the soonest there first; "how long before the time you leave" would put
@@ -821,7 +839,10 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // (Riding it all is a choice of its own however it scores: the owner,
     // 2026-10-12, wants it under the rest, 成功九街 → 竹東高中 by 電輔車.)
     const far = p.score > best + Math.max(45, best) && !(sooner && p.score <= best + 2 * Math.max(45, best)) && !(p.bike && !vehicles(p).length);
-    if (beaten || changes || hop || mostlyRidden || further || feeder || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    // A ride for nothing: there no sooner than walking it all, and walking
+    // most of that anyway (a 40-minute wait for one stop, beside a 4-minute walk).
+    const idle = vehicles(p).length && list.some(q => !q.legs.some(l => l.mode !== 'walk') && q.arr <= p.arr && (p.walk || 0) >= (q.walk || 0) * 0.8);
+    if (beaten || changes || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // Never nothing: the best way stays when every way was set aside.
   if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
@@ -837,7 +858,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
       for (const q of g) times.set(q, [q]);
       continue;
     }
-    const by = [...g].sort((a, b) => a.dep - b.dep).filter((q, k) => q === g[0] || Math.abs(q.dep - g[0].dep) <= 90 * 60_000 || (k < 3 && q.dep - g[0].dep <= 4 * 3_600_000)).slice(0, 6);
+    const by = [...g].sort((a, b) => a.dep - b.dep).filter((q, k) => q === g[0] || Math.abs(q.dep - g[0].dep) <= 90 * 60_000 || (k < 3 && q.dep >= g[0].dep && q.dep - g[0].dep <= 4 * 3_600_000)).slice(0, 6);
     for (const q of g) times.set(q, by);
   }
   // Different ways first: each recommendation rides a different main line
@@ -990,11 +1011,22 @@ function withStations(p, bikes) {
         const w = walkLeg(l.from, l.to, l.dep);
         return { ...w, arr: Math.max(w.arr, l.arr) };
       }
-      return { ...l, name: 'YouBike', rent, ret, from: rent ? { name: rent.name, lat: rent.lat, lon: rent.lon } : { ...l.from, name: l.from.name || W('附近的 YouBike 站', 'Nearby YouBike dock') }, to: ret ? { name: ret.name, lat: ret.lat, lon: ret.lon } : { ...l.to, name: l.to.name || W('附近的 YouBike 站', 'Nearby YouBike dock') } };
+      // A planner's ride: from a station and to one (none at either end: no
+      // plan, never a made-up 附近的 YouBike 站), with the walks to and from
+      // them (they were left out: there 7 minutes early), its time kept.
+      if (!rent || !ret) return null;
+      const w1 = walkLeg(l.from, rent, 0);
+      const w2 = walkLeg(ret, l.to, 0);
+      return [
+        w1.dist > 20 ? { ...w1, dep: l.dep - w1.dur * 1000, arr: l.dep } : null,
+        { ...l, name: 'YouBike', rent, ret, from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon } },
+        w2.dist > 20 ? { ...w2, dep: l.arr, arr: l.arr + w2.dur * 1000 } : null
+      ].filter(Boolean);
     });
   if (legs.some(l => l === null)) return null;
-  // (A ride to the stop turned into a walk takes longer: set out earlier.)
-  return tidy(finish({ ...p, legs: legs.flat() }));
+  // (A ride to the stop turned into a walk, or a walk added before it, takes
+  // longer: set out earlier. One added after it: what follows a little later.)
+  return tidy(finish({ ...p, legs: later(legs.flat()) }));
 }
 
 // The points whose YouBike stations a set of plans needs: both ends, and

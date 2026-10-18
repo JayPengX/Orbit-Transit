@@ -2388,3 +2388,83 @@ test('a proxy ask turned away for its token (401: the proxy’s secret changed, 
     useSession(null);
   }
 });
+
+test("a planner's YouBike ride gets its walks to and from the stations (it arrived 7 minutes early without them); with no station at an end it's no plan, never 附近的 YouBike 站", async () => {
+  const { withBikes, finish } = await import('../public/lib/plan.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-10-19', x);
+  const exit = { name: '市政府站 出口2', lat: 25.0411, lon: 121.5651 };
+  const dest = { name: '台北101', lat: 25.0336, lon: 121.5646 };
+  const o = { name: 'O', lat: 25.0478, lon: 121.517 };
+  const plan = (bikes) => finish({ src: 'tdx-bike', legs: [{ mode: 'metro', name: '板南線', short: '板南線', from: o, to: exit, dep: T('15:55'), arr: T('16:07'), dur: 720 }, { mode: 'bike', name: '自行車', from: exit, to: dest, dep: T('16:08'), arr: T('16:13'), dur: 300, dist: 900 }] });
+  const docks = [{ uid: 'r', name: '市府松高路口', lat: 25.0388, lon: 121.5657, bikes: 5, ebike: 0, ret: 5, ok: true }, { uid: 't', name: '市府松壽路口', lat: 25.0358, lon: 121.5655, bikes: 5, ebike: 0, ret: 5, ok: true }];
+  const [p] = withBikes([plan()], o, dest, docks, T('15:50'), { modes: { metro: true, bike: true }, clock: T('15:50') }).filter(x => x.legs.some(l => l.mode === 'metro'));
+  assert.deepEqual(p.legs.map(l => l.mode), ['metro', 'walk', 'bike', 'walk']);
+  assert.equal(p.legs[2].from.name, '市府松高路口');
+  assert.ok(p.arr > T('16:13'), 'the walk to the place counted');
+  // No station near where it ends: no such plan.
+  const none = withBikes([plan()], o, dest, docks.slice(0, 1), T('15:50'), { modes: { metro: true, bike: true }, clock: T('15:50') });
+  assert.ok(!none.some(x => x.legs.some(l => /附近的 YouBike 站/.test(`${l.from?.name}${l.to?.name}`))));
+});
+
+test('by an arrival time, no way in hours early (the evening before for 07:30), and a card’s times never earlier than its own', async () => {
+  const { rank, finish } = await import('../public/lib/plan.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = (d, x) => twAt(d, x);
+  const o = { name: 'A', lat: 24.8176, lon: 121.0165 };
+  const d = { name: 'B', lat: 24.733, lon: 121.0882 };
+  const bus = (day, dep, arr) => finish({ src: 'g', legs: [{ mode: 'bus', name: '5608', short: '5608', from: o, to: d, dep: T(day, dep), arr: T(day, arr), dur: (T(day, arr) - T(day, dep)) / 1000 }] });
+  const out = rank([bus('2026-10-18', '21:00', '21:40'), bus('2026-10-19', '06:30', '07:10'), bus('2026-10-19', '06:50', '07:25')], { now: T('2026-10-19', '07:30'), clock: T('2026-10-18', '18:00'), by: 'arrive', deadline: T('2026-10-19', '07:30'), o, d });
+  assert.ok(out.every(p => p.dep >= T('2026-10-19', '00:00')), out.map(p => p.dep));
+  for (const p of out) assert.ok(p.times.every(i => out[i].dep >= out[p.times[0]].dep));
+});
+
+test('a ride for nothing folds: a bus one stop away, later than walking it all and walking as far anyway', async () => {
+  const { rank, finish } = await import('../public/lib/plan.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-10-19', x);
+  const o = { name: '新竹站', lat: 24.8016, lon: 120.9716 };
+  const d = { name: 'B', lat: 24.803, lon: 120.97 };
+  const s1 = { name: '站A', lat: 24.802, lon: 120.9718 };
+  const s2 = { name: '站B', lat: 24.8045, lon: 120.9705 };
+  const walk = finish({ src: 'walk', legs: [{ mode: 'walk', from: o, to: d, dep: T('15:54'), arr: T('15:58'), dur: 240, dist: 268 }] });
+  const bus = finish({ src: 'g', legs: [{ mode: 'walk', from: o, to: s1, dep: T('16:14'), arr: T('16:16'), dur: 120, dist: 60 }, { mode: 'bus', name: '20', short: '20', from: s1, to: s2, dep: T('16:17'), arr: T('16:19'), dur: 120 }, { mode: 'walk', from: s2, to: d, dep: T('16:19'), arr: T('16:22'), dur: 180, dist: 248 }] });
+  const out = rank([walk, bus], { now: T('15:54'), o, d });
+  assert.ok(out.find(p => p.legs.some(l => l.mode === 'bus')).weak);
+  assert.ok(out.find(p => p.legs.every(l => l.mode === 'walk')).top);
+});
+
+test('one train or metro named two ways by two planners (機場線普通車, 桃園機場捷運線; 高鐵, 南港-左營) is one way, one card', async () => {
+  const { sameWay, finish } = await import('../public/lib/plan.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-10-19', x);
+  const A1 = { name: '機場第一航廈', lat: 25.0811, lon: 121.2375 };
+  const A18 = { name: '高鐵桃園站', lat: 25.0127, lon: 121.2152 };
+  const HC = { name: '高鐵新竹站', lat: 24.8081, lon: 121.0403 };
+  const way = (metro, hsr, from) => finish({ src: 'x', legs: [{ mode: 'metro', name: metro, short: metro, from, to: A18, dep: T('16:02'), arr: T('16:20') }, { mode: 'hsr', name: hsr, short: hsr, from: A18, to: HC, dep: T('16:30'), arr: T('16:45') }] });
+  assert.ok(sameWay(way('桃園機場捷運線', '高鐵', A1), way('機場線普通車', '南港-左營', { ...A1, name: 'A12 機場第一航廈站', lat: 25.0813 })));
+  assert.ok(!sameWay(way('桃園機場捷運線', '高鐵', A1), { ...way('桃園機場捷運線', '高鐵', A1), legs: way('桃園機場捷運線', '高鐵', A1).legs.map((l, i) => (i ? { ...l, dep: l.dep + 30 * 60_000, arr: l.arr + 30 * 60_000 } : l)) }), 'the next train is another way');
+});
+
+test('no source’s name on the screen (TRUTH §7: one truth): no TDX, Google (but the Google 地圖 you hand a walk to), OpenStreetMap, nor a quota, in any shown string', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../public/lib/', import.meta.url);
+  const bad = [];
+  for (const f of [...readdirSync(dir).map(x => new URL(x, dir)), new URL('../public/app.mjs', import.meta.url)]) {
+    if (!String(f).endsWith('.mjs')) continue;
+    const text = readFileSync(f, 'utf8');
+    for (const m of text.matchAll(/W\(\s*(['`])((?:\\.|(?!\1).)*)\1\s*,\s*(['`])((?:\\.|(?!\3).)*)\3/g))
+      for (const s of [m[2], m[4]]) if (/TDX|OpenStreetMap|Google(?! ?(地圖|Maps))|額度|free use/.test(s)) bad.push(`${String(f).split('/').pop()}: ${s}`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('a plan our own router made (no fare) still costs what its trains do in the ranking: 高鐵 板橋 → 台北 is never free beside a 台鐵 train', async () => {
+  const { fareOf } = await import('../public/lib/tpass.mjs');
+  const leg = (mode, dist, code) => ({ mode, dist, train: { code } });
+  const hsr = fareOf({ legs: [leg('hsr', 7200)] }, null);
+  const local = fareOf({ legs: [leg('tra', 7200, '6')] }, null);
+  assert.equal(hsr.text, '', 'no price shown that nobody gave');
+  assert.ok(hsr.cost >= 40 && local.cost >= 15 && hsr.cost > local.cost);
+  assert.equal(fareOf({ fare: 290, legs: [leg('hsr', 66000)] }, null).cost, 290, 'a fare given is the fare');
+});

@@ -228,13 +228,13 @@ export const errorText = err =>
     : err?.code === 'TDX_BUSY' || err?.status === 429
       ? W('查詢的人有點多，稍後自動再試。', 'Busy right now. Retrying shortly.')
       : err?.code === 'TDX_NO_KEY'
-        ? W('交通資料尚未開通（TDX 金鑰還沒設定）。', 'Transit data isn’t set up yet (no TDX key).')
+        ? W('交通資料尚未開通。', 'Transit data isn’t set up yet.')
         : err?.code === 'SIGNED_OUT'
           ? W('請先登入 Quadra Pass。', 'Sign in to Quadra Pass first.')
           : err?.code === 'TIMEOUT'
-            ? W('資料來源回應太慢，稍後自動再試。', 'The source is slow. Retrying shortly.')
+            ? W('回應太慢，稍後自動再試。', 'Slow to answer. Retrying shortly.')
             : err?.code === 'TDX_FAILED' || err?.status >= 500
-              ? W('交通部 TDX 暫時沒有回應，稍後自動再試。', 'TDX isn’t answering. Retrying shortly.')
+              ? W('交通資料暫時沒有回應，稍後自動再試。', 'Transit data isn’t answering. Retrying shortly.')
               : W('暫時無法取得資料，稍後自動再試。', 'Can’t get data right now. Retrying shortly.');
 
 // ---- Walks ---------------------------------------------------------------------------------------
