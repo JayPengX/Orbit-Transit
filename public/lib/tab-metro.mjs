@@ -19,6 +19,7 @@ let ctx = null;
 let map = null;
 let current = null;
 let systems = [];
+let retry = 0;
 let onClose = () => {};
 
 export function init(c, opts = {}) {
@@ -77,12 +78,23 @@ async function open(id) {
   $('m-maps').querySelectorAll('[data-map]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.map === id)));
   const m = MAPS.find(x => x.id === id);
   $('m-msg').textContent = W('載入路網…', 'Loading the network…');
+  clearTimeout(retry);
   try {
-    systems = (await Promise.all(m.systems.map(s => loadSystem(s).catch(() => null)))).filter(s => s?.stations.length);
+    const got = (await Promise.all(m.systems.map(s => loadSystem(s).catch(() => null)))).filter(s => s?.stations.length);
     if (current !== id) return;
+    systems = got;
     if (!systems.length) throw Object.assign(new Error('empty'), { code: 'TDX_FAILED' });
   } catch (err) {
+    if (current !== id) return;
+    // Not the last city's map under this one's error (its lines, stations
+    // and legend gone too), and tried again as the message says.
+    systems = [];
+    groups = [];
+    map.lines('metro', []);
+    map.layer('metro').set([]);
+    $('m-legend').innerHTML = '';
     $('m-msg').textContent = errorText(err);
+    retry = setTimeout(() => current === id && open(id), 30_000);
     return;
   }
   $('m-msg').textContent = '';

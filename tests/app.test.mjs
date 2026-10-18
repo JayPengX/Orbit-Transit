@@ -847,6 +847,20 @@ test('a weekday trip on a Sunday is Monday’s; a day of its own keeps its own t
   assert.equal(tripNow(t, home, twAt('2026-10-08', '20:00')).at, twAt('2026-10-09', '07:30'), 'Friday out: the usual time');
 });
 
+test('a weekday trip seen from neither end on a Saturday, a Sunday or late on a Friday is Monday’s way out, not its way back', async () => {
+  const { tripNow } = await import('../public/lib/tab-go.mjs');
+  const home = { name: '家', lat: 24.821, lon: 121.018 };
+  const school = { name: '竹東高中', lat: 24.733, lon: 121.088 };
+  const away = { lat: 25.04, lon: 121.51 }; // 台北: near neither end
+  const t = cleanSaved({ id: 's2', name: '上學', from: home, to: school, time: '08:00', by: 'arrive', days: [1, 2, 3, 4, 5], back: '17:30' });
+  for (const [now, monday] of [[twAt('2026-10-03', '16:00'), '2026-10-05'], [twAt('2026-10-04', '15:50'), '2026-10-05'], [twAt('2026-10-09', '21:00'), '2026-10-12']]) {
+    const w = tripNow(t, away, now);
+    assert.equal(w.to.name, '竹東高中', new Date(now).toISOString());
+    assert.equal(w.at, twAt(monday, '08:00'));
+  }
+  assert.equal(tripNow(t, away, twAt('2026-10-08', '16:30')).to.name, '家', 'a school day near the time back: the way back');
+});
+
 test('the buzz: a chime where there’s no vibrating (an iPhone), once a tap has started the audio', async () => {
   const { buzz, primeBuzz } = await import('../public/lib/buzz.mjs');
   const started = [];

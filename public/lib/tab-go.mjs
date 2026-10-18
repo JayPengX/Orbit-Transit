@@ -21,7 +21,7 @@ import { planTrip } from './planner.mjs';
 import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { icon, legChips, depChips, tagText, trainKind } from './ui.mjs';
+import { icon, legChips, depChips, tagText, trainKind, trainName } from './ui.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -32,7 +32,7 @@ let shown = false;
 const S = {
   pinned: new Map(), // stopUID → eta
   planned: new Map(), // stopUID → { at, day }: the timetable's next bus there, for when none is on its way
-  trains: new Map(), // pin id → [{ dep, arr, label, delay }]
+  trains: new Map(), // pin id → { rows: [{ dep, arr, label, delay }] } once read, or { error }
   trips: new Map(), // key → { at, plans, error, loading }
   choice: new Map(), // `${trip}:${its card's plan}` → the departure picked from its times
   places: new Map(), // place id → { stops, bikes, at }
@@ -60,10 +60,17 @@ export function init(c) {
   $('panel-go').addEventListener('click', onClick);
   (ctx.onRefresh ||= []).push(() => shown && render());
 }
+// The first look, filled in (where you are, the kept plans timed, the
+// buses and trains): what the opening waits for, so the loading screen
+// lifts onto it and nothing changes after (the app caps the wait).
+let firstLook = null;
+export const ready = () => firstLook || Promise.resolve();
+
 export function show() {
   shown = true;
   render();
-  refresh(true);
+  const run = refresh(true);
+  firstLook ||= run.catch(() => {});
   clearInterval(timer);
   timer = setInterval(() => refresh(false), liveMs());
 }
@@ -94,10 +101,12 @@ export function tripNow(t, here, now = Date.now()) {
   const fwd = { from: t.from, to: t.to, label: t.name || t.to.name, key: 'time', rev: false };
   let way = fwd;
   if (near(t.to) && t.from) way = back;
-  else if (!near(t.from) && t.from && today.back && t.days.length) {
-    // Neither end: by the clock (after the time out and nearer the time back).
+  else if (!near(t.from) && t.from && today.back && t.days.includes(day.dow) && !(weekdaysOnly(t.days) && holidayOn(day.date))) {
+    // Neither end, on one of its days: by the clock (after the time out,
+    // nearer the time back, and that not 30 minutes gone). Any other day,
+    // or later that evening, it's the next time out.
     const mins = hhmm => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
-    if (day.min > (today.time ? mins(today.time) + 60 : 12 * 60) && Math.abs(day.min - mins(today.back)) < Math.abs(day.min - (today.time ? mins(today.time) : 0))) way = back;
+    if (day.min > (today.time ? mins(today.time) + 60 : 12 * 60) && day.min <= mins(today.back) + 30 && Math.abs(day.min - mins(today.back)) < Math.abs(day.min - (today.time ? mins(today.time) : 0))) way = back;
   }
   // From the trip's own start; from where you are only when there (800 m), or
   // when its start is "wherever I am".
@@ -196,19 +205,22 @@ async function trainPins() {
       const to = `${p.to.sys}:${p.to.id}`;
       if (p.kind === 'train') {
         const js = journeys(net, [{ key: from, at: now }], [{ key: to, extra: 0 }], now, { n: 3 });
-        S.trains.set(p.id, js.map(j => {
+        S.trains.set(p.id, { rows: js.map(j => {
           const rides = j.legs.filter(l => !l.walk);
-          return { dep: j.dep, arr: j.arr, label: rides.map(l => `${l.trip.type} ${l.trip.no}`).join(' › '), delay: rides[0]?.trip.sys === 'tra' ? delays.get(rides[0].trip.no) || 0 : 0 };
-        }));
+          return { dep: j.dep, arr: j.arr, label: rides.map(l => trainName(l.trip).replace(/ /g, '\u00a0')).join(' › '), delay: rides[0]?.trip.sys === 'tra' ? delays.get(rides[0].trip.no) || 0 : 0 };
+        }) });
       } else {
         // That train today (or tomorrow, after it's gone): its times at your two stations.
         const runs = net.trips.filter(t => t.sys === p.sys && t.no === p.no);
         const times = runs.map(t => ({ a: t.stops.find(x => x.st === from), b: t.stops.find(x => x.st === to) })).filter(x => x.a && x.b && x.a.dep > now - 60_000);
         const x = times[0];
-        S.trains.set(p.id, [{ dep: x ? x.a.dep : null, arr: x ? x.b.arr : null, label: x ? W(`${p.type || ''} ${p.no} 次`, `${trainKind(p.type || '')} ${p.no}`).trim() : W(`${p.no} 次今天不開或已過`, `Train ${p.no}: none today or gone`), delay: p.sys === 'tra' ? delays.get(p.no) || 0 : 0 }]);
+        S.trains.set(p.id, { rows: [{ dep: x ? x.a.dep : null, arr: x ? x.b.arr : null, label: x ? W(`${p.type || ''} ${p.no} 次`, `${trainKind(p.type || '')} ${p.no}`).trim() : W(`${p.no} 次今天不開或已過`, `Train ${p.no}: none today or gone`), delay: p.sys === 'tra' ? delays.get(p.no) || 0 : 0 }] });
       }
     }
-  } catch {}
+  } catch (err) {
+    // A failed read says so (rows read before stay); never 載入中… for good.
+    for (const p of pins) if (!S.trains.get(p.id)?.rows) S.trains.set(p.id, { error: errorText(err) });
+  }
 }
 
 // A trip's plans are planned once and used again: which ways go there
@@ -330,6 +342,8 @@ async function loadTrip(w, { force = false } = {}) {
   const kept = force ? null : old?.base ? { at: old.at, from: old.from, plans: old.base } : readTrips()[tripKey(w)];
   if (kept && !replanWhy(kept, { w, here, picks })) {
     if (old?.base && Date.now() - old.timed < RETIME_MS) return;
+    // (Shown at once as kept, rolled on to now; the buses' times follow.)
+    if (!old?.plans) S.trips.set(w.id, { sig, at: kept.at, from: w.from || { name: W('目前位置', 'Here'), ...kept.from }, base: kept.plans, timed: 0, plans: w.by === 'arrive' ? kept.plans : rollPlans(kept.plans, Date.now()), error: '', kept: true });
     const plans = await retimed(kept.plans, w).catch(() => null);
     if (plans) {
       const cur = S.trips.get(w.id);
@@ -458,19 +472,20 @@ function pinnedHtml() {
       // (A stop pinned alone: which way its buses go.)
       const route = e(JSON.stringify({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }));
       const dir = it.back ? `<span class="ot-strip-dir" role="button" data-flip="${e(it.id)}" aria-label="${r.back ? W('回程，改看去程', 'Return; show outbound') : W('去程，改看回程', 'Outbound; show return')}">${icon('swap')}${r.back ? W('回程', 'Return') : W('去程', 'Out')}</span>` : '';
-      const note = r.off ? `${dir}${W('到', 'to')} ${e(r.off.stop)}${it.n ? ` · ${W(`${it.n} 站`, `${it.n} stops`)}` : ''}` : `${W('往', 'to')} ${e(r.headsign || '—')}`;
+      const note = r.off ? `${dir}${W('到', 'to')} ${e(r.off.stop)}${it.n ? `<span class="ot-drop"> · ${W(`${it.n} 站`, `${it.n} stops`)}</span>` : ''}` : `${W('往', 'to')} ${e(r.headsign || '—')}`;
       return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: t, attrs: `data-route="${route}"` })}</div>`;
     })
     .join('');
   const name = s => (s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
   const tr = trains
     .map(p => {
-      const list = S.trains.get(p.id) || [];
-      const rowsHtml = list
+      const got = S.trains.get(p.id);
+      const rowsHtml = (got?.rows || [])
         .filter(x => x.dep == null || x.dep > Date.now() - 60_000 || p.kind === 'trainNo')
-        .map(x => `<span class="ot-go-tr"><b>${e(hm(x.dep))}</b>${x.arr ? `→${e(hm(x.arr))}` : ''} <small>${e(x.label)}</small>${x.delay ? `<i class="warn">${W(`晚 ${x.delay} 分`, `${x.delay} min late`)}</i>` : ''}</span>`)
+        .map(x => `<span class="ot-go-tr">${x.dep != null ? `<b>${e(hm(x.dep))}</b>${x.arr ? `→${e(hm(x.arr))}` : ''} ` : ''}<small>${e(x.label)}</small>${x.delay ? `<i class="warn">${W(`晚 ${x.delay} 分`, `${x.delay} min late`)}</i>` : ''}</span>`)
         .join('');
-      return `<div class="ot-go-row train"><span class="ot-go-what"><b>${e(name(p.from))} → ${e(name(p.to))}</b><small>${p.kind === 'trainNo' ? W('釘選的車次', 'Pinned train') : W('接下來的車', 'Next trains')}</small><span class="ot-go-trs">${rowsHtml || `<small>${W('載入中…', 'Loading…')}</small>`}</span></span><button class="q-icon-btn on" type="button" data-unpin-train="${e(p.id)}" aria-label="${W('取消釘選', 'Unpin')}">${icon('star')}</button><button class="q-icon-btn" type="button" data-times="${e(p.id)}" aria-label="${W('查時刻', 'Times')}">${icon('chevron')}</button></div>`;
+      const none = !got ? W('載入中…', 'Loading…') : got.error || W('今天沒有車了', 'No more trains today');
+      return `<div class="ot-go-row train"><span class="ot-go-what"><b>${e(name(p.from))} → ${e(name(p.to))}</b><small>${p.kind === 'trainNo' ? W('釘選的車次', 'Pinned train') : W('接下來的車', 'Next trains')}</small><span class="ot-go-trs">${rowsHtml || `<small>${e(none)}</small>`}</span></span><button class="q-icon-btn on" type="button" data-unpin-train="${e(p.id)}" aria-label="${W('取消釘選', 'Unpin')}">${icon('star')}</button><button class="q-icon-btn" type="button" data-times="${e(p.id)}" aria-label="${W('查時刻', 'Times')}">${icon('chevron')}</button></div>`;
     })
     .join('');
   return `<h3 class="ot-go-h">${W('釘選的公車・火車', 'Pinned buses and trains')}</h3><section class="ot-go-card">${buses}${tr}</section>`;

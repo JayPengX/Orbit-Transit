@@ -452,7 +452,7 @@ export function boardHtml(rs, next, ahead, delay, end = null, paced = null, dela
   const ks = [];
   for (let k = next; k <= rs.j; k++) ks.push(k);
   const show = ks.length > 4 ? [ks[0], ks[1], null, ks.at(-1)] : ks;
-  return `<ol class="ot-board">${show
+  return `<ol class="ot-stops">${show
     .map(k =>
       k == null
         ? `<li class="more"><i></i><span>${W(`再 ${ks.length - 3} 站`, `${ks.length - 3} more stops`)}</span></li>`
