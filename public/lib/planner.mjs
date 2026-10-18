@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -84,13 +84,15 @@ async function busToRail(net, from, to, at, { use, now, trace, bike = false }) {
     .sort((a, b) => a.m - b.m)
     .slice(0, 4);
   const out = [];
+  // (Never for a train you could have boarded nearer: see railPlans' `chase`.)
+  const chase = railStarts(net, from, at, { bike });
   await Promise.all(stations.map(async ({ s }) => {
     const st = stationPoint(s);
     const buses = await busLink(from, st, at, { fromM: 900, toM: 800, n: 2, routes: 8, now }).catch(() => []);
     if (!buses.length) return void trace.push(`${st.name}: no bus`);
     // Each bus there (the soonest two), with the trains after it gets in.
     for (const b of buses) {
-      const trains = railPlans(net, st, to, b.arr + 60_000, { n: 2, bus: true, use });
+      const trains = railPlans(net, st, to, b.arr + 60_000, { n: 2, bus: true, use, chase });
       trace.push(`${st.name}: ${b.legs.find(l => l.mode === 'bus').short} ${hm(b.arr)}${trains.length ? '' : ' (no train)'}`);
       for (const r of trains) out.push(finish({ src: 'bus+rail', legs: [...b.legs, ...r.legs.filter((l, i) => !(i === 0 && l.mode === 'walk' && l.dist < 150))], live: b.live }));
     }

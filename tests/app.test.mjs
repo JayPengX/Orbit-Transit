@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys, earliest, directs, tags, traFare, hsrFare } from '../public/lib/rail.mjs';
 import { swapDocks, rentalPush, rentalStep } from '../public/lib/rental.mjs';
-import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike, keepWins } from '../public/lib/plan.mjs';
+import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, railStarts, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike, keepWins } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
 import { liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
 import { sameRoute } from '../public/lib/util.mjs';
@@ -1160,6 +1160,23 @@ test("rank: a planner's train named only by its line (彰化-花蓮) is the time
     assert.equal(out.length, 1);
     assert.equal(out[0].legs[0].short, '普悠瑪 282');
   }
+});
+
+test('railPlans: never a bus down the line for a train you could walk to (to 竹北 for the 自強 152 that leaves 新竹, where you are, first), nor a ride to a station for a train back to change where you set out', () => {
+  const hsinchu = { lat: 24.8016, lon: 120.9716 };
+  const zhubei = { lat: 24.8392, lon: 121.0093 };
+  const taipei = { lat: 25.0478, lon: 121.517 };
+  const no = p => p.legs.filter(l => l.mode === 'tra').map(l => l.train.no).join('>');
+  // Off a bus at 竹北 at 08:05: the 152 from there, unless you could have boarded it at 新竹.
+  const only152 = list => list.length > 0 && list.every(p => no(p) === '152');
+  assert.ok(only152(railPlans(net, zhubei, taipei, T('08:05'), { bus: true })));
+  assert.deepEqual(railPlans(net, zhubei, taipei, T('08:05'), { bus: true, chase: railStarts(net, hsinchu, T('07:50')) }), []);
+  // Too late for it at 新竹 (ready 08:33): the 152 from 竹北 is a way after all.
+  assert.ok(only152(railPlans(net, zhubei, taipei, T('08:05'), { bus: true, chase: railStarts(net, hsinchu, T('08:30')) })));
+  // From 新竹 with YouBike: never riding to 北新竹 for the 1701 back to 新竹 and the 152 there.
+  const own = railPlans(net, hsinchu, taipei, T('07:55'), { bike: true });
+  assert.ok(own.some(p => no(p) === '152'));
+  assert.ok(!own.some(p => /^1701>.*152/.test(no(p))), own.map(no).join(' '));
 });
 
 test('journeys to several stations: each station keeps its own too (on to 六家 by the 六家線, over off sooner at 北新竹)', () => {
