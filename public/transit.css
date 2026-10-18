@@ -4960,3 +4960,24 @@ button.ot-nav-gm {
   gap: 10px;
   margin-top: 14px;
 }
+
+/* A sheet's sub-line that is one saved address: one line, ellipsis. */
+.q-sheet-head > div:has(> .ot-sheet-sub > .ot-sub-1) {
+  min-width: 0;
+}
+.ot-sub-1 {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A name in a step's title stays whole: the line breaks around it, not inside. */
+.ot-nw {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  vertical-align: top;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

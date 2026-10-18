@@ -150,7 +150,7 @@ function placeSheet(id) {
   const p = ctx.data.places.find(x => x.id === id);
   if (!p) return;
   let ic = p.icon;
-  const d = sheet(`${sheetHead(W('編輯地點', 'Edit place'), e(p.address || ''))}
+  const d = sheet(`${sheetHead(W('編輯地點', 'Edit place'), p.address ? `<span class="ot-sub-1">${e(p.address)}</span>` : '')}
     <label class="ot-field"><span>${W('名稱', 'Name')}</span><input id="pl-name" maxlength="30" value="${e(p.name)}" placeholder="${W('例如：家、公司、學校', 'e.g. Home, Work, School')}"></label>
     <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === ic}">${v}</button>`).join('')}</div></div>
     <div class="ot-row ot-actions"><button class="q-btn" type="button" data-del="1">${W('刪除', 'Delete')}</button><button class="q-btn primary" type="button" data-save="1">${W('儲存', 'Save')}</button></div>`);

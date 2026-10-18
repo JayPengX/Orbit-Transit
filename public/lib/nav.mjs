@@ -259,6 +259,13 @@ export const wayText = l => {
   if (!h) return '';
   return `${W('往', 'to')} ${h === String(l.from?.name || '').trim() && l.to?.name ? l.to.name : h}`;
 };
+// A step's title as HTML: each place or route name in it kept in one piece (it wraps between the words, never inside a name; a name too long for the line ends in an ellipsis).
+const titleHtml = (title, plan) => {
+  const names = [...new Set((plan.legs || []).flatMap(l => [l.from?.name, l.to?.name, l.route ? rideName(l) : '']).map(n => e(String(n || '').trim())).filter(Boolean))].sort((a, b) => b.length - a.length);
+  const html = e(title);
+  if (!names.length) return html;
+  return html.replace(new RegExp(names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g'), n => `<span class="ot-nw">${n}</span>`);
+};
 // What to do on a leg, before (or while) doing it: one short line, and what's said under it.
 function stepText(plan, i, phase) {
   const l = plan.legs[i];
@@ -636,7 +643,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         ${off}${offer}${strayed}
         <div class="ot-nav-main">
           <span class="ot-nav-i">${icon(state.done ? 'pin' : offNext ? 'bell' : l.mode)}</span>
-          <div class="ot-nav-text"><b>${e(title)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>
+          <div class="ot-nav-text"><b>${titleHtml(title, plan)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>
           ${big ? `<span class="ot-nav-big"${cd}>${big}</span>` : ''}
         </div>
         ${rentLine}
