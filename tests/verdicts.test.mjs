@@ -8,9 +8,9 @@ import assert from 'node:assert/strict';
 import { rankSaved, sayPlan } from './verdict-rank.mjs';
 import { crossings } from '../public/lib/rivers.mjs';
 import { inOrder } from '../public/lib/plan.mjs';
+import { rides } from '../public/lib/util.mjs';
 
 const shown = r => r.filter(p => p.lead && !p.weak);
-const rides = p => p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
 const busChain = p => rides(p).some((l, i, a) => i > 0 && l.mode === 'bus' && a[i - 1].mode === 'bus');
 const bikeOverRiver = p => rides(p).length && p.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to));
 const firstTrain = r => shown(r).find(p => p.top && rides(p).some(l => l.mode === 'tra'));

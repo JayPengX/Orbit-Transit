@@ -1,6 +1,6 @@
 // Shared UI: sheets, the transport icons, a plan's legs as chips.
 
-import { e, minsText, hm } from './util.mjs';
+import { e, minsText, hm, rides } from './util.mjs';
 
 import { W, en } from './lang.mjs';
 // A modal sheet (the kit's look): closed by its × or a tap on the page
@@ -102,7 +102,6 @@ export function legLabel(l) {
 export function depChips(plans, idx, on, attrs) {
   if (idx.length < 2) return '';
   // The ride the times differ by (a bus to the station, then a choice of trains: the trains').
-  const rides = p => p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   const k = Math.max(0, rides(plans[idx[0]]).findIndex((l, j) => idx.some(i => rides(plans[i])[j]?.dep !== l.dep)));
   const ride = p => rides(p)[k] || rides(p)[0];
   const kind = p => (ride(p)?.train ? trainKind(String(ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '')) : '');

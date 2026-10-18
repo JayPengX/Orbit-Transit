@@ -21,11 +21,12 @@ import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
-import { meters, tw, hm } from './util.mjs';
+import { meters, tw, hm, isRide } from './util.mjs';
 import { crossings } from './rivers.mjs';
 import { rec } from '#kit/quadra.mjs';
 
-const RAIL = new Set(['tra', 'hsr']);
+// 台鐵 and 高鐵 (our own router's trains; not the metro).
+const TRAINS = new Set(['tra', 'hsr']);
 
 // The planner's YouBike stations by the streets: the walks it knows (either way round).
 useStreetWalks((a, b) => (walkKnown(a, b) || walkKnown(b, a))?.dist ?? null);
@@ -57,7 +58,7 @@ async function trainThenBus(plans, to, now) {
   const jobs = [];
   const tried = new Set();
   for (const p of plans) {
-    const k = p.legs.findLastIndex(l => RAIL.has(l.mode));
+    const k = p.legs.findLastIndex(l => TRAINS.has(l.mode));
     if (k < 0) continue;
     const off = p.legs[k];
     if (!off.to?.lat || (meters(off.to.lat, off.to.lon, to.lat, to.lon) < 1200 && !p.legs[k + 1]?.bus)) continue;
@@ -304,14 +305,14 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           // (Once a line and stop: many plans board the same bus at the same stop.)
           const once = new Map();
           const key = p => {
-            const l = p.legs.find(x => x.mode !== 'walk' && x.mode !== 'bike');
+            const l = p.legs.find(isRide);
             return l?.mode === 'bus' && !l.next && !l.nextP && l.from?.lat ? `${l.short || l.name}|${l.from.lat.toFixed(3)},${l.from.lon.toFixed(3)}|${Math.round(l.dep / 600_000)}` : null;
           };
           list = list.map(p => {
             const k = key(p);
             if (!k) return p;
             if (!once.has(k)) once.set(k, busTimes(p, { now }).catch(() => []));
-            const l0 = p.legs.find(x => x.mode !== 'walk' && x.mode !== 'bike');
+            const l0 = p.legs.find(isRide);
             return { ...p, legs: p.legs.map(l => (l === l0 ? { ...l, nextP: once.get(k) } : l)) };
           });
           list = await Promise.all(list.map(async p => (p.legs.some(l => l.nextP) ? { ...p, legs: await Promise.all(p.legs.map(async ({ nextP, ...l }) => (nextP ? { ...l, next: await nextP.catch(() => []) } : l))) } : p)));

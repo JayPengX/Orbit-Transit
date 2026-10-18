@@ -13,7 +13,7 @@ import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stopTimes, routeCity } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish, walkLeg } from './plan.mjs';
-import { meters, walkSec, zh, tw, twAt, addDays, etaAge, routeNorm, sameRoute } from './util.mjs';
+import { meters, walkSec, zh, tw, twAt, addDays, etaAge, routeNorm, sameRoute, isRide, RAIL } from './util.mjs';
 
 import { W } from './lang.mjs';
 const MIN = 60_000;
@@ -47,8 +47,6 @@ export function liveTimes(list, name, now = Date.now(), { dir = null, routeUID =
   const uniq = times.filter(t => Number.isFinite(t.at) && !seen.has(Math.round(t.at / 30_000)) && seen.add(Math.round(t.at / 30_000))).sort((a, b) => a.at - b.at);
   return { found: mine.length > 0, times: uniq, off: uniq.length || running ? 0 : off };
 }
-
-const FIXED = new Set(['tra', 'hsr', 'metro', 'lightrail']);
 
 // A planner's bus leg as the official route: Google names routes its own
 // way (快捷八號經中正大橋 is 快捷8號, 快捷八號經興隆大橋 快捷8號支), which
@@ -108,11 +106,11 @@ export async function officialPlan(plan, now = Date.now(), opts = {}) {
     if (t == null || Math.abs(t - l.dep) < MIN || t - l.dep > 45 * MIN) continue;
     const delta = t - l.dep;
     for (let a = i; a < legs.length; a++) {
-      if (a > i && FIXED.has(legs[a].mode)) break;
+      if (a > i && RAIL.has(legs[a].mode)) break;
       legs[a] = { ...legs[a], dep: legs[a].dep + delta, arr: legs[a].arr + delta };
     }
     // The way to the first ride: leave so as to be there a minute before it.
-    if (legs.slice(0, i).every(x => x.mode === 'walk' || x.mode === 'bike')) for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + delta, arr: legs[a].arr + delta };
+    if (!legs.slice(0, i).some(isRide)) for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + delta, arr: legs[a].arr + delta };
   }
   return finish({ ...plan, legs });
 }
@@ -205,7 +203,7 @@ export async function laterBuses(list, l, after, { now = Date.now(), stops = rou
 // A plan's first bus, its later buses, when TDX gave no estimate for it (a
 // trip later in the day; a planner's bus).
 export async function busTimes(plan, { near = etaAround, now = Date.now() } = {}) {
-  const l = plan.legs.find(x => x.mode !== 'walk' && x.mode !== 'bike');
+  const l = plan.legs.find(isRide);
   if (!l || l.mode !== 'bus' || !l.from?.lat) return [];
   const list = await near(l.from.lat, l.from.lon, 150).catch(() => []);
   return laterBuses(list, l, l.dep, { now });
@@ -249,7 +247,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     // Kept on the leg: a way to this stop made later (by bike instead of the
     // walk) catches its bus from them too (plan.mjs catchBus).
     legs[i] = { ...l, seen: times.map(t => ({ at: t.at, planned: Boolean(t.planned), last: Boolean(t.last) })) };
-    const first = legs.findIndex(x => x.mode !== 'walk' && x.mode !== 'bike');
+    const first = legs.findIndex(isRide);
     const before = legs.slice(0, i).reduce((a, x) => a + (x.dur || 0) * 1000, 0);
     // When you can be at the stop: now plus the walk (or ride) to it, else after the leg before.
     const ready = i === first ? Math.max(now, start ?? legs[0].dep ?? now) + before : (legs[i - 1]?.arr ?? l.dep) + 30_000;
@@ -268,7 +266,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     // This bus and what follows it move with it, up to the next train (which keeps its time).
     let k = i;
     for (; k < legs.length; k++) {
-      if (k > i && FIXED.has(legs[k].mode)) break;
+      if (k > i && RAIL.has(legs[k].mode)) break;
       legs[k] = { ...legs[k], dep: legs[k].dep + delta, arr: legs[k].arr + delta };
     }
     if (k < legs.length && legs[k - 1].arr + 60_000 > legs[k].dep) miss = W(`可能趕不上 ${legs[k].short || legs[k].name}`, `May miss ${legs[k].short || legs[k].name}`);
