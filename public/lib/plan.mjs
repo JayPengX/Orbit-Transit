@@ -15,6 +15,7 @@ import { journeys, directs } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
 import { trainKind } from './ui.mjs';
 import { stationPoint } from './raildata.mjs';
+import { canRent } from './bike.mjs';
 
 import { W } from './lang.mjs';
 export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
@@ -89,8 +90,8 @@ const within = (pt, bikes, max) => bikes.filter(usable).map(s => ({ s, d: meters
 // later (off a train) is by place: the counts will have changed by then. A
 // station full where it goes back is still the one (換附近的站 is a tap,
 // navigating), and a swap's needs no bike: you take one again where you
-// return yours.
-const hasBike = (s, ebike) => s.bikes == null || (ebike ? s.ebike : s.bikes + s.ebike) > 0;
+// return yours. (A station without counts is taken as having bikes.)
+const hasBike = (s, ebike) => s.bikes == null || canRent(s, ebike);
 export function rentNear(pt, bikes, { ebike = false, max = NEAR_M, to = null, first = false } = {}) {
   return bestStation(pt, within(pt, bikes, max).filter(x => !first || hasBike(x.s, ebike)), to, ebike);
 }

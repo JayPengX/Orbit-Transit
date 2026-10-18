@@ -60,5 +60,9 @@ export async function bikesNear(lat, lon) {
   return mergeBikes(st, live);
 }
 
+// A bike to take at a station now (a 電輔車, with `ebike`), and a free dock to return one.
+export const canRent = (s, ebike = false) => s.ok !== false && (ebike ? s.ebike || 0 : s.bikes + (s.ebike || 0)) > 0;
+export const canReturn = s => s.ok !== false && s.ret > 0;
+
 // The marker's look: how many to take, by colour.
-export const bikeLevel = s => (s.ok === false ? 'off' : s.bikes + s.ebike === 0 ? 'none' : s.bikes + s.ebike <= 3 ? 'few' : 'ok');
+export const bikeLevel = s => (s.ok === false ? 'off' : !canRent(s) ? 'none' : s.bikes + s.ebike <= 3 ? 'few' : 'ok');
