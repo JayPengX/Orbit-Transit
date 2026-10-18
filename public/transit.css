@@ -121,6 +121,10 @@ main {
   background: none;
   color: var(--q-text);
   font: 500 16px var(--q-font);
+  text-overflow: ellipsis;
+}
+.ot-search input::placeholder {
+  text-overflow: ellipsis;
 }
 .ot-search input::-webkit-search-cancel-button {
   display: none;
@@ -3748,7 +3752,12 @@ main {
 }
 /* The line whole (the stop's name, the time, how early): on to a second
    line between its parts, never cut with an ellipsis. */
+/* Its parts apart by a gap, not a ・ (which was left dangling at the
+   end of a line when the next part wrapped). */
 .ot-nav-pace .ot-nav-pt {
+  display: inline-flex;
+  flex-wrap: wrap;
+  column-gap: 0.5em;
   overflow: visible;
   white-space: normal;
   line-height: 1.3;
