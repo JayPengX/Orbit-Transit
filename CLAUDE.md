@@ -1,24 +1,8 @@
-# Working on Quadra
+# Working on Orbit Transit
 
-**Read `Shared-Proxy/docs/TRUTH.md` first**: the owner's standing rules for
-every app (how the owner works, working and testing, security, the shared
-kit, the data layers and cost, live results, opening without movement,
-iPhone Safari, the words and look, what each product is, Quadra's money,
-each app's yardsticks, and the owner's calls by date). They win over
-anything else here.
+Read `../Shared-Proxy/docs/TRUTH.md` first (one page: how the owner works and what matters).
+The README is this repo's map.
 
-- **Push every change to `main` directly, always** (the owner's standing
-  instruction). `main` deploys on push (GitHub Pages for the apps, Cloudflare
-  for Shared-Proxy's Workers). Work on any branch the session gives you, then
-  also `git push origin HEAD:main` after each validated change.
-- Run the tests before pushing (`npm test`; Orbit Class also `npx eslint .`).
-- The shared kit lives in `Shared-Proxy/kit/` and only there: every app
-  loads it from Shared-Proxy's GitHub Pages (`kit/loader.html`; modules
-  import `#kit/quadra.mjs`), so a kit change is one push to Shared-Proxy.
-  `node kit/link.mjs` links the apps here for their tests.
-- The brand (Quadra: Securities, Play, the Pass; Orbit: Class, Weather,
-  Transit, Sports, Words) is `Shared-Proxy/kit/brand.mjs`; icons, share
-  cards and page tags come from `node brand/generate.mjs`.
-- The family's state now: `Shared-Proxy/docs/HANDOFF.md`; tools (phone
-  screenshots with real data, ESPN probes, word audio):
-  `Shared-Proxy/tools/README.md`.
+- `npm test`, then `git push origin HEAD:main`.
+- `node scripts/live.mjs <from> <to>` runs a trip on today's real data; `--against HEAD` compares a batch old vs new when changing how plans rank.
+- See it on a phone: `node ../Shared-Proxy/tools/preview.mjs transit --live --width 375`.
