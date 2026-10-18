@@ -21,7 +21,7 @@ import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
-import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides } from './util.mjs';
+import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readJson, writeJson } from './util.mjs';
 
 import { W, en } from './lang.mjs';
 let nav = null;
@@ -33,25 +33,16 @@ const NAV_KEY = 'ot.nav.v1';
 // when you get there): a late bus is still being ridden (the owner,
 // 2026-10-13: opened again on the last stretch, ended at 5 minutes past).
 const NAV_KEEP = 90 * 60_000;
-const plain = x => JSON.parse(JSON.stringify(x, (k, v) => (v instanceof Promise ? undefined : v)));
-function saveNav(state) {
-  try {
-    localStorage.setItem(NAV_KEY, JSON.stringify({ plan: plain(state.plan), i: state.i, reached: state.reached, phase: state.phase, min: Boolean(state.min), at: Date.now() }));
-  } catch {}
-}
+// (Promises, the later buses on their way, aren't kept.)
+const noPromises = (k, v) => (v instanceof Promise ? undefined : v);
+const saveNav = state => writeJson(NAV_KEY, { plan: state.plan, i: state.i, reached: state.reached, phase: state.phase, min: Boolean(state.min), at: Date.now() }, noPromises);
 export function savedNav(now = Date.now()) {
-  try {
-    const x = JSON.parse(localStorage.getItem(NAV_KEY) || 'null');
-    if (x?.plan?.legs?.length && x.plan.arr > now - NAV_KEEP) return x;
-    localStorage.removeItem(NAV_KEY);
-  } catch {}
+  const x = readJson(NAV_KEY);
+  if (x?.plan?.legs?.length && x.plan.arr > now - NAV_KEEP) return x;
+  writeJson(NAV_KEY, null);
   return null;
 }
-const dropNav = () => {
-  try {
-    localStorage.removeItem(NAV_KEY);
-  } catch {}
-};
+const dropNav = () => writeJson(NAV_KEY, null);
 
 // A bus leg as its official route and way, with its timetable (for which
 // live buses are in service), looked up once per leg.
@@ -186,18 +177,10 @@ export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat
 // opens one, kept on the device. → { top, bottom }
 const FOLD_KEY = 'ot.nav.fold';
 function readFold() {
-  try {
-    const f = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {};
-    return { top: f.top === true, bottom: f.bottom === true };
-  } catch {
-    return { top: false, bottom: false };
-  }
+  const f = readJson(FOLD_KEY, {}) || {};
+  return { top: f.top === true, bottom: f.bottom === true };
 }
-function saveFold(f) {
-  try {
-    localStorage.setItem(FOLD_KEY, JSON.stringify(f));
-  } catch {}
-}
+const saveFold = f => writeJson(FOLD_KEY, f);
 const grip = (which, folded) => `<button class="ot-nav-grip" type="button" data-nav="fold-${which}" aria-label="${folded ? W('展開', 'Expand') : W('收合', 'Collapse')}" aria-expanded="${!folded}"></button>`;
 // Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
 const AWAY_MS = 45_000;

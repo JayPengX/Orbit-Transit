@@ -9,7 +9,7 @@
 
 import { stationEtaAsk, etaOf, routeCity } from './bus.mjs';
 import { etaStops } from './near.mjs';
-import { uid } from './util.mjs';
+import { uid, readJson, writeJson } from './util.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 
 import { W } from './lang.mjs';
@@ -22,17 +22,11 @@ let push = null;
 const listeners = new Set();
 
 function load() {
-  try {
-    const all = JSON.parse(localStorage.getItem(KEY) || '[]');
-    return Array.isArray(all) ? all.filter(a => a && Date.now() - a.at < TTL) : [];
-  } catch {
-    return [];
-  }
+  const all = readJson(KEY, []);
+  return Array.isArray(all) ? all.filter(a => a && Date.now() - a.at < TTL) : [];
 }
 function keep() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(list));
-  } catch {}
+  writeJson(KEY, list);
   listeners.forEach(f => f());
   push?.schedule([...list.map(pushItem), ...navItems, ...bikeItems]);
   if (list.length && !timer) timer = setInterval(check, 20_000);

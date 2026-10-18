@@ -4,7 +4,7 @@
 // timetable) in this device's cache, so a second look costs nothing.
 
 import { dev } from '#kit/quadra.mjs';
-import { WALK_M_MIN } from './util.mjs';
+import { WALK_M_MIN, readJson, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 export const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
@@ -189,16 +189,12 @@ export function townships() {
 // The township and village at a point (a spot tapped on the map: 竹北市 斗崙里附近).
 export const whereIs = pt => get(`/weather/where?lat=${pt.lat.toFixed(5)}&lon=${pt.lon.toFixed(5)}`, { wait: 8000 });
 async function readTownships() {
-  try {
-    const k = JSON.parse(localStorage.getItem(TOWNS_KEY) || 'null');
-    if (k && Date.now() - k.at < 30 * 86_400_000) return (towns = k.data);
-  } catch {}
+  const k = readJson(TOWNS_KEY);
+  if (k && Date.now() - k.at < 30 * 86_400_000) return (towns = k.data);
   const res = await fetch(`${PROXY}/weather/places`, { signal: AbortSignal.timeout?.(10_000) });
   if (!res.ok) throw new Error(`places ${res.status}`);
   towns = await res.json();
-  try {
-    localStorage.setItem(TOWNS_KEY, JSON.stringify({ at: Date.now(), data: towns }));
-  } catch {}
+  writeJson(TOWNS_KEY, { at: Date.now(), data: towns });
   return towns;
 }
 
@@ -247,19 +243,14 @@ export const errorText = err =>
 //   → [{ dist, sec, poly? } | null]
 const WALKS_KEY = 'orbit-transit.walks';
 const walksKept = (() => {
-  try {
-    return new Map(JSON.parse(localStorage.getItem(WALKS_KEY) || '[]'));
-  } catch {
-    return new Map();
-  }
+  const kept = readJson(WALKS_KEY, []);
+  return new Map(Array.isArray(kept) ? kept.filter(Array.isArray) : []);
 })();
 let walksSave = 0;
 const keepWalks = () => {
   clearTimeout(walksSave);
   walksSave = setTimeout(() => {
-    try {
-      localStorage.setItem(WALKS_KEY, JSON.stringify([...walksKept].slice(-400).map(([k, w]) => [k, { dist: w.dist, sec: w.sec }])));
-    } catch {}
+    writeJson(WALKS_KEY, [...walksKept].slice(-400).map(([k, w]) => [k, { dist: w.dist, sec: w.sec }]));
   }, 1000);
 };
 const p5 = p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;

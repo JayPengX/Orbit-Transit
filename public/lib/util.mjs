@@ -1,6 +1,7 @@
 // Small shared pieces: escaping, Taiwan time, distances, the two polyline
 // encodings the planners use.
 
+import * as kit from '#kit/quadra.mjs';
 import { W } from './lang.mjs';
 
 export const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -148,6 +149,25 @@ export function decodeFlexible(str) {
   return out;
 }
 export const decodeLine = (poly, fmt) => (!poly ? [] : fmt === 'f' ? decodeFlexible(poly) : decodeGoogle(poly));
+
+// Saved on this device as JSON, never throwing: the kit's (readJson, writeJson),
+// else the same here, as a phone may still run an older kit. `fallback` when
+// there's none or it can't be read; a value of null removes the key.
+export function readJson(key, fallback = null) {
+  if (kit.readJson) return kit.readJson(key, fallback);
+  try {
+    return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+export function writeJson(key, value, replacer) {
+  if (kit.writeJson) return kit.writeJson(key, value, replacer);
+  try {
+    if (value == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value, replacer));
+  } catch {}
+}
 
 export const zh = v => (v && typeof v === 'object' ? v.Zh_tw || v.En || '' : String(v ?? ''));
 export const uid = () => Math.random().toString(36).slice(2, 10);
