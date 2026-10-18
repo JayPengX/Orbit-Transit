@@ -2518,3 +2518,18 @@ test('after midnight: yesterday\'s trains still running are in the network (TDX 
   assert.deepEqual(railSpan(twAt('2026-10-05', '22:30'), twAt('2026-10-06', '00:30')), { date: '2026-10-05', next: true, prev: false });
   assert.deepEqual(railSpan(twAt('2026-10-05', '06:00'), twAt('2026-10-05', '22:00')), { date: '2026-10-05', next: false, prev: false }, 'arrive by 22:00: that day only');
 });
+
+test('arrive by 08:00 tomorrow, asked at 22:00, nothing in the usual window: searched again from six hours before it, not tonight\'s trips', async () => {
+  const { searchFrom, missedRetry } = await import('../public/lib/planner.mjs');
+  const now = twAt('2026-10-05', '22:00');
+  const at = twAt('2026-10-06', '08:00');
+  assert.equal(searchFrom(at, now, { by: 'arrive' }), twAt('2026-10-06', '06:00'), 'the usual window: two hours');
+  assert.equal(searchFrom(at, now, { by: 'arrive', far: true }), twAt('2026-10-06', '04:00'), 'a long trip: four');
+  assert.equal(missedRetry(at, now), 'wide');
+  assert.equal(searchFrom(at, now, { by: 'arrive', wide: true }), twAt('2026-10-06', '02:00'), 'searched again: six');
+  assert.equal(missedRetry(at, now, true), null, 'a wide search done stands');
+  // Already too close (07:21 for 08:00, the owner's 上學): the ways leaving now, as before.
+  assert.equal(missedRetry(twAt('2026-10-05', '08:00'), twAt('2026-10-05', '07:21')), 'now');
+  assert.equal(searchFrom(twAt('2026-10-05', '08:00'), twAt('2026-10-05', '07:21'), { by: 'arrive' }), twAt('2026-10-05', '07:21'), 'never before now');
+  assert.equal(searchFrom(at, now), at, 'a departure: its own time');
+});
