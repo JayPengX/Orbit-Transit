@@ -11,6 +11,7 @@
 // 2號 are on it.
 import { EXPRESS } from './rail.mjs';
 import { W } from './lang.mjs';
+import { isRide } from './util.mjs';
 
 const TAO_HSIN_MIAO_SKIP = { HsinchuCounty: ['觀光8號'] };
 
@@ -38,7 +39,7 @@ export const passTrain = l => l.mode !== 'tra' || !(PREMIUM.has(String(l.train?.
 // The same for a train in the day's timetable (rail.mjs's trips): a 台鐵 one of a class the pass takes.
 export const passTrainTrip = x => x.sys === 'tra' && !PREMIUM.has(String(x.code));
 // Can a ride ever be on the pass (高鐵 and a taxi never are)?
-export const passMode = l => l.mode === 'walk' || l.mode === 'bike' || (PAID.has(l.mode) && passTrain(l));
+export const passMode = l => !isRide(l) || (PAID.has(l.mode) && passTrain(l));
 
 // A route the pass leaves out though it runs inside its cities (its skip list).
 const skipped = (pass, city, name) => Boolean(pass?.skip?.[city]?.includes(String(name || '').trim()));
@@ -70,7 +71,7 @@ export const inPass = (o, d, pass, cityOf) => Boolean(pass) && [o, d].every(p =>
 
 // Every ride of a plan one the pass takes (a long YouBike ride too: it
 // only costs a little past the half hour).
-export const passOk = (plan, pass, cityOf) => plan.legs.every(l => l.mode === 'walk' || l.mode === 'bike' || (passMode(l) && [l.from, l.to].every(p => p?.lat != null && pass.cities.includes(cityOf(p))) && !skippedLeg(l, pass, cityOf)));
+export const passOk = (plan, pass, cityOf) => plan.legs.every(l => !isRide(l) || (passMode(l) && [l.from, l.to].every(p => p?.lat != null && pass.cities.includes(cityOf(p))) && !skippedLeg(l, pass, cityOf)));
 
 export function fareOf(plan, cov) {
   const fare = Number(plan.fare) || 0;

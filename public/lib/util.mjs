@@ -66,6 +66,13 @@ export function meters(aLat, aLon, bLat, bLon) {
 }
 export const near = (a, b) => meters(a.lat, a.lon, b.lat, b.lon);
 
+// A leg on a bus, train or metro (not on foot or on a YouBike), and a plan's such legs.
+export const isRide = l => Boolean(l) && l.mode !== 'walk' && l.mode !== 'bike';
+export const rides = p => p.legs.filter(isRide);
+// Rail (台鐵, 高鐵, the metro and light rail): it keeps its timetable, a late
+// bus before it never moves it.
+export const RAIL = new Set(['tra', 'hsr', 'metro', 'lightrail']);
+
 // Walking: streets aren't straight (×1.3) at 83 m a minute, 5 km/h (Google's
 // pace; 75, 4.5 km/h, until the owner's call of 2026-10-13).
 export const WALK_M_MIN = 83;

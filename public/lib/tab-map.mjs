@@ -26,7 +26,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
 import * as kit from '#kit/quadra.mjs';
@@ -2084,7 +2084,7 @@ function navMore() {
   const n = navNow();
   if (!n) return;
   const l = n.plan.legs[n.i];
-  const ride = l.mode !== 'walk' && l.mode !== 'bike';
+  const ride = isRide(l);
   const d = sheet(`${sheetHead(W('導航', 'Directions'), e(W(`到 ${navDest(n).name || '目的地'}`, `To ${navDest(n).name || 'destination'}`)))}
     <div class="ot-nav-menu">
       <button class="ot-row-btn" type="button" data-m="min">${icon('down')}<span><b>${W('縮小，先做別的事', 'Minimize')}</b><small>${W('導航繼續，點下方的列回來', 'Directions go on; tap the bar to return')}</small></span></button>
