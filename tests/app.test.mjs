@@ -526,6 +526,17 @@ test('TPASS: buses and 台鐵 inside its cities free, 高鐵 never, YouBike’s 
   assert.equal(fareOf(out, coverage(out, null, city)).text, 'NT$60');
 });
 
+test('TPASS: YouBike only in the pass’s own bike cities (臺南799), 60 free minutes at 桃園’s stations', () => {
+  const pt = { lat: 23, lon: 120.2 };
+  const bike = dur => ({ legs: [{ mode: 'bike', dur, from: pt, to: pt }] });
+  assert.equal(coverage(bike(900), tpassOf('tncy'), () => 'Tainan').all, true);
+  assert.equal(coverage(bike(900), tpassOf('tncy'), () => 'Chiayi').all, false, '臺南799 leaves 嘉義’s YouBike out');
+  assert.equal(coverage(bike(900), tpassOf('cct'), () => 'Chiayi').all, true);
+  assert.equal(coverage(bike(50 * 60), tpassOf('thhm'), () => 'Taoyuan').all, true);
+  assert.equal(coverage(bike(50 * 60), tpassOf('thhm'), () => 'Hsinchu').all, false);
+  assert.equal(tpassOf('ph').price, 150);
+});
+
 test('TPASS: a route its official table leaves out (新竹縣 觀光8號) is paid, though inside its cities', () => {
   const city = () => 'HsinchuCounty';
   const ride = short => ({ legs: [{ mode: 'bus', short, name: short, from: { lat: 24.8, lon: 121 }, to: { lat: 24.7, lon: 121.1 } }], fare: 90 });
