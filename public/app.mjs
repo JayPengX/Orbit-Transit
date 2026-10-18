@@ -23,7 +23,7 @@ import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
-import { useHolidays, readJson, writeJson } from './lib/util.mjs';
+import { useHolidays, readSaved, UNREAD, writeJson } from './lib/util.mjs';
 import { W, en, lang } from './lib/lang.mjs';
 // Taiwan's holidays (the kit's), before the first screen: a weekdays-only
 // trip (家 → 學校) isn't picked for a holiday (an older kit: none, at once).
@@ -53,9 +53,10 @@ const q = quadraSession('transit', { lang });
 useSession(q);
 
 // Where the device was last (opens the map there at once), this device's
-// copy of the pass's data.
-const local = readJson(LOCAL, {}) || {};
-const saveLocal = () => writeJson(LOCAL, local);
+// copy of the pass's data (one that couldn't be read is never saved over).
+const kept = readSaved(LOCAL, {});
+const local = (kept !== UNREAD && kept) || {};
+const saveLocal = () => kept !== UNREAD && writeJson(LOCAL, local);
 
 // What every tab shares.
 export const ctx = {

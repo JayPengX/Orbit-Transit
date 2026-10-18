@@ -13,7 +13,7 @@ import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
 import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, onTimeWay, offerText, stageView } from '../public/lib/nav.mjs';
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
-import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays } from '../public/lib/util.mjs';
+import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays, readSaved, UNREAD } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
 import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
 
@@ -2481,4 +2481,19 @@ test('a plan our own router made (no fare) still costs what its trains do in the
   assert.equal(hsr.text, '', 'no price shown that nobody gave');
   assert.ok(hsr.cost >= 40 && local.cost >= 15 && hsr.cost > local.cost);
   assert.equal(fareOf({ fare: 290, legs: [leg('hsr', 66000)] }, null).cost, 290, 'a fare given is the fare');
+});
+
+test('a failed read is a failure, never nothing there', () => {
+  const was = globalThis.localStorage;
+  const kept = { a: '[1]', bad: '[1,' };
+  try {
+    globalThis.localStorage = { getItem: k => kept[k] ?? null };
+    assert.deepEqual(readSaved('a', []), [1]);
+    assert.deepEqual(readSaved('none', []), [], 'nothing there: the fallback');
+    assert.equal(readSaved('bad', []), UNREAD, 'not JSON: unread, not the fallback');
+    globalThis.localStorage = { getItem: () => { throw new Error('blocked'); } };
+    assert.equal(readSaved('a', []), UNREAD, 'storage throws: unread');
+  } finally {
+    globalThis.localStorage = was;
+  }
 });

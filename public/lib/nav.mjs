@@ -21,7 +21,7 @@ import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
-import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readJson, writeJson } from './util.mjs';
+import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W, en } from './lang.mjs';
 let nav = null;
@@ -37,7 +37,8 @@ const NAV_KEEP = 90 * 60_000;
 const noPromises = (k, v) => (v instanceof Promise ? undefined : v);
 const saveNav = state => writeJson(NAV_KEY, { plan: state.plan, i: state.i, reached: state.reached, phase: state.phase, min: Boolean(state.min), at: Date.now() }, noPromises);
 export function savedNav(now = Date.now()) {
-  const x = readJson(NAV_KEY);
+  const x = readSaved(NAV_KEY);
+  if (x === UNREAD) return null; // (kept, not dropped)
   if (x?.plan?.legs?.length && x.plan.arr > now - NAV_KEEP) return x;
   writeJson(NAV_KEY, null);
   return null;
@@ -176,11 +177,13 @@ export const legEnd = (plan, k) => (k === plan.legs.length - 1 && plan.dest?.lat
 // the bottom to when you're there; a tap on the grip (or a swipe) folds or
 // opens one, kept on the device. → { top, bottom }
 const FOLD_KEY = 'ot.nav.fold';
+let foldUnread = false;
 function readFold() {
-  const f = readJson(FOLD_KEY, {}) || {};
-  return { top: f.top === true, bottom: f.bottom === true };
+  const f = readSaved(FOLD_KEY, {});
+  foldUnread = f === UNREAD;
+  return { top: f?.top === true, bottom: f?.bottom === true };
 }
-const saveFold = f => writeJson(FOLD_KEY, f);
+const saveFold = f => foldUnread || writeJson(FOLD_KEY, f);
 const grip = (which, folded) => `<button class="ot-nav-grip" type="button" data-nav="fold-${which}" aria-label="${folded ? W('展開', 'Expand') : W('收合', 'Collapse')}" aria-expanded="${!folded}"></button>`;
 // Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
 const AWAY_MS = 45_000;

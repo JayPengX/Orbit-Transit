@@ -10,7 +10,7 @@ import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
-import { e, meters, distText, readJson, writeJson } from './util.mjs';
+import { e, meters, distText, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -65,12 +65,12 @@ function pick(v) {
 const NEAR = 'near';
 const RECENT = 'orbit-transit.routes';
 const bus = { city: NEAR, list: [], failed: '', loaded: '', around: null };
-const recentRoutes = () => {
-  const r = readJson(RECENT, []);
-  return Array.isArray(r) ? r.filter(x => x?.uid && x.name).slice(0, 8) : [];
-};
+const routesIn = r => (Array.isArray(r) ? r.filter(x => x?.uid && x.name).slice(0, 8) : []);
+const recentRoutes = () => routesIn(readJson(RECENT, []));
 function rememberRoute(r) {
-  writeJson(RECENT, [{ uid: r.uid, name: r.name, city: r.city, from: r.from || '', to: r.to || '' }, ...recentRoutes().filter(x => x.uid !== r.uid)].slice(0, 8));
+  const kept = readSaved(RECENT, []);
+  if (kept === UNREAD) return; // (never saved over)
+  writeJson(RECENT, [{ uid: r.uid, name: r.name, city: r.city, from: r.from || '', to: r.to || '' }, ...routesIn(kept).filter(x => x.uid !== r.uid)].slice(0, 8));
 }
 // (From a stop near you: the route at that stop, scrolled to it.)
 const openBus = (r, stopUID = '', stopName = '') => {

@@ -9,12 +9,13 @@
 
 import { stationEtaAsk, etaOf, routeCity } from './bus.mjs';
 import { etaStops } from './near.mjs';
-import { uid, readJson, writeJson } from './util.mjs';
+import { uid, readSaved, UNREAD, writeJson } from './util.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 
 import { W } from './lang.mjs';
 const KEY = 'orbit-transit.alerts';
 const TTL = 2 * 60 * 60_000;
+let unread = false; // (couldn't be read: never saved over)
 let list = load();
 let timer = 0;
 let say = () => {};
@@ -22,11 +23,12 @@ let push = null;
 const listeners = new Set();
 
 function load() {
-  const all = readJson(KEY, []);
+  const all = readSaved(KEY, []);
+  unread = all === UNREAD;
   return Array.isArray(all) ? all.filter(a => a && Date.now() - a.at < TTL) : [];
 }
 function keep() {
-  writeJson(KEY, list);
+  if (!unread) writeJson(KEY, list);
   listeners.forEach(f => f());
   push?.schedule([...list.map(pushItem), ...navItems, ...bikeItems]);
   if (list.length && !timer) timer = setInterval(check, 20_000);
