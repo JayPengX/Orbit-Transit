@@ -4981,3 +4981,623 @@ button.ot-nav-gm {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* ==== Premium (2026-10-18): the family's look on Transit's pages ====
+   Page heads, one hero card, colour tiles per way of moving, row cards and
+   tags: the kit's q-page-head / q-hero-card / q-tile / q-rowcard / q-tag
+   (kit/quadra.css "Premium layer"), tinted with the app's green. The map
+   keeps its own pieces; its floating cards (the search, YouBike's) get the
+   same tiles and tags. Every colour is a kit token: light and dark follow. */
+.ot-wrap {
+  padding-top: 0;
+}
+.ot-sec {
+  margin-top: 24px;
+}
+.ot-sec .q-section-head {
+  margin: 0 0 8px;
+}
+.ot-sec .q-section-head h2 {
+  font: 700 20px/25px var(--q-font);
+}
+.ot-sec .q-section-head button {
+  border: 0;
+  background: none;
+  font: 400 17px/22px var(--q-font);
+}
+.ot-sec > .q-rowcard + .q-rowcard,
+.ot-sec > .ot-pad + .q-rowcard {
+  margin-top: 12px;
+}
+
+/* The hero: the page's one thing. */
+.ot-hero {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  cursor: default;
+}
+button.ot-hero {
+  cursor: pointer;
+}
+.ot-hero .q-hc-eyebrow {
+  min-width: 0;
+}
+.ot-hero .q-hc-eyebrow > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-hero .q-hc-title {
+  overflow-wrap: anywhere;
+}
+.ot-count {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 44px;
+}
+.ot-count small {
+  font: 600 18px/1 var(--q-font);
+  opacity: 0.85;
+}
+.ot-hero.empty .q-hc-title {
+  font-size: 24px;
+  line-height: 30px;
+}
+.ot-hc-tags {
+  margin-top: 4px;
+}
+.ot-hero .q-tag {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.ot-hero .q-tag.solid {
+  background: #fff;
+  color: var(--q-hc-b);
+}
+.ot-hero .q-tag.solid.red {
+  color: #d70015;
+}
+.ot-hero .q-tag.solid.orange {
+  color: #c93400;
+}
+.ot-hero .q-hc-row {
+  margin-top: 4px;
+}
+.ot-hero .q-hc-btn:disabled {
+  opacity: 0.55;
+}
+.ot-hero .ot-i {
+  width: 16px;
+  height: 16px;
+}
+.ot-hero .q-hc-btn .ot-i {
+  width: 18px;
+  height: 18px;
+}
+
+/* Tiles hold the app's own glyphs. */
+.q-tile .ot-i {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2;
+}
+.q-tile.sm .ot-i {
+  width: 18px;
+  height: 18px;
+}
+.q-tile.lg .ot-i {
+  width: 28px;
+  height: 28px;
+}
+.q-tile.soft {
+  --t: var(--q-accent);
+}
+
+/* Rows. */
+.q-rowcard > .q-ritem,
+.q-rowcard > .ot-strip {
+  min-height: 60px;
+}
+.q-ritem .q-icon-btn {
+  flex: none;
+}
+.q-ritem .q-icon-btn.on {
+  color: var(--ot-bike);
+}
+.q-ritem .q-icon-btn.on .ot-i {
+  fill: currentColor;
+}
+.ot-add-row .q-ritem-title {
+  color: var(--q-accent);
+  font-weight: 600;
+}
+.ot-order {
+  gap: 4px;
+  padding-right: 4px;
+}
+.ot-place-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-eta {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  gap: 2px;
+}
+.ot-eta b {
+  font: 700 20px/22px var(--q-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.ot-eta small {
+  color: var(--q-label-2);
+  font: 500 12px/14px var(--q-font);
+  white-space: nowrap;
+}
+.ot-eta.soon b {
+  color: var(--q-green);
+}
+.ot-train-row .q-ritem-text,
+.ot-bike-row .q-ritem-text {
+  padding: 6px 0;
+}
+.ot-train-row .q-ritem-title,
+.ot-bike-row .q-ritem-title {
+  white-space: normal;
+}
+
+/* A bus route's strip as a row of a card: its number a tile, its time big. */
+.q-rowcard > .ot-strip {
+  position: relative;
+  align-items: center;
+  border: 0;
+}
+.q-rowcard > .ot-strip + .ot-strip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 72px;
+  right: 0;
+  border-top: var(--q-hairline, 0.5px) solid var(--q-sep);
+}
+.q-rowcard .ot-strip-main {
+  min-height: 64px;
+  padding: 10px 12px;
+  gap: 12px;
+}
+.q-rowcard .ot-strip-main:active {
+  background: var(--q-fill-4);
+}
+.ot-strip-no {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--q-green) 80%, #fff), var(--q-green) 60%);
+  color: #fff;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+}
+.ot-strip-no > span {
+  padding: 0 4px;
+}
+.ot-strip-what b {
+  font-weight: 500;
+}
+.ot-strip-eta b {
+  font: 700 20px/24px var(--q-font-rounded);
+  letter-spacing: -0.01em;
+}
+.ot-strip-eta.live b,
+.ot-strip-eta.live.words b {
+  color: var(--q-green);
+}
+.ot-strip-eta.words b {
+  font: 600 14px/20px var(--q-font);
+}
+.ot-strip-note small,
+.ot-strip-eta small {
+  color: var(--q-label-2);
+}
+.ot-bus-chip {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--q-green) 16%, transparent);
+  color: var(--q-green);
+}
+
+/* ---- 交通 ---- */
+.ot-go .ot-go-card {
+  margin: 0 0 12px;
+  padding: 0 0 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 18px;
+  background: var(--q-surface);
+}
+.ot-go .ot-go-head {
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 12px 8px;
+}
+.ot-go-hd {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.ot-go-hd b {
+  overflow: hidden;
+  font: 600 17px/22px var(--q-font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-go-hd small {
+  color: var(--q-label-2);
+  font: var(--q-t-footnote);
+}
+.ot-go .ot-go-plan-row {
+  padding: 0 12px;
+  border-top: var(--q-hairline, 0.5px) solid var(--q-sep);
+}
+.ot-go .ot-go-leave b {
+  color: var(--q-accent);
+  font: 700 22px/26px var(--q-font-rounded);
+}
+.ot-go .ot-go-link {
+  padding: 10px 12px 6px;
+  border-top: var(--q-hairline, 0.5px) solid var(--q-sep);
+  color: var(--q-accent);
+}
+.ot-go .ot-go-tip,
+.ot-go .ot-go-card > .ot-note {
+  margin: 8px 12px;
+}
+.ot-place {
+  margin: 0 0 12px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--q-surface);
+}
+.ot-place .ot-go-head {
+  padding: 10px 12px;
+}
+.ot-place .ot-go-title {
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+.ot-place .q-rowcard {
+  margin: 0 0 4px;
+  border-radius: 0;
+  background: none;
+}
+.ot-place > .ot-note {
+  margin: 4px 12px 12px;
+}
+.ot-go-there-btn {
+  flex: none;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--q-accent) 16%, transparent);
+  color: var(--q-accent);
+  font: 600 14px/1 var(--q-font);
+}
+.ot-go-there-btn .ot-i {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---- 我的 ---- */
+.ot-mine .ot-hero {
+  margin-bottom: 12px;
+}
+.ot-stats {
+  margin: 0;
+}
+.ot-stats .q-stat {
+  padding: 12px;
+}
+.ot-stats .q-stat strong {
+  font-size: 24px;
+}
+.ot-pad {
+  display: block;
+  padding: 12px 12px 8px;
+}
+.ot-pref-h {
+  margin: 0 0 8px;
+  color: var(--q-label-2);
+  font: 600 13px/18px var(--q-font);
+}
+.ot-modes {
+  margin: 0 calc(-1 * var(--q-margin, 16px));
+  padding: 0 var(--q-margin, 16px) 4px;
+}
+.ot-pad .ot-modes {
+  margin: 0 -12px;
+  padding: 0 12px 4px;
+}
+.ot-sel-row {
+  cursor: default;
+}
+.ot-sel-row select {
+  flex: none;
+  max-width: 46%;
+  min-height: 34px;
+  padding: 0 28px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background-color: var(--q-fill-3);
+  color: var(--q-accent);
+  font: 500 15px/1 var(--q-font);
+  text-overflow: ellipsis;
+}
+.ot-sel-row .q-ritem-text small {
+  white-space: normal;
+}
+
+/* ---- 查時刻 ---- */
+.ot-times-title {
+  position: relative;
+  z-index: 21;
+  max-width: var(--ot-max);
+  margin: 0 auto;
+  padding: calc(var(--q-top, env(safe-area-inset-top)) + 8px) 16px 0;
+  box-sizing: border-box;
+}
+.ot-times-head {
+  margin-top: calc(-1 * var(--q-top, env(safe-area-inset-top)));
+}
+.ot-times-head .q-seg {
+  margin-top: 0;
+}
+.ot-od-card {
+  gap: 12px;
+  padding: 16px;
+  border: 0;
+  background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--q-hc-glow) 55%, transparent), transparent 60%), linear-gradient(135deg, var(--q-hc-a), var(--q-hc-b));
+}
+.ot-od-pair {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+.ot-od-card .ot-st-pick {
+  min-height: 58px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.ot-od-card .ot-st-pick small {
+  color: rgba(255, 255, 255, 0.78);
+}
+.ot-od-card .ot-st-pick b {
+  font: 700 21px/26px var(--q-font);
+}
+.ot-od-card .ot-st-pick b.muted {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 17px;
+}
+.ot-od-card .ot-sys {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.ot-od-card .ot-swap {
+  right: 14px;
+  background: #fff;
+  color: var(--q-hc-b);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  border: 0;
+}
+.ot-go-btn {
+  width: 100%;
+  min-height: 46px;
+  font-size: 17px;
+}
+.ot-go-btn .ot-i {
+  width: 18px;
+  height: 18px;
+}
+.ot-feat {
+  margin-top: 16px;
+}
+.ot-feat .q-ritem {
+  min-height: 64px;
+}
+.ot-jny {
+  border-radius: 18px;
+  background: var(--q-surface);
+}
+.ot-jny-time {
+  font: 700 22px/28px var(--q-font-rounded);
+}
+.ot-jny-dur {
+  color: var(--q-accent);
+  font: 700 17px/22px var(--q-font-rounded);
+}
+.ot-jny-sub span {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--q-fill-3);
+  color: var(--q-label-2);
+  font: 600 12px/22px var(--q-font);
+}
+.ot-jny-sub span.warn {
+  background: color-mix(in srgb, var(--q-orange) 16%, transparent);
+  color: var(--q-orange);
+}
+.ot-train-chip {
+  border-radius: 999px;
+  background: color-mix(in srgb, #0ea5e9 18%, transparent);
+  color: #0ea5e9;
+}
+.ot-train-chip.hsr {
+  background: color-mix(in srgb, #f97316 18%, transparent);
+  color: #f97316;
+}
+.ot-train-chip.local {
+  background: var(--q-fill-3);
+  color: var(--q-label-2);
+}
+.ot-bus #tb-hero {
+  margin-bottom: 4px;
+}
+.ot-bus .ot-bus-top {
+  margin-top: 12px;
+}
+.ot-bus-group,
+.ot-bus-near {
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--q-surface);
+}
+.ot-bus-stop {
+  background: none;
+  border-radius: 0 !important;
+  padding: 12px;
+}
+.ot-bus-stop + .ot-bus-stop {
+  border-top: var(--q-hairline, 0.5px) solid var(--q-sep);
+}
+.ot-bus-stop-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ot-bus-stop-h b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: 600 16px/21px var(--q-font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-bus-stop-h > .q-tag {
+  flex: none;
+}
+.ot-bus-nos {
+  margin-top: 10px;
+}
+
+/* ---- 地圖: its floating cards ---- */
+.tab-map .ot-search {
+  height: 48px;
+  border-radius: 24px;
+  color: var(--q-accent);
+}
+.tab-map .ot-search .ot-i {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.2;
+}
+.ot-search input {
+  font: 500 17px/22px var(--q-font);
+}
+.ot-search input::placeholder {
+  color: var(--q-label-2);
+}
+.ot-map-chips {
+  top: calc(var(--q-top, 0px) + 66px);
+}
+.ot-map-chips .q-chip {
+  min-height: 36px;
+  font-weight: 600;
+}
+.ot-nearbikes {
+  gap: 12px;
+  bottom: 14px;
+  scroll-padding-inline: 16px;
+}
+.ot-nb {
+  gap: 8px;
+  width: min(70vw, 252px);
+  padding: 12px;
+  border: 0;
+  border-radius: 22px;
+}
+.ot-nb-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ot-nb-top b {
+  flex: 1;
+  font: 600 16px/21px var(--q-font);
+}
+.ot-nb-n {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.ot-nb-c {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.ot-nb-c em {
+  color: var(--q-label);
+  font: 700 26px/28px var(--q-font-rounded);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.ot-nb-c small {
+  overflow: hidden;
+  color: var(--q-label-2);
+  font: 500 12px/16px var(--q-font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-nb-c.e em {
+  color: var(--ot-bike);
+}
+.ot-nb-c.d em {
+  color: var(--q-blue);
+}
+.ot-nb.few .ot-nb-c:first-child em {
+  color: var(--q-orange);
+}
+.ot-nb.none .ot-nb-c:first-child em,
+.ot-nb.off .ot-nb-c:first-child em {
+  color: var(--q-red);
+}
+.ot-nb-d {
+  margin: 0;
+}
+.ot-nb-d .q-tag .ot-i {
+  width: 12px;
+  height: 12px;
+}
+.ot-map-panel:has(.ot-nearbikes:not([hidden])) .ot-fabs {
+  bottom: 156px;
+}
+
+.ot-mine .q-ritem-title {
+  white-space: normal;
+}
+.ot-sel-row select {
+  max-width: 44%;
+  padding: 0 24px 0 10px;
+  font-size: 14px;
+}
+.ot-sel-row select {
+  max-width: 52%;
+  text-overflow: clip;
+}
+.ot-sel-row .q-ritem-title {
+  white-space: nowrap;
+}

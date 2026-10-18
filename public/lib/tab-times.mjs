@@ -10,6 +10,8 @@ import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
+import { nearStops as busNear } from './bus-ui.mjs';
+import { COLOR, pageHead, dateLine, tile, tag, countHtml, tick, hero } from './premium.mjs';
 import { e, meters, distText, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -25,6 +27,7 @@ export function init(c) {
   try {
     view = localStorage.getItem(KEY) === 'bus' ? 'bus' : 'train';
   } catch {}
+  $('times-title').innerHTML = pageHead(W('查時刻', 'Times'), dateLine());
   $('times-seg').addEventListener('click', ev => {
     const b = ev.target.closest('[data-view]');
     if (b) pick(b.dataset.view);
@@ -81,7 +84,7 @@ const openBus = (r, stopUID = '', stopName = '') => {
 
 function busInit() {
   const box = $('times-bus');
-  box.innerHTML = `<div class="ot-wrap ot-bus"><div class="ot-bus-top">
+  box.innerHTML = `<div class="ot-wrap ot-bus"><div id="tb-hero"></div><div class="ot-bus-top">
     <label class="q-search ot-search-in"><input id="tb-q" type="search" inputmode="search" placeholder="${W('路線或站名，如 藍1、5608', 'Route or stop, e.g. 307')}" autocomplete="off" enterkeyhint="search"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
     <div class="q-chips ot-city-chips ot-scroll-chips" id="tb-city"></div></div>
     <div id="tb-list"></div></div>`;
@@ -111,13 +114,43 @@ function busInit() {
 // The next buses again every 30 s while the list is on screen (only the
 // strips in view are asked).
 let ticking = 0;
+let ticks = 0;
 function busShow() {
-  ticking ||= setInterval(() => !$('times-bus').hidden && $('times-bus').offsetParent && document.visibilityState === 'visible' && busDraw(), 30_000);
+  ticking ||= setInterval(() => !$('times-bus').hidden && $('times-bus').offsetParent && document.visibilityState === 'visible' && (busDraw(), heroLoad()), 30_000);
+  ticks ||= setInterval(() => !$('times-bus').hidden && tick($('tb-hero')), 5000);
+  heroLoad();
   const home = ctx.city || 'Taipei';
   if (bus.loaded !== `${bus.city}:${home}`) busLoad();
   else busDraw();
   if (!bus.around) aroundRoutes();
 }
+// The bus due soonest at the stops around you, as the page's one card: its
+// countdown runs on between reads.
+let near = null;
+let nearAsking = false;
+async function heroLoad() {
+  const h = ctx.here || (await ctx.locate());
+  if (!h || nearAsking || (near && Date.now() - near.at < 20_000)) return heroDraw();
+  nearAsking = true;
+  try {
+    const stops = await busNear(h, { n: 3, r: 350 });
+    const x = stops.flatMap(st => st.rows.slice(0, 2).map(r => ({ ...r, dist: st.dist }))).filter(r => r.v?.status === 0 && r.v.sec != null).sort((a, b) => a.v.sec - b.v.sec)[0];
+    near = { at: Date.now(), x: x ? { ...x, at: Date.now() + x.v.sec * 1000 } : null };
+  } catch {
+    near = { at: Date.now(), x: near?.x || null };
+  }
+  nearAsking = false;
+  heroDraw();
+}
+function heroDraw() {
+  const box = $('tb-hero');
+  if (!box) return;
+  const x = near?.x;
+  box.innerHTML = x && x.at > Date.now() - 60_000
+    ? hero({ eyebrow: W('附近的下一班', 'Next near you'), glyph: 'bus', big: countHtml(x.at, { floor: true }), title: `${x.route}${x.stop ? `・${x.stop}` : ''}`, sub: Number.isFinite(x.dist) ? W(`距離 ${distText(x.dist)}`, `${distText(x.dist)} away`) : W('附近站牌', 'Nearby stop'), tags: [tag(W('即時', 'Live'), 'solid green'), x.v.last ? tag(W('末班車', 'Last bus'), 'solid red') : ''], attrs: `data-r="${e(`${x.city}|${x.uid}`)}" data-name="${e(x.route)}" data-stop="${e(x.stopUID)}" data-stop-name="${e(x.stop)}"` })
+    : near ? '' : hero({ eyebrow: W('附近的下一班', 'Next near you'), glyph: 'bus', big: '<strong class="q-hc-big ot-count">…</strong>', title: W('找附近的公車', 'Finding buses nearby'), empty: true });
+}
+
 // The stops within ~400 m of you, nearest first, each with its routes:
 // [{ name, dist, routes: [{ uid, name, city }] }] (a stop's two sides as one).
 async function aroundRoutes() {
@@ -206,7 +239,7 @@ function watchRows() {
   for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]')) seen.observe(el);
 }
 // A stop near you: its name and distance, its routes as numbers to tap.
-const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${distText(s.dist)}</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
+const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h">${tile('bus', COLOR.bus, 'sm')}<b>${e(s.name)}</b>${tag(distText(s.dist))}</div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
 function busDraw() {
   const home = ctx.city || 'Taipei';
   $('tb-city').innerHTML = [[NEAR, W(`${cityShort(home)}附近`, `Near ${cityShort(home)}`)], [INTERCITY, W('公路客運', 'Intercity')], ...CITIES.map(([k]) => [k, cityShort(k)])]
@@ -217,15 +250,15 @@ function busDraw() {
     const recent = recentRoutes();
     const around = bus.around || [];
     $('tb-list').innerHTML =
-      (recent.length ? `<h3 class="ot-go-h">${W('最近查看', 'Recent')}<button class="ot-res-clear" type="button" data-clear-routes="1">${W('清除', 'Clear')}</button></h3><div class="ot-bus-group">${recent.slice(0, 5).map(row).join('')}</div>` : '') +
-      (around.length ? `<h3 class="ot-go-h">${icon('pin')} ${W('你附近的站牌', 'Stops near you')}</h3><div class="ot-bus-near">${around.map(nearStop).join('')}</div>` : bus.around ? '' : `<p class="ot-note">${W('找你附近的站牌…', 'Finding stops near you…')}</p>`) +
+      (recent.length ? `<section class="q-section ot-sec"><div class="q-section-head"><h2>${W('最近查看', 'Recent')}</h2><button type="button" data-clear-routes="1">${W('清除', 'Clear')}</button></div><div class="q-rowcard ot-bus-group">${recent.slice(0, 5).map(row).join('')}</div></section>` : '') +
+      (around.length ? `<section class="q-section ot-sec"><div class="q-section-head"><h2>${W('附近站牌', 'Stops near you')}</h2></div><div class="q-rowcard ot-bus-near">${around.map(nearStop).join('')}</div></section>` : bus.around ? '' : `<p class="ot-note">${W('找你附近的站牌…', 'Finding stops near you…')}</p>`) +
       (bus.failed && !bus.list.length ? `<p class="ot-note bad">${e(bus.failed)}</p>` : '');
   } else {
     const found = findRoutes(bus.list, t);
     $('tb-list').innerHTML = !bus.list.length
       ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || W('載入路線中…', 'Loading routes…'))}</p>`
       : found.length
-        ? `<div class="ot-bus-group">${found.map(row).join('')}</div>`
+        ? `<div class="q-rowcard ot-bus-group">${found.map(row).join('')}</div>`
         : `<p class="ot-note">${W('沒有符合的路線，試試其他縣市。', 'No matching route. Try another city.')}</p>`;
   }
   fitStrips($('tb-list'));
