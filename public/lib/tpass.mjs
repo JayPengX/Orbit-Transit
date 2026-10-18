@@ -9,6 +9,7 @@
 // pass's official route table: 桃竹竹苗's Q&A (2024-09-27) names 新竹縣's
 // 觀光8號 (觀霧線, crossing the county line, no commuters); its 觀光1號 and
 // 2號 are on it.
+import { EXPRESS } from './rail.mjs';
 import { W } from './lang.mjs';
 
 const TAO_HSIN_MIAO_SKIP = { HsinchuCounty: ['觀光8號'] };
@@ -73,7 +74,22 @@ export const passOk = (plan, pass, cityOf) => plan.legs.every(l => l.mode === 'w
 
 export function fareOf(plan, cov) {
   const fare = Number(plan.fare) || 0;
+  // (What it costs, for the ranking: a plan our own router made has no fare,
+  // so its trains by their distance at Taiwan's rates; never shown as a price.)
+  const cost = fare || trainCost(plan);
   if (cov?.all) return { text: W('TPASS 涵蓋', 'TPASS covers it'), cost: 0 };
-  if (cov?.some) return { text: fare ? W(`NT$${fare}（部分 TPASS）`, `NT$${fare} (part TPASS)`) : W('部分 TPASS', 'Part TPASS'), cost: Math.round(fare / 2) };
-  return { text: fare ? `NT$${fare}` : '', cost: fare };
+  if (cov?.some) return { text: fare ? W(`NT$${fare}（部分 TPASS）`, `NT$${fare} (part TPASS)`) : W('部分 TPASS', 'Part TPASS'), cost: Math.round(cost / 2) };
+  return { text: fare ? `NT$${fare}` : '', cost };
 }
+// A plan's trains at about what they cost: 高鐵 NT$4.3 a km, 台鐵's express
+// trains 2.27 and the rest 1.46 (the track a sixth longer than the line between
+// stations), each at least its least fare. HSR was free to the ranking.
+const trainCost = plan =>
+  Math.round(
+    plan.legs.reduce((t, l) => {
+      const km = ((l.dist || 0) / 1000) * 1.15;
+      if (l.mode === 'hsr') return t + Math.max(40, km * 4.3);
+      if (l.mode === 'tra') return t + Math.max(15, km * (EXPRESS.has(String(l.train?.code ?? '')) ? 2.27 : 1.46));
+      return t;
+    }, 0)
+  );

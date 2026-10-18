@@ -86,7 +86,12 @@ batch old against new, say what moved).
    catch, the rest of the trip moved with it, and a train it would now miss
    marked. Google's and TDX's names for one route are matched (快捷8經興隆大橋
    = 快捷8號, Chinese numerals as digits; never 5 and 5608).
-4. **YouBike ideas** (`plan.mjs`), by where the stations are, not by the
+4. **A planner's YouBike ride** is from a station and to one, with the walks
+   to and from them (none at either end: no such plan, never a made-up
+   附近的 YouBike 站). Plans our own router makes cost their trains by
+   distance in the ranking (高鐵 is never free beside 台鐵; never shown as a
+   price). By an arrival time, a way in more than 4 hours early is none.
+5. **YouBike ideas** (`plan.mjs`), by where the stations are, not by the
    bikes or docks there at the moment (too live to plan on; 換附近的站 is a
    tap, navigating), with one exception (the owner, 2026-10-13): a trip that
    starts with the bike never takes it at a station with none there as you
@@ -119,14 +124,14 @@ batch old against new, say what moved).
    the buses to the stations and the buses on from them are searched
    from two hours before (the planners leave out the 六家線 then 內灣線 to
    竹東; without YouBike, a bus to the station, not a 5 km walk).
-5. **Rivers** (`rivers.mjs`): a ride over 頭前溪 or 鳳山溪 goes round by
+6. **Rivers** (`rivers.mjs`): a ride over 頭前溪 or 鳳山溪 goes round by
    the bridge least out of its way, and that distance is its time; no
    bridge counts against it on top (the owner, 2026-10-12). A ride's length
    on the roads is the straight line and a quarter, or, over a river, the
    way by its bridge and a little (竹中 → 綠41公園 5.3 km, as the roads say).
-6. **Only the ways of moving the person allows** are used (我的 →
+7. **Only the ways of moving the person allows** are used (我的 →
    交通偏好). A taxi never is: TDX sometimes ends a trip with one.
-7. **TPASS** (`tpass.mjs`): what the pass covers counts as free. That is
+8. **TPASS** (`tpass.mjs`): what the pass covers counts as free. That is
    buses, 台鐵 and metros inside its cities (never 高鐵; never 太魯閣,
    普悠瑪, EMU3000; its skipped routes), and YouBike's first 30 minutes
    where included. A trip inside the pass's area is ranked only by what
@@ -176,6 +181,8 @@ Each falls back to TDX's own search when the packs can't be had.
    - one of its rides is most of what riding all the way would (two short
      rides around a train are gap-fillers, not that);
    - a walk over 2 km to a bus or train, while a way without one is there;
+   - a ride for nothing: there no sooner than walking it all, and walking
+     most of that anyway (a 40-minute wait for one stop beside a 4-minute walk);
    - it's far behind the best (never riding it all: a choice of its own;
      by a time, never kept for getting in sooner).
 

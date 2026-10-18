@@ -721,7 +721,7 @@ export function metroBoardHtml(live) {
     .map(r => `<div class="ot-board-row"><span class="ot-train"><b>${W('往', 'to')} ${e(r.dest)}</b><small>${W('時刻表', 'Timetable')}</small></span><span class="ot-times">${r.times.map(t => `<b>${e(hm(t))}</b>`).join('')}</span></div>`)
     .join('');
   if (liveHtml || tableHtml) return `<div class="ot-board">${liveHtml}${tableHtml}</div>`;
-  if (live.op === 'TMRT') return `<p class="ot-note">${W('台中捷運沒有提供即時或時刻資料給交通部 TDX。', 'Taichung Metro shares no live or timetable data with TDX.')}</p>`;
+  if (live.op === 'TMRT') return `<p class="ot-note">${W('台中捷運沒有提供即時或時刻資料。', 'Taichung Metro shares no live or timetable data.')}</p>`;
   return `<p class="ot-note">${W('現在沒有列車資料（可能已收班）。', 'No trains right now (maybe done for the day).')}</p>`;
 }
 
@@ -1314,8 +1314,7 @@ function layersSheet() {
   const d = sheet(`${sheetHead(W('地圖圖層', 'Map layers'))}
     <div class="ot-list">${Object.entries(LAYERS)
       .map(([k, name]) => `<div class="ot-order-row"><span>${name}<small>${{ bike: W('放大到街道才顯示；數字是一般車，⚡ 是電輔車', 'Shown at street zoom; number is bikes, ⚡ e-bikes'), bus: W('放大到路口才顯示', 'Shown at block zoom'), rail: W('台鐵與高鐵車站', 'TRA and HSR stations'), metro: W('各城市捷運與輕軌車站', 'Metro and light rail stations') }[k]}</small></span><button class="q-switch" type="button" role="switch" data-sw="${k}" aria-checked="${L[k]}" aria-label="${name}"><i></i></button></div>`)
-      .join('')}</div>
-    <p class="ot-note">${map.kind === 'google' ? W('Google 地圖（本月免費額度內）', 'Google Maps (within this month’s free use)') : W('國土測繪中心電子地圖（Google 地圖本月額度已用完，下個月自動換回）', 'NLSC map (Google’s free use is spent this month; back next month)')}</p>`);
+      .join('')}</div>`);
   d.addEventListener('click', ev => {
     const sw = ev.target.closest('[data-sw]');
     if (!sw) return;
@@ -1591,11 +1590,10 @@ function leaveText(p) {
 
 // Which planner didn't answer, said plainly: only when no plan came at all
 // (when there are plans, they're what matters).
-const SOURCE = { google: W('Google 路線', 'Google routes'), tdx: W('TDX 規劃', 'TDX planner'), tdxBike: W('TDX 單車轉乘', 'TDX bike planner') };
+// Some of the planning didn't answer: said once, plainly, never which source (TRUTH §7: one truth).
 function sourcesNote(src) {
-  const why = v => (v === 'cap' ? W('本月免費額度已用完', 'free use spent this month') : v === 'busy' ? W('忙碌中', 'busy') : v === 'nokey' ? W('未設定', 'not set up') : v === 'http 403' ? W('金鑰未開通此服務', 'key not enabled') : W('暫時沒有回應', 'not answering'));
-  const bad = Object.entries(src || {}).filter(([k, v]) => SOURCE[k] && v !== 'ok' && v !== 'off');
-  return bad.length ? `<p class="ot-note">${bad.map(([k, v]) => `${SOURCE[k]}：${why(v)}`).map(e).join('；')}。</p>` : '';
+  const bad = Object.entries(src || {}).some(([k, v]) => ['google', 'tdx', 'tdxBike'].includes(k) && !['ok', 'off', 'cap', 'nokey'].includes(v));
+  return bad ? `<p class="ot-note">${W('有些路線暫時查不到，稍後再試一次。', 'Some routes couldn’t be found just now; try again shortly.')}</p>` : '';
 }
 
 // The saved trip a plans card is (the same two ends), and the plans pinned on it.
