@@ -18,12 +18,12 @@ import { stationPoint } from './raildata.mjs';
 import { canRent } from './bike.mjs';
 
 import { W } from './lang.mjs';
-export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
+const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
-export const BIKE_MAX_M = 12_000; // further than this, nobody wants to ride
-export const NEAR_M = 500; // a station farther than this from where you are isn't "here"
-export const TREK_M = 2000; // a walk to a bus or train longer than this is no way there
-export const SWAP_SEC = 30 * 60; // YouBike's free (TPASS) or cheapest first half hour
+const BIKE_MAX_M = 12_000; // further than this, nobody wants to ride
+const NEAR_M = 500; // a station farther than this from where you are isn't "here"
+const TREK_M = 2000; // a walk to a bus or train longer than this is no way there
+const SWAP_SEC = 30 * 60; // YouBike's free (TPASS) or cheapest first half hour
 
 // Which of the person's allowed ways of moving a leg is (lightrail is the metro's).
 const KIND = { bus: 'bus', tra: 'tra', hsr: 'hsr', metro: 'metro', lightrail: 'metro', bike: 'bike' };
@@ -292,7 +292,7 @@ export function bikeFromRail(plan, d, bikes, { anyRide = false, at = -1 } = {}) 
 // Trains of our own router (台鐵 + 高鐵, the changes included) between the
 // stations near both ends, for trips the planners answer with buses only.
 // `net` is raildata's railNetwork. Walks to and from the stations up to 2 km.
-export const RAIL_WALK_M = 2000;
+const RAIL_WALK_M = 2000;
 // With YouBike allowed, stations this far are reached by bike (竹北 → 六家, 千甲).
 export const RAIL_BIKE_M = 4500;
 const BIKE_OVER_M = 1200; // past this, a station is ridden to rather than walked
@@ -387,7 +387,7 @@ function trainLeg(net, l) {
 // (the same slack before it) and the way on moved with its arrival. Only for
 // plans with one bus or train (a change would need both re-timed); none you
 // would have to have left already for.
-export function retime(plan, k, ride, now = Date.now()) {
+function retime(plan, k, ride, now = Date.now()) {
   const old = plan.legs[k];
   const before = ride.dep - old.dep;
   const after = ride.arr - old.arr;
@@ -455,7 +455,7 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //     riding north to 竹北's station for a train south costs its minutes and
 //     its ride, nothing more;
 //   - what it costs in money, and a train it would now miss.
-export const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.min(Math.max(min - 18, 0), 12) * 2 + Math.max(min - 30, 0) * 4.5;
+const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.min(Math.max(min - 18, 0), 12) * 2 + Math.max(min - 30, 0) * 4.5;
 export function score(p, opts = {}) {
   const parts = scoreParts(p, opts);
   return Object.values(parts).reduce((a, b) => a + b, 0);
@@ -533,7 +533,7 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
 const ownWay = p => (p.legs.some(l => l.mode === 'bike') ? `bike:${p.legs.some(l => l.ebike)}` : 'walk');
 // The same rides (the lines, where you get on and off), whatever the walks
 // and bikes around them: also what a pinned recommendation is known by.
-export const ridesSig = p =>
+const ridesSig = p =>
   p.legs
     .filter(isRide)
     .map(l => `${l.mode}:${l.short || l.name || ''}:${l.from?.name || ''}`)
@@ -561,7 +561,7 @@ const line = once(routeNorm);
 // A plan's rides, a train changed for another train one ride (竹東 → 新竹
 // straight through, or changing at 竹中: the train either way), from where
 // you board the first to where you leave the last.
-export const segs = p => {
+const segs = p => {
   const out = [];
   for (const l of p.legs) {
     if (!isRide(l)) continue;
@@ -1147,7 +1147,7 @@ export function keepBike(o, places, bikes, dep, { have = false, swap = false, si
 // unless a stop is far (a ride over 20 minutes to it) or walking it all
 // gets there sooner. `keep`: keepBike's stretches; `whole`: the recommended
 // way, each stretch's plan.
-export const KEEP_RIDE_MAX = 20 * 60;
+const KEEP_RIDE_MAX = 20 * 60;
 export function keepWins(keep, whole) {
   if (!keep?.length) return false;
   if (keep.some(q => q.legs.some(l => l.mode === 'bike' && l.dur > KEEP_RIDE_MAX))) return false;

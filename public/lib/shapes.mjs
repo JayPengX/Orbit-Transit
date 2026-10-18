@@ -33,8 +33,8 @@ function onSegment(p, a, b) {
   const q = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
   return [q, t, dist(p, q)];
 }
-export const JOIN = 150;
-export const REACH = 400;
+const JOIN = 150;
+const REACH = 400;
 const graphs = new WeakMap();
 // The pieces as a graph: { pts: [[lat, lon]…], adj: [[[node, metres]…]…], seg: [[i, j]…] }.
 function graphOf(lines) {

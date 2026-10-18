@@ -29,7 +29,7 @@ export const CITIES = [
   ['KinmenCounty', '金門縣'],
   ['LienchiangCounty', '連江縣']
 ];
-export const cityName = code => CITIES.find(c => c[0] === code)?.[1] || code;
+const cityName = code => CITIES.find(c => c[0] === code)?.[1] || code;
 // 新竹 and 嘉義 are a 市 and a 縣 each: those keep it.
 export const cityShort = code =>
   en ? String(code || '').replace(/County$/, en && /^(Hsinchu|Chiayi)County$/.test(code) ? ' Co.' : '').replace(/([a-z])([A-Z])/g, '$1 $2') : /^(新竹|嘉義)/.test(cityName(code)) ? cityName(code) : cityName(code).replace(/[市縣]$/, '');

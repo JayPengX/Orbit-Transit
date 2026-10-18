@@ -11,7 +11,7 @@ const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
 const NLSC = 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
 
 // Google's map in the app's dark colours (the page is always dark).
-export const DARK = [
+const DARK = [
   { elementType: 'geometry', stylers: [{ color: '#161a22' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#9aa3b5' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#0d0f14' }] },

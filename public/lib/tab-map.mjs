@@ -300,7 +300,6 @@ async function nearBikesNow() {
     )
     .join('');
 }
-export const navOn = () => navigating();
 // Navigating with its card on the map (not shrunk to the bar to do something else).
 const navFull = () => navigating() && !navNow()?.min;
 
@@ -995,7 +994,7 @@ const resultRow = r =>
 
 // A sheet to choose a trip's end: 目前位置, your places, stations, Google's
 // places. → { name, lat, lon } (here: true for 目前位置), or null.
-export function pickPoint(title, { here = false, onMap = true } = {}) {
+function pickPoint(title, { here = false, onMap = true } = {}) {
   return new Promise(resolve => {
     let done = false;
     const finish = v => {
@@ -2249,7 +2248,7 @@ async function restFrom(stop, dest, at) {
 
 // A point's name for a trip's end: one of your places within 300 m, else as given.
 const endName = (pt, name) => ctx.data.places.map(p => ({ p, d: meters(pt.lat, pt.lon, p.lat, p.lon) })).filter(x => x.d <= 300).sort((a, b) => a.d - b.d)[0]?.p.name || name;
-export function saveTripSheet(c, { edit = null } = {}) {
+function saveTripSheet(c, { edit = null } = {}) {
   // From where you are: that spot, kept (the trip's own start, for its way
   // back and to plan from it wherever you are; the owner, 2026-10-13). 目前位置
   // ("wherever I am") only when picked so.

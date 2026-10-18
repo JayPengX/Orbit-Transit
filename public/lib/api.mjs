@@ -7,7 +7,7 @@ import { dev } from '#kit/quadra.mjs';
 import { WALK_M_MIN, readJson, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
-export const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
+const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
 const DATA_CACHE = 'orbit-transit-data';
 
 let session = null;
@@ -162,8 +162,6 @@ export const keepLocal = (key, data) => keep(`local/${key}`, data, Date.now());
 
 // When a path's data is from (ms), or 0.
 export const dataAt = path => memory.get(path)?.at || 0;
-// What's already here for a path (no network), or null.
-export const peek = path => memory.get(path)?.data ?? null;
 
 // Each way TDX answers a list: v2 an array, v3 an object with one list in it.
 export const rows = j => (Array.isArray(j) ? j : j && typeof j === 'object' ? Object.values(j).find(Array.isArray) || [] : []);

@@ -20,8 +20,8 @@ export const OPERATORS = en
   ? { TRTC: 'Taipei Metro', NTMC: 'New Taipei Metro', NTDLRT: 'Danhai LRT', NTALRT: 'Ankeng LRT', TRTCMG: 'Maokong Gondola', TYMC: 'Taoyuan Metro', TMRT: 'Taichung Metro', KRTC: 'Kaohsiung Metro', KLRT: 'Kaohsiung LRT' }
   : { TRTC: '臺北捷運', NTMC: '新北捷運', NTDLRT: '淡海輕軌', NTALRT: '安坑輕軌', TRTCMG: '貓空纜車', TYMC: '桃園捷運', TMRT: '臺中捷運', KRTC: '高雄捷運', KLRT: '高雄輕軌' };
 // Which systems TDX gives a live board for, and a station timetable for.
-export const LIVE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT']);
-export const TIMETABLE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT', 'NTDLRT', 'NTALRT', 'NTMC']);
+const LIVE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT']);
+const TIMETABLE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT', 'NTDLRT', 'NTALRT', 'NTMC']);
 // Colours TDX leaves out (貓空纜車 has none, 高雄 often none): by system, or system:line.
 const FALLBACK_COLOR = { TRTCMG: '#77bc1f', 'KRTC:R': '#e2211c', 'KRTC:O': '#f8a51b', KLRT: '#7cc24d', TYMC: '#8246af', TMRT: '#8ec31f', NTDLRT: '#e3002c', NTALRT: '#c3b091' };
 
