@@ -1972,7 +1972,15 @@ main {
   text-align: left;
   cursor: pointer;
 }
+.ot-go-title {
+  flex-wrap: wrap;
+  column-gap: 6px;
+  row-gap: 0;
+}
+/* The distance whole, after the name or under a long one. */
 .ot-go-title small {
+  flex: none;
+  white-space: nowrap;
   color: var(--q-muted);
   font-size: 12px;
 }
@@ -2072,8 +2080,13 @@ main {
   gap: 4px 10px;
   margin-top: 4px;
 }
+/* A row breaks only between its trains (› ), never inside a time or a train's name. */
 .ot-go-tr {
   font-size: 13px;
+  white-space: nowrap;
+}
+.ot-go-tr small {
+  white-space: normal;
 }
 .ot-go-tr i {
   margin-left: 4px;
@@ -3536,12 +3549,10 @@ main {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+/* The line under a step's title whole: a second line rather than cut. */
 .ot-nav-text small {
-  overflow: hidden;
   color: var(--q-text-2);
   font-size: 13px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .ot-nav-big {
   display: grid;
@@ -3641,11 +3652,14 @@ main {
   gap: 8px;
   padding: 0 2px 0 6px;
 }
+/* The arrival and how late on a line; the time left after it, or under it
+   when the row is too narrow: never cut (it's what the row is for). */
 .ot-nav-eta span {
   display: flex;
   flex: 1;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 0 8px;
   min-width: 0;
 }
 .ot-nav-eta b {
@@ -3654,11 +3668,9 @@ main {
   font-variant-numeric: tabular-nums;
 }
 .ot-nav-eta small {
-  overflow: hidden;
   color: var(--q-text-2);
   font-size: 13px;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .ot-nav-end {
   flex: none;
@@ -3899,13 +3911,13 @@ main {
 
 /* On board: the stops still to go down a line in the ride's colour, the
    next one bold, yours at the end in the colour, each with its time. */
-.ot-board {
+.ot-stops {
   display: grid;
   margin: 0;
   padding: 6px 14px 10px;
   list-style: none;
 }
-.ot-board li {
+.ot-stops li {
   position: relative;
   display: flex;
   align-items: center;
@@ -3914,7 +3926,7 @@ main {
   color: var(--q-text-2);
   font-size: 14px;
 }
-.ot-board li::before {
+.ot-stops li::before {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -3923,16 +3935,16 @@ main {
   background: color-mix(in srgb, var(--c) 55%, transparent);
   content: '';
 }
-.ot-board li:first-child::before {
+.ot-stops li:first-child::before {
   top: 50%;
 }
-.ot-board li:last-child::before {
+.ot-stops li:last-child::before {
   bottom: 50%;
 }
-.ot-board li.more::before {
+.ot-stops li.more::before {
   background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--c) 55%, transparent) 0 3px, transparent 3px 7px);
 }
-.ot-board i {
+.ot-stops i {
   position: relative;
   z-index: 1;
   flex: none;
@@ -3942,22 +3954,22 @@ main {
   border-radius: 50%;
   background: color-mix(in srgb, var(--c) 70%, #fff);
 }
-.ot-board li.more {
+.ot-stops li.more {
   min-height: 26px;
   color: var(--q-muted);
   font-size: 12.5px;
 }
-.ot-board li.more i {
+.ot-stops li.more i {
   visibility: hidden;
 }
-.ot-board span {
+.ot-stops span {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.ot-board em {
+.ot-stops em {
   flex: none;
   padding: 2px 8px;
   border-radius: 999px;
@@ -3968,7 +3980,7 @@ main {
   font-weight: 700;
   white-space: nowrap;
 }
-.ot-board time {
+.ot-stops time {
   flex: none;
   min-width: 3.2em;
   color: var(--q-text-2);
@@ -3976,15 +3988,15 @@ main {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.ot-board li.next span {
+.ot-stops li.next span {
   color: var(--q-text);
   font-weight: 700;
 }
-.ot-board li.you span {
+.ot-stops li.you span {
   color: var(--q-text);
   font-weight: 700;
 }
-.ot-board li.you i {
+.ot-stops li.you i {
   width: 18px;
   height: 18px;
   margin: 0 -2px;
@@ -3992,7 +4004,7 @@ main {
   background: #fff;
   box-shadow: 0 0 0 2px var(--ot-card);
 }
-.ot-board li.you em {
+.ot-stops li.you em {
   background: var(--c);
   color: #fff;
 }
@@ -4632,15 +4644,16 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
   font-weight: 700;
 }
 /* Late for the time you said: the way that still makes it, one tap. */
+/* Its words in their own space beside 改走這條: the second line may wrap there. */
 .ot-nav-late span {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 1px;
-  overflow: visible;
+  min-width: 0;
   white-space: normal;
 }
-.ot-nav-late b,
-.ot-nav-late small {
+.ot-nav-late b {
   white-space: nowrap;
 }
 .ot-nav-late small {

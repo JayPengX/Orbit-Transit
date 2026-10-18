@@ -80,6 +80,8 @@ export const trainKind = s => {
   const hit = en && TRAIN_EN.find(([re]) => re.test(t));
   return hit ? t.replace(new RegExp(`(${hit[0].source})[號車]?`), hit[1]).replace(/[（(][^）)]*[）)]/g, '').trim() : t;
 };
+// A train by its kind and number, as a row shows it: 「區間 1804」「Local 1804」「高鐵 0612」「HSR 0612」.
+export const trainName = t => (t.sys === 'hsr' ? W(`高鐵 ${t.no}`, `HSR ${t.no}`) : `${trainKind(t.type)} ${t.no}`);
 export const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', car: '#eab308', plane: '#a78bfa', rail: '#0ea5e9' };
 export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : MODE_COLOR[l.mode] || '#94a3b8');
 

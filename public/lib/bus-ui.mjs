@@ -82,7 +82,17 @@ export function strip({ no, note = '', main = '', eta = null, attrs = '', wait =
   return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no"><span>${e(no)}</span></span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
 }
 // (The number too: its badge one width, so every strip's words start in one column.)
-export const fitStrips = box => fitNumbers([...box.querySelectorAll('.ot-strip-note small, .ot-strip-what b, .ot-strip-no > span')]);
+// A note still too wide at the smallest size drops its less useful part
+// (`.ot-drop`, e.g. 「· 4 站」) and fits again: shown whole, never cut.
+export function fitStrips(box) {
+  const all = () => [...box.querySelectorAll('.ot-strip-note small, .ot-strip-what b, .ot-strip-no > span')];
+  for (const x of box.querySelectorAll('.ot-drop')) x.hidden = false;
+  fitNumbers(all());
+  const over = [...box.querySelectorAll('.ot-strip-note small')].filter(el => el.querySelector('.ot-drop') && el.scrollWidth > (el.parentElement?.clientWidth || Infinity));
+  if (!over.length) return;
+  for (const el of over) el.querySelector('.ot-drop').hidden = true;
+  fitNumbers(all());
+}
 
 // What a stop's time says: the live time while a bus is on its way, else the
 // timetable's next there (`planned`: { at, day }, its day when not today's).

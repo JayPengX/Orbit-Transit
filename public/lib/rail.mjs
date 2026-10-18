@@ -383,7 +383,8 @@ export function journeys(net, from, to, t, { n = 6, use = () => true } = {}) {
   return [...top, ...kept.filter(j => own.has(j))].sort((a, b) => a.dep - b.dep);
 }
 
-// Labels for a list of options: the fastest, the earliest there, the fewest changes.
+// Labels for a list of options: the earliest there, the fastest. (No changes
+// is said on every card's own line, 直達, so not again as a label.)
 export function tags(list) {
   if (!list.length) return new Map();
   const out = new Map(list.map(j => [j, []]));
@@ -392,8 +393,6 @@ export function tags(list) {
   const first = list.reduce((a, b) => (fin(b) < fin(a) ? b : a));
   out.get(first).push('最早抵達');
   if (fastest !== first) out.get(fastest).push('車程最短');
-  const minT = Math.min(...list.map(j => j.transfers));
-  if (list.some(j => j.transfers > minT)) for (const j of list) if (j.transfers === minT && j.transfers === 0) out.get(j).push('直達');
   return out;
 }
 
