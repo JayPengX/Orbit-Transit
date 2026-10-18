@@ -144,20 +144,22 @@ export async function nextTrains(st, now = Date.now(), n = 4) {
   return upcoming(rows(j), now, n);
 }
 export function upcoming(list, now = Date.now(), n = 4) {
-  const t = tw(now);
-  const day = DOW[t.dow];
+  // After midnight belongs to the day before (00:30 is tonight's last train):
+  // before 04:00, the night that began yesterday (its own service day) and today's first trains.
+  const days = [tw(now), ...(tw(now).min < 240 ? [tw(now - 86_400_000)] : [])];
   const out = [];
   for (const r of list) {
-    if (r.ServiceDay && r.ServiceDay[day] === false) continue;
-    const times = (r.Timetables || [])
-      .map(x => x.DepartureTime || x.ArrivalTime)
-      .filter(Boolean)
-      .map(hhmm => {
-        const [h, m] = hhmm.split(':').map(Number);
-        // After midnight belongs to the day before (00:30 is tonight's last train).
-        const mins = (h < 4 ? h + 24 : h) * 60 + m;
-        return Date.parse(`${t.date}T00:00:00+08:00`) + mins * 60_000;
-      })
+    const times = days
+      .filter(t => !(r.ServiceDay && r.ServiceDay[DOW[t.dow]] === false))
+      .flatMap(t =>
+        (r.Timetables || [])
+          .map(x => x.DepartureTime || x.ArrivalTime)
+          .filter(Boolean)
+          .map(hhmm => {
+            const [h, m] = hhmm.split(':').map(Number);
+            return Date.parse(`${t.date}T00:00:00+08:00`) + ((h < 4 ? h + 24 : h) * 60 + m) * 60_000;
+          })
+      )
       .filter(x => x >= now - 30_000)
       .sort((a, b) => a - b)
       .slice(0, n);

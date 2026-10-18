@@ -405,7 +405,8 @@ export function moreTrains(plan, net, now = Date.now(), { n = 4, use = () => tru
   const reach = l.dep - plan.legs[0].dep; // from leaving to the train
   return directs(net, a, b, now + reach - 60_000, { use, n: n + 2 })
     .map(j => j.legs[0])
-    .filter(x => String(x.trip.no) !== String(no))
+    // (Never the plan's own train again: a planner's leg may name no number, 內灣-新竹, so it's its time too.)
+    .filter(x => String(x.trip.no) !== String(no) && Math.abs(x.dep - l.dep) > 60_000)
     .slice(0, n)
     .map(x => retime(plan, k, trainLeg(net, x), now))
     .filter(Boolean);
@@ -417,7 +418,8 @@ export function moreBuses(plan, now = Date.now()) {
   if (k < 0 || l.mode !== 'bus' || !l.next?.length) return [];
   return l.next
     .filter(t => Math.abs(t - l.dep) > 2 * 60_000)
-    .map(t => retime(plan, k, { dep: t, arr: t + (l.arr - l.dep), live: { at: t } }, now))
+    // (Without the stop's live times: each later bus is that bus, never caught again as the first one.)
+    .map(t => retime(plan, k, { dep: t, arr: t + (l.arr - l.dep), live: { at: t }, seen: null }, now))
     .filter(Boolean);
 }
 
@@ -660,8 +662,12 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   if (by === 'arrive' && deadline && !fits.length) [by, now, deadline] = ['depart', clock, null];
   // One plan per way (sameWay): walking or riding to the same bus, boarding
   // the same train a station up the line, 電輔車 or not: only the best of them.
+  // (Equal ones in one order whatever order they came in: the one naming its
+  // trains' numbers first, the official name over a planner's 內灣-新竹.)
+  const named = p => p.legs.filter(l => trainNo(l)).length;
+  const key = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${l.dep}`).join('|');
   const scored = [];
-  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }) })).sort((a, b) => a.s - b.s || a.p.arr - b.p.arr))
+  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }), k: key(p) })).sort((a, b) => a.s - b.s || a.p.arr - b.p.arr || named(b.p) - named(a.p) || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0)))
     if (!scored.some(y => sameWay(x.p, y.p))) scored.push(x);
   // Not running at all (末班已過, 今日未營運), or waiting hours half way (the
   // last bus gone, the first train tomorrow), is no plan, unless it's all there is.
@@ -743,21 +749,22 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // The bus or the train is for the crossing. (20 minutes, not a fine line a
   // minute decides.) Set aside first: what's set aside sets nothing else
   // aside (off at 新莊 and over the river never beats the change to the 六家線).
-  const bikeOver = x => x.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to));
-  const longest = x => Math.max(0, ...x.legs.filter(l => l.mode === 'bike').map(l => l.dur || 0)) / 60;
-  const crossesAnyway = (p, q) => !q.off && q.arr <= p.arr + 20 * 60_000 && q.dep >= p.dep - 20 * 60_000 && (vehicles(q).length ? !bikeOver(q) : q.bike && longest(q) <= 40);
-  const over = new Set(leads.filter(p => vehicles(p).length && bikeOver(p) && list.some(q => q !== p && crossesAnyway(p, q))).map(p => groups.get(pickSig(p))));
   // A bus then another bus: Taiwan's buses don't keep their times, so the
   // change is a gamble nobody plans on (the owner, 2026-10-12: 5673 then
   // 5614 shown as 最快抵達). Set aside whenever any way without one is there.
   const busChain = x => vehicles(x).some((l, i, a) => i > 0 && l.mode === 'bus' && a[i - 1].mode === 'bus');
   const noChain = list.some(q => !busChain(q) && !q.off);
-  for (const p of leads) if (noChain && busChain(p)) over.add(groups.get(pickSig(p)));
   // A walk nobody takes to a bus or train (over 2 km in one go: 5.4 km to
   // 千甲 at 04:48 for an 08:00 at school, without YouBike; the owner,
   // 2026-10-12), whenever a way without one is there.
   const trek = x => vehicles(x).length && x.legs.some(l => l.mode === 'walk' && (l.dist || 0) > TREK_M);
   const noTrek = list.some(q => !trek(q) && !q.off);
+  const bikeOver = x => x.legs.some(l => l.mode === 'bike' && crossings(l.from, l.to));
+  const longest = x => Math.max(0, ...x.legs.filter(l => l.mode === 'bike').map(l => l.dur || 0)) / 60;
+  // (A way set aside itself, a bus to a bus or a 2 km walk, sets nothing aside.)
+  const crossesAnyway = (p, q) => !q.off && !(noChain && busChain(q)) && !(noTrek && trek(q)) && q.arr <= p.arr + 20 * 60_000 && q.dep >= p.dep - 20 * 60_000 && (vehicles(q).length ? !bikeOver(q) : q.bike && longest(q) <= 40);
+  const over = new Set(leads.filter(p => vehicles(p).length && bikeOver(p) && list.some(q => q !== p && crossesAnyway(p, q))).map(p => groups.get(pickSig(p))));
+  for (const p of leads) if (noChain && busChain(p)) over.add(groups.get(pickSig(p)));
   for (const p of leads) if (noTrek && trek(p)) over.add(groups.get(pickSig(p)));
   // Of those, one by train and one by bus stay listed under the
   // recommendations, never one themselves: the fewest trains and buses, then
@@ -854,10 +861,14 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     lines.add(ridesSig(p));
     picked.add(p);
   }
+  // (Listed under the recommendations only while there's one: when every way
+  // left is such, the best of them is it, never a list with none.)
+  if (!picked.size && shown.length) picked.add(shown[0]);
   // And only when it gets there 5 minutes sooner than the recommendations
   // of its kind (of any, when none is): what it's for (竹中 and a ride, 18:54, over the
   // 六家線's 19:04; never north on the bus and back over the river for 新竹站).
   for (const p of shown.filter(behind)) {
+    if (picked.has(p)) continue;
     const tops = [...picked].filter(q => vehicles(q).length);
     const mine = tops.filter(q => kind(q) === kind(p));
     if ((mine.length ? mine : tops).some(q => q.arr < p.arr + 5 * 60_000)) for (const q of groups.get(pickSig(p))) weak.add(q);
@@ -941,9 +952,10 @@ export function withBikes(plans, o, d, bikes, now = Date.now(), opts = {}) {
     }
   }
   // Each plan's first bus as you'd catch it, its way there as it is now (a bike to it built above).
+  // (By an arrival time, from when that plan sets out, as adjustPlan does: never every plan pulled to the first bus from now.)
   const clock = opts.clock ?? now;
   return rank(
-    out.filter(p => allowed(p, modes)).map(p => catchBus(p, clock, opts.by === 'arrive' ? clock : now)),
+    out.filter(p => allowed(p, modes)).map(p => catchBus(p, clock, opts.by === 'arrive' ? (p.legs[0]?.dep ?? clock) : now)),
     { now, o, d, ...opts }
   );
 }
