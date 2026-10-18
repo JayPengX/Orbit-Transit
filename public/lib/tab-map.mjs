@@ -959,7 +959,7 @@ function wireSearch() {
     }
     const local = await localMatches(t);
     const draw = remote =>
-      (box.innerHTML = [...local.map(r => resultRow(r)), ...(remote || []).map(r => resultRow(r))].join('') || (remote ? `<p class="ot-note">${W('找不到符合的地點', 'No matching place')}</p>` : `<p class="ot-note">${W('搜尋中…', 'Searching…')}</p>`));
+      (box.innerHTML = uniqueResults([...local, ...(remote || [])]).map(r => resultRow(r)).join('') || (remote ? `<p class="ot-note">${W('找不到符合的地點', 'No matching place')}</p>` : `<p class="ot-note">${W('搜尋中…', 'Searching…')}</p>`));
     draw(t.length >= 2 ? null : []);
     if (t.length < 2) return;
     try {
@@ -976,8 +976,31 @@ function closeResults() {
   $('results').hidden = true;
   $('q').blur();
 }
+// One row a place: the same name (台/臺, spaces and brackets aside) once when
+// it's the same spot (within 300 m, the same address, or one without a
+// place on the map), the first copy kept (yours, then stations, then the
+// search's). The owner, 2026-10-18: 巨城購物中心 listed over and over.
+export function uniqueResults(rows) {
+  const norm = s => String(s || '').replace(/台/g, '臺').replace(/[\s()（）・·\-]/g, '').toLowerCase();
+  const kept = [];
+  for (const r of rows) {
+    const n = norm(r.name);
+    const same = kept.some(k => {
+      if ((r.gid && (k.gid === r.gid || k.id === r.gid)) || (r.id && (k.id === r.id || k.gid === r.id))) return true;
+      // (巨城購物中心 and 巨城購物中心 Big City at the same door: one.)
+      const kn = norm(k.name);
+      if (kn !== n) return Number.isFinite(k.lat) && Number.isFinite(r.lat) && Math.min(kn.length, n.length) >= 3 && (kn.includes(n) || n.includes(kn)) && meters(k.lat, k.lon, r.lat, r.lon) < 150;
+      if (!Number.isFinite(k.lat) || !Number.isFinite(r.lat)) return norm(k.sub) === norm(r.sub) || !k.sub || !r.sub;
+      return meters(k.lat, k.lon, r.lat, r.lon) < 300 || (r.sub && norm(k.sub) === norm(r.sub));
+    });
+    if (!same) kept.push(r);
+  }
+  return kept;
+}
+// An address without its 里 (新竹市東區復中里中央路229號 -> 新竹市東區中央路229號): shorter, as Maps says it.
+export const shortAddress = s => String(s || '').replace(/([區鄉鎮市])[^\s區鄉鎮路街段巷道里]{1,4}里(?=\S)/, '$1').replace(/(\d)\s+(?=[號樓])/g, '$1');
 const resultRow = r =>
-  `<button class="ot-res" type="button" data-res="${e(JSON.stringify(r))}"><span class="ot-res-i">${r.kind === 'place' ? PLACE_ICONS[r.icon] || '📍' : r.kind === 'trip' ? icon('clock') : r.kind === 'tra' ? icon('tra') : r.kind === 'hsr' ? icon('hsr') : r.kind === 'metro' ? icon('metro') : r.kind === 'here' ? icon('locate') : r.kind === 'map' ? icon('layers') : icon('pin')}</span><span class="ot-res-t"><b>${e(r.name)}</b><small>${e(r.sub || '')}</small></span>${r.dist ? `<span class="ot-res-d">${e(distText(r.dist))}</span>` : ''}</button>`;
+  `<button class="ot-res" type="button" data-res="${e(JSON.stringify(r))}"><span class="ot-res-i">${r.kind === 'place' ? PLACE_ICONS[r.icon] || '📍' : r.kind === 'trip' ? icon('clock') : r.kind === 'tra' ? icon('tra') : r.kind === 'hsr' ? icon('hsr') : r.kind === 'metro' ? icon('metro') : r.kind === 'here' ? icon('locate') : r.kind === 'map' ? icon('layers') : icon('pin')}</span><span class="ot-res-t"><b>${e(r.name)}</b><small>${e(shortAddress(r.sub))}</small></span>${r.dist ? `<span class="ot-res-d">${e(distText(r.dist))}</span>` : ''}</button>`;
 
 // A sheet to choose a trip's end: 目前位置, your places, stations, Google's
 // places. → { name, lat, lon } (here: true for 目前位置), or null.
@@ -1013,7 +1036,7 @@ export function pickPoint(title, { here = false, onMap = true } = {}) {
         const out = await searchPlaces(t, { lat: c.lat, lon: c.lon, session });
         if (n !== ask) return;
         const remote = out.items.map(i => ({ kind: i.lat != null ? 'geo' : 'google', id: i.id, name: i.name, sub: i.sub, lat: i.lat, lon: i.lon, dist: i.dist }));
-        box.innerHTML = [...local, ...remote].map(resultRow).join('') || `<p class="ot-note">${W('找不到符合的地點', 'No matching place')}</p>`;
+        box.innerHTML = uniqueResults([...local, ...remote]).map(resultRow).join('') || `<p class="ot-note">${W('找不到符合的地點', 'No matching place')}</p>`;
       } catch (err) {
         if (n === ask) box.innerHTML = `${local.map(resultRow).join('')}<p class="ot-note bad">${e(errorText(err))}</p>`;
       }
@@ -1358,6 +1381,7 @@ async function plan(from, to, opts = {}) {
   }
   if (card === c) {
     renderCard();
+    dropGone(c);
     // The best plan drawn on the map at once; its steps open with a tap.
     if (c.plans.length) {
       drawPlan(c.plans[0], { fit: false });
@@ -1379,6 +1403,7 @@ async function plan(from, to, opts = {}) {
     } else if (c.keepPlan) c.plans.push(c.keepPlan);
     c.sel = open ? c.plans.findIndex(p => pickSig(p) === pickSig(open) && Math.abs(p.dep - open.dep) < 60_000) : -1;
     renderCard();
+    dropGone(c);
     if (c.sel < 0 && c.plans.length) {
       drawPlan(c.plans[0], { fit: false });
       roadLegs(c.plans[0], { roads: false });
@@ -1546,7 +1571,9 @@ function plansHtml(c) {
       </button>`;
   };
   // The routes' cards (a way set aside shows only when it's pinned).
-  const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.weak || picked(c, p)));
+  // (A way whose first bus is gone before you're at its stop isn't listed, unless that's every way.)
+  const fine = c.plans.some(p => p.lead !== false && !p.gone);
+  const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.weak || picked(c, p)) && (!p.gone || !fine || picked(c, p)));
   const card_ = ([p, i]) => row(c.plans[shownAt(i)], shownAt(i), i);
   const tops = leads.filter(([p]) => p.top || picked(c, p));
   const rest = leads.filter(([p]) => !p.top && !picked(c, p));
@@ -1805,6 +1832,35 @@ async function liveLegs(p) {
       if (el && text) el.innerHTML = `${icon('live')} ${e(text)}`;
     } catch {}
   }
+}
+
+// The ways whose first ride is a bus coming soon: each checked live, and
+// one whose bus comes before you can be at its stop (and no other of its
+// line soon after) set aside (the owner, 2026-10-18: "即時：這班 1 分後到，
+// 趕不上" was still listed).
+export function busGone(p, times, now = Date.now()) {
+  const k = p.legs.findIndex(l => l.mode !== 'walk');
+  const l = p.legs[k];
+  if (!l || l.mode !== 'bus') return false;
+  const ready = (k ? p.legs[k - 1].arr : l.dep - 60_000) + Math.max(0, now - p.dep);
+  if (times.some(t => t.at >= ready - 60_000 && t.at <= l.dep + 25 * 60_000)) return false;
+  return times.some(t => Math.abs(t.at - l.dep) <= 6 * 60_000 && t.at < ready - 60_000);
+}
+async function dropGone(c) {
+  const soon = (c.plans || []).filter(p => {
+    const l = p.legs.find(x => x.mode !== 'walk');
+    return l?.mode === 'bus' && l.from?.lat && l.dep < Date.now() + 20 * 60_000;
+  });
+  let changed = false;
+  await Promise.all(soon.slice(0, 8).map(async p => {
+    try {
+      const l = p.legs.find(x => x.mode !== 'walk');
+      const { times } = liveTimes(await etaNear(l.from.lat, l.from.lon, 150), l.short || l.name);
+      const gone = busGone(p, times);
+      if (gone !== Boolean(p.gone)) (p.gone = gone), (changed = true);
+    } catch {}
+  }));
+  if (changed && card === c && !navFull()) renderCard();
 }
 
 // ---- Navigation ---------------------------------------------------------------------------------------
