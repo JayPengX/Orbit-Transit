@@ -303,38 +303,60 @@ const access = (m, bike) => (bike && m > BIKE_OVER_M ? { mode: 'bike', sec: ride
 // and a wait) until the planner finds the real one (trainThenBus); a plan
 // whose bus isn't found is dropped (`bus: true` on its walk).
 const BUS_ACCESS = m => ({ mode: 'walk', bus: true, sec: Math.round((m * 1.3) / 330 * 60) + 8 * 60 });
-export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use = () => true } = {}) {
+// The stations near a point you'd set out to or finish from, each with the
+// way there (`a`); `bus` (the far end, without YouBike) a few by bus too.
+function stationsNear(net, pt, { bike = false, bus = false } = {}) {
+  const all = [...net.st.values()].map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m);
+  // Walked to: on your side of the river only (the straight line over 頭前溪
+  // is no footpath: the bridge is far round and made for cars).
+  const walk = all.filter(x => x.m <= RAIL_WALK_M && !crossings(pt, x.s)).slice(0, 3);
+  const far = x => (x.m > BIKE_OVER_M || crossings(pt, x.s)) && x.m <= RAIL_BIKE_M && !walk.includes(x);
+  // Every station a ride away, not the nearest few: one a little further
+  // on the line you're on (竹中, for 竹東's trains) can be the one to take.
+  const ride = bike ? all.filter(far).slice(0, 8) : [];
+  const byBus = !bike && bus ? all.filter(far).slice(0, 3) : [];
+  return [...walk.map(x => ({ ...x, a: access(x.m, bike) })), ...ride.map(x => ({ ...x, a: access(x.m, bike) })), ...byBus.map(x => ({ ...x, a: BUS_ACCESS(x.m) }))];
+}
+// Each station timed by the quickest way you allow to it, whatever the
+// way drawn (a walk under BIKE_OVER_M, ridden instead by withBikes when a
+// bike is quicker): 竹東's station a 15-minute walk or a 7-minute ride is
+// the 7, else riding 11 to 榮華 for the same train looks like leaving later.
+const quick = (x, bike) => (bike && !x.a.bus && x.m > 600 ? Math.min(x.a.sec, rideSec(x.m) + 2 * DOCK_SEC + 120) : x.a.sec);
+const startOf = (x, at, bike) => ({ key: x.s.key, at: at + quick(x, bike) * 1000 + 3 * 60_000, pre: quick(x, bike) + 180, walk: x.a.mode === 'walk' && !x.a.bus });
+// The stations you could set out to from o leaving at `at`, when you'd be
+// ready for a train there, and whether it's a walk: [{ key, at, walk }].
+export const railStarts = (net, o, at, { bike = false } = {}) => (net ? stationsNear(net, o, { bike }).map(x => startOf(x, at, bike)) : []);
+// A journey that comes past a station you could have walked to, in time
+// for its train there, is no way of its own: changing at 臺北 onto the 自強
+// 438 after riding to 萬華 for a 區間 back (walk into 臺北 and take the 438),
+// or a bus to 松山 for the 自強 436 that left 臺北, where you are, before it
+// (or to 板橋 for the 438 that comes through 臺北 after).
+// (A station a bike ride away is no such sure thing: the 內灣線 from 竹東's
+// station to change at 竹中 can beat riding to 竹中; the ranking weighs it.)
+// `could`: those stations, key → ready at, for a change; `chased`: those
+// near where the whole trip sets out, for the first train's other stops
+// (when you get to it by bus: never worth it).
+const wasted = (j, could, chased) =>
+  j.legs.some((l, x) => !l.walk && (x > 0 ? could.get(l.from) <= l.dep : l.trip.stops.slice(0, l.toK).some((s, k) => k !== l.fromK && chased.get(s.st) <= s.dep)));
+// `chase`: the stations near where the whole trip sets out (railStarts),
+// when o is a station a bus gets you to on the way.
+export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use = () => true, chase = [] } = {}) {
   if (!net || meters(o.lat, o.lon, d.lat, d.lon) < 3000) return [];
-  const near = (pt, end) => {
-    const all = [...net.st.values()].map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m);
-    // Walked to: on your side of the river only (the straight line over 頭前溪
-    // is no footpath: the bridge is far round and made for cars).
-    const walk = all.filter(x => x.m <= RAIL_WALK_M && !crossings(pt, x.s)).slice(0, 3);
-    const far = x => (x.m > BIKE_OVER_M || crossings(pt, x.s)) && x.m <= RAIL_BIKE_M && !walk.includes(x);
-    // Every station a ride away, not the nearest few: one a little further
-    // on the line you're on (竹中, for 竹東's trains) can be the one to take.
-    const ride = bike ? all.filter(far).slice(0, 8) : [];
-    const byBus = !bike && bus && end ? all.filter(far).slice(0, 3) : [];
-    return [...walk.map(x => ({ ...x, a: access(x.m, bike) })), ...ride.map(x => ({ ...x, a: access(x.m, bike) })), ...byBus.map(x => ({ ...x, a: BUS_ACCESS(x.m) }))];
-  };
   // A station near both ends (千甲, 北新竹 between 竹北 and 巨城) is the
   // nearer end's only: from it to itself is no train, and would be all found.
-  const A0 = near(o);
-  const B0 = near(d, true);
+  const A0 = stationsNear(net, o, { bike });
+  const B0 = stationsNear(net, d, { bike, bus });
   const A = A0.filter(x => !B0.some(y => y.s.key === x.s.key && y.m < x.m));
   const B = B0.filter(x => !A.some(y => y.s.key === x.s.key));
   if (!A.length || !B.length) return [];
-  // Each station timed by the quickest way you allow to it, whatever the
-  // way drawn (a walk under BIKE_OVER_M, ridden instead by withBikes when a
-  // bike is quicker): 竹東's station a 15-minute walk or a 7-minute ride is
-  // the 7, else riding 11 to 榮華 for the same train looks like leaving later.
-  const quick = x => (bike && !x.a.bus && x.m > 600 ? Math.min(x.a.sec, rideSec(x.m) + 2 * DOCK_SEC + 120) : x.a.sec);
-  const starts = A.map(x => ({ key: x.s.key, at: at + quick(x) * 1000 + 3 * 60_000, pre: quick(x) + 180 }));
-  const ends = B.map(x => ({ key: x.s.key, extra: quick(x) }));
+  const starts = A.map(x => startOf(x, at, bike));
+  const ends = B.map(x => ({ key: x.s.key, extra: quick(x, bike) }));
   const reach = new Map([...A.map(x => [`a:${x.s.key}`, x]), ...B.map(x => [`b:${x.s.key}`, x])]);
+  const walked = list => new Map(list.filter(s => s.walk).map(s => [s.key, s.at]));
+  const [could, chased] = [walked([...chase, ...starts]), walked(chase)];
   let found = [];
   try {
-    found = journeys(net, starts, ends, at, { n: bike ? n + 2 : n, use });
+    found = journeys(net, starts, ends, at, { n: bike ? n + 2 : n, use }).filter(j => !wasted(j, could, chased));
   } catch {
     return [];
   }
