@@ -9,7 +9,7 @@
 
 import { meters } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 const KEY = 'orbit-transit.rental';
 const TTL = 12 * 60 * 60_000;
 export const FREE_MS = 30 * 60_000;

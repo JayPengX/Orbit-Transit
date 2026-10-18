@@ -6,7 +6,7 @@
 import { dev } from '#kit/quadra.mjs';
 import { WALK_M_MIN } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 export const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
 const DATA_CACHE = 'orbit-transit-data';
 

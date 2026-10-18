@@ -8,7 +8,7 @@
 
 import { uid } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 export const MAX_GROUPS = 12;
 export const MAX_ITEMS = 16;
 export const MAX_PLACES = 20;

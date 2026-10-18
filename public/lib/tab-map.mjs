@@ -17,7 +17,7 @@ import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta } from './near.mjs';
-import { startNav, stopNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, legEnd, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { startNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
@@ -40,7 +40,6 @@ const VIEW_KEY = 'orbit-transit.view';
 let ctx = null;
 let map = null;
 let card = null; // what the card shows: { kind, ... }
-let me = null; // the device's dot
 let stopWatch = () => {};
 let following = false;
 // The map placed: where it was left, at you, or where you went (arrive): the device's first fix doesn't move it then.
@@ -314,7 +313,6 @@ const navFull = () => navigating() && !navNow()?.min;
 // ---- The device -------------------------------------------------------------------------------
 
 function drawMe(h) {
-  me = h;
   map?.layer('me').set([{ id: 'me', lat: h.lat, lon: h.lon, cls: 'me', z: 50, html: '<i class="ot-me"></i>' }]);
 }
 async function locateMe() {

@@ -20,7 +20,7 @@ import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
-import { e, hm, minsText, distText, meters, walkSec, tw, decodeLine } from './util.mjs';
+import { e, hm, minsText, meters, walkSec, tw, decodeLine } from './util.mjs';
 
 import { W, en } from './lang.mjs';
 let nav = null;

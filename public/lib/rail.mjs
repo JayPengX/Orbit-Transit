@@ -14,7 +14,7 @@
 import { meters, twAt, zh, WALK_M_MIN } from './util.mjs';
 import { cityFromAddress } from './city.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 export const SYSTEMS = { tra: W('台鐵', 'TRA'), hsr: W('高鐵', 'HSR'), metro: W('捷運', 'Metro') };
 export const TRAIN_TYPES = { 1: '太魯閣', 2: '普悠瑪', 3: '自強', 4: '莒光', 5: '復興', 6: '區間', 7: '普快', 10: '區間快', 11: '自強' };
 // Express classes (reserved seats), for the "fewer stops" sort and the fares.

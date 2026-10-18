@@ -15,7 +15,7 @@ import { journeys, directs } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
 import { trainKind } from './ui.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
 export const BIKE_MAX_M = 12_000; // further than this, nobody wants to ride

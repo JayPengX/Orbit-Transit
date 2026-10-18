@@ -3,7 +3,7 @@
 
 import { meters } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { en } from './lang.mjs';
 // [TDX City, 中文, north-to-south order for the pickers]
 export const CITIES = [
   ['Keelung', '基隆市'],
