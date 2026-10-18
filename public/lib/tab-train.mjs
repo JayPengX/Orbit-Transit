@@ -11,7 +11,7 @@ import { CITIES, cityShort } from './city.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
-import { sheet, sheetHead, icon, tagText, trainKind } from './ui.mjs';
+import { sheet, sheetHead, icon, tagText, trainKind, stationLabel } from './ui.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -64,7 +64,6 @@ async function nearestStart() {
   } catch {}
 }
 
-const stationLabel = s => (!s ? '' : s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
 const sysTag = s => (s ? `<span class="ot-sys ${s.sys}">${SYSTEMS[s.sys]}</span>` : '');
 
 function render() {
@@ -129,7 +128,7 @@ function fareText(rides) {
 let net = null;
 const nameOf = key => {
   const s = net?.st.get(key);
-  return s ? (s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name) : key;
+  return s ? stationLabel(s) : key;
 };
 function detailHtml(j) {
   const out = [];

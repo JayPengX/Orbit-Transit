@@ -21,7 +21,7 @@ import { planTrip } from './planner.mjs';
 import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { icon, legChips, depChips, tagText, trainKind, trainName } from './ui.mjs';
+import { icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -476,7 +476,7 @@ function pinnedHtml() {
       return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: t, attrs: `data-route="${route}"` })}</div>`;
     })
     .join('');
-  const name = s => (s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
+  const name = stationLabel;
   const tr = trains
     .map(p => {
       const got = S.trains.get(p.id);

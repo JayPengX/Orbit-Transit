@@ -9,6 +9,9 @@ import { tw, zh, twAt, addDays } from './util.mjs';
 
 const DAY = 86_400_000;
 
+// A station as a plan's point: 高鐵 before an HSR station's name (once).
+export const stationPoint = s => ({ name: s.sys === 'hsr' ? `高鐵${s.name.replace(/^高鐵/, '')}` : s.name, lat: s.lat, lon: s.lon });
+
 let stationsP = null;
 // TRA and HSR stations: [{ key, sys, id, name, lat, lon, cls, city }].
 export function railStations() {

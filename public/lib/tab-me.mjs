@@ -12,7 +12,7 @@ import * as metroTab from './tab-metro.mjs';
 import { manageSheet, useBusCtx } from './bus-ui.mjs';
 import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf } from './tpass.mjs';
-import { sheet, sheetHead, icon, trainKind } from './ui.mjs';
+import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters } from './util.mjs';
 
 import { W, en } from './lang.mjs';
@@ -50,7 +50,6 @@ export function hide() {
   metroTab.hide?.();
 }
 
-const name = s => (s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
 const DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const daysText = d => (!d.length ? '' : d.length === 5 && [1, 2, 3, 4, 5].every(x => d.includes(x)) ? W('平日', 'Weekdays') : d.length === 7 ? W('每天', 'Daily') : d.length === 2 && d.includes(0) && d.includes(6) ? W('週末', 'Weekends') : W(`每週${d.map(x => DAYS[x]).join('、')}`, d.map(x => DAYS_EN[x]).join(', ')));
 
@@ -72,7 +71,7 @@ function render() {
     <h3 class="ot-go-h">${W('釘選交通', 'Pinned rides')}</h3>
     <section class="ot-go-card">
       <button class="ot-row-btn" type="button" data-act="groups">${icon('bus')}<span><b>${W('公車站牌', 'Bus stops')}</b><small>${D.groups.map(g => `${e(g.name)} ${g.items.length}`).join('、')}</small></span>${icon('chevron')}</button>
-      ${D.pins.map(p => `<div class="ot-order-row"><span>${icon(p.from.sys === 'hsr' ? 'hsr' : 'tra')} ${e(name(p.from))} → ${e(name(p.to))}<small>${p.kind === 'trainNo' ? `${e(trainKind(p.type || ''))} ${e(p.no)}${W(' 次', '')}${p.dep ? ` · ${e(p.dep)}` : ''}` : W('每一班', 'Every train')}</small></span><button class="q-icon-btn" type="button" data-pin-del="${e(p.id)}" aria-label="${W('刪除', 'Delete')}">${icon('trash')}</button></div>`).join('')}
+      ${D.pins.map(p => `<div class="ot-order-row"><span>${icon(p.from.sys === 'hsr' ? 'hsr' : 'tra')} ${e(stationLabel(p.from))} → ${e(stationLabel(p.to))}<small>${p.kind === 'trainNo' ? `${e(trainKind(p.type || ''))} ${e(p.no)}${W(' 次', '')}${p.dep ? ` · ${e(p.dep)}` : ''}` : W('每一班', 'Every train')}</small></span><button class="q-icon-btn" type="button" data-pin-del="${e(p.id)}" aria-label="${W('刪除', 'Delete')}">${icon('trash')}</button></div>`).join('')}
       <button class="q-btn ot-wide" type="button" data-act="times">${icon('tra')} ${W('查時刻，釘選火車或公車', 'Find times to pin')}</button></section>
 
     <h3 class="ot-go-h">${W('交通偏好', 'Preferences')}</h3>
