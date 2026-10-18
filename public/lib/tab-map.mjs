@@ -1932,7 +1932,8 @@ async function navigate(p, resume = null, { swap = false } = {}) {
         // (On one YouBike kept, parked here: it rides on from here; its rental from when it really began, a stay included.)
         const kp = how.plan;
         const parked = Boolean(kp?.keep && kp.legs.some(l => l.park));
-        const since = parked && kp.rentAt != null ? (kp.rentAt >= kp.dep ? Date.now() - (kp.arr - kp.rentAt) : kp.rentAt) : null;
+        // (The rental's real start when it's timed; else from the plan.)
+        const since = parked ? (rental()?.at ?? (kp.rentAt != null ? (kp.rentAt >= kp.dep ? Date.now() - (kp.arr - kp.rentAt) : kp.rentAt) : null)) : null;
         return plan(null, next[0], { then: next.slice(1), keep: parked, since });
       }
       if (how.arrived || !card) return closeCard();
