@@ -2490,7 +2490,7 @@ test('a failed read is a failure, never nothing there', () => {
     globalThis.localStorage = { getItem: k => kept[k] ?? null };
     assert.deepEqual(readSaved('a', []), [1]);
     assert.deepEqual(readSaved('none', []), [], 'nothing there: the fallback');
-    assert.equal(readSaved('bad', []), UNREAD, 'not JSON: unread, not the fallback');
+    assert.deepEqual(readSaved('bad', []), [], 'not JSON: nothing worth keeping, the next save mends it');
     globalThis.localStorage = { getItem: () => { throw new Error('blocked'); } };
     assert.equal(readSaved('a', []), UNREAD, 'storage throws: unread');
   } finally {

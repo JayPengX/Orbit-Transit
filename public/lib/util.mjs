@@ -163,15 +163,23 @@ export function readJson(key, fallback = null) {
     return fallback;
   }
 }
-// The same, for a copy that's added to and saved back: UNREAD when it threw or
-// isn't JSON (the kit's readJson answers `fallback` then, as for nothing
-// there), so a failed read is never saved over what's kept.
+// The same, for a copy that's added to and saved back: UNREAD when the phone's
+// storage couldn't be read (the kit's readJson answers `fallback` then, as for
+// nothing there), so a failed read is never saved over what's kept. A copy
+// that isn't JSON any more is nothing worth keeping: `fallback`, and the next
+// save mends it.
 export const UNREAD = Symbol('unread');
 export function readSaved(key, fallback = null) {
+  let raw;
   try {
-    return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback;
+    raw = localStorage.getItem(key);
   } catch {
     return UNREAD;
+  }
+  try {
+    return JSON.parse(raw || 'null') ?? fallback;
+  } catch {
+    return fallback;
   }
 }
 export function writeJson(key, value, replacer) {
