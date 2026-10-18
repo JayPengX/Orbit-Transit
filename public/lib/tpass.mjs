@@ -34,6 +34,8 @@ const PAID = new Set(['bus', 'tra', 'metro', 'lightrail']);
 // codes 1, 2, 11; Google names them). Every other class does (自強 too).
 export const PREMIUM = new Set(['1', '2', '11']);
 export const passTrain = l => l.mode !== 'tra' || !(PREMIUM.has(String(l.train?.code ?? l.trip?.code ?? '')) || /普悠瑪|太魯閣|3000/.test(`${l.name || ''} ${l.short || ''} ${l.typeFull || ''}`));
+// The same for a train in the day's timetable (rail.mjs's trips): a 台鐵 one of a class the pass takes.
+export const passTrainTrip = x => x.sys === 'tra' && !PREMIUM.has(String(x.code));
 // Can a ride ever be on the pass (高鐵 and a taxi never are)?
 export const passMode = l => l.mode === 'walk' || l.mode === 'bike' || (PAID.has(l.mode) && passTrain(l));
 

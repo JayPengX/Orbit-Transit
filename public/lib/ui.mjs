@@ -3,12 +3,20 @@
 import { e, minsText, hm } from './util.mjs';
 
 import { W, en } from './lang.mjs';
-// A modal sheet (the kit's look): closed by its × or a tap outside.
+// A modal sheet (the kit's look): closed by its × or a tap on the page
+// behind, sliding down as every app's sheets do (the kit's closeSheet);
+// `d.shut()` closes it the same way.
 export function sheet(html, cls = '') {
   const d = document.createElement('dialog');
   d.className = `q-sheet ot-sheet ${cls}`;
   d.innerHTML = html;
-  d.addEventListener('click', ev => (ev.target === d || ev.target.closest('[data-act="close"]')) && d.close());
+  d.shut = () => (globalThis.quadraCloseSheet || (x => x.close()))(d);
+  d.addEventListener('click', ev => {
+    if (ev.target.closest('[data-act="close"]')) return d.shut();
+    if (ev.target !== d) return;
+    const r = d.getBoundingClientRect();
+    if (ev.clientY < r.top || ev.clientY > r.bottom || ev.clientX < r.left || ev.clientX > r.right) d.shut();
+  });
   d.addEventListener('close', () => {
     d.onclosed?.();
     d.remove();

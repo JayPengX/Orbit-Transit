@@ -1074,7 +1074,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     d.addEventListener('click', ev => {
       const n = ev.target.closest('[data-n]')?.dataset.n;
       if (n == null) return;
-      d.close();
+      d.shut();
       const o = opts[Number(n)];
       if (nav === state && Math.abs(o.dep - cur) >= 90_000) takeOther(k, o, W(`改搭 ${optText(o, l)}`, `Switched: ${optText(o, l)}`));
     });

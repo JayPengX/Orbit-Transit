@@ -2369,3 +2369,22 @@ test('a river is between two places only when its course is crossed an odd numbe
   // Over it once: still there, round by its bridge.
   assert.deepEqual(crossed({ lat: 24.79, lon: 120.98 }, { lat: 24.84, lon: 121.0 }), ['頭前溪']);
 });
+
+test('a proxy ask turned away for its token (401: the proxy’s secret changed, or it ran out) is asked once more with a new one, as the kit’s are', async () => {
+  const { useSession, whereIs } = await import('../public/lib/api.mjs');
+  const asked = [];
+  const was = globalThis.fetch;
+  globalThis.fetch = async url => {
+    const qt = new URL(url).searchParams.get('qt');
+    asked.push(qt);
+    return qt === 'new' ? new Response(JSON.stringify({ town: '竹北市' }), { status: 200 }) : new Response(JSON.stringify({ code: 'ECO_TOKEN_INVALID' }), { status: 401 });
+  };
+  useSession({ ensureToken: async ({ renew = false } = {}) => (renew ? 'new' : 'old') });
+  try {
+    assert.equal((await whereIs({ lat: 24.83, lon: 121.01 })).town, '竹北市');
+    assert.deepEqual(asked, ['old', 'new']);
+  } finally {
+    globalThis.fetch = was;
+    useSession(null);
+  }
+});
