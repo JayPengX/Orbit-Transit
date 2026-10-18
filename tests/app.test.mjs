@@ -2533,3 +2533,31 @@ test('arrive by 08:00 tomorrow, asked at 22:00, nothing in the usual window: sea
   assert.equal(searchFrom(twAt('2026-10-05', '08:00'), twAt('2026-10-05', '07:21'), { by: 'arrive' }), twAt('2026-10-05', '07:21'), 'never before now');
   assert.equal(searchFrom(at, now), at, 'a departure: its own time');
 });
+
+test('TPASS beyond the west coast: 北北宜 takes 台鐵 to 宜蘭 and 宜蘭’s buses, not 台北’s metro or buses; 臺東 only 非對號 trains; 花蓮 基本 no buses', async () => {
+  const { passTrainTrip } = await import('../public/lib/tpass.mjs');
+  const prices = Object.fromEntries(['tpy', 'yl', 'hl', 'hlb', 'tt', 'cy', 'yla', 'kl', 'kh', 'tc', 'tcr'].map(id => [id, tpassOf(id)?.price]));
+  assert.deepEqual(prices, { tpy: 1800, yl: 750, hl: 399, hlb: 199, tt: 299, cy: 399, yla: 199, kl: 288, kh: 399, tc: 599, tcr: 299 });
+  const TPE = { lat: 25.04, lon: 121.5 };
+  const ILA = { lat: 24.75, lon: 121.75 };
+  const city = pt => (pt.lat > 24.9 ? 'Taipei' : pt.lat > 24.3 ? 'YilanCounty' : pt.lat > 23.4 ? 'HualienCounty' : 'TaitungCounty');
+  const leg = (mode, from, to, extra = {}) => ({ legs: [{ mode, from, to, ...extra }] });
+  const tpy = tpassOf('tpy');
+  assert.equal(coverage(leg('tra', TPE, ILA, { train: { code: '6' } }), tpy, city).all, true, '台北 → 宜蘭 by 區間');
+  assert.equal(coverage(leg('metro', TPE, { lat: 25.05, lon: 121.55 }), tpy, city).some, false, '台北捷運: not on 北北宜');
+  assert.equal(coverage(leg('bus', TPE, { lat: 25.05, lon: 121.55 }), tpy, city).some, false, '台北 city bus: not on 北北宜');
+  assert.equal(passOk(leg('bus', TPE, ILA), tpy, city), false, 'a 國道客運 from 台北: not claimed');
+  assert.equal(coverage(leg('bus', ILA, { lat: 24.68, lon: 121.77 }), tpy, city).all, true, '宜蘭 → 羅東 bus');
+  assert.equal(routeOnPass(tpy, 'Taipei', '307'), false);
+  assert.equal(routeOnPass(tpy, 'YilanCounty', '1766'), true);
+  const TTT = { lat: 22.79, lon: 121.12 };
+  const CHS = { lat: 23.1, lon: 121.22 };
+  assert.equal(coverage(leg('tra', TTT, CHS, { train: { code: '3' } }), tpassOf('tt'), city).some, false, '臺東: a 自強 is 對號');
+  assert.equal(coverage(leg('tra', TTT, CHS, { train: { code: '6' } }), tpassOf('tt'), city).all, true, '臺東: a 區間');
+  assert.equal(passTrainTrip({ sys: 'tra', code: '3' }, tpassOf('tt')), false);
+  assert.equal(passTrainTrip({ sys: 'tra', code: '3' }, tpassOf('hl')), true, '花蓮: a 自強 is fine');
+  assert.equal(passTrainTrip({ sys: 'tra', code: '2' }, tpassOf('hl')), false, '普悠瑪 never');
+  const HUN = { lat: 23.99, lon: 121.6 };
+  assert.equal(coverage(leg('bus', HUN, { lat: 23.97, lon: 121.58 }), tpassOf('hlb'), city).some, false, '花蓮 199: 台鐵 only here');
+  assert.equal(coverage(leg('bus', HUN, { lat: 23.97, lon: 121.58 }), tpassOf('hl'), city).all, true, '花蓮 399: its buses');
+});
