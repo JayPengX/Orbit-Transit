@@ -22,17 +22,22 @@ const CHIAYI_SKIP = Object.fromEntries(['Chiayi', 'ChiayiCounty', 'Tainan'].map(
 // 2026-10, from 臺鐵's 行政院通勤月票 pages (price, buyers and stations, per
 // 生活圈: railway.gov.tw → 行政院通勤月票) and 一卡通's plan pages (what else
 // each takes: i-pass.com.tw/Page/<Region>Region); tpass.gov.tw and the
-// counties' own sites refuse us. `modes`: what it takes (else bus, 台鐵 and
+// counties' own sites (rechecked 2026-10-18: 臺鐵's pass pages, i-pass.com.tw
+// and the county tpass.tw sites load; www.tpass.gov.tw still refuses us). `modes`: what it takes (else bus, 台鐵 and
 // metro); `busCities`: where its buses count (北北宜's are 宜蘭's own, its
 // 國道客運 to 台北 left out: those routes can't be told apart here; 南嘉's
 // 臺南's, 嘉義 799's 嘉義's); `only`: the only bus routes it takes in a city
-// (花蓮 199's: the six 市區客運). Every pass's 台鐵 is every class but 太魯閣,
+// (花蓮 199's: the six 市區客運); `bikeCities`: where its YouBike counts (臺南799's
+// in 臺南, 嘉義799's in 嘉義); `bikeMin`: free minutes where they are not 30
+// (桃園's stations: 60, i-pass TaoHsinMiaoRegion). Every pass's 台鐵 is every class but 太魯閣,
 // 普悠瑪 and EMU3000 (臺東's too). Left out: 雲林 399 (its 台鐵 runs 員林–民雄,
-// part of 彰化 and 嘉義縣) and 澎湖 (its price is only in the county's notice).
+// part of 彰化 and 嘉義縣: its stations, not its counties), 澎湖's 車船月票 400 (its
+// boats aren't planned here) and 北宜 2300 (a 1,100 add-on to 基北北桃 + 宜蘭).
+// 中彰投苗's 溪頭線 from 彰化 (15 路) is left out too, but not by a number we can tell apart.
 export const TPASSES = [
   { id: 'kbnt', name: W('基北北桃', 'Greater Taipei'), price: 1200, cities: ['Keelung', 'Taipei', 'NewTaipei', 'Taoyuan'], bike: true },
-  { id: 'thhm', name: W('桃竹竹苗', 'Taoyuan–Miaoli'), price: 1200, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
-  { id: 'thh', name: W('桃竹竹', 'Taoyuan–Hsinchu'), price: 799, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
+  { id: 'thhm', bikeMin: { Taoyuan: 60 }, name: W('桃竹竹苗', 'Taoyuan–Miaoli'), price: 1200, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
+  { id: 'thh', bikeMin: { Taoyuan: 60 }, name: W('桃竹竹', 'Taoyuan–Hsinchu'), price: 799, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
   { id: 'hhm', name: W('竹竹苗', 'Hsinchu–Miaoli'), price: 699, cities: ['Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
   { id: 'hh', name: W('竹竹', 'Hsinchu'), price: 288, cities: ['Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
   { id: 'tcnm', name: W('中彰投苗', 'Central Taiwan'), price: 999, cities: ['Taichung', 'ChanghuaCounty', 'NantouCounty', 'MiaoliCounty'], bike: true, skip: CENTRAL_SKIP },
@@ -45,7 +50,7 @@ export const TPASSES = [
   { id: 'kh', name: W('高雄市', 'Kaohsiung'), price: 399, cities: ['Kaohsiung'], bike: true },
   { id: 'tn', name: W('臺南市', 'Tainan'), price: 399, cities: ['Tainan'], bike: true },
   { id: 'tnb', name: W('臺南市（公車）', 'Tainan (buses)'), price: 299, cities: ['Tainan'], bike: true, modes: ['bus'] },
-  { id: 'tncy', name: W('臺南公車＋南嘉臺鐵', 'Tainan buses + TRA to Chiayi'), price: 799, cities: ['Tainan', 'Chiayi', 'ChiayiCounty'], bike: true, modes: ['tra', 'bus'], busCities: ['Tainan'] },
+  { id: 'tncy', name: W('臺南公車＋南嘉臺鐵', 'Tainan buses + TRA to Chiayi'), price: 799, cities: ['Tainan', 'Chiayi', 'ChiayiCounty'], bike: true, modes: ['tra', 'bus'], busCities: ['Tainan'], bikeCities: ['Tainan'] },
   { id: 'pt', name: W('屏東縣', 'Pingtung'), price: 399, cities: ['PingtungCounty'], bike: true },
   { id: 'ptb', name: W('屏東縣（公車）', 'Pingtung (buses)'), price: 299, cities: ['PingtungCounty'], bike: true, modes: ['bus'] },
   { id: 'kl', name: W('基隆市', 'Keelung'), price: 288, cities: ['Keelung'], bike: false, modes: ['tra', 'bus'] },
@@ -55,9 +60,10 @@ export const TPASSES = [
   { id: 'hlb', name: W('花蓮縣（基本）', 'Hualien (basic)'), price: 199, cities: ['HualienCounty'], bike: false, modes: ['tra', 'bus'], only: { HualienCounty: ['301', '302', '303', '305', '307', '308'] } },
   { id: 'tt', name: W('臺東縣', 'Taitung'), price: 299, cities: ['TaitungCounty'], bike: false, modes: ['tra', 'bus'] },
   { id: 'cy', name: W('嘉義', 'Chiayi'), price: 399, cities: ['Chiayi', 'ChiayiCounty'], bike: true, modes: ['tra', 'bus'] },
-  { id: 'cyt', name: W('嘉義＋南嘉臺鐵', 'Chiayi + TRA to Tainan'), price: 799, cities: ['Chiayi', 'ChiayiCounty', 'Tainan'], bike: true, modes: ['tra', 'bus'], busCities: ['Chiayi', 'ChiayiCounty'], skip: CHIAYI_SKIP },
+  { id: 'cyt', name: W('嘉義＋南嘉臺鐵', 'Chiayi + TRA to Tainan'), price: 799, cities: ['Chiayi', 'ChiayiCounty', 'Tainan'], bike: true, modes: ['tra', 'bus'], busCities: ['Chiayi', 'ChiayiCounty'], bikeCities: ['Chiayi', 'ChiayiCounty'], skip: CHIAYI_SKIP },
   { id: 'cct', name: W('嘉嘉南', 'Chiayi–Tainan'), price: 999, cities: ['Chiayi', 'ChiayiCounty', 'Tainan'], bike: true, modes: ['tra', 'bus'], skip: CHIAYI_SKIP },
-  { id: 'yla', name: W('雲林縣', 'Yunlin'), price: 199, cities: ['YunlinCounty'], bike: true, modes: ['tra', 'bus'] }
+  { id: 'yla', name: W('雲林縣', 'Yunlin'), price: 199, cities: ['YunlinCounty'], bike: true, modes: ['tra', 'bus'] },
+  { id: 'ph', name: W('澎湖縣（公車）', 'Penghu (buses)'), price: 150, cities: ['PenghuCounty'], bike: false, modes: ['bus'] }
 ];
 export const tpassOf = id => TPASSES.find(p => p.id === id) || null;
 // Long rides cut every 30 minutes (每 30 分鐘換車): when set, and always
@@ -100,7 +106,10 @@ export function coverage(plan, pass, cityOf) {
   const inside = pt => pt?.lat != null && pass.cities.includes(cityOf(pt));
   const legs = plan.legs.map(l => {
     if (l.mode === 'walk') return true;
-    if (l.mode === 'bike') return pass.bike && (l.dur || 0) <= 30 * 60;
+    if (l.mode === 'bike') {
+      const city = l.from?.lat != null ? cityOf(l.from) : null;
+      return pass.bike && (!pass.bikeCities || pass.bikeCities.includes(city)) && (l.dur || 0) <= (pass.bikeMin?.[city] || 30) * 60;
+    }
     if (PAID.has(l.mode)) return passMode(l, pass) && inside(l.from) && inside(l.to) && busOk(l, pass, cityOf) && !skippedLeg(l, pass, cityOf);
     return false;
   });
