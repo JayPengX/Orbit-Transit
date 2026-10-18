@@ -2433,6 +2433,19 @@ test('by an arrival time, no way in hours early (the evening before for 07:30), 
   for (const p of out) assert.ok(p.times.every(i => out[i].dep >= out[p.times[0]].dep));
 });
 
+test('by a time nothing gets in by (台東 by 06:30 from 花蓮, first train in 08:33): the first ways that morning, late, not tonight’s', async () => {
+  const { rank, finish } = await import('../public/lib/plan.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = (d, x) => twAt(d, x);
+  const o = { name: '花蓮', lat: 23.9929, lon: 121.6011 };
+  const d = { name: '臺東', lat: 22.7934, lon: 121.1233 };
+  const tra = (day, dep, arr) => finish({ src: 'r', legs: [{ mode: 'tra', name: '自強', short: '自強', from: o, to: d, dep: T(day, dep), arr: T(day, arr), dur: (T(day, arr) - T(day, dep)) / 1000 }] });
+  const out = rank([tra('2026-10-18', '17:29', '19:23'), tra('2026-10-18', '20:16', '22:05'), tra('2026-10-19', '06:17', '08:33'), tra('2026-10-19', '07:10', '09:30')], { now: T('2026-10-19', '06:30'), clock: T('2026-10-18', '17:10'), by: 'arrive', deadline: T('2026-10-19', '06:30'), o, d });
+  const top = out.find(p => p.top);
+  assert.equal(top.dep, T('2026-10-19', '06:17'));
+  assert.ok(out.every(p => p.dep >= T('2026-10-19', '00:00')), out.map(p => p.dep));
+});
+
 test('a ride for nothing folds: a bus one stop away, later than walking it all and walking as far anyway', async () => {
   const { rank, finish } = await import('../public/lib/plan.mjs');
   const { twAt } = await import('../public/lib/util.mjs');

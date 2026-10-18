@@ -640,6 +640,8 @@ const mainLine = p => {
 // Each gets its labels. `cost(p)` adds what a plan costs you in money.
 // Each ride leaves after what comes before it is over (2 minutes' grace).
 export const inOrder = p => p.legs.every((l, i) => i === 0 || !isRide(l) || l.dep == null || p.legs[i - 1].arr == null || l.dep >= p.legs[i - 1].arr - 2 * 60_000);
+// To be there by a time: a way in by it, but not more than this before it.
+export const ARRIVE_WINDOW = 4 * 3_600_000;
 export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now(), keep = null } = {}) {
   // Only what `keep` allows (inside your TPASS's area: what the pass takes), unless that's nothing.
   if (keep) {
@@ -663,8 +665,11 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // Leaving before the time asked (a ride to the train worked out backwards
   // from it), or arriving after it, is no plan, unless it's all there is.
   // (By a time, in by it and not hours before: a way in 10 hours early, the evening before, is no way to be there by 07:30.)
-  const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 && p.arr >= deadline - 4 * 3_600_000 : p.dep >= now - 2 * 60_000));
-  const ok = fits.length ? fits : all;
+  const fits = all.filter(p => (by === 'arrive' && deadline ? p.arr <= deadline + 2 * 60_000 && p.arr >= deadline - ARRIVE_WINDOW : p.dep >= now - 2 * 60_000));
+  // Nothing in by then (台東 by 06:30 from 花蓮: the first train is in at
+  // 08:33): the first ways of that morning, late, not tonight's trains.
+  const notEve = by === 'arrive' && deadline ? all.filter(p => p.arr >= deadline - ARRIVE_WINDOW) : [];
+  const ok = fits.length ? fits : notEve.length ? notEve : all;
   // By a time already out of reach (07:21 for 08:00): ranked as leaving now,
   // the soonest there first; "how long before the time you leave" would put
   // the one leaving latest first (16:20, the owner's 上學, 2026-10-16).
