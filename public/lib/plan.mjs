@@ -1051,7 +1051,22 @@ function withStations(p, bikes) {
   if (legs.some(l => l === null)) return null;
   // (A ride to the stop turned into a walk, or a walk added before it, takes
   // longer: set out earlier. One added after it: what follows a little later.)
-  return tidy(finish({ ...p, legs: later(legs.flat()) }));
+  return tidy(finish({ ...p, legs: later(joinWalks(legs.flat())) }));
+}
+
+// Back-to-back walks as one (TDX's walk to a metro's exit then on to its
+// platform read 走1′ · 走2′): their ends, times and lengths, their road
+// joined where both have one in one format (else the map finds it again).
+export function joinWalks(legs) {
+  const polys = l => (Array.isArray(l.poly) ? l.poly : l.poly ? [l.poly] : []);
+  return legs.reduce((out, l) => {
+    const a = out.at(-1);
+    if (!(a?.mode === 'walk' && l.mode === 'walk' && !a.bus && !l.bus)) return [...out, l];
+    const road = polys(a).length && polys(l).length && (a.fmt || '') === (l.fmt || '');
+    const { poly, fmt, path, ...rest } = a;
+    out[out.length - 1] = { ...rest, to: l.to, arr: l.arr, dur: (a.dur || 0) + (l.dur || 0), dist: (a.dist || 0) + (l.dist || 0), ...(road ? { poly: [...polys(a), ...polys(l)], fmt: a.fmt } : {}), straight: !road };
+    return out;
+  }, []);
 }
 
 // The points whose YouBike stations a set of plans needs: both ends, and

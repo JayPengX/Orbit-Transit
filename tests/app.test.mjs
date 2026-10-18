@@ -2664,3 +2664,15 @@ test('TPASS in central and southern Taiwan: 中彰投苗 699 for 臺中市民, �
   // 南高屏 takes YouBike’s first half hour.
   assert.equal(coverage(leg('bike', TNN, TNN, { dur: 1200 }), tpassOf('tkp'), city).all, true);
 });
+
+test('back-to-back walks read as one (TDX walks to a metro exit, then to its platform)', async () => {
+  const { joinWalks } = await import('../public/lib/plan.mjs');
+  const w = (from, to, dep, dur, poly) => ({ mode: 'walk', from: { name: from }, to: { name: to }, dep, arr: dep + dur * 1000, dur, dist: dur, ...(poly ? { poly, fmt: '' } : {}) });
+  const ride = { mode: 'metro', from: { name: 'B' }, to: { name: 'C' }, dep: 200_000, arr: 600_000 };
+  const out = joinWalks([w('A', 'X', 0, 60, 'p1'), w('X', 'B', 60_000, 120, 'p2'), ride, w('C', 'Y', 600_000, 120), w('Y', 'D', 720_000, 180, 'p3')]);
+  assert.deepEqual(out.map(l => [l.mode, l.from.name, l.to.name, l.dur]), [['walk', 'A', 'B', 180], ['metro', 'B', 'C', undefined], ['walk', 'C', 'D', 300]]);
+  assert.deepEqual(out[0].poly, ['p1', 'p2']);
+  // One without its road: the joined walk has none (the map finds it again).
+  assert.equal(out[2].poly, undefined);
+  assert.equal(out[2].straight, true);
+});
