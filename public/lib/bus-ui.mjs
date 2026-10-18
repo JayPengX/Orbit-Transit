@@ -13,7 +13,10 @@ import { sheet, sheetHead, icon, ago } from './ui.mjs';
 import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel } from './util.mjs';
 import { nextRun, liveTrusted } from './live.mjs';
 
+import { W, en } from './lang.mjs';
 const WEEK = '日一二三四五六';
+const WEEK_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const wk = i => (en ? WEEK_EN[i] : `週${WEEK[i]}`);
 // 'HH:MM' times as a stop's sign has them: an hour a row, its minutes beside it.
 export const hours = times => [...times.reduce((m, t) => m.set(t.slice(0, 2), [...(m.get(t.slice(0, 2)) || []), t]), new Map())];
 let ctx = null;
@@ -73,7 +76,7 @@ export function strip({ no, note = '', main = '', eta = null, attrs = '', wait =
   const when = wait
     ? `<span class="ot-strip-eta"><b>${skel('46px')}</b><small>${skel('28px')}</small></span>`
     : eta
-      ? `<span class="ot-strip-eta ${eta.tone}${/\d/.test(eta.main) ? '' : ' words'}${/分|進站/.test(eta.main) ? ' live' : ''}"><b data-q-live="${e(`eta:${no}:${attrs}`)}">${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>`
+      ? `<span class="ot-strip-eta ${eta.tone}${/\d/.test(eta.main) ? '' : ' words'}${/分|進站|min|Arriving|Due/.test(eta.main) ? ' live' : ''}"><b data-q-live="${e(`eta:${no}:${attrs}`)}">${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>`
       : '';
   const sub = wait ? `<small>${skel('84px')}</small>` : note ? `<small>${note}</small>` : '';
   return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no"><span>${e(no)}</span></span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
@@ -83,7 +86,7 @@ export const fitStrips = box => fitNumbers([...box.querySelectorAll('.ot-strip-n
 
 // What a stop's time says: the live time while a bus is on its way, else the
 // timetable's next there (`planned`: { at, day }, its day when not today's).
-export const busWhen = (v, planned) => (planned && !(v?.status === 0 && v.sec != null) ? { main: hm(planned.at), sub: planned.day ? dayLabel(tw(planned.at).date) : '預計', tone: 'wait' } : etaText(v));
+export const busWhen = (v, planned) => (planned && !(v?.status === 0 && v.sec != null) ? { main: hm(planned.at), sub: planned.day ? dayLabel(tw(planned.at).date) : W('預計', 'planned'), tone: 'wait' } : etaText(v));
 // The timetable's next bus at a stop with none on its way (`r`: routeUID,
 // route, city, dir, stopUID; `near`: where, for the route's pack): its stops
 // and times from the bus packs, no proxy read. → { at, day } or null.
@@ -167,17 +170,17 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   const planned = (w, k) => (sched?.length ? nextRun(sched, w, k, Date.now()) : null);
   const dayName = n => {
     const t = today();
-    return n === 1 ? `明天（週${WEEK[(t.dow + 1) % 7]}）` : `週${WEEK[(t.dow + n) % 7]}`;
+    return n === 1 ? W(`明天（週${WEEK[(t.dow + 1) % 7]}）`, `tomorrow (${WEEK_EN[(t.dow + 1) % 7]})`) : wk((t.dow + n) % 7);
   };
   // The route not running again today: which day the stops' times are of.
   const offNote = w => {
     const first = planned(w, 0);
     if (!first || first.day === 0) return '';
     const ranToday = nextRun(sched, w, 0, twAt(today().date, '00:00'), 0);
-    return `${ranToday ? '今天已收班' : '今天不行駛'}，以下是${dayName(first.day)}的時刻`;
+    return W(`${ranToday ? '今天已收班' : '今天不行駛'}，以下是${dayName(first.day)}的時刻`, `${ranToday ? 'Done for today' : 'Not running today'}; times for ${dayName(first.day)}`);
   };
   const tableHtml = w => {
-    if (!sched) return '<p class="ot-note">載入時刻表…</p>';
+    if (!sched) return `<p class="ot-note">${W('載入時刻表…', 'Loading the timetable…')}</p>`;
     const s = w.stops.find(x => x.uid === picked) || w.stops[0];
     const t0 = today();
     // Not running today at this stop (a weekday route on Sunday): the nearest day it does, said so.
@@ -191,7 +194,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       const n = has(0) ? 0 : [1, 2, 3, 4, 5, 6].find(has);
       if (n) {
         day = n;
-        moved = `今天不行駛，顯示${dayName(n)}的時刻`;
+        moved = W(`今天不行駛，顯示${dayName(n)}的時刻`, `Not running today; showing ${dayName(n)}`);
       }
     }
     const date = addDays(t0.date, day);
@@ -200,19 +203,19 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const now = day ? '' : t0.hm;
     const { times, every } = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, date, dow);
     const next = day ? null : times.find(t => t >= now);
-    const named = day === 0 ? '今天' : day === 1 ? '明天' : `週${WEEK[dow]}`;
+    const named = day === 0 ? W('今天', 'Today') : day === 1 ? W('明天', 'Tomorrow') : wk(dow);
     // The coming week, a day a column: 今天, 明天, then by weekday.
-    const days = `<div class="ot-tt-days" role="group" aria-label="哪一天">${[0, 1, 2, 3, 4, 5, 6].map(i => `<button type="button" data-day="${i}" aria-pressed="${i === day}"><small>${i === 0 ? '今天' : i === 1 ? '明天' : '週'}</small><b>${WEEK[(t0.dow + i) % 7]}</b></button>`).join('')}</div>`;
+    const days = `<div class="ot-tt-days" role="group" aria-label="${W('哪一天', 'Day')}">${[0, 1, 2, 3, 4, 5, 6].map(i => `<button type="button" data-day="${i}" aria-pressed="${i === day}"><small>${i === 0 ? W('今天', 'Today') : i === 1 ? W('明天', 'Tmrw') : W('週', '')}</small><b>${en ? WEEK_EN[(t0.dow + i) % 7] : WEEK[(t0.dow + i) % 7]}</b></button>`).join('')}</div>`;
     // The stop: a native picker (an iPhone's wheel), its name the label.
-    const stopPick = `<label class="ot-tt-stop"><b>${e(s.name)}</b>${icon('down')}<select data-pickstop aria-label="換站牌">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(x.name)}</option>`).join('')}</select></label>`;
+    const stopPick = `<label class="ot-tt-stop"><b>${e(s.name)}</b>${icon('down')}<select data-pickstop aria-label="${W('換站牌', 'Change stop')}">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(x.name)}</option>`).join('')}</select></label>`;
     const body = times.length
       ? `<div class="ot-timetable">${hours(times)
           .map(([h, list]) => `<div class="ot-tt-hour"><b>${e(h)}</b><span>${list.map(t => `<i class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t.slice(3, 5))}</i>`).join('')}</span></div>`)
           .join('')}</div>`
       : every.length
-        ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? `每 ${f.min}–${f.max} 分` : `每 ${f.min || f.max} 分`}</b></div>`).join('')}</div>`
-        : `<p class="ot-note">${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。</p>`;
-    return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${times.length} 班${day ? '' : next ? `・下一班 ${e(next)}` : '・已收班'}` : ''}</small></div>${body}`;
+        ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? W(`每 ${f.min}–${f.max} 分`, `every ${f.min}–${f.max} min`) : W(`每 ${f.min || f.max} 分`, `every ${f.min || f.max} min`)}</b></div>`).join('')}</div>`
+        : `<p class="ot-note">${W(`${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。`, `No timetable at this stop for ${named.toLowerCase()} (none published, or not running).`)}</p>`;
+    return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${W(`${times.length} 班`, `${times.length} buses`)}${day ? '' : next ? `・${W('下一班', 'next')} ${e(next)}` : `・${W('已收班', 'done')}`}` : ''}</small></div>${body}`;
   };
   let offDay = 0;
   const draw = () => {
@@ -222,10 +225,10 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const keep = d.scrollTop;
     // Like a stop's sign: the route's number big, where it's going beside it;
     // the way and the view stay at the top while the stops scroll under.
-    const where = route.city === INTERCITY ? '公路客運' : cityShort(route.city);
-    const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${w ? `往 ${e(w.headsign)}` : '路線'}</h2><p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}</p></div></div><button class="q-close" type="button" data-act="close" aria-label="關閉">×</button></div>`;
-    const tabs = ways && ways.length > 1 ? `<div class="q-seg ot-dir" role="group" aria-label="方向">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">往 ${e(x.headsign)}</button>`).join('')}</div>` : '';
-    const views = `<div class="q-seg ot-view" role="group" aria-label="即時或時刻表"><button type="button" data-view="live" aria-pressed="${view === 'live'}">即時到站</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">時刻表</button></div>`;
+    const where = route.city === INTERCITY ? W('公路客運', 'Intercity') : cityShort(route.city);
+    const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${w ? `${W('往', 'To')} ${e(w.headsign)}` : W('路線', 'Route')}</h2><p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}</p></div></div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
+    const tabs = ways && ways.length > 1 ? `<div class="q-seg ot-dir" role="group" aria-label="${W('方向', 'Direction')}">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">${W('往', 'To')} ${e(x.headsign)}</button>`).join('')}</div>` : '';
+    const views = `<div class="q-seg ot-view" role="group" aria-label="${W('即時或時刻表', 'Live or timetable')}"><button type="button" data-view="live" aria-pressed="${view === 'live'}">${W('即時到站', 'Live')}</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">${W('時刻表', 'Timetable')}</button></div>`;
     // Each stop's live time, trusted: a bus 'coming' that the timetable has
     // nowhere near (resting with its tracker on) isn't taken (the
     // timetable's time instead).
@@ -235,9 +238,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     });
     const between = k => busBetween(lives, k);
     const stops = !ways
-      ? '<p class="ot-note">載入站牌中…</p>'
+      ? `<p class="ot-note">${W('載入站牌中…', 'Loading stops…')}</p>`
       : !w
-        ? '<p class="ot-note">這條路線沒有站牌資料。</p>'
+        ? `<p class="ot-note">${W('這條路線沒有站牌資料。', 'No stops for this route.')}</p>`
         : view === 'table'
           ? tableHtml(w)
           : `${off ? `<p class="ot-note ot-off-note">${e(off)}</p>` : ''}<ol class="ot-route-stops">${w.stops
@@ -256,11 +259,11 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
               const at = boarding ? w.stops.findIndex(x => x.uid === boarding.uid) : -1;
               const pick = boarding ? (k > at ? ' can-off' : k === at ? ' on-here' : ' before') : '';
               // A bus at the stop (進站中, 即將進站) rides on its dot.
-              return `<li class="${t.tone}${busAt(lives, k) ? ' at' : ''}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span>${between(k) ? `<i class="ot-rs-bus" aria-label="公車在這兩站之間">${icon('bus')}</i>` : ''}<span class="ot-rs-dot">${busAt(lives, k) ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? '<small>上車</small>' : ride?.off ? `<small>${icon('star')} 到 ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? '取消釘選' : '從這站上車，釘選'}">${icon('star')}</button>`}</li>`;
+              return `<li class="${t.tone}${busAt(lives, k) ? ' at' : ''}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span>${between(k) ? `<i class="ot-rs-bus" aria-label="${W('公車在這兩站之間', 'Bus between these stops')}">${icon('bus')}</i>` : ''}<span class="ot-rs-dot">${busAt(lives, k) ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? `<small>${W('上車', 'Board')}</small>` : ride?.off ? `<small>${icon('star')} ${W('到', 'to')} ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? W('取消釘選', 'Unpin') : W('從這站上車，釘選', 'Board here and pin')}">${icon('star')}</button>`}</li>`;
             })
             .join('')}</ol>`;
-    const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>從「${e(boarding.name)}」上車</b><small>點你下車的站，回程會自動對調</small></div><button class="q-btn" type="button" data-only="1">只釘這站</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="取消">${icon('x')}</button></div>` : '';
-    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding ? `<p class="ot-note center">${e(ago(at))}・每 20 秒更新・☆ 釘選你搭的這段</p>` : ''}`;
+    const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`從「${e(boarding.name)}」上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('點你下車的站，回程會自動對調', 'Tap where you get off; the way back flips')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding ? `<p class="ot-note center">${e(ago(at))}・${W('每 20 秒更新・☆ 釘選你搭的這段', 'every 20 s・☆ pins your ride')}</p>` : ''}`;
     d.scrollTop = keep;
   };
   // A ride pinned on at this stop, either way (the way back gets on where the ride gets off).
@@ -273,7 +276,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   // way back: the other direction, on where you got off, off where you got on.
   const saveRide = (w, on, off) => {
     const all = ctx.data.groups.flatMap(g => g.items);
-    if (all.length >= MAX_ITEMS * ctx.data.groups.length) return ctx.status('釘選的公車太多了，先刪掉一些');
+    if (all.length >= MAX_ITEMS * ctx.data.groups.length) return ctx.status(W('釘選的公車太多了，先刪掉一些', 'Too many pinned buses; remove some first'));
     const pt = s => ({ stopUID: s.uid, stop: s.name, lat: s.lat, lon: s.lon });
     let back = null;
     if (off) {
@@ -288,11 +291,11 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     }
     const n = off ? w.stops.indexOf(off) - w.stops.indexOf(on) : 0;
     const item = cleanItem({ id: 'i' + uid(), city: route.city, routeUID: route.uid, route: route.name, dir: w.dir, stopUID: on.uid, stop: on.name, headsign: w.headsign, lat: on.lat, lon: on.lon, ...(off ? { off: pt(off), n, back } : {}) });
-    const g = ctx.data.groups[0] || (ctx.data.groups[0] = { id: 'g' + uid(), name: '常用', items: [] });
+    const g = ctx.data.groups[0] || (ctx.data.groups[0] = { id: 'g' + uid(), name: W('常用', 'Favorites'), items: [] });
     g.items.push(item);
     ctx.save();
     ctx.refreshTabs?.();
-    ctx.status(off ? `已釘選 ${route.name}：${on.name} → ${off.name}${back ? '，回程自動對調' : ''}` : `已釘選 ${route.name} ${on.name}`);
+    ctx.status(off ? W(`已釘選 ${route.name}：${on.name} → ${off.name}${back ? '，回程自動對調' : ''}`, `Pinned ${route.name}: ${on.name} → ${off.name}${back ? ', back flips' : ''}`) : W(`已釘選 ${route.name} ${on.name}`, `Pinned ${route.name} at ${on.name}`));
   };
   const refresh = async () => {
     try {
@@ -381,7 +384,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
         ctx.data.groups = ctx.data.groups.map(g => ({ ...g, items: g.items.filter(x => !rideAt(s.uid)(x)) }));
         ctx.save();
         ctx.refreshTabs?.();
-        ctx.status('已取消釘選');
+        ctx.status(W('已取消釘選', 'Unpinned'));
         return draw();
       }
       boarding = s;
@@ -395,14 +398,14 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
 // Which group a stop goes into (or a new one).
 export function chooseGroup(raw, done) {
   const item = cleanItem({ ...raw, id: 'i' + uid() });
-  const d = sheet(`${sheetHead('加入群組', `${e(item.route)} · ${e(item.stop)}`)}
+  const d = sheet(`${sheetHead(W('加入群組', 'Add to group'), `${e(item.route)} · ${e(item.stop)}`)}
     <div class="ot-list">${ctx.data.groups
       .map((g, i) => {
         const has = g.items.some(x => x.stopUID === item.stopUID);
-        return `<button class="ot-row-btn" type="button" data-to="${i}" ${has ? 'disabled' : ''}><span><b>${e(g.name)}</b><small>${g.items.length} 個站牌${has ? ' · 已在這裡' : ''}</small></span>${icon('plus')}</button>`;
+        return `<button class="ot-row-btn" type="button" data-to="${i}" ${has ? 'disabled' : ''}><span><b>${e(g.name)}</b><small>${W(`${g.items.length} 個站牌`, `${g.items.length} stops`)}${has ? W(' · 已在這裡', ' · already here') : ''}</small></span>${icon('plus')}</button>`;
       })
       .join('')}</div>
-    ${ctx.data.groups.length < MAX_GROUPS ? `<label class="ot-field"><span>或新的群組</span><div class="ot-row"><input id="g-new" maxlength="12" placeholder="例如：上班、回家"><button class="q-btn" type="button" data-new="1">建立並加入</button></div></label>` : ''}`);
+    ${ctx.data.groups.length < MAX_GROUPS ? `<label class="ot-field"><span>${W('或新的群組', 'Or a new group')}</span><div class="ot-row"><input id="g-new" maxlength="12" placeholder="${W('例如：上班、回家', 'e.g. Work, Home')}"><button class="q-btn" type="button" data-new="1">${W('建立並加入', 'Create')}</button></div></label>` : ''}`);
   d.addEventListener('click', ev => {
     const to = ev.target.closest('[data-to]');
     let g = null;
@@ -414,13 +417,13 @@ export function chooseGroup(raw, done) {
       ctx.data.groups.push(g);
     }
     if (!g) return;
-    if (g.items.length >= MAX_ITEMS) return ctx.status(`一個群組最多 ${MAX_ITEMS} 個站牌`);
+    if (g.items.length >= MAX_ITEMS) return ctx.status(W(`一個群組最多 ${MAX_ITEMS} 個站牌`, `Up to ${MAX_ITEMS} stops a group`));
     g.items.push(item);
     ctx.save();
     d.close();
     ctx.refreshTabs?.();
     done?.();
-    ctx.status(`已加入「${g.name}」`);
+    ctx.status(W(`已加入「${g.name}」`, `Added to ${g.name}`));
   });
 }
 
@@ -429,32 +432,32 @@ export function chooseGroup(raw, done) {
 export function manageSheet() {
   const d = sheet('', 'ot-tall-sheet');
   const draw = () => {
-    d.innerHTML = `${sheetHead('管理群組', '上下移動調整順序；左右滑動就照這個順序切換')}
+    d.innerHTML = `${sheetHead(W('管理群組', 'Groups'), W('上下移動調整順序；左右滑動就照這個順序切換', 'Reorder; swipe sideways in this order'))}
       ${ctx.data.groups
         .map(
           (g, i, all) => `<section class="ot-manage">
-          <div class="ot-order-row head"><input class="ot-name-in" data-name="${i}" value="${e(g.name)}" maxlength="16" aria-label="群組名稱">
-            <button class="q-icon-btn" type="button" data-gmove="${i}" data-by="-1" aria-label="上移" ${i ? '' : 'disabled'}>${icon('up')}</button>
-            <button class="q-icon-btn" type="button" data-gmove="${i}" data-by="1" aria-label="下移" ${i < all.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
-            <button class="q-icon-btn" type="button" data-gdel="${i}" aria-label="刪除群組" ${all.length > 1 ? '' : 'disabled'}>${icon('trash')}</button></div>
+          <div class="ot-order-row head"><input class="ot-name-in" data-name="${i}" value="${e(g.name)}" maxlength="16" aria-label="${W('群組名稱', 'Group name')}">
+            <button class="q-icon-btn" type="button" data-gmove="${i}" data-by="-1" aria-label="${W('上移', 'Move up')}" ${i ? '' : 'disabled'}>${icon('up')}</button>
+            <button class="q-icon-btn" type="button" data-gmove="${i}" data-by="1" aria-label="${W('下移', 'Move down')}" ${i < all.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
+            <button class="q-icon-btn" type="button" data-gdel="${i}" aria-label="${W('刪除群組', 'Delete group')}" ${all.length > 1 ? '' : 'disabled'}>${icon('trash')}</button></div>
           ${g.items
             .map(
-              (it, k, list) => `<div class="ot-order-row"><span><b>${e(it.route)}</b> ${e(it.stop)}${it.off ? ` → ${e(it.off.stop)}` : ''}<small>往 ${e(it.headsign)}${it.back ? ' · 回程自動對調' : ''}</small></span>
-              <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="-1" aria-label="上移" ${k ? '' : 'disabled'}>${icon('up')}</button>
-              <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="1" aria-label="下移" ${k < list.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
-              <button class="q-icon-btn" type="button" data-idel="${i}:${k}" aria-label="移除">${icon('trash')}</button></div>`
+              (it, k, list) => `<div class="ot-order-row"><span><b>${e(it.route)}</b> ${e(it.stop)}${it.off ? ` → ${e(it.off.stop)}` : ''}<small>${W('往', 'to')} ${e(it.headsign)}${it.back ? W(' · 回程自動對調', ' · back flips') : ''}</small></span>
+              <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="-1" aria-label="${W('上移', 'Move up')}" ${k ? '' : 'disabled'}>${icon('up')}</button>
+              <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="1" aria-label="${W('下移', 'Move down')}" ${k < list.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
+              <button class="q-icon-btn" type="button" data-idel="${i}:${k}" aria-label="${W('移除', 'Remove')}">${icon('trash')}</button></div>`
             )
             .join('')}
         </section>`
         )
         .join('')}
-      ${ctx.data.groups.length < MAX_GROUPS ? `<button class="q-btn ot-wide" type="button" data-gadd="1">${icon('plus')} 新增群組</button>` : ''}`;
+      ${ctx.data.groups.length < MAX_GROUPS ? `<button class="q-btn ot-wide" type="button" data-gadd="1">${icon('plus')} ${W('新增群組', 'New group')}</button>` : ''}`;
   };
   draw();
   d.addEventListener('change', ev => {
     const n = ev.target.closest('[data-name]');
     if (!n) return;
-    ctx.data.groups[Number(n.dataset.name)].name = n.value.trim().slice(0, 16) || '群組';
+    ctx.data.groups[Number(n.dataset.name)].name = n.value.trim().slice(0, 16) || W('群組', 'Group');
     ctx.save();
     ctx.refreshTabs?.();
   });
@@ -472,7 +475,7 @@ export function manageSheet() {
     } else if (id) {
       const [g, k] = id.dataset.idel.split(':').map(Number);
       ctx.data.groups[g].items = ctx.data.groups[g].items.filter((_, i) => i !== k);
-    } else if (ev.target.closest('[data-gadd]')) ctx.data.groups.push({ id: 'g' + uid(), name: `群組 ${ctx.data.groups.length + 1}`, items: [] });
+    } else if (ev.target.closest('[data-gadd]')) ctx.data.groups.push({ id: 'g' + uid(), name: W(`群組 ${ctx.data.groups.length + 1}`, `Group ${ctx.data.groups.length + 1}`), items: [] });
     else return;
     ctx.save();
     draw();

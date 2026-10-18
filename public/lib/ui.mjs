@@ -2,6 +2,7 @@
 
 import { e, minsText, hm } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 // A modal sheet (the kit's look): closed by its × or a tap outside.
 export function sheet(html, cls = '') {
   const d = document.createElement('dialog');
@@ -16,7 +17,7 @@ export function sheet(html, cls = '') {
   d.showModal();
   return d;
 }
-export const sheetHead = (title, sub = '') => `<div class="q-sheet-head"><div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" aria-label="關閉">×</button></div>`;
+export const sheetHead = (title, sub = '') => `<div class="q-sheet-head"><div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
 
 // 24×24 stroked icons, one per way of moving.
 const I = {
@@ -58,18 +59,30 @@ const I = {
 };
 export const icon = (name, cls = '') => `<svg class="ot-i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[name] || I.rail}</svg>`;
 
-export const MODE_NAME = { walk: '步行', bike: 'YouBike', bus: '公車', metro: '捷運', lightrail: '輕軌', tra: '台鐵', hsr: '高鐵', ferry: '渡輪', gondola: '纜車', car: '計程車', plane: '飛機', rail: '鐵路' };
+export const MODE_NAME = en
+  ? { walk: 'Walk', bike: 'YouBike', bus: 'Bus', metro: 'Metro', lightrail: 'Light rail', tra: 'TRA', hsr: 'HSR', ferry: 'Ferry', gondola: 'Gondola', car: 'Taxi', plane: 'Flight', rail: 'Rail' }
+  : { walk: '步行', bike: 'YouBike', bus: '公車', metro: '捷運', lightrail: '輕軌', tra: '台鐵', hsr: '高鐵', ferry: '渡輪', gondola: '纜車', car: '計程車', plane: '飛機', rail: '鐵路' };
+// A plan's tags (kept in Chinese: the code compares them) as shown.
+const TAG_EN = { 推薦: 'Best', 最快抵達: 'Fastest', 最少轉乘: 'Fewest changes', 最少步行: 'Least walking', 電輔車: 'E-bike', 即時: 'Live', 最早抵達: 'Earliest', 車程最短: 'Shortest', 直達: 'Direct', '全程 YouBike': 'All YouBike', 騎車: 'Ride', 步行: 'Walk' };
+export const tagText = t => (en ? TAG_EN[t] || t : t);
+// TRA's train kinds in English (their own names, as on the board).
+const TRAIN_EN = [[/區間快/, 'Fast Local'], [/區間/, 'Local'], [/自強/, 'Tze-Chiang'], [/莒光/, 'Chu-Kuang'], [/復興/, 'Fu-Hsing'], [/普悠瑪/, 'Puyuma'], [/太魯閣/, 'Taroko'], [/新自強|EMU3000/, 'EMU3000'], [/觀光|鳴日/, 'Tourist'], [/普快/, 'Ordinary']];
+export const trainKind = s => {
+  const t = String(s || '');
+  const hit = en && TRAIN_EN.find(([re]) => re.test(t));
+  return hit ? t.replace(new RegExp(`(${hit[0].source})[號車]?`), hit[1]).replace(/[（(][^）)]*[）)]/g, '').trim() : t;
+};
 export const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', car: '#eab308', plane: '#a78bfa', rail: '#0ea5e9' };
 export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : MODE_COLOR[l.mode] || '#94a3b8');
 
 // What a leg is called on its chip: 「區間車」「板南線」「182」「YouBike」.
 export function legLabel(l) {
   if (l.mode === 'walk') return minsText(l.dur);
-  if (l.mode === 'bike') return l.ebike ? '電輔車' : 'YouBike';
-  if (l.mode === 'bus') return l.short || l.name || '公車';
-  if (l.mode === 'hsr') return '高鐵';
+  if (l.mode === 'bike') return l.ebike ? W('電輔車', 'E-bike') : 'YouBike';
+  if (l.mode === 'bus') return l.short || l.name || MODE_NAME.bus;
+  if (l.mode === 'hsr') return MODE_NAME.hsr;
   // A planner's line (新竹-六家) once the train is known: its kind and number, as on its sign.
-  if (l.mode === 'tra' && l.train?.type && l.train?.no && /-/.test(l.short || l.name || '')) return `${l.train.type} ${l.train.no}`;
+  if (l.mode === 'tra' && l.train?.type && l.train?.no && /-/.test(l.short || l.name || '')) return `${trainKind(l.train.type)} ${l.train.no}`;
   return l.short || l.name || MODE_NAME[l.mode];
 }
 // A plan's legs as a row of chips (the short walks left out).
@@ -82,13 +95,13 @@ export function depChips(plans, idx, on, attrs) {
   const rides = p => p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   const k = Math.max(0, rides(plans[idx[0]]).findIndex((l, j) => idx.some(i => rides(plans[i])[j]?.dep !== l.dep)));
   const ride = p => rides(p)[k] || rides(p)[0];
-  const kind = p => (ride(p)?.train ? String(ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '') : '');
+  const kind = p => (ride(p)?.train ? trainKind(String(ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '')) : '');
   const mixed = new Set(idx.map(i => kind(plans[i]))).size > 1;
   // Some straight through, some changing trains (竹東 → 新竹, or via 竹中): which is which.
-  const via = p => (rides(p).length > 1 ? `${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}轉` : '直達');
+  const via = p => (rides(p).length > 1 ? W(`${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}轉`, `via ${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}`) : W('直達', 'direct'));
   const changing = new Set(idx.map(i => rides(plans[i]).length)).size > 1;
   const tag = p => [mixed ? kind(p) : '', changing ? via(p) : ''].filter(Boolean).join('・');
-  return `<div class="ot-plan-deps" role="group" aria-label="選班次">${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${tag(plans[i]) ? `<small>${e(tag(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;
+  return `<div class="ot-plan-deps" role="group" aria-label="${W('選班次', 'Departures')}">${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${tag(plans[i]) ? `<small>${e(tag(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;
 }
 
 export function legChips(legs) {
@@ -99,8 +112,8 @@ export function legChips(legs) {
       const c = legColor(l);
       // A walk or a ride of your own: its minutes (the plan's tags say YouBike); a bus or train: its line.
       const mins = `${Math.max(1, Math.round((l.dur || 0) / 60))}′`;
-      if (l.mode === 'walk') return `<span class="ot-leg walk" aria-label="步行 ${mins}">${icon('walk')}${mins}</span>`;
-      if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? '電輔車' : 'YouBike'} ${mins}">${icon(l.ebike ? 'bolt' : 'bike')}<b>${mins}</b></span>`;
+      if (l.mode === 'walk') return `<span class="ot-leg walk" aria-label="${W('步行', 'Walk')} ${mins}">${icon('walk')}${mins}</span>`;
+      if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${mins}">${icon(l.ebike ? 'bolt' : 'bike')}<b>${mins}</b></span>`;
       return `<span class="ot-leg" style="--c:${e(c)}">${icon(l.mode)}<b>${e(legLabel(l))}</b></span>`;
     })
     .join('<span class="ot-leg-sep">›</span>');
@@ -112,5 +125,5 @@ export const timeRange = (dep, arr) => `${hm(dep)} – ${hm(arr)}`;
 export function ago(at, now = Date.now()) {
   if (!at) return '';
   const s = Math.max(0, Math.round((now - at) / 1000));
-  return s < 15 ? '剛剛更新' : s < 60 ? `${s} 秒前更新` : `${Math.round(s / 60)} 分鐘前更新`;
+  return s < 15 ? W('剛剛更新', 'Updated just now') : s < 60 ? W(`${s} 秒前更新`, `Updated ${s}s ago`) : W(`${Math.round(s / 60)} 分鐘前更新`, `Updated ${Math.round(s / 60)} min ago`);
 }

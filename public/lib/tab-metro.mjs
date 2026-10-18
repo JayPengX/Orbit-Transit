@@ -12,6 +12,7 @@ import { sheet, sheetHead, icon } from './ui.mjs';
 import { metroBoardHtml } from './tab-map.mjs';
 import { e, meters } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 const $ = id => document.getElementById(id);
 const KEY = 'orbit-transit.metro';
 let ctx = null;
@@ -24,7 +25,7 @@ export function init(c, opts = {}) {
   ctx = c;
   onClose = opts.onClose || onClose;
   const panel = $('panel-metro');
-  panel.innerHTML = `<div class="ot-metro-top"><button class="q-icon-btn" type="button" data-m="close" aria-label="返回">${icon('back')}</button><b>捷運路網圖</b><nav class="q-chips ot-metro-chips" id="m-maps">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(m.name)}</button>`).join('')}</nav></div>
+  panel.innerHTML = `<div class="ot-metro-top"><button class="q-icon-btn" type="button" data-m="close" aria-label="${W('返回', 'Back')}">${icon('back')}</button><b>${W('捷運路網圖', 'Metro map')}</b><nav class="q-chips ot-metro-chips" id="m-maps">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(m.name)}</button>`).join('')}</nav></div>
     <div class="ot-metro-view"><div id="m-map" class="ot-map"></div><div class="ot-metro-legend" id="m-legend"></div><p class="ot-note ot-metro-msg" id="m-msg"></p></div>`;
   panel.addEventListener('click', ev => {
     const b = ev.target.closest('[data-map]');
@@ -41,7 +42,7 @@ export async function show() {
       // Google's own transit lines would draw a second map under ours.
       map.showTransit(false);
     } catch (err) {
-      $('m-msg').textContent = `地圖載入失敗：${err.message}`;
+      $('m-msg').textContent = W(`地圖載入失敗：${err.message}`, `Map failed to load: ${err.message}`);
       return;
     }
   }
@@ -75,7 +76,7 @@ async function open(id) {
   } catch {}
   $('m-maps').querySelectorAll('[data-map]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.map === id)));
   const m = MAPS.find(x => x.id === id);
-  $('m-msg').textContent = '載入路網…';
+  $('m-msg').textContent = W('載入路網…', 'Loading the network…');
   try {
     systems = (await Promise.all(m.systems.map(s => loadSystem(s).catch(() => null)))).filter(s => s?.stations.length);
     if (current !== id) return;
@@ -142,8 +143,8 @@ function stationSheet(list) {
   const lines = systems.flatMap(s => s.lines).filter(l => list.some(st => l.seq.includes(st.key)));
   const d = sheet(`${sheetHead(e(stationTitle(name)), [...new Set(list.map(s => OPERATORS[s.op]))].map(e).join('・'))}
     <div class="ot-line-chips">${lines.filter((l, i, a) => a.findIndex(x => x.name === l.name) === i).map(l => `<span style="--c:${e(l.color)}">${e(l.name)}</span>`).join('')}</div>
-    <div id="mb"><p class="ot-note">載入中…</p></div>
-    <div class="ot-row ot-actions"><button class="q-btn" type="button" data-route-here="1">${icon('route')} 怎麼去</button></div>`);
+    <div id="mb"><p class="ot-note">${W('載入中…', 'Loading…')}</p></div>
+    <div class="ot-row ot-actions"><button class="q-btn" type="button" data-route-here="1">${icon('route')} ${W('怎麼去', 'Directions')}</button></div>`);
   const load = async () => {
     const parts = await Promise.all(
       list.map(async st => {

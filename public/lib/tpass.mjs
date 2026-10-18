@@ -9,16 +9,18 @@
 // pass's official route table: 桃竹竹苗's Q&A (2024-09-27) names 新竹縣's
 // 觀光8號 (觀霧線, crossing the county line, no commuters); its 觀光1號 and
 // 2號 are on it.
+import { W, en } from './lang.mjs';
+
 const TAO_HSIN_MIAO_SKIP = { HsinchuCounty: ['觀光8號'] };
 
 export const TPASSES = [
-  { id: 'kbnt', name: '基北北桃', price: 1200, cities: ['Keelung', 'Taipei', 'NewTaipei', 'Taoyuan'], bike: true },
-  { id: 'thhm', name: '桃竹竹苗', price: 1200, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
-  { id: 'thh', name: '桃竹竹', price: 799, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
-  { id: 'hhm', name: '竹竹苗', price: 699, cities: ['Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
-  { id: 'hh', name: '竹竹', price: 288, cities: ['Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
-  { id: 'tcnm', name: '中彰投苗', price: 999, cities: ['Taichung', 'ChanghuaCounty', 'NantouCounty', 'MiaoliCounty'], bike: true },
-  { id: 'tkp', name: '南高屏', price: 999, cities: ['Tainan', 'Kaohsiung', 'PingtungCounty'], bike: false }
+  { id: 'kbnt', name: W('基北北桃', 'Greater Taipei'), price: 1200, cities: ['Keelung', 'Taipei', 'NewTaipei', 'Taoyuan'], bike: true },
+  { id: 'thhm', name: W('桃竹竹苗', 'Taoyuan–Miaoli'), price: 1200, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
+  { id: 'thh', name: W('桃竹竹', 'Taoyuan–Hsinchu'), price: 799, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
+  { id: 'hhm', name: W('竹竹苗', 'Hsinchu–Miaoli'), price: 699, cities: ['Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
+  { id: 'hh', name: W('竹竹', 'Hsinchu'), price: 288, cities: ['Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
+  { id: 'tcnm', name: W('中彰投苗', 'Central Taiwan'), price: 999, cities: ['Taichung', 'ChanghuaCounty', 'NantouCounty', 'MiaoliCounty'], bike: true },
+  { id: 'tkp', name: W('南高屏', 'Tainan–Pingtung'), price: 999, cities: ['Tainan', 'Kaohsiung', 'PingtungCounty'], bike: false }
 ];
 export const tpassOf = id => TPASSES.find(p => p.id === id) || null;
 // Long rides cut every 30 minutes (每 30 分鐘換車): when set, and always
@@ -69,7 +71,7 @@ export const passOk = (plan, pass, cityOf) => plan.legs.every(l => l.mode === 'w
 
 export function fareOf(plan, cov) {
   const fare = Number(plan.fare) || 0;
-  if (cov?.all) return { text: 'TPASS 涵蓋', cost: 0 };
-  if (cov?.some) return { text: fare ? `NT$${fare}（部分 TPASS）` : '部分 TPASS', cost: Math.round(fare / 2) };
+  if (cov?.all) return { text: W('TPASS 涵蓋', 'TPASS covers it'), cost: 0 };
+  if (cov?.some) return { text: fare ? W(`NT$${fare}（部分 TPASS）`, `NT$${fare} (part TPASS)`) : W('部分 TPASS', 'Part TPASS'), cost: Math.round(fare / 2) };
   return { text: fare ? `NT$${fare}` : '', cost: fare };
 }

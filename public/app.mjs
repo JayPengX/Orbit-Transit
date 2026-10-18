@@ -24,6 +24,7 @@ import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
 import { useHolidays } from './lib/util.mjs';
+import { W, en, lang } from './lib/lang.mjs';
 // Taiwan's holidays (the kit's), before the first screen: a weekdays-only
 // trip (家 → 學校) isn't picked for a holiday (an older kit: none, at once).
 const holidays = await Promise.race([import('#kit/holidays.mjs').catch(() => null), new Promise(r => setTimeout(r, 1500, null))]);
@@ -32,7 +33,23 @@ if (holidays?.twHoliday) useHolidays(date => Boolean(holidays.twHoliday(date)));
 const $ = id => document.getElementById(id);
 const VERSION = document.querySelector('meta[name="build-version"]')?.content || 'dev';
 const LOCAL = 'orbit-transit.v1';
-const q = quadraSession('transit', { lang: 'zh' });
+document.documentElement.lang = en ? 'en' : 'zh-Hant';
+// The page's own words, in English.
+if (en) {
+  const set = (sel, attr, v) => document.querySelector(sel)?.setAttribute(attr, v);
+  set('#q', 'placeholder', 'Search places, stations');
+  set('#q', 'aria-label', 'Search');
+  set('#q-clear', 'aria-label', 'Clear');
+  set('#tabs', 'aria-label', 'Tabs');
+  set('#map', 'aria-label', 'Map');
+  set('#fab-layers', 'aria-label', 'Layers');
+  set('#fab-locate', 'aria-label', 'My location');
+  set('#times-seg', 'aria-label', 'Times');
+  const seg = (v, t) => { const b = document.querySelector(`#times-seg [data-view="${v}"]`); if (b) b.textContent = t; };
+  seg('train', 'Train・HSR');
+  seg('bus', 'Bus');
+}
+const q = quadraSession('transit', { lang });
 useSession(q);
 
 // Where the device was last (opens the map there at once), this device's
@@ -132,10 +149,10 @@ useMapsApp(() => ctx.data.prefs?.maps);
 // ---- Tabs --------------------------------------------------------------------------------------
 
 const TABS = [
-  { id: 'map', label: '地圖', icon: '<path d="M9 4.5L3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>', mod: mapTab },
-  { id: 'go', label: '交通', icon: '<rect x="4.5" y="3.5" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 18.5V21M16 18.5V21"/><path d="M12 3.5V11"/>', mod: goTab },
-  { id: 'times', label: '查時刻', icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', mod: timesTab },
-  { id: 'me', label: '我的', icon: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/>', mod: meTab }
+  { id: 'map', label: W('地圖', 'Map'), icon: '<path d="M9 4.5L3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>', mod: mapTab },
+  { id: 'go', label: W('交通', 'Transit'), icon: '<rect x="4.5" y="3.5" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 18.5V21M16 18.5V21"/><path d="M12 3.5V11"/>', mod: goTab },
+  { id: 'times', label: W('查時刻', 'Times'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', mod: timesTab },
+  { id: 'me', label: W('我的', 'Me'), icon: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/>', mod: meTab }
 ];
 // Old addresses (#bus, #train, #metro) open their new homes.
 const OLD = { bus: 'go', train: 'times', metro: 'me' };
@@ -162,7 +179,7 @@ watchUpdates({ current: VERSION, key: 'orbitTransit', cachePrefix: 'orbit-transi
 topActions(q);
 
 async function boot() {
-  bar = tabBar({ tabs: TABS, onSelect: (id, o) => select(id, o), label: '分頁' });
+  bar = tabBar({ tabs: TABS, onSelect: (id, o) => select(id, o), label: W('分頁', 'Tabs') });
   // Opened again (back from the background after iOS let it go): on what this
   // device has, at once — its copy of the pass's data and the map's settings
   // kept from last time — and the pass and the settings read behind it
@@ -220,9 +237,9 @@ async function boot() {
     schedule: items => schedulePush(q, items),
     // Whether the Worker can tell you with the phone locked; if not, why.
     allow() {
-      if (!('Notification' in globalThis)) return '加到主畫面後，手機鎖著也能收到到站提醒';
-      if (Notification.permission !== 'granted') return '沒有允許通知：只在 App 開著時提醒';
-      if (notifyPrefs().on === false) return '通知在帳戶裡關閉了：只在 App 開著時提醒';
+      if (!('Notification' in globalThis)) return W('加到主畫面後，手機鎖著也能收到到站提醒', 'Add to Home Screen to get arrival alerts while locked');
+      if (Notification.permission !== 'granted') return W('沒有允許通知：只在 App 開著時提醒', 'Notifications off: alerts only while the app is open');
+      if (notifyPrefs().on === false) return W('通知在帳戶裡關閉了：只在 App 開著時提醒', 'Notifications off in your account: alerts only while open');
       if (!notifyOn()) setNotifyOn(true, q);
       return '';
     }

@@ -9,6 +9,7 @@
 
 import { meters } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 const KEY = 'orbit-transit.rental';
 const TTL = 12 * 60 * 60_000;
 export const FREE_MS = 30 * 60_000;
@@ -65,7 +66,7 @@ export function endRental() {
 // The notice before the free half hour runs out (kit schedulePush's shape).
 export const rentalPush = (r, swap) =>
   r && swap && r.at + WARN_MS > Date.now() - 60_000
-    ? [{ at: r.at + WARN_MS, title: 'YouBike 已騎 25 分鐘', body: '5 分鐘內還車再借一台，下一段仍免費（地圖上有附近的站）', tag: `bike:rent:${r.at}`, kind: 'bike', hash: 'map' }]
+    ? [{ at: r.at + WARN_MS, title: W('YouBike 已騎 25 分鐘', 'YouBike: 25 minutes'), body: W('5 分鐘內還車再借一台，下一段仍免費（地圖上有附近的站）', 'Return and re-rent within 5 minutes to keep the next ride free (nearby docks are on the map).'), tag: `bike:rent:${r.at}`, kind: 'bike', hash: 'map' }]
     : [];
 
 // Where to return the bike and take another, near you: a station with a free

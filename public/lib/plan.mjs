@@ -13,7 +13,9 @@
 import { meters, walkSec, tw, hm, addDays } from './util.mjs';
 import { journeys, directs } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
+import { trainKind } from './ui.mjs';
 
+import { W, en } from './lang.mjs';
 export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
 export const BIKE_MAX_M = 12_000; // further than this, nobody wants to ride
@@ -108,7 +110,7 @@ const walkLeg = (from, to, dep) => {
 const rideLeg = (rent, ret, t, ebike = false) => {
   const dist = Math.round(roadM(rent, ret));
   const dur = rideSec(dist / 1.25, ebike) + 2 * DOCK_SEC;
-  return { mode: 'bike', ebike, name: ebike ? 'YouBike 電輔車' : 'YouBike', from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon }, dur, dist, dep: t, arr: t + dur * 1000, rent, ret };
+  return { mode: 'bike', ebike, name: ebike ? W('YouBike 電輔車', 'YouBike E-bike') : 'YouBike', from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon }, dur, dist, dep: t, arr: t + dur * 1000, rent, ret };
 };
 
 // A ride over half an hour, cut where you can return the bike and take one
@@ -253,7 +255,7 @@ export function catchBus(plan, now, start = now) {
     for (let a = 0; a < i; a++) Object.assign(legs[a], { dep: legs[a].dep + back, arr: legs[a].arr + back });
   }
   const out = finish({ ...plan, legs, live: true });
-  if (k < legs.length && legs[k - 1].arr + 60_000 > legs[k].dep) out.miss = `可能趕不上 ${legs[k].short || legs[k].name}`;
+  if (k < legs.length && legs[k - 1].arr + 60_000 > legs[k].dep) out.miss = W(`可能趕不上 ${legs[k].short || legs[k].name}`, `May miss ${legs[k].short || legs[k].name}`);
   return out;
 }
 
@@ -358,7 +360,7 @@ function trainLeg(net, l) {
   return {
     mode: l.trip.sys,
     name: l.trip.sys === 'hsr' ? '高鐵' : l.trip.typeFull || l.trip.type,
-    short: l.trip.sys === 'hsr' ? `${l.trip.no} 次` : `${l.trip.type} ${l.trip.no}`,
+    short: l.trip.sys === 'hsr' ? W(`${l.trip.no} 次`, `HSR ${l.trip.no}`) : `${trainKind(l.trip.type)} ${l.trip.no}`,
     headsign: l.trip.headsign,
     from: pt(l.from),
     to: pt(l.to),
@@ -875,8 +877,8 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const today = tw(by === 'arrive' && deadline ? deadline : now).date;
   for (const p of out) {
     const k = p.legs.findIndex((l, i) => i > 0 && l.dep - p.legs[i - 1].arr > 90 * 60_000);
-    if (k > 0) p.late = `中途要在${p.legs[k].from?.name || '轉乘站'}等到 ${hm(p.legs[k].dep)}${tw(p.legs[k].dep).date !== today ? '（隔天）' : ''}`;
-    else if (tw(p.dep).date !== today) p.late = `${tw(p.dep).date === addDays(today, 1) ? '明天' : tw(p.dep).date.slice(5).replace('-', '/')} ${hm(p.dep)} 才有車`;
+    if (k > 0) p.late = W(`中途要在${p.legs[k].from?.name || '轉乘站'}等到 ${hm(p.legs[k].dep)}${tw(p.legs[k].dep).date !== today ? '（隔天）' : ''}`, `Wait at ${p.legs[k].from?.name || 'the change'} until ${hm(p.legs[k].dep)}${tw(p.legs[k].dep).date !== today ? ' (next day)' : ''}`);
+    else if (tw(p.dep).date !== today) p.late = W(`${tw(p.dep).date === addDays(today, 1) ? '明天' : tw(p.dep).date.slice(5).replace('-', '/')} ${hm(p.dep)} 才有車`, `First ride ${tw(p.dep).date === addDays(today, 1) ? 'tomorrow' : tw(p.dep).date.slice(5).replace('-', '/')} ${hm(p.dep)}`);
   }
   return out;
 }
@@ -967,7 +969,7 @@ function withStations(p, bikes) {
         const w = walkLeg(l.from, l.to, l.dep);
         return { ...w, arr: Math.max(w.arr, l.arr) };
       }
-      return { ...l, name: 'YouBike', rent, ret, from: rent ? { name: rent.name, lat: rent.lat, lon: rent.lon } : { ...l.from, name: l.from.name || '附近的 YouBike 站' }, to: ret ? { name: ret.name, lat: ret.lat, lon: ret.lon } : { ...l.to, name: l.to.name || '附近的 YouBike 站' } };
+      return { ...l, name: 'YouBike', rent, ret, from: rent ? { name: rent.name, lat: rent.lat, lon: rent.lon } : { ...l.from, name: l.from.name || W('附近的 YouBike 站', 'Nearby YouBike dock') }, to: ret ? { name: ret.name, lat: ret.lat, lon: ret.lon } : { ...l.to, name: l.to.name || W('附近的 YouBike 站', 'Nearby YouBike dock') } };
     });
   if (legs.some(l => l === null)) return null;
   // (A ride to the stop turned into a walk takes longer: set out earlier.)

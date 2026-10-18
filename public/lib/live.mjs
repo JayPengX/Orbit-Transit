@@ -15,6 +15,7 @@ import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish } from './plan.mjs';
 import { meters, walkSec, zh, tw, twAt, addDays, etaAge } from './util.mjs';
 
+import { W, en } from './lang.mjs';
 const MIN = 60_000;
 const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,DataTime';
 
@@ -269,7 +270,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     const ready = i === first ? Math.max(now, start ?? legs[0].dep ?? now) + before : (legs[i - 1]?.arr ?? l.dep) + 30_000;
     const bus = times.find(t => t.at >= ready - 30_000);
     if (!bus) {
-      if (stopped) off = stopped === 3 ? `${l.short || l.name} 末班已過` : `${l.short || l.name} 今日未營運`;
+      if (stopped) off = stopped === 3 ? W(`${l.short || l.name} 末班已過`, `${l.short || l.name}: last one gone`) : W(`${l.short || l.name} 今日未營運`, `${l.short || l.name}: not running today`);
       continue;
     }
     legs[i].live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
@@ -285,7 +286,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
       if (k > i && FIXED.has(legs[k].mode)) break;
       legs[k] = { ...legs[k], dep: legs[k].dep + delta, arr: legs[k].arr + delta };
     }
-    if (k < legs.length && legs[k - 1].arr + 60_000 > legs[k].dep) miss = `可能趕不上 ${legs[k].short || legs[k].name}`;
+    if (k < legs.length && legs[k - 1].arr + 60_000 > legs[k].dep) miss = W(`可能趕不上 ${legs[k].short || legs[k].name}`, `May miss ${legs[k].short || legs[k].name}`);
     // The way to the first bus: you leave so as to be there a minute before it.
     if (i === first) for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + delta, arr: legs[a].arr + delta };
     if (legs[0].dep < now - 60_000) {

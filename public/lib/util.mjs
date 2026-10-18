@@ -1,6 +1,8 @@
 // Small shared pieces: escaping, Taiwan time, distances, the two polyline
 // encodings the planners use.
 
+import { W, en } from './lang.mjs';
+
 export const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export const e = escapeHtml;
 
@@ -26,7 +28,13 @@ export function twAt(date, hm) {
 export const hm = t => (t == null ? '' : tw(t).hm);
 export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00+08:00`) + n * 86_400_000 + TPE).toISOString().slice(0, 10);
 const WEEK = '日一二三四五六';
-export const dayLabel = (date, today = tw().date) => (date === today ? '今天' : date === addDays(today, 1) ? '明天' : `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}（${WEEK[new Date(`${date}T12:00:00+08:00`).getUTCDay()]}）`);
+const WEEK_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const dayLabel = (date, today = tw().date) => {
+  if (date === today) return W('今天', 'Today');
+  if (date === addDays(today, 1)) return W('明天', 'Tomorrow');
+  const d = new Date(`${date}T12:00:00+08:00`).getUTCDay();
+  return W(`${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}（${WEEK[d]}）`, `${WEEK_EN[d]} ${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`);
+};
 
 // Taiwan, what the app covers: the main island, 澎湖, 綠島, 蘭嶼, 金門 and 馬祖
 // (each by its own box, so the coast of Fujian beside them, and 平潭, are
@@ -44,10 +52,10 @@ export function inTaiwan(lat, lon) {
 // Minutes, written the way a timetable says them: 「8 分」, 「1 小時 5 分」.
 export function minsText(sec) {
   const m = Math.max(0, Math.round(sec / 60));
-  if (m < 60) return `${m} 分`;
-  return `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ''}`;
+  if (m < 60) return W(`${m} 分`, `${m} min`);
+  return W(`${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ''}`, `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`);
 }
-export const distText = m => (m == null ? '' : m < 1000 ? `${Math.round(m / 10) * 10} 公尺` : `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} 公里`);
+export const distText = m => (m == null ? '' : m < 1000 ? `${Math.round(m / 10) * 10} ${W('公尺', 'm')}` : `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} ${W('公里', 'km')}`);
 
 // Metres between two points.
 export function meters(aLat, aLon, bLat, bLon) {
