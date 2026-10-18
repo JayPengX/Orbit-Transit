@@ -1146,6 +1146,22 @@ test('score: chasing your own train to the next station costs more than boarding
   assert.ok(sameWay(finish({ legs: [ride(north, { ...hsinchu, dep: T('08:00') })] }), google));
 });
 
+test("rank: a planner's train named only by its line (彰化-花蓮) is the timetable's 普悠瑪 282, and the one naming it is the card, though the planner's own times say sooner", () => {
+  const o = { lat: 25.0478, lon: 121.517 };
+  const d = { lat: 23.9929, lon: 121.6011 };
+  const taipei = { name: '臺北', lat: 25.0478, lon: 121.517 };
+  const hualien = { name: '花蓮', lat: 23.9929, lon: 121.6011 };
+  const ride = x => finish({ src: x.src, legs: [{ mode: 'tra', from: taipei, to: hualien, dep: T('17:40'), ...x }] });
+  const planner = ride({ src: 'tdx', short: '彰化-花蓮', name: '彰化-花蓮', arr: T('19:54') });
+  const ours = ride({ src: 'rail', short: '普悠瑪 282', name: '普悠瑪', arr: T('19:59'), train: { sys: 'tra', no: '282', code: '2' } });
+  assert.ok(sameWay(planner, ours));
+  for (const list of [[planner, ours], [ours, planner]]) {
+    const out = rank(list, { o, d, now: T('17:20') });
+    assert.equal(out.length, 1);
+    assert.equal(out[0].legs[0].short, '普悠瑪 282');
+  }
+});
+
 test('journeys to several stations: each station keeps its own too (on to 六家 by the 六家線, over off sooner at 北新竹)', () => {
   // From 上員: the 1701 is at 北新竹 first; 六家 is a change at 竹中 to the 1801.
   const list = journeys(net, [{ key: 'tra:1201', at: T('07:50') }], [{ key: 'tra:1193', extra: 0 }, { key: 'tra:1195', extra: 0 }], T('07:50'));

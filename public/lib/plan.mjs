@@ -676,13 +676,20 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   if (by === 'arrive' && deadline && !fits.length) [by, now, deadline] = ['depart', clock, null];
   // One plan per way (sameWay): walking or riding to the same bus, boarding
   // the same train a station up the line, 電輔車 or not: only the best of them.
-  // (Equal ones in one order whatever order they came in: the one naming its
-  // trains' numbers first, the official name over a planner's 內灣-新竹.)
+  // The one naming more of its trains' numbers is the best whatever its
+  // score: a planner's 彰化-花蓮 is the 普悠瑪 282 of the day's timetable, and
+  // its own times for it (in 5 minutes sooner) are not the train's. (Equal
+  // ones in one order whatever order they came in.)
   const named = p => p.legs.filter(l => trainNo(l)).length;
   const key = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${l.dep}`).join('|');
+  const order = (a, b) => a.s - b.s || a.p.arr - b.p.arr || named(b.p) - named(a.p) || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0);
   const scored = [];
-  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }), k: key(p) })).sort((a, b) => a.s - b.s || a.p.arr - b.p.arr || named(b.p) - named(a.p) || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0)))
-    if (!scored.some(y => sameWay(x.p, y.p))) scored.push(x);
+  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }), k: key(p) })).sort(order)) {
+    const i = scored.findIndex(y => sameWay(x.p, y.p));
+    if (i < 0) scored.push(x);
+    else if (named(x.p) > named(scored[i].p)) scored[i] = x;
+  }
+  scored.sort(order);
   // Not running at all (末班已過, 今日未營運), or waiting hours half way (the
   // last bus gone, the first train tomorrow), is no plan, unless it's all there is.
   const longWait = p => p.legs.some((l, i) => i > 0 && l.dep - p.legs[i - 1].arr > 90 * 60_000);
