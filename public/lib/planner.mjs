@@ -166,7 +166,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const pass = tpassOf(prefs.tpass);
   const passTrip = inPass(from, to, pass, cityOf);
   // Inside your TPASS's area, our router looks only at the trains the pass takes.
-  const useTrain = x => modes[x.sys] !== false && (!passTrip || passTrainTrip(x, pass));
+  const useTrain = x => modes[x.sys] !== false && (!passTrip || passTrainTrip(x));
   // While the planners think (a second or two): the packs and bikes near
   // both ends, and the buses due at the stops near you, so what comes after
   // finds them here; and the walks to the YouBike stations near each end

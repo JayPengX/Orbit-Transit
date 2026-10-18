@@ -2547,30 +2547,87 @@ test('arrive by 08:00 tomorrow, asked at 22:00, nothing in the usual window: sea
   assert.equal(searchFrom(at, now), at, 'a departure: its own time');
 });
 
-test('TPASS beyond the west coast: 北北宜 takes 台鐵 to 宜蘭 and 宜蘭’s buses, not 台北’s metro or buses; 臺東 only 非對號 trains; 花蓮 基本 no buses', async () => {
+test('TPASS beyond the west coast: 北北宜 takes 台鐵 from 基隆 to 宜蘭 and 宜蘭’s buses, not 台北’s metro or buses; 臺東 every 台鐵 class but 普悠瑪; 花蓮 基本 only its six city buses', async () => {
   const { passTrainTrip } = await import('../public/lib/tpass.mjs');
   const prices = Object.fromEntries(['tpy', 'yl', 'hl', 'hlb', 'tt', 'cy', 'yla', 'kl', 'kh', 'tc', 'tcr'].map(id => [id, tpassOf(id)?.price]));
   assert.deepEqual(prices, { tpy: 1800, yl: 750, hl: 399, hlb: 199, tt: 299, cy: 399, yla: 199, kl: 288, kh: 399, tc: 599, tcr: 299 });
   const TPE = { lat: 25.04, lon: 121.5 };
+  const KEE = { lat: 25.13, lon: 121.74 };
   const ILA = { lat: 24.75, lon: 121.75 };
-  const city = pt => (pt.lat > 24.9 ? 'Taipei' : pt.lat > 24.3 ? 'YilanCounty' : pt.lat > 23.4 ? 'HualienCounty' : 'TaitungCounty');
+  const city = pt => (pt.lat > 25.1 ? 'Keelung' : pt.lat > 24.9 ? 'Taipei' : pt.lat > 24.3 ? 'YilanCounty' : pt.lat > 23.4 ? 'HualienCounty' : 'TaitungCounty');
   const leg = (mode, from, to, extra = {}) => ({ legs: [{ mode, from, to, ...extra }] });
   const tpy = tpassOf('tpy');
   assert.equal(coverage(leg('tra', TPE, ILA, { train: { code: '6' } }), tpy, city).all, true, '台北 → 宜蘭 by 區間');
+  assert.equal(coverage(leg('tra', KEE, ILA, { train: { code: '6' } }), tpy, city).all, true, '基隆 → 宜蘭: 基隆’s stations are on 北北宜');
+  assert.equal(coverage(leg('bus', KEE, { lat: 25.14, lon: 121.75 }), tpy, city).some, false, '基隆 city bus: not on 北北宜');
   assert.equal(coverage(leg('metro', TPE, { lat: 25.05, lon: 121.55 }), tpy, city).some, false, '台北捷運: not on 北北宜');
   assert.equal(coverage(leg('bus', TPE, { lat: 25.05, lon: 121.55 }), tpy, city).some, false, '台北 city bus: not on 北北宜');
   assert.equal(passOk(leg('bus', TPE, ILA), tpy, city), false, 'a 國道客運 from 台北: not claimed');
   assert.equal(coverage(leg('bus', ILA, { lat: 24.68, lon: 121.77 }), tpy, city).all, true, '宜蘭 → 羅東 bus');
   assert.equal(routeOnPass(tpy, 'Taipei', '307'), false);
   assert.equal(routeOnPass(tpy, 'YilanCounty', '1766'), true);
+  assert.equal(coverage(leg('bus', KEE, { lat: 25.14, lon: 121.75 }), tpassOf('kl'), city).all, true, '基隆 288: its city buses');
   const TTT = { lat: 22.79, lon: 121.12 };
   const CHS = { lat: 23.1, lon: 121.22 };
-  assert.equal(coverage(leg('tra', TTT, CHS, { train: { code: '3' } }), tpassOf('tt'), city).some, false, '臺東: a 自強 is 對號');
-  assert.equal(coverage(leg('tra', TTT, CHS, { train: { code: '6' } }), tpassOf('tt'), city).all, true, '臺東: a 區間');
-  assert.equal(passTrainTrip({ sys: 'tra', code: '3' }, tpassOf('tt')), false);
-  assert.equal(passTrainTrip({ sys: 'tra', code: '3' }, tpassOf('hl')), true, '花蓮: a 自強 is fine');
-  assert.equal(passTrainTrip({ sys: 'tra', code: '2' }, tpassOf('hl')), false, '普悠瑪 never');
+  assert.equal(coverage(leg('tra', TTT, CHS, { train: { code: '3' } }), tpassOf('tt'), city).all, true, '臺東: a 自強 too');
+  assert.equal(coverage(leg('tra', TTT, CHS, { train: { code: '2' } }), tpassOf('tt'), city).some, false, '臺東: not a 普悠瑪');
+  assert.equal(passTrainTrip({ sys: 'tra', code: '3' }), true, 'a 自強 is fine');
+  assert.equal(passTrainTrip({ sys: 'tra', code: '2' }), false, '普悠瑪 never');
+  assert.equal(passTrainTrip({ sys: 'hsr', code: '' }), false, '高鐵 never');
   const HUN = { lat: 23.99, lon: 121.6 };
-  assert.equal(coverage(leg('bus', HUN, { lat: 23.97, lon: 121.58 }), tpassOf('hlb'), city).some, false, '花蓮 199: 台鐵 only here');
-  assert.equal(coverage(leg('bus', HUN, { lat: 23.97, lon: 121.58 }), tpassOf('hl'), city).all, true, '花蓮 399: its buses');
+  const city301 = n => leg('bus', HUN, { lat: 23.97, lon: 121.58 }, { short: n });
+  assert.equal(coverage(city301('301'), tpassOf('hlb'), city).all, true, '花蓮 199: its 市區客運 301');
+  assert.equal(coverage(city301('1121'), tpassOf('hlb'), city).some, false, '花蓮 199: not a 公路客運');
+  assert.equal(routeOnPass(tpassOf('hlb'), 'HualienCounty', '1121'), false);
+  assert.equal(coverage(city301('1121'), tpassOf('hl'), city).all, true, '花蓮 399: its 公路客運 too');
+});
+
+test('TPASS in central and southern Taiwan: 中彰投苗 699 for 臺中市民, 彰化, 南投, 雲林 199 with its buses, 臺南, 屏東, 嘉嘉南 and the 南嘉 臺鐵 passes', () => {
+  const prices = Object.fromEntries(['tcnmr', 'tcnm', 'ch', 'nt', 'yla', 'tn', 'tnb', 'tncy', 'pt', 'ptb', 'cyt', 'cct', 'tkp'].map(id => [id, tpassOf(id)?.price]));
+  assert.deepEqual(prices, { tcnmr: 699, tcnm: 999, ch: 699, nt: 699, yla: 199, tn: 399, tnb: 299, tncy: 799, pt: 399, ptb: 299, cyt: 799, cct: 999, tkp: 999 });
+  const city = pt => (pt.lat > 24.1 ? 'Taichung' : pt.lat > 23.9 ? (pt.lon > 120.68 ? 'NantouCounty' : 'ChanghuaCounty') : pt.lat > 23.55 ? 'YunlinCounty' : pt.lat > 23.4 ? 'Chiayi' : pt.lat > 23.3 ? 'ChiayiCounty' : pt.lat > 22.9 ? 'Tainan' : pt.lat > 22.7 ? 'Kaohsiung' : 'PingtungCounty');
+  const leg = (mode, from, to, extra = {}) => ({ legs: [{ mode, from, to, ...extra }] });
+  const TXG = { lat: 24.14, lon: 120.68 };
+  const CHA = { lat: 24.08, lon: 120.54 };
+  const SHUILI = { lat: 23.96, lon: 120.85 };
+  const DOULIU = { lat: 23.71, lon: 120.54 };
+  const CYI = { lat: 23.48, lon: 120.44 };
+  const MINXIONG = { lat: 23.35, lon: 120.43 };
+  const TNN = { lat: 22.99, lon: 120.21 };
+  const PTG = { lat: 22.67, lon: 120.49 };
+  // 中彰投苗 for 臺中市民: the same rides as the 999, 6883 to 溪頭 not among them.
+  assert.equal(coverage(leg('tra', TXG, CHA, { train: { code: '6' } }), tpassOf('tcnmr'), city).all, true);
+  assert.equal(routeOnPass(tpassOf('tcnmr'), 'NantouCounty', '6883'), false, '溪頭線 from 台中: left out');
+  assert.equal(routeOnPass(tpassOf('tcnm'), 'Taichung', '6883'), false);
+  assert.equal(routeOnPass(tpassOf('tcnm'), 'Taichung', '300'), true);
+  // 彰化 and 南投: their own county only.
+  assert.equal(coverage(leg('bus', CHA, { lat: 23.96, lon: 120.57 }), tpassOf('ch'), city).all, true, '彰化 bus');
+  assert.equal(coverage(leg('tra', CHA, TXG, { train: { code: '6' } }), tpassOf('ch'), city).some, false, '彰化 → 臺中: outside it');
+  assert.equal(coverage(leg('tra', SHUILI, { lat: 23.92, lon: 120.75 }, { train: { code: '6' } }), tpassOf('nt'), city).all, true, '集集線 in 南投');
+  assert.equal(tpassOf('nt').bike, false, '南投: no bikes');
+  // 雲林 199: its buses and bikes as well as 台鐵 林內–石龜.
+  assert.equal(coverage(leg('bus', DOULIU, { lat: 23.7, lon: 120.43 }), tpassOf('yla'), city).all, true, '雲林 bus');
+  assert.equal(coverage(leg('tra', DOULIU, CYI, { train: { code: '6' } }), tpassOf('yla'), city).some, false, '斗六 → 嘉義: past 石龜');
+  assert.equal(tpassOf('yla').bike, true);
+  // 臺南 299 is buses only; 399 adds 台鐵.
+  const tnTrain = leg('tra', TNN, { lat: 23.1, lon: 120.3 }, { train: { code: '6' } });
+  assert.equal(coverage(tnTrain, tpassOf('tnb'), city).some, false, '臺南 299: no 台鐵');
+  assert.equal(coverage(tnTrain, tpassOf('tn'), city).all, true, '臺南 399: 台鐵 in 臺南');
+  assert.equal(coverage(leg('bus', TNN, { lat: 23.0, lon: 120.25 }), tpassOf('tnb'), city).all, true, '臺南 299: its buses');
+  // 屏東 the same: 299 buses, 399 台鐵 六塊厝–枋山 too, never to 高雄.
+  assert.equal(coverage(leg('tra', PTG, { lat: 22.37, lon: 120.6 }, { train: { code: '6' } }), tpassOf('ptb'), city).some, false);
+  assert.equal(coverage(leg('tra', PTG, { lat: 22.37, lon: 120.6 }, { train: { code: '6' } }), tpassOf('pt'), city).all, true);
+  assert.equal(coverage(leg('tra', PTG, { lat: 22.8, lon: 120.3 }, { train: { code: '6' } }), tpassOf('pt'), city).some, false, '屏東 → 高雄: outside it');
+  // 南嘉 臺鐵: 台鐵 嘉義 → 臺南 on both 799s and 嘉嘉南; buses only on each one's own side.
+  const cyTn = leg('tra', CYI, TNN, { train: { code: '4' } });
+  for (const id of ['tncy', 'cyt', 'cct']) assert.equal(coverage(cyTn, tpassOf(id), city).all, true, id);
+  assert.equal(coverage(cyTn, tpassOf('cy'), city).some, false, '嘉義 399: 台鐵 stops at 南靖');
+  assert.equal(coverage(leg('bus', CYI, MINXIONG), tpassOf('tncy'), city).some, false, '臺南 799: not 嘉義’s buses');
+  assert.equal(coverage(leg('bus', CYI, MINXIONG), tpassOf('cyt'), city).all, true, '嘉義 799: 嘉義’s buses');
+  assert.equal(coverage(leg('bus', TNN, { lat: 23.0, lon: 120.25 }), tpassOf('cyt'), city).some, false, '嘉義 799: not 臺南’s buses');
+  assert.equal(coverage(leg('bus', TNN, { lat: 23.0, lon: 120.25 }), tpassOf('cct'), city).all, true, '嘉嘉南: both sides’ buses');
+  assert.equal(routeOnPass(tpassOf('cct'), 'ChiayiCounty', '7329'), false, '7329: left out');
+  assert.equal(fareOf(cyTn, coverage(cyTn, tpassOf('cct'), city)).cost, 0);
+  // 南高屏 takes YouBike’s first half hour.
+  assert.equal(coverage(leg('bike', TNN, TNN, { dur: 1200 }), tpassOf('tkp'), city).all, true);
 });
