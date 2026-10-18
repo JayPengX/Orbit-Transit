@@ -14,7 +14,7 @@ import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt } from './live.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
-import { rideSec, DOCK_SEC } from './plan.mjs';
+import { rideSec, DOCK_SEC, walkLeg, rideLeg } from './plan.mjs';
 import { rental, startRental, endRental, rentalStep, FREE_MS } from './rental.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
@@ -386,24 +386,22 @@ export function moveRide(plan, k, end, station) {
   const l = plan.legs[k];
   if (l?.mode !== 'bike' || station?.lat == null) return false;
   const st = { name: station.name, lat: station.lat, lon: station.lon };
-  const walkLeg = (from, to) => {
-    const m = meters(from.lat, from.lon, to.lat, to.lon);
-    return { mode: 'walk', from, to, dist: Math.round(m * 1.3), dur: walkSec(m) };
-  };
+  const walk = (from, to) => (({ dist, dur }) => ({ mode: 'walk', from, to, dist, dur }))(walkLeg(from, to, 0));
   const before = plan.legs.reduce((t, x) => t + (x.dur || 0), 0);
   if (end === 'rent') {
     const prev = plan.legs[k - 1];
-    if (prev?.mode === 'walk') Object.assign(prev, walkLeg(prev.from, st), { poly: undefined, road: false, path: undefined });
-    else plan.legs.splice(k, 0, walkLeg(l.from, st)), (k += 1);
+    if (prev?.mode === 'walk') Object.assign(prev, walk(prev.from, st), { poly: undefined, road: false, path: undefined });
+    else plan.legs.splice(k, 0, walk(l.from, st)), (k += 1);
     l.from = st;
   } else {
     const next = plan.legs[k + 1];
-    if (next?.mode === 'walk') Object.assign(next, walkLeg(st, next.to), { poly: undefined, road: false, path: undefined });
-    else plan.legs.splice(k + 1, 0, walkLeg(st, l.to));
+    if (next?.mode === 'walk') Object.assign(next, walk(st, next.to), { poly: undefined, road: false, path: undefined });
+    else plan.legs.splice(k + 1, 0, walk(st, l.to));
     l.to = st;
   }
-  const m = meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon);
-  Object.assign(l, { dist: Math.round(m * 1.25), dur: rideSec(m, l.ebike) + DOCK_SEC, poly: undefined, road: false, path: undefined });
+  // (Timed as the planner times a ride: by the roads, a river by its bridge, a dock at each end.)
+  const { dist, dur } = rideLeg(l.from, l.to, 0, l.ebike);
+  Object.assign(l, { dist, dur, poly: undefined, road: false, path: undefined });
   const after = plan.legs.reduce((t, x) => t + (x.dur || 0), 0);
   plan.dur = (plan.dur || before) + (after - before);
   if (plan.arr) plan.arr += (after - before) * 1000;

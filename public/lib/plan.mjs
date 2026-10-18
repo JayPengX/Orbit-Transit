@@ -10,7 +10,7 @@
 //   - by bike from the last station, instead of a bus or a long walk: there
 //     sooner.
 
-import { meters, walkSec, tw, hm, addDays } from './util.mjs';
+import { meters, walkSec, tw, hm, addDays, routeNorm, sameRoute, stationKey } from './util.mjs';
 import { journeys, directs } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
 import { trainKind } from './ui.mjs';
@@ -99,7 +99,7 @@ export function returnNear(pt, bikes, { max = NEAR_M, from = null, ebike = false
 }
 
 // (By the streets where known; else the straight line, over a river the way round to its bridge too.)
-const walkLeg = (from, to, dep) => {
+export const walkLeg = (from, to, dep) => {
   const road = streetM(from, to);
   const dist = road != null ? Math.round(road) : Math.round((meters(from.lat, from.lon, to.lat, to.lon) + bridgeExtra(from, to)) * 1.3);
   const dur = walkSec(dist / 1.3);
@@ -107,7 +107,7 @@ const walkLeg = (from, to, dep) => {
 };
 
 // One ride from station to station, leaving at t.
-const rideLeg = (rent, ret, t, ebike = false) => {
+export const rideLeg = (rent, ret, t, ebike = false) => {
   const dist = Math.round(roadM(rent, ret));
   const dur = rideSec(dist / 1.25, ebike) + 2 * DOCK_SEC;
   return { mode: 'bike', ebike, name: ebike ? W('YouBike 電輔車', 'YouBike E-bike') : 'YouBike', from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon }, dur, dist, dep: t, arr: t + dur * 1000, rent, ret };
@@ -532,21 +532,24 @@ export const ridesSig = p =>
     .join('|') || ownWay(p);
 
 // A pinned recommendation's way, whatever the day's train numbers and each
-// planner's names for things (快捷8號 / 快捷8, 竹北車站 / 竹北): the buses
-// and metro by their line, the trains by where you get on and off.
-// (Each name worked out once: the ranking compares every plan with every other.)
-const normed = new Map();
-const norm = x => {
-  const k = String(x || '');
-  let v = normed.get(k);
-  if (v === undefined) {
-    if (normed.size > 2000) normed.clear();
-    normed.set(k, (v = k.replace(/\s+/g, '').replace(/[號线線]/g, '').replace(/[（(].*$/, '').replace(/^高鐵/, '').replace(/(火車站|車站|站)$/, '').replace(/台/g, '臺').toUpperCase()));
-  }
-  return v;
+// planner's names for things (快捷8號 / 快捷八號, 竹北車站 / 竹北): the buses
+// and metro by their line (util's routeNorm), the trains by where you get on
+// and off (stationKey). (Each name worked out once: the ranking compares
+// every plan with every other.)
+const once = f => {
+  const seen = new Map();
+  return x => {
+    const k = String(x || '');
+    let v = seen.get(k);
+    if (v === undefined) {
+      if (seen.size > 2000) seen.clear();
+      seen.set(k, (v = f(k)));
+    }
+    return v;
+  };
 };
-// A station however a source writes it: 竹北火車站, 臺鐵竹北車站 and 竹北 are one.
-const station = n => norm(n).replace(/^(臺鐵|高鐵)/, '').replace(/(火車站|車站|站)$/, '') || norm(n);
+const station = once(n => stationKey(n.replace(/[（(].*$/, '')).toUpperCase());
+const line = once(routeNorm);
 // A plan's rides, a train changed for another train one ride (竹東 → 新竹
 // straight through, or changing at 竹中: the train either way), from where
 // you board the first to where you leave the last.
@@ -562,7 +565,7 @@ export const segs = p => {
 };
 export const pickSig = p =>
   segs(p)
-    .map(x => (x.mode === 'tra' || x.mode === 'hsr' ? `${x.mode}:${station(x.from)}>${station(x.to)}` : `${x.mode}:${norm(x.name)}`))
+    .map(x => (x.mode === 'tra' || x.mode === 'hsr' ? `${x.mode}:${station(x.from)}>${station(x.to)}` : `${x.mode}:${line(x.name)}`))
     .join('|') || (p.legs.some(l => l.mode === 'bike') ? 'bike' : 'walk');
 
 // Two plans are one way when they ride the same buses and trains, whatever
@@ -594,9 +597,9 @@ function sameVehicle(l, m) {
   const [n, k] = [trainNo(l), trainNo(m)];
   if (n && k) return n === k;
   // (Or boarded a stop apart: the train ours left 竹東 on is TDX's from 竹東.)
-  const at = (x, y) => norm(x?.name) === norm(y.from?.name) && Math.abs((x.dep || 0) - (y.dep || 0)) <= 2 * 60_000;
+  const at = (x, y) => station(x?.name) === station(y.from?.name) && Math.abs((x.dep || 0) - (y.dep || 0)) <= 2 * 60_000;
   if (n || k) return at(l.from && { ...l.from, dep: l.dep }, m) || (l.prev && at(l.prev, m)) || (m.prev && at(m.prev, l));
-  return norm(l.short || l.name) === norm(m.short || m.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 8 * 60_000;
+  return sameRoute(l.short || l.name, m.short || m.name) && Math.abs((l.dep || 0) - (m.dep || 0)) <= 8 * 60_000;
 }
 
 // q sets out on the same bus or train as p, changes no more, rides home

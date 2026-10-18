@@ -6,7 +6,8 @@ import { traStations, hsrStations, traTrips, hsrTrips, network, links, journeys,
 import { swapDocks, rentalPush, rentalStep } from '../public/lib/rental.mjs';
 import { withBikes, bikeOnly, bikeToRail, bikeFromRail, rentNear, returnNear, rank, bikePoints, railPlans, allowed, swapRides, bikeTrip, score, finish, inOrder, sameWay, chainOn, keepBike, keepWins } from '../public/lib/plan.mjs';
 import { coverage, fareOf, tpassOf, passOk, inPass, routeOnPass, bikeSwap } from '../public/lib/tpass.mjs';
-import { sameRoute, liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
+import { liveTimes, adjustPlan, rideTime, officialLeg } from '../public/lib/live.mjs';
+import { sameRoute } from '../public/lib/util.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides, stopGroups } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
@@ -1755,6 +1756,10 @@ test('a YouBike station out of bikes or docks while on the way: the ride moved t
   moveRide(q, 0, 'return', T2);
   assert.deepEqual(q.legs.map(l => [l.mode, l.from.name, l.to.name]), [['bike', '站1', '站4'], ['walk', '站4', '站2']]);
   assert.equal(moveRide(q, 1, 'rent', S2), false);
+  // Timed as the planner times a ride and a walk (a dock at each end; the walk's shown length the one it's timed by).
+  const { rideLeg, walkLeg } = await import('../public/lib/plan.mjs');
+  assert.equal(p.legs[1].dur, rideLeg(S2, T2, 0).dur);
+  assert.equal(p.legs[2].dist, walkLeg(T2, B, 0).dist);
 });
 
 test('a change where the next train already crosses your way: off at 竹中 for the 六家 train, not on to 新竹 and back', () => {
@@ -2259,4 +2264,19 @@ test('navigating, the YouBike timer follows the trip: a bike taken starts it (a 
   assert.equal(rentalStep(kept, 4), 'end');
   const parked = { legs: [{ mode: 'bike', park: true }, walk] };
   assert.equal(rentalStep(parked, 1), null, 'parked at a stop, not returned: it runs on');
+});
+
+test('one rule for names: a station however written (新竹火車站 finds 新竹), one bus by either planner’s name (快捷八號 is 快捷8號), a way pinned before still held', async () => {
+  const { stationKey, pinSig } = await import('../public/lib/util.mjs');
+  const { pickSig, sameWay } = await import('../public/lib/plan.mjs');
+  for (const n of ['新竹火車站', '臺鐵新竹車站', '新竹站', '新竹', '台鐵新竹']) assert.equal(stationKey(n), '新竹', n);
+  assert.equal(stationKey('高鐵新竹站'), '新竹');
+  const bus = (name, dep) => ({ mode: 'bus', name, short: name, from: { name: 'A' }, to: { name: 'B' }, dep, arr: dep + 600_000 });
+  const p = { legs: [bus('快捷八號', 1_000_000)] };
+  const q = { legs: [bus('快捷8號', 1_060_000)] };
+  assert.equal(pickSig(p), pickSig(q));
+  assert.ok(sameWay(p, q));
+  assert.ok(!sameWay({ legs: [bus('5', 1_000_000)] }, { legs: [bus('5608', 1_000_000)] }));
+  // Pinned as the old rule wrote it (no numerals read): still the same way.
+  assert.equal(pinSig('bus:快捷八|tra:竹北>新竹'), pickSig(q) + '|tra:竹北>新竹');
 });
