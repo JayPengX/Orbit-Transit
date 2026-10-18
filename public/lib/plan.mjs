@@ -459,9 +459,15 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   const rides = p.legs.filter(l => l.mode !== 'walk' && l.mode !== 'bike');
   // Time: door to door in full; the wait before leaving (at home, at your
   // desk) only a third: a train in 25 minutes isn't 25 minutes lost, it's
-  // when you leave. By an arrival time: how early you must leave.
-  if (by === 'arrive' && deadline) add('time', (deadline - p.dep) / 60_000);
-  else {
+  // when you leave. By an arrival time: door to door in full too, and there
+  // early counted less (at school before the bell is your own time, not a
+  // seat on the bus): never leaving 12 minutes later to ride 25 minutes
+  // longer (06:41 → 07:52 over 06:29 → 07:17, the owner's 上學, 2026-10-18).
+  if (by === 'arrive' && deadline) {
+    add('time', (p.arr - p.dep) / 60_000);
+    const early = Math.max(0, (deadline - p.arr) / 60_000);
+    add('early', Math.min(early, 30) * 0.4 + Math.max(early - 30, 0) * 0.7);
+  } else {
     add('time', (p.arr - p.dep) / 60_000);
     // (A short wait is when you leave; past a quarter of an hour it's time
     // lost, there that much later: a bus in 55 minutes is no bargain.)

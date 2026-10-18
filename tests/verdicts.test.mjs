@@ -76,6 +76,9 @@ CASES['成功九街 → 竹東高中 by 08:00 (TPASS): the buses, and under them
   assert.equal(ride.legs.filter(l => l.mode === 'bike').length, 2, sayPlan(ride));
   assert.ok(ride.legs.filter(l => l.mode === 'bike').every(l => l.dur <= 33 * 60), sayPlan(ride));
   assert.deepEqual(s.filter(p => /北新竹>竹東/.test(sayPlan(p))).map(sayPlan), []);
+  // Never leaving later to ride longer: the first is the shortest door to door of those that ride a bus.
+  const bus = s.filter(p => rides(p).some(l => l.mode === 'bus'));
+  assert.ok(bus[0].arr - bus[0].dep <= Math.min(...bus.map(p => p.arr - p.dep)) + 5 * 60_000, say(s));
 };
 
 CASES['成功九街 → 竹東高中 by 08:00 without YouBike: the buses, never walking 5 km to 千甲 at 04:48 (a walk over 2 km folds while there is a way without one); nothing late'] = opts => {
