@@ -2497,3 +2497,24 @@ test('a failed read is a failure, never nothing there', () => {
     globalThis.localStorage = was;
   }
 });
+
+test('after midnight: yesterday\'s trains still running are in the network (TDX files them under the day they left)', async () => {
+  const { railSpan, netDates } = await import('../public/lib/raildata.mjs');
+  // A 區間 that left 新竹 at 23:50 on the 5th, at 竹北 00:05 and 台北 01:30 on the 6th.
+  const late = { TrainDate: '2026-10-05', TrainTimetables: [train('1199', '6', '區間車', [stop('1210', '23:50'), stop('1180', '00:05'), stop('1000', '01:30')], { end: '臺北' })] };
+  const byDate = { '2026-10-05': traTrips(late), '2026-10-06': [], '2026-10-07': [] };
+  const at = twAt('2026-10-06', '00:01');
+  const span = railSpan(at);
+  assert.deepEqual(span, { date: '2026-10-06', next: false, prev: true });
+  assert.deepEqual(netDates(span.date, span), ['2026-10-05', '2026-10-06']);
+  const n = network(stations, netDates(span.date, span).flatMap(d => byDate[d]), links(stations));
+  const j = journeys(n, 'tra:1180', 'tra:1000', at);
+  assert.equal(j[0]?.legs.find(l => !l.walk)?.trip.no, '1199', '竹北 00:05 → 台北, on yesterday\'s train');
+  assert.equal(j[0].arr, twAt('2026-10-06', '01:30'), 'on the right day');
+  // From 03:00 on, and in the evening, yesterday's are not wanted; after 21:00 tomorrow's are.
+  assert.equal(railSpan(twAt('2026-10-06', '03:00')).prev, false);
+  assert.deepEqual(railSpan(twAt('2026-10-06', '22:00')), { date: '2026-10-06', next: true, prev: false });
+  // Arrive by 00:30 searched from 22:30: tomorrow's trains too, not yesterday's.
+  assert.deepEqual(railSpan(twAt('2026-10-05', '22:30'), twAt('2026-10-06', '00:30')), { date: '2026-10-05', next: true, prev: false });
+  assert.deepEqual(railSpan(twAt('2026-10-05', '06:00'), twAt('2026-10-05', '22:00')), { date: '2026-10-05', next: false, prev: false }, 'arrive by 22:00: that day only');
+});

@@ -4,7 +4,7 @@
 // station (or any, picked by city first); each option shows its trains,
 // where to change and how long you wait, the fare, and today's delays.
 
-import { railStations, railNetwork, traDelays, legFare } from './raildata.mjs';
+import { railStations, railNetwork, railSpan, traDelays, legFare } from './raildata.mjs';
 import { journeys, tags, SYSTEMS } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { CITIES, cityShort } from './city.mjs';
@@ -172,7 +172,8 @@ async function search() {
   const now = Date.now();
   const t = state.time ? twAt(date, state.time) : date === today ? now : twAt(date, '05:00');
   try {
-    net = await railNetwork(date, { next: tw(t).min >= 21 * 60 });
+    const span = railSpan(t);
+    net = await railNetwork(span.date, span);
     const use = state.mode === 'tra' ? x => x.sys === 'tra' : state.mode === 'hsr' ? x => x.sys === 'hsr' : () => true;
     const fromKey = `${state.from.sys}:${state.from.id}`;
     const toKey = `${state.to.sys}:${state.to.id}`;
