@@ -985,7 +985,7 @@ export function uniqueResults(rows) {
   const kept = [];
   for (const r of rows) {
     const n = norm(r.name);
-    const same = kept.some(k => {
+    const at = kept.findIndex(k => {
       if ((r.gid && (k.gid === r.gid || k.id === r.gid)) || (r.id && (k.id === r.id || k.gid === r.id))) return true;
       // (巨城購物中心 and 巨城購物中心 Big City at the same door: one.)
       const kn = norm(k.name);
@@ -993,14 +993,17 @@ export function uniqueResults(rows) {
       if (!Number.isFinite(k.lat) || !Number.isFinite(r.lat)) return norm(k.sub) === norm(r.sub) || !k.sub || !r.sub;
       return meters(k.lat, k.lon, r.lat, r.lon) < 300 || (r.sub && norm(k.sub) === norm(r.sub));
     });
-    if (!same) kept.push(r);
+    if (at < 0) kept.push(r);
+    // The same place twice: its full name kept (遠東巨城購物中心, not 巨城購物,
+    // the owner 2026-10-18), in the first one's place; a pinned place stays yours.
+    else if (kept[at].kind !== 'place' && norm(r.name).length > norm(kept[at].name).length) kept[at] = { ...r, dist: r.dist ?? kept[at].dist };
   }
   return kept;
 }
 // An address without its 里 (新竹市東區復中里中央路229號 -> 新竹市東區中央路229號): shorter, as Maps says it.
 export const shortAddress = s => String(s || '').replace(/([區鄉鎮市])[^\s區鄉鎮路街段巷道里]{1,4}里(?=\S)/, '$1').replace(/(\d)\s+(?=[號樓])/g, '$1');
 const resultRow = r =>
-  `<button class="ot-res" type="button" data-res="${e(JSON.stringify(r))}"><span class="ot-res-i">${r.kind === 'place' ? PLACE_ICONS[r.icon] || '📍' : r.kind === 'trip' ? icon('clock') : r.kind === 'tra' ? icon('tra') : r.kind === 'hsr' ? icon('hsr') : r.kind === 'metro' ? icon('metro') : r.kind === 'here' ? icon('locate') : r.kind === 'map' ? icon('layers') : icon('pin')}</span><span class="ot-res-t"><b>${e(r.name)}</b><small>${e(shortAddress(r.sub))}</small></span>${r.dist ? `<span class="ot-res-d">${e(distText(r.dist))}</span>` : ''}</button>`;
+  `<button class="ot-res" type="button" data-res="${e(JSON.stringify(r))}"><span class="ot-res-i">${r.kind === 'place' ? PLACE_ICONS[r.icon] || '📍' : r.kind === 'trip' ? icon('clock') : r.kind === 'tra' ? icon('tra') : r.kind === 'hsr' ? icon('hsr') : r.kind === 'metro' ? icon('metro') : r.kind === 'here' ? icon('locate') : r.kind === 'map' ? icon('layers') : icon('pin')}</span><span class="ot-res-t"><b>${e(r.name)}</b><small>${e([r.dist ? distText(r.dist) : '', shortAddress(r.sub)].filter(Boolean).join(' · '))}</small></span></button>`;
 
 // A sheet to choose a trip's end: 目前位置, your places, stations, Google's
 // places. → { name, lat, lon } (here: true for 目前位置), or null.
