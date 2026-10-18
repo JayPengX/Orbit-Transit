@@ -14,6 +14,7 @@ import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt } from './live.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
+import { canRent, canReturn } from './bike.mjs';
 import { rideSec, DOCK_SEC, walkLeg, rideLeg } from './plan.mjs';
 import { rental, startRental, endRental, rentalStep, FREE_MS } from './rental.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
@@ -1034,7 +1035,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const tried = (state.tried ||= new Set());
     const list = await bikesAround(pt.lat, pt.lon).catch(() => []);
     for (const s of list) if (meters(pt.lat, pt.lon, s.lat, s.lon) < 60) tried.add(s.uid);
-    const has = s => s.ok !== false && (end === 'rent' ? (l.ebike ? s.ebike : s.bikes + s.ebike) : s.ret) > 0;
+    const has = s => (end === 'rent' ? canRent(s, l.ebike) : canReturn(s));
     const alt = list.map(s => ({ s, d: meters(pt.lat, pt.lon, s.lat, s.lon) })).filter(x => x.d < 500 && !tried.has(x.s.uid) && has(x.s)).sort((x, y) => x.d - y.d)[0]?.s;
     if (nav !== state) return;
     if (!alt || !moveRide(plan, k, end, alt)) {

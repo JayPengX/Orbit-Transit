@@ -8,6 +8,7 @@
 // phone is locked).
 
 import { meters } from './util.mjs';
+import { canRent, canReturn } from './bike.mjs';
 
 import { W } from './lang.mjs';
 const KEY = 'orbit-transit.rental';
@@ -75,7 +76,7 @@ export const rentalPush = (r, swap) =>
 export function swapDocks(here, bikes, { toward = null, max = 800, n = 3 } = {}) {
   if (!here) return [];
   return bikes
-    .filter(s => s.ok !== false && s.ret > 0 && s.bikes + (s.ebike || 0) > 0)
+    .filter(s => canReturn(s) && canRent(s))
     .map(s => {
       const d = meters(here.lat, here.lon, s.lat, s.lon);
       const ahead = toward ? meters(s.lat, s.lon, toward.lat, toward.lon) < meters(here.lat, here.lon, toward.lat, toward.lon) : false;
