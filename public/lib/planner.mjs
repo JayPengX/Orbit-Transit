@@ -14,7 +14,7 @@
 import { routePlans, townships, walksTo, walkKnown } from './api.mjs';
 import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
-import { railNetwork } from './raildata.mjs';
+import { railNetwork, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
@@ -77,7 +77,6 @@ async function trainThenBus(plans, to, now) {
 // stations side by side; `trace` says what was found, for the 除錯紀錄.
 async function busToRail(net, from, to, at, { use, now, trace, bike = false }) {
   const whole = meters(from.lat, from.lon, to.lat, to.lon);
-  const pt = s => ({ name: s.sys === 'hsr' ? `高鐵${s.name.replace(/^高鐵/, '')}` : s.name, lat: s.lat, lon: s.lon });
   const far = x => (bike ? x.m > RAIL_BIKE_M : x.m > 1000 || crossings(from, x.s));
   const stations = [...net.st.values()]
     .map(s => ({ s, m: meters(from.lat, from.lon, s.lat, s.lon) }))
@@ -86,7 +85,7 @@ async function busToRail(net, from, to, at, { use, now, trace, bike = false }) {
     .slice(0, 4);
   const out = [];
   await Promise.all(stations.map(async ({ s }) => {
-    const st = pt(s);
+    const st = stationPoint(s);
     const buses = await busLink(from, st, at, { fromM: 900, toM: 800, n: 2, routes: 8, now }).catch(() => []);
     if (!buses.length) return void trace.push(`${st.name}: no bus`);
     // Each bus there (the soonest two), with the trains after it gets in.

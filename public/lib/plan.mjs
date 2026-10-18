@@ -14,6 +14,7 @@ import { meters, walkSec, tw, hm, addDays, routeNorm, sameRoute, stationKey, isR
 import { journeys, directs } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
 import { trainKind } from './ui.mjs';
+import { stationPoint } from './raildata.mjs';
 
 import { W } from './lang.mjs';
 export const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
@@ -336,10 +337,7 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
   } catch {
     return [];
   }
-  const pt = k => {
-    const s = net.st.get(k);
-    return { name: s.sys === 'hsr' ? `高鐵${s.name.replace(/^高鐵/, '')}` : s.name, lat: s.lat, lon: s.lon };
-  };
+  const pt = k => stationPoint(net.st.get(k));
   return found.map(j => {
     const legs = [];
     const first = j.legs[0];
@@ -363,10 +361,7 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
 }
 // A train of our router's as a plan's leg.
 function trainLeg(net, l) {
-  const pt = k => {
-    const s = net.st.get(k);
-    return { name: s.sys === 'hsr' ? `高鐵${s.name.replace(/^高鐵/, '')}` : s.name, lat: s.lat, lon: s.lon };
-  };
+  const pt = k => stationPoint(net.st.get(k));
   return {
     mode: l.trip.sys,
     name: l.trip.sys === 'hsr' ? '高鐵' : l.trip.typeFull || l.trip.type,

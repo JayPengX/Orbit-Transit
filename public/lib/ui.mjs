@@ -3,6 +3,9 @@
 import { e, minsText, hm, rides } from './util.mjs';
 
 import { W, en } from './lang.mjs';
+
+// A railway station's name as shown: 高鐵 before an HSR station's.
+export const stationLabel = s => (!s ? '' : s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
 // A modal sheet (the kit's look): closed by its × or a tap on the page
 // behind, sliding down as every app's sheets do (the kit's closeSheet);
 // `d.shut()` closes it the same way.
