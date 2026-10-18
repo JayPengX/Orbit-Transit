@@ -22,7 +22,7 @@ import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
-import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
+import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, readJson, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -301,21 +301,17 @@ export function replanWhy(kept, { w, here = null, picks = [], now = Date.now() }
 }
 
 function readTrips() {
-  try {
-    return JSON.parse(localStorage.getItem(TRIP_CACHE) || '{}') || {};
-  } catch {
-    return {};
-  }
+  return readJson(TRIP_CACHE, {}) || {};
 }
 function keepTrip(key, kept) {
   try {
-    localStorage.removeItem('ot.trips.v1');
+    writeJson('ot.trips.v1', null);
     const all = readTrips();
     const now = Date.now();
     for (const k of Object.keys(all)) if (now - all[k].at > KEEP_AHEAD_MS) delete all[k];
     // (Promises, the later buses on their way, aren't kept.)
     all[key] = JSON.parse(JSON.stringify({ at: kept.at, from: kept.from, plans: kept.plans }, (k, v) => (v instanceof Promise ? undefined : v)));
-    localStorage.setItem(TRIP_CACHE, JSON.stringify(all));
+    writeJson(TRIP_CACHE, all);
   } catch {}
 }
 // The kept plans as they are now: rolled on, the buses due soon timed by what they're doing.

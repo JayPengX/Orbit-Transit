@@ -7,7 +7,7 @@
 // at most), the notice sent with the alerts' (the Worker tells you once the
 // phone is locked).
 
-import { meters } from './util.mjs';
+import { meters, readJson, writeJson } from './util.mjs';
 import { canRent, canReturn } from './bike.mjs';
 
 import { W } from './lang.mjs';
@@ -19,18 +19,11 @@ const listeners = new Set();
 let cur = load();
 
 function load() {
-  try {
-    const r = JSON.parse(localStorage.getItem(KEY) || 'null');
-    return r && Number.isFinite(r.at) && Date.now() - r.at < TTL ? r : null;
-  } catch {
-    return null;
-  }
+  const r = readJson(KEY);
+  return r && Number.isFinite(r.at) && Date.now() - r.at < TTL ? r : null;
 }
 function keep() {
-  try {
-    if (cur) localStorage.setItem(KEY, JSON.stringify(cur));
-    else localStorage.removeItem(KEY);
-  } catch {}
+  writeJson(KEY, cur || null);
   listeners.forEach(f => f(cur));
 }
 

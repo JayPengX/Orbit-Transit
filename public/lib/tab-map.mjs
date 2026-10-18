@@ -26,7 +26,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
 import * as kit from '#kit/quadra.mjs';
@@ -86,13 +86,7 @@ export async function init(c) {
   ctx = c;
   $('fab-locate').innerHTML = icon('locate');
   $('fab-layers').innerHTML = icon('layers');
-  const view = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(VIEW_KEY) || 'null');
-    } catch {
-      return null;
-    }
-  })();
+  const view = readJson(VIEW_KEY);
   // (Never opened here before, nowhere known: where you are, briefly, not 台北車站's tiles first.)
   if (!ctx.here && !view) await Promise.race([ctx.locate(), wait(1500)]);
   const center = ctx.here || view || FALLBACK;
@@ -338,9 +332,7 @@ function idle() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(drawLayers, 250);
   const c = map.center();
-  try {
-    localStorage.setItem(VIEW_KEY, JSON.stringify({ lat: c.lat, lon: c.lon, z: map.zoom() }));
-  } catch {}
+  writeJson(VIEW_KEY, { lat: c.lat, lon: c.lon, z: map.zoom() });
 }
 const inView = (b, p, pad = 0.002) => p.lat >= b.s - pad && p.lat <= b.n + pad && p.lon >= b.w - pad && p.lon <= b.e + pad;
 const closest = (list, c, n) => list.map(x => [meters(c.lat, c.lon, x.lat, x.lon), x]).sort((a, b) => a[0] - b[0]).slice(0, n).map(x => x[1]);

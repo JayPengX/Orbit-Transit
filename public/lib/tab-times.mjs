@@ -10,7 +10,7 @@ import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
-import { e, meters } from './util.mjs';
+import { e, meters, readJson, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -66,17 +66,11 @@ const NEAR = 'near';
 const RECENT = 'orbit-transit.routes';
 const bus = { city: NEAR, list: [], failed: '', loaded: '', around: null };
 const recentRoutes = () => {
-  try {
-    const r = JSON.parse(localStorage.getItem(RECENT) || '[]');
-    return Array.isArray(r) ? r.filter(x => x?.uid && x.name).slice(0, 8) : [];
-  } catch {
-    return [];
-  }
+  const r = readJson(RECENT, []);
+  return Array.isArray(r) ? r.filter(x => x?.uid && x.name).slice(0, 8) : [];
 };
 function rememberRoute(r) {
-  try {
-    localStorage.setItem(RECENT, JSON.stringify([{ uid: r.uid, name: r.name, city: r.city, from: r.from || '', to: r.to || '' }, ...recentRoutes().filter(x => x.uid !== r.uid)].slice(0, 8)));
-  } catch {}
+  writeJson(RECENT, [{ uid: r.uid, name: r.name, city: r.city, from: r.from || '', to: r.to || '' }, ...recentRoutes().filter(x => x.uid !== r.uid)].slice(0, 8));
 }
 // (From a stop near you: the route at that stop, scrolled to it.)
 const openBus = (r, stopUID = '', stopName = '') => {
@@ -109,9 +103,7 @@ function busInit() {
       return openBus(routeOf(city, uid, r.dataset.name || ''), r.dataset.stop || '', r.dataset.stopName || r.closest('.ot-bus-stop')?.querySelector('.ot-bus-stop-h b')?.textContent || '');
     }
     if (ev.target.closest('[data-clear-routes]')) {
-      try {
-        localStorage.removeItem(RECENT);
-      } catch {}
+      writeJson(RECENT, null);
       busDraw();
     }
   });
