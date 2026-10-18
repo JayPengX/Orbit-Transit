@@ -6,7 +6,7 @@
 // planner may use. The newer copy (by `t`) wins; this device keeps one too,
 // so it opens at once.
 
-import { uid, pinSig } from './util.mjs';
+import { uid, pinSig, TAIWAN_BOX } from './util.mjs';
 
 import { W } from './lang.mjs';
 export const MAX_GROUPS = 12;
@@ -61,10 +61,12 @@ function cleanStop(x) {
   if (!x || typeof x !== 'object' || !x.stopUID) return null;
   return { stopUID: str(x.stopUID, 40), stop: str(x.stop, 40), ...(coord(x.lat) != null && coord(x.lon) != null ? { lat: coord(x.lat), lon: coord(x.lon) } : {}) };
 }
+// (The map's box, not inTaiwan: a place saved near its edge is never dropped.)
+const inBox = (lat, lon) => lat >= TAIWAN_BOX.s && lat <= TAIWAN_BOX.n && lon >= TAIWAN_BOX.w && lon <= TAIWAN_BOX.e;
 export function cleanPlace(p) {
   const lat = coord(p?.lat);
   const lon = coord(p?.lon);
-  if (!p || lat == null || lon == null || !(lat > 21 && lat < 27 && lon > 118 && lon < 123)) return null;
+  if (!p || lat == null || lon == null || !inBox(lat, lon)) return null;
   return { id: str(p.id, 20) || 'p' + uid(), name: str(p.name, 30) || W('我的地點', 'My place'), icon: PLACE_ICONS[p.icon] ? p.icon : 'pin', lat, lon, address: str(p.address, 80), ...gidOf(p) };
 }
 // A place's id at Google (for Google Maps' own navigation to the place
@@ -74,7 +76,7 @@ const gidOf = p => (typeof p?.gid === 'string' && /^[A-Za-z0-9_-]{20,300}$/.test
 export function cleanEnd(p) {
   const lat = coord(p?.lat);
   const lon = coord(p?.lon);
-  if (!p || lat == null || lon == null || !(lat > 21 && lat < 27 && lon > 118 && lon < 123)) return null;
+  if (!p || lat == null || lon == null || !inBox(lat, lon)) return null;
   return { name: str(p.name, 30) || W('地點', 'Place'), lat, lon, ...gidOf(p) };
 }
 const hhmm = v => (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : '');

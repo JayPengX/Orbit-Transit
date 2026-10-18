@@ -3,7 +3,7 @@
 // operator sends it, else from the timetable.
 
 import { tdx, rows } from './api.mjs';
-import { zh, meters, tw } from './util.mjs';
+import { zh, meters, tw, twAt, TDX_DAYS } from './util.mjs';
 
 import { W, en } from './lang.mjs';
 // The maps, by city; each draws one or more TDX rail systems.
@@ -136,7 +136,6 @@ export async function liveBoard(st) {
   return rows(j).map(r => ({ dest: zh(r.DestinationStationName) || r.TripHeadSign || '', min: r.EstimateTime == null ? null : Number(r.EstimateTime), status: Number(r.ServiceStatus) || 0, line: r.LineID || r.LineNO || '' }));
 }
 
-const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 // From the timetable: the next departures each way, [{ dest, times: [ms…], line }].
 export async function nextTrains(st, now = Date.now(), n = 4) {
   if (!TIMETABLE.has(st.op)) return null;
@@ -150,14 +149,14 @@ export function upcoming(list, now = Date.now(), n = 4) {
   const out = [];
   for (const r of list) {
     const times = days
-      .filter(t => !(r.ServiceDay && r.ServiceDay[DOW[t.dow]] === false))
+      .filter(t => !(r.ServiceDay && r.ServiceDay[TDX_DAYS[t.dow]] === false))
       .flatMap(t =>
         (r.Timetables || [])
           .map(x => x.DepartureTime || x.ArrivalTime)
           .filter(Boolean)
           .map(hhmm => {
             const [h, m] = hhmm.split(':').map(Number);
-            return Date.parse(`${t.date}T00:00:00+08:00`) + ((h < 4 ? h + 24 : h) * 60 + m) * 60_000;
+            return twAt(t.date, `${h < 4 ? h + 24 : h}:${m}`);
           })
       )
       .filter(x => x >= now - 30_000)

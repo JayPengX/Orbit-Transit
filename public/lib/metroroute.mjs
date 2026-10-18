@@ -8,14 +8,13 @@
 
 import { tdx, rows } from './api.mjs';
 import { MAPS, OPERATORS, loadSystem, lineRuns } from './metro.mjs';
-import { meters, walkSec, walkGuess, tw } from './util.mjs';
+import { meters, walkSec, walkGuess, tw, TDX_DAYS } from './util.mjs';
 import { finish } from './plan.mjs';
 
 const DAY = 86_400_000;
 const WALK_M = 1500; // stations this far from either end are walked to
 const CHANGE_SEC = 180;
 const CHANGE_COST = 5 * 60; // what a change costs on top of its time, when choosing
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const nets = new Map();
 // One map's network (台北・新北, 高雄…): { st: Map(key → station), lines: Map(id → line), next: Map(key → [{ to, sec, line }]), freq }.
@@ -98,7 +97,7 @@ export function buildNet(systems, extra = []) {
 export function waitSec(line, at) {
   const t = tw(at);
   // (Before 04:00 it's still the night that began yesterday: yesterday's service day.)
-  const day = DAYS[t.min < 240 ? tw(at - 86_400_000).dow : t.dow];
+  const day = TDX_DAYS[t.min < 240 ? tw(at - 86_400_000).dow : t.dow];
   const hmv = t.hm;
   const list = line.freq.filter(r => !r.ServiceDay || r.ServiceDay[day] === true || r.ServiceDay[day] === 1);
   if (!list.length) return hmv >= '06:00' ? 180 : null;

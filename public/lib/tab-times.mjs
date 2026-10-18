@@ -10,7 +10,7 @@ import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
-import { e, meters, readJson, writeJson } from './util.mjs';
+import { e, meters, distText, readJson, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -206,7 +206,7 @@ function watchRows() {
   for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]')) seen.observe(el);
 }
 // A stop near you: its name and distance, its routes as numbers to tap.
-const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${Math.round(s.dist / 10) * 10} ${W('公尺', 'm')}</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
+const nearStop = s => `<div class="ot-bus-stop"><div class="ot-bus-stop-h"><b>${e(s.name)}</b><small>${distText(s.dist)}</small></div><div class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-chip" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</div></div>`;
 function busDraw() {
   const home = ctx.city || 'Taipei';
   $('tb-city').innerHTML = [[NEAR, W(`${cityShort(home)}附近`, `Near ${cityShort(home)}`)], [INTERCITY, W('公路客運', 'Intercity')], ...CITIES.map(([k]) => [k, cityShort(k)])]

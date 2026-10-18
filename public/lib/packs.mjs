@@ -6,6 +6,7 @@
 // (or no pack to be had) is asked of TDX as before.
 
 import * as kit from '#kit/quadra.mjs';
+import { TDX_DAYS } from './util.mjs';
 
 const SQUARE = 0.25;
 export const squareOf = (lat, lon) => `${(Math.floor(lat / SQUARE) * SQUARE).toFixed(2)}_${(Math.floor(lon / SQUARE) * SQUARE).toFixed(2)}`;
@@ -23,8 +24,7 @@ export async function pack(name) {
   return indexed.get(raw);
 }
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const days = bits => Object.fromEntries(DAYS.map((d, i) => [d, bits & (1 << i) ? 1 : 0]));
+const days = bits => Object.fromEntries(TDX_DAYS.map((d, i) => [d, bits & (1 << i) ? 1 : 0]));
 const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const N = s => ({ Zh_tw: s || '' });
 

@@ -28,6 +28,8 @@ export function twAt(date, hm) {
 }
 export const hm = t => (t == null ? '' : tw(t).hm);
 export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00+08:00`) + n * 86_400_000 + TPE).toISOString().slice(0, 10);
+// TDX's ServiceDay keys, Sunday first (by a date's dow).
+export const TDX_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WEEK = '日一二三四五六';
 const WEEK_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const dayLabel = (date, today = tw().date) => {
