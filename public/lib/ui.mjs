@@ -77,14 +77,16 @@ export const MODE_NAME = en
 const TAG_EN = { 推薦: 'Best', 最快抵達: 'Fastest', 最少轉乘: 'Fewest changes', 最少步行: 'Least walking', 電輔車: 'E-bike', 即時: 'Live', 最早抵達: 'Earliest', 車程最短: 'Shortest', 直達: 'Direct', '全程 YouBike': 'All YouBike', 騎車: 'Ride', 步行: 'Walk' };
 export const tagText = t => (en ? TAG_EN[t] || t : t);
 // TRA's train kinds in English (their own names, as on the board).
-const TRAIN_EN = [[/區間快/, 'Fast Local'], [/區間/, 'Local'], [/自強/, 'Tze-Chiang'], [/莒光/, 'Chu-Kuang'], [/復興/, 'Fu-Hsing'], [/普悠瑪/, 'Puyuma'], [/太魯閣/, 'Taroko'], [/新自強|EMU3000/, 'EMU3000'], [/觀光|鳴日/, 'Tourist'], [/普快/, 'Ordinary']];
+const TRAIN_EN = [[/區間快/, 'Fast Local'], [/區間/, 'Local'], [/自強/, 'Tze‑Chiang'], [/莒光/, 'Chu‑Kuang'], [/復興/, 'Fu‑Hsing'], [/普悠瑪/, 'Puyuma'], [/太魯閣/, 'Taroko'], [/新自強|EMU3000/, 'EMU3000'], [/觀光|鳴日/, 'Tourist'], [/普快/, 'Ordinary']];
 export const trainKind = s => {
   const t = String(s || '');
   const hit = en && TRAIN_EN.find(([re]) => re.test(t));
   return hit ? t.replace(new RegExp(`(${hit[0].source})[號車]?`), hit[1]).replace(/[（(][^）)]*[）)]/g, '').trim() : t;
 };
 // A train by its kind and number, as a row shows it: 「區間 1804」「Local 1804」「高鐵 0612」「HSR 0612」.
-export const trainName = t => (t.sys === 'hsr' ? W(`高鐵 ${t.no}`, `HSR ${t.no}`) : `${trainKind(t.type)} ${t.no}`);
+// One piece on a narrow row: never broken at its hyphen (Tze‑Chiang, a
+// non-breaking one) nor between kind and number (a no-break space).
+export const trainName = t => (t.sys === 'hsr' ? W(`高鐵 ${t.no}`, `HSR ${t.no}`) : `${trainKind(t.type)} ${t.no}`);
 const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', car: '#eab308', plane: '#a78bfa', rail: '#0ea5e9' };
 export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : MODE_COLOR[l.mode] || '#94a3b8');
 

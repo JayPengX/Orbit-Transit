@@ -269,7 +269,7 @@ function stepText(plan, i, phase) {
     return { title: `${W('走到', 'Walk to')} ${last && !l.to?.name ? W('目的地', 'destination') : where}`, sub: next?.mode === 'bike' ? `${W('在這裡借', 'Rent a')} ${next.ebike ? W('電輔車', 'e-bike') : 'YouBike'}${W('', ' here')}` : isRide(next) ? `${W('搭', 'Take')} ${rideName(next)}` : '' };
   }
   // (One bike kept the whole trip with stops: ridden on from each, parked, not returned, at each.)
-  if (l.mode === 'bike') return { title: `${W('騎到', 'Ride to')} ${l.to.name}`, sub: l.swap ? W('還車再借一台（每 30 分鐘換一次車）', 'Return and re-rent (a new bike every 30 min)') : `${l.kept ? W('騎同一台', 'Same bike') : `${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'}・${W(`在 ${l.from.name} 借車`, `rent at ${l.from.name}`)}`}${l.park ? W('・到了先停好，不還車', '・park it, don’t return') : ''}` };
+  if (l.mode === 'bike') return { title: `${W('騎到', 'Ride to')} ${l.to.name}`, sub: l.swap ? W('還車再借一台（每 30 分鐘換一次車）', 'Return and re-rent (a new bike every 30 min)') : `${l.kept ? W('騎同一台', 'Same bike') : `${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'}・${W(`在 ${l.from.name} 借⁠車`, `rent at ${l.from.name}`)}`}${l.park ? W('・到了先停好，不還⁠車', '・park it, don’t return') : ''}` };
   if (phase === 'on') return { title: W(`坐到 ${l.to.name} 下車`, `Ride to ${l.to.name}`), sub: `${rideName(l)}${wayText(l) ? ` ${wayText(l)}` : ''}` };
   return { title: `${W('搭', 'Take')} ${rideName(l)}`, sub: `${l.from.name}${wayText(l) ? `・${wayText(l)}` : ''}${l.train?.platform ? W(`・${l.train.platform} 月台`, `・platform ${l.train.platform}`) : ''}` };
 }
@@ -641,7 +641,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         </div>
         ${rentLine}
         ${fold.top ? '' : `${track}${board}`}
-        ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map((x, k, a) => `<span>${e(x)}${k < a.length - 1 ? '・' : ''}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}${W('重新規劃', 'Replan')}</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
+        ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map(x => `<span>${e(x)}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}${W('重新規劃', 'Replan')}</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
         ${bikeLine && !fold.top ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
         ${fold.top ? '' : then}
         ${grip('top', fold.top)}
