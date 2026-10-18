@@ -41,7 +41,7 @@ async function streetWalks(bikes, from, to) {
 
 // A point's TDX city, from the townships list (loaded once, kept a month).
 let towns = null;
-export async function cityFinder() {
+async function cityFinder() {
   towns ||= await townships().catch(() => null);
   const memo = new Map();
   return pt => {
@@ -102,13 +102,13 @@ async function busToRail(net, from, to, at, { use, now, trace, bike = false }) {
 // `modes`: this search's own ways of moving (the chips on the plans card),
 // else the person's 交通偏好.
 // A ride by its rides (not its walks): the same ride from two planners is one plan.
-export const planSig = p =>
+const planSig = p =>
   p.legs
     .filter(l => l.mode !== 'walk')
     .map(l => `${l.mode}:${l.short || l.name}:${l.from?.name}>${l.to?.name}`)
     .join('|');
 // Google's and TDX's answers as one (the earliest of a ride kept, as the proxy did).
-export function joinPlanners(a, b) {
+function joinPlanners(a, b) {
   const seen = new Set();
   const plans = [...(a.plans || []), ...(b.plans || [])]
     .filter(p => p.legs?.length && p.arr != null)

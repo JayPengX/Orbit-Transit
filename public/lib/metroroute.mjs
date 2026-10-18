@@ -18,7 +18,7 @@ const CHANGE_COST = 5 * 60; // what a change costs on top of its time, when choo
 
 const nets = new Map();
 // One map's network (台北・新北, 高雄…): { st: Map(key → station), lines: Map(id → line), next: Map(key → [{ to, sec, line }]), freq }.
-export async function metroNet(map) {
+async function metroNet(map) {
   if (!nets.has(map.id))
     nets.set(
       map.id,
@@ -41,7 +41,7 @@ export async function metroNet(map) {
 }
 
 // The network from loadSystem's systems and each system's { sys, s2s, freq } rows.
-export function buildNet(systems, extra = []) {
+function buildNet(systems, extra = []) {
   const st = new Map();
   const lines = new Map();
   const next = new Map();
@@ -94,7 +94,7 @@ export function buildNet(systems, extra = []) {
 
 // A line's wait for a train at a moment: half its headway then (6 minutes
 // unknown), or null when it isn't running (after its last train).
-export function waitSec(line, at) {
+function waitSec(line, at) {
   const t = tw(at);
   // (Before 04:00 it's still the night that began yesterday: yesterday's service day.)
   const day = TDX_DAYS[t.min < 240 ? tw(at - 86_400_000).dow : t.dow];
@@ -117,7 +117,7 @@ export function waitSec(line, at) {
 
 // Rides by metro from o to d leaving at `at`: plans (the planners' shape),
 // the quickest and, when it changes lines, the quickest with fewer changes.
-export function metroRoutes(net, o, d, at, { n = 2 } = {}) {
+function metroRoutes(net, o, d, at, { n = 2 } = {}) {
   const near = pt => [...net.st.values()].map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).filter(x => x.m <= WALK_M).sort((a, b) => a.m - b.m).slice(0, 4);
   const A = near(o);
   const B = near(d);

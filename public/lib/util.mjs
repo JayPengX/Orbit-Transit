@@ -4,7 +4,7 @@
 import * as kit from '#kit/quadra.mjs';
 import { W } from './lang.mjs';
 
-export const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export const e = escapeHtml;
 
 const TPE = 8 * 3_600_000;
@@ -173,7 +173,6 @@ export function writeJson(key, value, replacer) {
 
 export const zh = v => (v && typeof v === 'object' ? v.Zh_tw || v.En || '' : String(v ?? ''));
 export const uid = () => Math.random().toString(36).slice(2, 10);
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // Taiwan's national holidays (the kit's holidays.mjs, set by the app once
 // loaded): a trip saved for weekdays only (家 → 學校) keeps the work

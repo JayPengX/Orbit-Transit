@@ -33,7 +33,7 @@ export const emptyData = () => ({
   t: 0
 });
 // `maps`: the app a walk or a ride is handed to (google, apple).
-export const defaultPrefs = () => ({ modes: Object.fromEntries(Object.keys(MODES).map(k => [k, true])), bike30: false, tpass: '', maps: 'google' });
+const defaultPrefs = () => ({ modes: Object.fromEntries(Object.keys(MODES).map(k => [k, true])), bike30: false, tpass: '', maps: 'google' });
 
 const str = (v, n = 60) => (typeof v === 'string' ? v.slice(0, n) : '');
 const coord = v => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 1e6) / 1e6 : null);

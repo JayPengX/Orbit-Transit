@@ -16,7 +16,7 @@ import { cityFromAddress } from './city.mjs';
 
 import { W } from './lang.mjs';
 export const SYSTEMS = { tra: W('台鐵', 'TRA'), hsr: W('高鐵', 'HSR'), metro: W('捷運', 'Metro') };
-export const TRAIN_TYPES = { 1: '太魯閣', 2: '普悠瑪', 3: '自強', 4: '莒光', 5: '復興', 6: '區間', 7: '普快', 10: '區間快', 11: '自強' };
+const TRAIN_TYPES = { 1: '太魯閣', 2: '普悠瑪', 3: '自強', 4: '莒光', 5: '復興', 6: '區間', 7: '普快', 10: '區間快', 11: '自強' };
 // Express classes (reserved seats), for the "fewer stops" sort and the fares.
 export const EXPRESS = new Set(['1', '2', '3', '4', '11']); // 11: 自強(3000)
 
@@ -125,7 +125,7 @@ export function hsrTrips(list) {
 
 // The minutes to change at one station: TRA's big stations take longer
 // (more platforms, an underpass), HSR's are one hall.
-export function changeMin(st) {
+function changeMin(st) {
   if (st.sys === 'hsr') return 4;
   if (st.sys === 'metro') return 3;
   return st.cls === '0' ? 5 : st.cls === '1' ? 4 : 3;

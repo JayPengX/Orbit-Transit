@@ -400,7 +400,7 @@ const countBig = (ms, what) => (ms >= 600_000 ? `<b>${Math.round(ms / 60_000)}</
 
 // Coming to your stop: its last few stops on a line, yours at the end, the
 // bus or train where it is now (on a stop, or between two), what it's at.
-export function trackHtml(rs, w, l) {
+function trackHtml(rs, w, l) {
   const i = rs.i;
   const far = w.far || w.k - 1 < i - 5;
   const s0 = Math.max(0, Math.min(far ? i - 5 : w.k - 1, i - 1));
@@ -1379,6 +1379,3 @@ export function stopNav() {
   nav.wake?.release?.().catch(() => {});
   nav = null;
 }
-
-
-export const navSummary = p => `${minsText(p.dur)} · ${W(`${hm(p.dep)} 出發`, `leave ${hm(p.dep)}`)}`;

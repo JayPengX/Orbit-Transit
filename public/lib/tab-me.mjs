@@ -146,7 +146,7 @@ document.addEventListener('change', ev => {
   done();
 });
 // A pinned place's name and icon.
-export function placeSheet(id) {
+function placeSheet(id) {
   const p = ctx.data.places.find(x => x.id === id);
   if (!p) return;
   let ic = p.icon;
