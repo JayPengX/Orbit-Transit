@@ -87,23 +87,36 @@ export function dayTrips(date) {
 
 // Ready before it's asked for: the day's network, built while the app is idle.
 export function warmRail() {
-  const t = tw();
-  return railNetwork(t.date, { next: t.min >= 21 * 60 }).catch(() => null);
+  const { date, ...days } = railSpan(Date.now());
+  return railNetwork(date, days).catch(() => null);
 }
 
+// Which days' trains a search needs, from `start` (ms) up to `end` (an
+// arrive-by's deadline; left out, a departure at `start`). TDX files a train
+// under the day it leaves its first station, so before 03:00 yesterday's
+// trains still running are wanted too (`prev`: a 區間 that left at 23:50);
+// late in the evening (or when the deadline is on a later day) tomorrow's
+// (`next`, for the first train tomorrow).
+export function railSpan(start, end = null) {
+  const a = tw(start);
+  const next = end == null ? a.min >= 21 * 60 : tw(end).date !== a.date;
+  return { date: a.date, next, prev: a.min < 180 };
+}
+// The days whose timetables make up a day's network, in order.
+export const netDates = (date, { next = false, prev = false } = {}) => [...(prev ? [addDays(date, -1)] : []), date, ...(next ? [addDays(date, 1)] : [])];
+
 // The network for a day: its trains (those past midnight included), every
-// station and the walks between railways; late in the evening the next
-// day's trains too (`next`), for the first train tomorrow.
+// station and the walks between railways; with `next` and `prev` the trains
+// of the day after and the day before too (see railSpan).
 const nets = new Map();
-export async function railNetwork(date, { next = false } = {}) {
-  const key = `${date}${next ? '+' : ''}`;
+export async function railNetwork(date, { next = false, prev = false } = {}) {
+  const key = `${prev ? '-' : ''}${date}${next ? '+' : ''}`;
   if (!nets.has(key)) {
     nets.set(
       key,
       (async () => {
         const stations = await railStations();
-        const [a, b] = await Promise.all([dayTrips(date), next ? dayTrips(addDays(date, 1)) : []]);
-        const trips = [...a, ...b];
+        const trips = (await Promise.all(netDates(date, { next, prev }).map(dayTrips))).flat();
         return network(stations, trips, links(stations));
       })().catch(err => {
         nets.delete(key);

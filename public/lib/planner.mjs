@@ -14,7 +14,7 @@
 import { routePlans, townships, walksTo, walkKnown } from './api.mjs';
 import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
-import { railNetwork, stationPoint } from './raildata.mjs';
+import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
@@ -141,7 +141,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   let tdxIn = null;
   const tdxAsk = ask('tdx').then(r => (tdxIn = r));
   const googleAsk = ask('google');
-  const netAsk = useRail ? railNetwork(tw(tS).date, { next: by !== 'arrive' && tw(t0).min >= 21 * 60 }) : null;
+  const span = railSpan(tS, by === 'arrive' ? t0 : null);
+  const netAsk = useRail ? railNetwork(span.date, span) : null;
   netAsk?.catch(() => {});
   const findCity = await cityFinder();
   // Each point's city as it was looked up, for the 除錯紀錄 (a replay needs no township list).
