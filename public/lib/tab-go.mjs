@@ -15,7 +15,7 @@ import { errorText, liveMs } from './api.mjs';
 import { stopsEta, etaRank } from './bus.mjs';
 import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
-import { railNetwork, traDelays } from './raildata.mjs';
+import { railNetwork, railSpan, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
 import { pickSig } from './plan.mjs';
@@ -198,7 +198,8 @@ async function trainPins() {
   if (!pins.length) return;
   try {
     const now = Date.now();
-    const net = await railNetwork(tw(now).date, { next: tw(now).min >= 21 * 60 });
+    const span = railSpan(now);
+    const net = await railNetwork(span.date, span);
     const delays = await traDelays().catch(() => new Map());
     for (const p of pins) {
       const from = `${p.from.sys}:${p.from.id}`;
