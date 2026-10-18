@@ -72,10 +72,12 @@ function render() {
   const recent = ctx.data.trains.filter(x => trainKey(x) !== (state.from && state.to ? trainKey({ from: state.from, to: state.to }) : '')).slice(0, 5);
   $('panel-train').innerHTML = `
     <div class="ot-wrap">
-      <section class="ot-od-card">
-        <button class="ot-st-pick" type="button" data-pick="from"><small>${W('出發', 'From')}</small>${state.from ? `<b>${e(stationLabel(state.from))}</b>${sysTag(state.from)}` : `<b class="muted">${W('選擇車站', 'Pick a station')}</b>`}</button>
+      <section class="q-hero-card ot-od-card">
+        <span class="q-hc-eyebrow">${icon('tra')}<span>${W('台鐵・高鐵', 'TRA・HSR')}</span></span>
+        <div class="ot-od-pair"><button class="ot-st-pick" type="button" data-pick="from"><small>${W('出發', 'From')}</small>${state.from ? `<b>${e(stationLabel(state.from))}</b>${sysTag(state.from)}` : `<b class="muted">${W('選擇車站', 'Pick a station')}</b>`}</button>
         <button class="ot-swap" type="button" data-act="swap" aria-label="${W('對調', 'Swap')}">${icon('swap')}</button>
-        <button class="ot-st-pick" type="button" data-pick="to"><small>${W('抵達', 'To')}</small>${state.to ? `<b>${e(stationLabel(state.to))}</b>${sysTag(state.to)}` : `<b class="muted">${W('選擇車站', 'Pick a station')}</b>`}</button>
+        <button class="ot-st-pick" type="button" data-pick="to"><small>${W('抵達', 'To')}</small>${state.to ? `<b>${e(stationLabel(state.to))}</b>${sysTag(state.to)}` : `<b class="muted">${W('選擇車站', 'Pick a station')}</b>`}</button></div>
+        <div class="q-hc-row"><button class="q-hc-btn ot-go-btn" type="button" data-act="go" ${state.from && state.to ? '' : 'disabled'}>${icon('search')} ${W('查詢', 'Search')}</button></div>
       </section>
       <div class="q-chips ot-mode">
         ${[['all', W('智慧轉乘（台鐵＋高鐵）', 'TRA + HSR')], ['tra', W('只搭台鐵', 'TRA only')], ['hsr', W('只搭高鐵', 'HSR only')]].map(([k, n]) => `<button class="q-chip" type="button" data-mode="${k}" aria-pressed="${state.mode === k}">${n}</button>`).join('')}
@@ -83,9 +85,8 @@ function render() {
       <div class="ot-when-row">
         <label class="ot-field inline"><span>${W('日期', 'Date')}</span><input id="t-date" type="date" value="${date}" min="${today}" max="${addDays(today, 30)}"></label>
         <label class="ot-field inline"><span>${W('出發時間', 'Leave at')}</span><input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}"></label>
-        <button class="q-btn primary" type="button" data-act="go" ${state.from && state.to ? '' : 'disabled'}>${icon('search')} ${W('查詢', 'Search')}</button>
       </div>
-      ${recent.length ? `<div class="q-chips ot-recent">${recent.map((x, i) => `<button class="q-chip" type="button" data-recent="${i}">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</button>`).join('')}</div>` : ''}
+      ${recent.length ? `<section class="q-section ot-sec"><div class="q-section-head"><h2>${W('最近查詢', 'Recent')}</h2></div><div class="q-rowcard">${recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}"><span class="q-tile sm" style="--t:${x.from.sys === 'hsr' ? '#f97316' : '#0ea5e9'}">${icon(x.from.sys === 'hsr' ? 'hsr' : 'tra')}</span><span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join('')}</div></section>` : ''}
       <div id="t-results">${resultsHtml()}</div>
     </div>`;
 }
@@ -93,7 +94,7 @@ function render() {
 function resultsHtml() {
   if (state.error) return `<p class="ot-note bad">${e(state.error)}</p>`;
   if (state.results === 'loading') return `<p class="ot-note">${W('載入今天的台鐵與高鐵時刻，找最好的轉乘…', 'Loading today’s TRA and HSR times…')}</p>`;
-  if (!state.results) return `<div class="ot-empty-card">${icon('tra', 'big')}<h3>${W('台鐵、高鐵一起查', 'TRA and HSR together')}</h3><p>${W('選起訖站，自動找出最快的走法：支線換幹線、台鐵換高鐵，換車要走多久都算好了。', 'Pick two stations for the fastest way, changes and walking between them included.')}</p></div>`;
+  if (!state.results) return `<div class="q-rowcard ot-feat"><div class="q-ritem"><span class="q-tile" style="--t:#0ea5e9">${icon('tra')}</span><span class="q-ritem-text"><span class="q-ritem-title">${W('支線換幹線', 'Branch to trunk')}</span><small>${W('換車要走多久都算好了', 'Changes and walks timed')}</small></span></div><div class="q-ritem"><span class="q-tile" style="--t:#f97316">${icon('hsr')}</span><span class="q-ritem-text"><span class="q-ritem-title">${W('台鐵換高鐵', 'TRA to HSR')}</span><small>${W('自動找出最快的走法', 'The fastest way, found for you')}</small></span></div></div>`;
   if (!state.results.length) return `<p class="ot-note">${W('這個時間之後找不到班次，換個時間或日期試試。', 'No trains after this time. Try another time or date.')}</p>`;
   const labels = tags(state.results);
   const passNote = state.passOnly ? `<p class="ot-note">${W(`在你的 TPASS（${e(pass().name)}）範圍內：只列月票能搭的車（不含高鐵、太魯閣、普悠瑪、EMU3000）。`, `Inside your TPASS (${e(pass().name)}): only trains the pass covers (no HSR, Taroko, Puyuma or EMU3000).`)}</p>` : '';

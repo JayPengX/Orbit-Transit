@@ -294,9 +294,14 @@ async function nearBikesNow() {
   box.hidden = !rows.length;
   box.innerHTML = rows
     .map(
-      ({ s, walk }) => `<button class="ot-nb ${bikeLevel(s)}" type="button" data-nb="${e(s.uid)}"><span class="ot-nb-top"><i class="ot-nb-i">${icon('bike')}</i><b>${e(s.name)}</b></span>
-      <span class="ot-nb-n">${s.ok === false ? `<em>${W('暫停營運', 'Closed')}</em>` : `<em>${s.bikes}</em><small>${W('一般', 'bikes')}</small><em class="e">${s.ebike}</em><small>${W('電輔', 'e')}</small><em class="d">${s.ret}</em><small>${W('空位', 'docks')}</small>`}</span>
-      <small class="ot-nb-d">${icon('walk')} ${Math.max(1, Math.round(walk.sec / 60))} ${W('分', 'min')} · ${e(distText(walk.dist))}</small></button>`
+      ({ s, walk }) => {
+        const lv = bikeLevel(s);
+        const mins = Math.max(1, Math.round(walk.sec / 60));
+        const n = (v, l, c = '') => `<span class="ot-nb-c ${c}"><em>${v}</em><small>${l}</small></span>`;
+        return `<button class="ot-nb ${lv}" type="button" data-nb="${e(s.uid)}"><span class="ot-nb-top"><span class="q-tile sm" style="--t:#f5b301" aria-hidden="true">${icon('bike')}</span><b>${e(s.name)}</b></span>
+      <span class="ot-nb-n">${s.ok === false ? `<span class="q-tag red">${W('暫停營運', 'Closed')}</span>` : `${n(s.bikes, W('一般', 'Bikes'))}${n(s.ebike, W('電輔', 'E-bike'), 'e')}${n(s.ret, W('空位', 'Docks'), 'd')}`}</span>
+      <span class="q-tags ot-nb-d"><span class="q-tag green">${icon('walk')} ${mins} ${W('分', 'min')}</span><span class="q-tag">${e(distText(walk.dist))}</span>${lv === 'few' ? `<span class="q-tag orange">${W('車少', 'Few')}</span>` : lv === 'none' ? `<span class="q-tag red">${W('沒車', 'None')}</span>` : ''}</span></button>`;
+      }
     )
     .join('');
 }

@@ -14,6 +14,7 @@ import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters } from './util.mjs';
+import { COLOR, pageHead, tile, tag, section, rowCard, hero } from './premium.mjs';
 
 import { W, en } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -59,36 +60,42 @@ function render() {
   const P = D.prefs;
   const pass = tpassOf(P.tpass);
   const allOn = Object.values(P.modes).every(Boolean);
+  const PLACE_GLYPH = { home: 'pin', work: 'route', school: 'star', pin: 'pin', star: 'star' };
+  const add = (act, text) => `<button class="q-ritem ot-add-row" type="button" data-act="${act}">${tile('plus', '', '', false).replace('q-tile', 'q-tile soft')}<span class="q-ritem-text"><span class="q-ritem-title">${text}</span></span></button>`;
+  const places = D.places
+    .map((p, i) => `<div class="q-ritem ot-order">${`<button class="ot-place-name" type="button" data-place-edit="${e(p.id)}">${tile(PLACE_GLYPH[p.icon] || 'pin', COLOR.place)}<span class="q-ritem-text"><span class="q-ritem-title">${e(p.name)}</span>${p.address || ctx.here ? `<small>${e(p.address || `${W('距離 ', '')}${distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon))}${W('', ' away')}`)}</small>` : ''}</span></button>`}<button class="q-icon-btn" type="button" data-place-up="${i}" aria-label="${W('上移', 'Move up')}" ${i ? '' : 'disabled'}>${icon('up')}</button><button class="q-icon-btn" type="button" data-place-del="${e(p.id)}" aria-label="${W('刪除', 'Delete')}">${icon('trash')}</button></div>`)
+    .join('');
+  const trips = D.saved
+    .map(t => {
+      const tags = [t.time ? tag(`${t.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${t.time}`, 'blue') : '', t.days.length ? tag(daysText(t.days), 'green') : '', t.back ? tag(`${W('回程', 'Back')} ${t.back}`, 'indigo') : '', ...(t.alt || []).map(a => tag(`${en ? a.days.map(x => DAYS_EN[x]).join(', ') : `週${a.days.map(x => DAYS[x]).join('')}`} ${[a.time, a.back && `${W('回', 'back')} ${a.back}`].filter(Boolean).join(' ')}`))].join('');
+      return `<button class="q-ritem chevron" type="button" data-trip="${e(t.id)}">${tile(t.days.length ? 'clock' : 'route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title">${e(t.name || t.to.name)}</span><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}</small>${tags ? `<span class="q-tags">${tags}</span>` : ''}</span></button>`;
+    })
+    .join('');
+  const pins = D.pins
+    .map(p => `<div class="q-ritem">${tile(p.from.sys === 'hsr' ? 'hsr' : 'tra', p.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra)}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(p.from))} → ${e(stationLabel(p.to))}</span><small>${p.kind === 'trainNo' ? `${e(trainKind(p.type || ''))} ${e(p.no)}${W(' 次', '')}${p.dep ? ` · ${e(p.dep)}` : ''}` : W('每一班', 'Every train')}</small></span><button class="q-icon-btn" type="button" data-pin-del="${e(p.id)}" aria-label="${W('刪除', 'Delete')}">${icon('trash')}</button></div>`)
+    .join('');
+  const stops = D.groups.reduce((n, g) => n + g.items.length, 0);
   $('me-main').innerHTML = `<div class="ot-wrap ot-mine">
-    <h3 class="ot-go-h">${W('地點', 'Places')}</h3>
-    <section class="ot-go-card">${D.places.map((p, i) => `<div class="ot-order-row"><button class="ot-place-name" type="button" data-place-edit="${e(p.id)}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span><b>${e(p.name)}</b>${p.address || ctx.here ? `<small>${e(p.address || `${W('距離 ', '')}${distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon))}${W('', ' away')}`)}</small>` : ''}</span>${icon('edit')}</button><button class="q-icon-btn" type="button" data-place-up="${i}" aria-label="${W('上移', 'Move up')}" ${i ? '' : 'disabled'}>${icon('up')}</button><button class="q-icon-btn" type="button" data-place-del="${e(p.id)}" aria-label="${W('刪除', 'Delete')}">${icon('trash')}</button></div>`).join('') || `<p class="ot-note">${W('還沒有釘選地點：在地圖上點一個地方，按「釘選」。', 'No pinned places yet: tap a place on the map, then Pin.')}</p>`}
-      <button class="q-btn ot-wide" type="button" data-act="add-place">${icon('plus')} ${W('在地圖上找地點釘選', 'Find a place to pin')}</button></section>
-
-    <h3 class="ot-go-h">${W('行程', 'Trips')}</h3>
-    <section class="ot-go-card">${D.saved.map(t => `<button class="ot-row-btn" type="button" data-trip="${e(t.id)}">${icon(t.days.length ? 'clock' : 'route')}<span><b>${e(t.name || t.to.name)}</b><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}${t.time ? ` · ${t.by === 'arrive' ? W('抵達', 'arrive') : W('出發', 'leave')} ${e(t.time)}` : ''}${t.days.length ? ` · ${e(daysText(t.days))}` : ''}${t.back ? ` · ${W('回程', 'back')} ${e(t.back)}` : ''}${(t.alt || []).map(a => ` · ${e(en ? a.days.map(x => DAYS_EN[x]).join(', ') : `週${a.days.map(x => DAYS[x]).join('')}`)} ${e([a.time, a.back && `${W('回', 'back')} ${a.back}`].filter(Boolean).join(' '))}`).join('')}</small></span>${icon('edit')}</button>`).join('') || `<p class="ot-note">${W('還沒有行程：在地圖上查路線時按 ☆，就能釘選（可以設定時間，或每週固定幾天）。', 'No trips yet: tap ☆ on a route on the map (with a time, or set days each week).')}</p>`}
-      <button class="q-btn ot-wide" type="button" data-act="add-trip">${icon('plus')} ${W('新增行程', 'Add a trip')}</button></section>
-
-    <h3 class="ot-go-h">${W('釘選交通', 'Pinned rides')}</h3>
-    <section class="ot-go-card">
-      <button class="ot-row-btn" type="button" data-act="groups">${icon('bus')}<span><b>${W('公車站牌', 'Bus stops')}</b><small>${D.groups.map(g => `${e(g.name)} ${g.items.length}`).join('、')}</small></span>${icon('chevron')}</button>
-      ${D.pins.map(p => `<div class="ot-order-row"><span>${icon(p.from.sys === 'hsr' ? 'hsr' : 'tra')} ${e(stationLabel(p.from))} → ${e(stationLabel(p.to))}<small>${p.kind === 'trainNo' ? `${e(trainKind(p.type || ''))} ${e(p.no)}${W(' 次', '')}${p.dep ? ` · ${e(p.dep)}` : ''}` : W('每一班', 'Every train')}</small></span><button class="q-icon-btn" type="button" data-pin-del="${e(p.id)}" aria-label="${W('刪除', 'Delete')}">${icon('trash')}</button></div>`).join('')}
-      <button class="q-btn ot-wide" type="button" data-act="times">${icon('tra')} ${W('查時刻，釘選火車或公車', 'Find times to pin')}</button></section>
-
-    <h3 class="ot-go-h">${W('交通偏好', 'Preferences')}</h3>
-    <section class="ot-go-card">
-      <p class="ot-note">${W('路線規劃使用：', 'Routes may use:')}</p>
-      <div class="q-chips ot-modes"><button class="q-chip" type="button" data-all-modes="1" aria-pressed="${allOn}">${W('全部大眾運輸', 'All transit')}</button>${Object.entries(MODES).map(([k, n]) => `<button class="q-chip" type="button" data-mode="${k}" aria-pressed="${P.modes[k]}">${e(n)}</button>`).join('')}</div>
-      <p class="ot-note">${W('關掉一種，就用其他方式代替（例如不騎 YouBike 就改搭公車或步行）。', 'Turn one off and others stand in (no YouBike: bus or walk).')}</p>
-      ${pass?.bike ? '' : `<div class="ot-order-row"><span>${W('每 30 分鐘換一台 YouBike', 'Swap YouBikes every 30 min')}<small>${W('長程騎車時，在半路的站還車再借：每段都在 30 分鐘內（TPASS 免費、或最便宜的時段）', 'On long rides, return and re-rent on the way so each leg stays under 30 minutes (free with TPASS, or the cheapest rate).')}</small></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${P.bike30}" aria-label="${W('每 30 分鐘換車', 'Swap every 30 min')}"><i></i></button></div>`}
-      <label class="ot-field"><span>${W('導航 App', 'Navigation app')}</span><select id="me-maps"><option value="google" ${P.maps !== 'apple' ? 'selected' : ''}>${W('Google 地圖', 'Google Maps')}</option><option value="apple" ${P.maps === 'apple' ? 'selected' : ''}>${W('Apple 地圖', 'Apple Maps')}</option></select></label>
-      <p class="ot-note">${W('導航時走路、騎 YouBike 的那一段，交給這個 App 帶路（步行、自行車模式）。', 'Walking and YouBike legs open in this app (walk or cycle mode).')}</p>
-      <label class="ot-field"><span>${W('我的 TPASS', 'My TPASS')}</span><select id="me-tpass"><option value="">${W('沒有 TPASS', 'No TPASS')}</option>${TPASSES.map(t => `<option value="${t.id}" ${t.id === P.tpass ? 'selected' : ''}>${e(t.name)}${W(`（NT$${t.price}）`, ` (NT$${t.price})`)}</option>`).join('')}</select></label>
-      <p class="ot-note">${pass ? W(`${e(pass.name)}：範圍內的公車、台鐵、捷運不另收費${pass.bike ? '，YouBike 前 30 分鐘免費（長程騎車會在半路的站換一台，每段都免費）' : ''}。路線比較會把這些算成 0 元（高鐵不含）。`, `${e(pass.name)}: buses, TRA and metro inside it are free${pass.bike ? ', and YouBike’s first 30 minutes (long rides swap bikes on the way)' : ''}. Routes count those as NT$0 (not HSR).`) : W('選了 TPASS，路線比較會把月票涵蓋的車資算成 0 元。', 'With a TPASS, routes count what it covers as NT$0.')}</p>
-    </section>
-
-
-    <h3 class="ot-go-h">${W('工具', 'Tools')}</h3>
-    <section class="ot-go-card"><button class="ot-row-btn" type="button" data-act="metro">${icon('metro')}<span><b>${W('捷運路網圖', 'Metro map')}</b><small>${W('台北・新北、桃園機捷、台中、高雄：車站在真正的地圖上，點車站看下一班', 'Taipei, Taoyuan, Taichung, Kaohsiung: tap a station for the next trains')}</small></span>${icon('chevron')}</button></section>
+    ${pageHead(W('我的', 'Me'), W('地點、行程與偏好', 'Places, trips and settings'))}
+    ${hero({ eyebrow: W('捷運路網圖', 'Metro map'), glyph: 'metro', title: W('車站在真正的地圖上', 'Stations on the real map'), sub: W('點車站，看下一班', 'Tap a station for the next trains'), tags: [], color: COLOR.metro, attrs: 'data-act="metro"' })}
+    <div class="q-stats ot-stats" style="--q-stats-n:3">
+      <div class="q-stat">${tile('pin', COLOR.place, 'sm')}<small>${W('地點', 'Places')}</small><strong>${D.places.length}</strong></div>
+      <div class="q-stat">${tile('route', COLOR.route, 'sm')}<small>${W('行程', 'Trips')}</small><strong>${D.saved.length}</strong></div>
+      <div class="q-stat">${tile('bus', COLOR.bus, 'sm')}<small>${W('釘選', 'Pinned')}</small><strong>${stops + D.pins.length}</strong></div>
+    </div>
+    ${section(W('地點', 'Places'), rowCard(places + add('add-place', W('在地圖上釘選地點', 'Pin a place on the map'))))}
+    ${section(W('行程', 'Trips'), rowCard(trips + add('add-trip', W('新增行程', 'Add a trip'))))}
+    ${section(
+      W('釘選交通', 'Pinned rides'),
+      rowCard(`<button class="q-ritem chevron" type="button" data-act="groups">${tile('bus', COLOR.bus)}<span class="q-ritem-text"><span class="q-ritem-title">${W('公車站牌', 'Bus stops')}</span><small>${e(D.groups.map(g => `${g.name} ${g.items.length}`).join('、'))}</small></span></button>${pins}${add('times', W('查時刻，釘選火車或公車', 'Find times to pin'))}`)
+    )}
+    ${section(
+      W('交通偏好', 'Preferences'),
+      `<div class="q-rowcard ot-pad"><p class="ot-pref-h">${W('路線規劃使用', 'Routes may use')}</p><div class="q-chips ot-modes"><button class="q-chip" type="button" data-all-modes="1" aria-pressed="${allOn}">${W('全部大眾運輸', 'All transit')}</button>${Object.entries(MODES).map(([k, n]) => `<button class="q-chip" type="button" data-mode="${k}" aria-pressed="${P.modes[k]}">${e(n)}</button>`).join('')}</div></div>
+      ${rowCard(`${pass?.bike ? '' : `<div class="q-ritem">${tile('bike', COLOR.bike)}<span class="q-ritem-text"><span class="q-ritem-title">${W('每 30 分鐘換車', 'Swap YouBikes every 30 min')}</span><small>${W('長程騎車時，半路還車再借', 'On long rides, re-rent on the way')}</small></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${P.bike30}" aria-label="${W('每 30 分鐘換車', 'Swap every 30 min')}"><i></i></button></div>`}
+        <label class="q-ritem ot-sel-row">${tile('route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title">${W('導航 App', 'Navigation app')}</span></span><select id="me-maps"><option value="google" ${P.maps !== 'apple' ? 'selected' : ''}>${W('Google 地圖', 'Google Maps')}</option><option value="apple" ${P.maps === 'apple' ? 'selected' : ''}>${W('Apple 地圖', 'Apple Maps')}</option></select></label>
+        <label class="q-ritem ot-sel-row">${tile('tra', COLOR.tra)}<span class="q-ritem-text"><span class="q-ritem-title">${W('我的 TPASS', 'My TPASS')}</span>${pass ? `<small>${W('範圍內公車、台鐵、捷運 NT$0', 'Buses, TRA, metro inside: NT$0')}${pass.bike ? W('；YouBike 前 30 分鐘免費', '; YouBike’s first 30 min free') : ''}</small>` : ''}</span><select id="me-tpass"><option value="">${W('沒有 TPASS', 'No TPASS')}</option>${TPASSES.map(t => `<option value="${t.id}" ${t.id === P.tpass ? 'selected' : ''}>${e(t.name)}${W(`（NT$${t.price}）`, ` (NT$${t.price})`)}</option>`).join('')}</select></label>`)}`
+    )}
   </div>`;
 }
 
