@@ -22,7 +22,7 @@ import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
-import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
+import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -255,7 +255,7 @@ const tripOf = w => {
   return st && st.sig === tripSig(w) ? st : null;
 };
 // A way with no ride to wait for (walking, a YouBike ride) leaves whenever you do.
-const anytime = p => p.legs.every(l => l.mode === 'walk' || l.mode === 'bike');
+const anytime = p => !p.legs.some(isRide);
 const shiftPlan = (p, d) => ({ ...p, dep: p.dep + d, arr: p.arr + d, legs: p.legs.map(l => ({ ...l, dep: l.dep + d, arr: l.arr + d })) });
 
 // The kept plans now: a way whose departure has gone hands its card (its
