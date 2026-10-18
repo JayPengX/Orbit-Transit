@@ -8,7 +8,7 @@
 
 import { tdx, rows } from './api.mjs';
 import { MAPS, OPERATORS, loadSystem, lineRuns } from './metro.mjs';
-import { meters, walkSec, tw } from './util.mjs';
+import { meters, walkSec, walkGuess, tw } from './util.mjs';
 import { finish } from './plan.mjs';
 
 const DAY = 86_400_000;
@@ -183,8 +183,8 @@ function toPlan(net, x, o, d, at, endM) {
   };
   const w0 = hops[0].walk0;
   const walk = (from, to, dep, m) => {
-    const dur = walkSec(m);
-    return { mode: 'walk', from, to, dep, arr: dep + dur * 1000, dur, dist: Math.round(m * 1.3), straight: true };
+    const { dist, sec: dur } = walkGuess(m);
+    return { mode: 'walk', from, to, dep, arr: dep + dur * 1000, dur, dist, straight: true };
   };
   // Each ride: from where it was boarded to the last stop on that line.
   let ride = null;

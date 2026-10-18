@@ -12,7 +12,7 @@ import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, PREMIUM } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind } from './ui.mjs';
-import { e, hm, minsText, tw, twAt, addDays, meters, distText } from './util.mjs';
+import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
 import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -292,12 +292,12 @@ async function pickStation(which) {
   };
   const draw = () => {
     d.querySelectorAll('[data-sys]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sys === sys)));
-    const t = d.querySelector('#s-q').value.trim().replace(/台/g, '臺').replace(/(車站|站)$/, '');
+    const t = d.querySelector('#s-q').value.trim() && stationKey(d.querySelector('#s-q').value);
     const mine = list.filter(s => s.sys === sys);
     const cities = CITIES.filter(([k]) => mine.some(s => s.city === k));
     if (!cities.some(([k]) => k === city)) city = cities[0]?.[0] || city;
     d.querySelector('#s-city').innerHTML = t ? '' : cities.map(([k]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(cityShort(k))}</button>`).join('');
-    const shown = t ? mine.filter(s => s.name.replace(/台/g, '臺').includes(t)) : mine.filter(s => s.city === city);
+    const shown = t ? mine.filter(s => stationKey(s.name).includes(t)) : mine.filter(s => s.city === city);
     d.querySelector('#s-list').innerHTML = shown.map(s => `<button class="ot-st-btn" type="button" data-st="${e(s.key)}">${e(s.name)}${s.cls === '0' || s.cls === '1' ? '<i></i>' : ''}</button>`).join('') || `<p class="ot-note">${W('沒有符合的車站', 'No matching station')}</p>`;
     const h = ctx.here;
     const near = h ? mine.map(s => [meters(h.lat, h.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0]).slice(0, 3) : [];

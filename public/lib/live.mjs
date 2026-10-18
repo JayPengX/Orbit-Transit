@@ -12,8 +12,8 @@
 import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stopTimes, routeCity } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
-import { finish } from './plan.mjs';
-import { meters, walkSec, zh, tw, twAt, addDays, etaAge } from './util.mjs';
+import { finish, walkLeg } from './plan.mjs';
+import { meters, walkSec, zh, tw, twAt, addDays, etaAge, routeNorm, sameRoute } from './util.mjs';
 
 import { W } from './lang.mjs';
 const MIN = 60_000;
@@ -24,22 +24,6 @@ const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTi
 export async function etaNear(lat, lon, r = 150) {
   const j = await tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${lat.toFixed(4)},${lon.toFixed(4)},${r})&${FIELDS}&$top=300`, { fresh: 'live' });
   return rows(j);
-}
-
-// Google's and TDX's names for one route differ (快捷8經興隆大橋, 快捷8號;
-// 藍1區間車, 藍1): the same when one is the other plus words, never 5 and 5608.
-// Chinese numerals as digits too (Google's 快捷八號 is TDX's 快捷8號).
-const NUM = { 〇: 0, 零: 0, 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
-const digits = s =>
-  s.replace(/([一二三四五六七八九]?)十([一二三四五六七八九]?)/g, (_, a, b) => `${a ? NUM[a] : 1}${b ? NUM[b] : 0}`).replace(/[〇零一二兩三四五六七八九](?=[號号路線线支區]|$)/g, c => NUM[c]);
-export const routeNorm = s => digits(String(s || '').replace(/\s+/g, '')).replace(/[號号线線]/g, '').replace(/[（(].*$/, '').replace(/台/g, '臺').toUpperCase();
-export function sameRoute(a, b) {
-  const x = routeNorm(a);
-  const y = routeNorm(b);
-  if (!x || !y) return false;
-  if (x === y) return true;
-  const [s, l] = x.length < y.length ? [x, y] : [y, x];
-  return l.startsWith(s) && !/\d/.test(l[s.length]) && !/^\d+$/.test(l.slice(s.length));
 }
 
 // A route's buses at those stops, as moments: [{ at, last, plate }], and
@@ -330,11 +314,6 @@ export function rideTime(way, i, j, sched = null) {
   return Math.round(((m * 1.15) / BUS_M_MIN) * 60 + (j - i - 1) * STOP_SEC);
 }
 
-const walkTo = (a, b, dep) => {
-  const dist = Math.round(meters(a.lat, a.lon, b.lat, b.lon) * 1.3);
-  const dur = walkSec(dist / 1.3);
-  return { mode: 'walk', from: { name: a.name || '', lat: a.lat, lon: a.lon }, to: { name: b.name || '', lat: b.lat, lon: b.lon }, dur, dist, dep, arr: dep + dur * 1000, straight: true };
-};
 
 // The buses from within `fromM` of a to within `toM` of b with no change,
 // leaving after `at`: up to `n` plans [walk, bus, walk], soonest there first.
@@ -386,7 +365,7 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     const { w, i, j } = best;
     const bs = w.stops[i];
     const as = w.stops[j];
-    const w1 = walkTo(a, bs, at);
+    const w1 = walkLeg(a, bs, at);
     const ready = w1.arr;
     // When the bus comes: TDX's estimate, else today's timetable at that stop.
     let dep = null;
@@ -412,7 +391,7 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     const legs = [];
     if (w1.dist > 20) legs.push({ ...w1, dep: dep - 60_000 - w1.dur * 1000, arr: dep - 60_000 });
     legs.push(bus);
-    const w2 = walkTo(as, b, bus.arr);
+    const w2 = walkLeg(as, b, bus.arr);
     if (w2.dist > 20) legs.push(w2);
     out.push(finish({ src: 'bus', legs, live: isLive }));
     trace?.kept.push(c.route);

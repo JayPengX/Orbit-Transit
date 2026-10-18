@@ -79,6 +79,8 @@ export const etaAge = (r, now = Date.now()) => {
   return Number.isFinite(t) ? Math.min(300, Math.max(0, (now - t) / 1000)) : 0;
 };
 export const walkSec = m => Math.round(((m * 1.3) / WALK_M_MIN) * 60);
+// A walk of `m` metres as the crow flies, as shown and timed (the streets' ×1.3 in both).
+export const walkGuess = m => ({ dist: Math.round(m * 1.3), sec: walkSec(m) });
 
 // Google's encoded polyline → [[lat, lon]…].
 export function decodeGoogle(str) {
@@ -151,3 +153,29 @@ let holidayCheck = () => false;
 export const useHolidays = fn => (holidayCheck = typeof fn === 'function' ? fn : () => false);
 export const holidayOn = date => holidayCheck(date);
 export const weekdaysOnly = days => days.length > 0 && !days.includes(0) && !days.includes(6);
+
+// Google's and TDX's names for one route differ (快捷8經興隆大橋, 快捷8號;
+// 藍1區間車, 藍1): the same when one is the other plus words, never 5 and 5608.
+// Chinese numerals as digits too (Google's 快捷八號 is TDX's 快捷8號).
+const NUM = { 〇: 0, 零: 0, 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+const digits = s =>
+  s.replace(/([一二三四五六七八九]?)十([一二三四五六七八九]?)/g, (_, a, b) => `${a ? NUM[a] : 1}${b ? NUM[b] : 0}`).replace(/[〇零一二兩三四五六七八九](?=[號号路線线支區]|$)/g, c => NUM[c]);
+export const routeNorm = s => digits(String(s || '').replace(/\s+/g, '')).replace(/[號号线線]/g, '').replace(/[（(].*$/, '').replace(/台/g, '臺').toUpperCase();
+export function sameRoute(a, b) {
+  const x = routeNorm(a);
+  const y = routeNorm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [s, l] = x.length < y.length ? [x, y] : [y, x];
+  return l.startsWith(s) && !/\d/.test(l[s.length]) && !/^\d+$/.test(l.slice(s.length));
+}
+
+// A station's name however a source or a person writes it (台 or 臺, 臺鐵 or
+// 高鐵 before it, 火車站, 車站 or 站 after): 竹北火車站, 臺鐵竹北車站 and 竹北 are one.
+export const stationKey = n => {
+  const s = String(n || '').replace(/\s+/g, '').replace(/台/g, '臺');
+  return s.replace(/^(臺鐵|高鐵)/, '').replace(/(火車站|車站|站)$/, '') || s;
+};
+// A pinned way (plan.mjs pickSig) kept from before its lines were read by
+// routeNorm (快捷八號 as 快捷8): read by the rule now, so the pin still holds.
+export const pinSig = k => String(k).split('|').map(x => (/^(tra|hsr):/.test(x) ? x : x.replace(/^(\w+):(.*)$/, (_, m, n) => `${m}:${routeNorm(n)}`))).join('|');

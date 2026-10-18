@@ -6,7 +6,7 @@
 // planner may use. The newer copy (by `t`) wins; this device keeps one too,
 // so it opens at once.
 
-import { uid } from './util.mjs';
+import { uid, pinSig } from './util.mjs';
 
 import { W } from './lang.mjs';
 export const MAX_GROUPS = 12;
@@ -95,8 +95,8 @@ export function cleanSaved(x) {
     back: hhmm(x.back),
     // Days whose times differ (星期五 earlier home): [{ days, time, back }], each a day only once.
     alt: cleanAlt(x.alt),
-    // Recommendations pinned on it (their rides: ridesSig in plan.mjs), shown first.
-    picks: [...new Set((Array.isArray(x.picks) ? x.picks : []).filter(k => typeof k === 'string' && k.length <= 300))].slice(0, 6)
+    // Recommendations pinned on it (their rides: pickSig in plan.mjs, read by today's rule), shown first.
+    picks: [...new Set((Array.isArray(x.picks) ? x.picks : []).filter(k => typeof k === 'string' && k.length <= 300).map(pinSig))].slice(0, 6)
   };
 }
 function cleanAlt(list) {

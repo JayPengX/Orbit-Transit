@@ -26,7 +26,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, inTaiwan } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
 import * as kit from '#kit/quadra.mjs';
@@ -295,7 +295,7 @@ async function nearBikesNow() {
   const asked = walksFrom(h, near.map(x => x.s));
   const ws = await Promise.race([asked, new Promise(r => setTimeout(() => r(near.map(x => walkKnown(h, x.s))), 1500))]);
   if (run !== nearRun) return nearDone;
-  const rows = near.map((x, k) => ({ ...x, walk: ws[k] || { dist: Math.round(x.d), sec: walkSec(x.d) } })).sort((a, b) => a.walk.dist - b.walk.dist);
+  const rows = near.map((x, k) => ({ ...x, walk: ws[k] || walkGuess(x.d) })).sort((a, b) => a.walk.dist - b.walk.dist);
   shownBikes = rows.map(x => x.s);
   box.hidden = !rows.length;
   box.innerHTML = rows
@@ -616,8 +616,7 @@ async function directTo(c, mode) {
   if (mode === 'walk') {
     // (The walk its button said: walkFrom.)
     const w = await walkFrom(h, to, { line: true });
-    const dist = w?.dist || Math.round(meters(h.lat, h.lon, c.lat, c.lon) * 1.3);
-    const dur = w?.sec || walkSec(dist / 1.3);
+    const { dist, sec: dur } = w || walkGuess(meters(h.lat, h.lon, c.lat, c.lon));
     legs = [{ mode: 'walk', from, to, dist, dur, dep: now, arr: now + dur * 1000, poly: w?.poly, fmt: '', road: Boolean(w?.poly) }];
   } else {
     const city = await ctx.cityOf(h.lat, h.lon);
@@ -1086,8 +1085,8 @@ async function localMatches(t) {
     // Nearest first (竹北 before 北竹).
     const c = ctx.here || map?.center();
     stations = [...rail, ...metro]
-      .filter(s => norm(s.name).includes(T.replace(/(車站|站)$/, '')))
-      .map(s => ({ s, d: c ? meters(c.lat, c.lon, s.lat, s.lon) : 0, exact: norm(s.name) === T.replace(/(車站|站)$/, '') }))
+      .filter(s => stationKey(s.name).includes(stationKey(T)))
+      .map(s => ({ s, d: c ? meters(c.lat, c.lon, s.lat, s.lon) : 0, exact: stationKey(s.name) === stationKey(T) }))
       .sort((a, b) => b.exact - a.exact || a.d - b.d)
       .map(x => ({ ...x.s, dist: c ? x.d : null }))
       .slice(0, 6)
@@ -1433,8 +1432,7 @@ async function planRest(c) {
     // one from here: the walk, the way when it's that short or nothing else came.)
     const d = meters(prev.lat, prev.lon, x.lat, x.lon);
     if (d <= 1500 && !plans.some(q => q.legs.every(l => l.mode === 'walk'))) {
-      const dist = Math.round(d * 1.3);
-      const dur = walkSec(d);
+      const { dist, sec: dur } = walkGuess(d);
       const w = { mode: 'walk', from: { name: prev.name || '', lat: prev.lat, lon: prev.lon }, to: { name: x.name || '', lat: x.lat, lon: x.lon }, dist, dur, dep: at, arr: at + dur * 1000, straight: true };
       plans = [{ ...finish({ src: 'walk', legs: [w] }), top: d <= 500 || !plans.length, lead: true, weak: false, times: [], tags: [] }, ...plans];
     }
@@ -2247,8 +2245,8 @@ const nextOf = n => {
 async function restFrom(stop, dest, at) {
   const d = meters(stop.lat, stop.lon, dest.lat, dest.lon);
   const walk = () => {
-    const dur = walkSec(d);
-    return [{ mode: 'walk', from: stop, to: dest, dep: at, arr: at + dur * 1000, dur, dist: Math.round(d), straight: true }];
+    const { dist, sec: dur } = walkGuess(d);
+    return [{ mode: 'walk', from: stop, to: dest, dep: at, arr: at + dur * 1000, dur, dist, straight: true }];
   };
   if (d < 400) return walk();
   try {
