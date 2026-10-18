@@ -243,7 +243,7 @@ export function tripAt(plan, pos, i = 0, now = Date.now()) {
     const a = at(k);
     if (!a?.on) continue;
     if (RIDE(l)) {
-      if (a.d > 200 && a.left > 150 && now >= (l.dep ?? 0) - 3 * 60_000) return { i: k, phase: 'on' };
+      if (a.d > 200 && a.left > 150 && now >= (l.dep ?? 0) - 3 * 60_000) return { i: k, phase: 'on', d: a.d };
     } else if (k > i && a.d > 60 && !busy) return { i: k, phase: 'before' };
   }
   return null;
@@ -705,7 +705,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.fresh = 0;
     state.offAt = off ? Date.now() : 0;
     // (Off a bus or train by the map: watched a while for still being on it.)
-    state.passed = off && RIDE(plan.legs[state.i - 1]) ? { k: state.i - 1, at: Date.now() } : null;
+    // (`j`: the stop taken as off at, when it isn't the plan's: stayed on past it.)
+    state.passed = off && RIDE(plan.legs[state.i - 1]) ? { k: state.i - 1, at: Date.now(), j: state.offJ ?? null } : null;
     state.track = [];
     state.paced = null;
     state.away = 0;
@@ -714,6 +715,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.offWay = 0;
     state.delayLive = false;
     state.done = false;
+    state.boarding = null;
+    state.offJ = null;
     saveNav(state);
     draw(plan, state.i);
     render();
@@ -723,9 +726,35 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // The trip moving you on (or back on a ride you stayed on) by itself:
   // that step is where you've got to. (A tap only shows a step: go.)
   const reach = (i, phase = 'before', off = false) => {
+    const was = state.reached;
     state.reached = Math.max(0, Math.min(plan.legs.length - 1, i));
+    state.look = null;
+    // (Steps passed on the way, the phone locked between them: a bike given back there is ended too.)
+    for (let k = was + 1; k < state.reached; k++) if (rentalStep(plan, k) === 'end' && rental()) endRental();
     bikeTimer(state.reached);
     go(i, phase, off);
+  };
+  // On board, said by two fixes: the second further along its way than the
+  // first (one fix on the bus's road while walking to the stop, or a jump, isn't a ride).
+  const aboard = (k, d) => {
+    const b = state.boarding;
+    if (b?.k === k && d > b.d + 30) return true;
+    state.boarding = { k, d: b?.k === k ? Math.min(b.d, d) : d };
+    return false;
+  };
+  // Off the ride only near where you get off along its own way (a one-way
+  // pair or a loop passes close to the stop long before), as far as you've
+  // got on it (a fix at the stop missed still counts); `away`: or once
+  // you've left its way. Its stops not known: `guess`.
+  const offEnd = (p, k, guess, away = false) => {
+    const rs = state.ride.get(k);
+    if (!rs?.stops?.length) return guess;
+    rs.cum ||= routeCum(rs.stops);
+    const from = Math.max(0, rs.i - 1);
+    if (away && offRide(rs.stops, p, rs.cum, from, legPts(plan.legs[k])) > 250) return true;
+    const a = alongRoute(rs.stops, p, rs.cum, from);
+    const got = Math.max(a?.d ?? 0, ...state.track.map(x => x.d));
+    return got >= rs.cum[state.offJ ?? rs.j] - (OFF_M[plan.legs[k].mode] || 120);
   };
   // YouBike's timer kept by the trip itself: at the station, the bike's ride
   // starts it (換一台 starts it over); walking on from a bike returned ends
@@ -863,23 +892,41 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     onEnd?.({ arrived: plan.dest?.name || l.to?.name || W('目的地', 'destination'), plan });
   };
   const moved = p => {
+    // A rough fix (a cell tower's, 100 m and more out) moves the dot, never the trip.
+    if (p.acc > 100) return follow?.(p);
     state.pos = p;
     state.posAt = Date.now();
     follow?.(p);
+    // Looked ahead while on a ride: it's still followed; your stop next, back
+    // on it (and buzzed); nothing else moves the trip meanwhile.
+    if (state.look && state.i > state.reached) {
+      const k = state.reached;
+      const l0 = plan.legs[k];
+      const rs = state.ride.get(k);
+      if (rs ? nextStop(rs.stops, rs.i, rs.j, p) >= rs.j : l0.to?.lat != null && meters(p.lat, p.lon, l0.to.lat, l0.to.lon) < NEXT_STOP_M) {
+        state.look = null;
+        go(k, 'on');
+      } else return render();
+    }
     // Taken as off at your stop, but still going along the bus's (or train's)
     // way, 300 m and more past it: you stayed on. Back on it, off at the next
     // stop, the rest planned from there (the owner, 2026-10-13).
     const sp = state.passed;
     if (sp && state.i === sp.k + 1 && Date.now() - sp.at < 6 * 60_000) {
       const rs = state.ride.get(sp.k);
-      if (rs?.stops?.length && rs.j < rs.stops.length - 1) {
+      const j = sp.j ?? rs?.j;
+      if (rs?.stops?.length && j < rs.stops.length - 1) {
         rs.cum ||= routeCum(rs.stops);
-        const a = alongRoute(rs.stops, p, rs.cum, rs.j);
-        const k = a && a.off < 120 && a.d > rs.cum[rs.j] + 300 ? rs.cum.findIndex((c, x) => x > rs.j && c > a.d + 50) : -1;
+        const a = alongRoute(rs.stops, p, rs.cum, j);
+        // (At a ride's speed, 8 km/h and more since: walking on along its road isn't staying on.)
+        const fast = a && (a.d - rs.cum[j]) / Math.max(1, (Date.now() - sp.at) / 1000) > 2.2;
+        const k = a && a.off < 120 && a.d > rs.cum[j] + 300 && fast ? rs.cum.findIndex((c, x) => x > j && c > a.d + 50) : -1;
         if (k > 0) {
-          const was = rs.stops[rs.j].name;
+          const was = rs.stops[j].name;
           state.passed = null;
           reach(sp.k, 'on');
+          // (Off at that stop now, not the one passed, till the rest is planned from it: never back and forth.)
+          state.offJ = k;
           return onAction?.('stayed', { k, was, stop: rs.stops[k] });
         }
       }
@@ -887,7 +934,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // Moved on to a later step already (its start reached, or this one's end
     // missed): there at once, off the bus or train if that's where you were.
     const on = tripAt(plan, p, state.i);
-    if (on && (on.i > state.i || (on.phase === 'on' && state.phase !== 'on'))) {
+    const riding = state.phase === 'on' && RIDE(plan.legs[state.i]);
+    if (on && (on.i > state.i || (on.phase === 'on' && state.phase !== 'on')) && (on.phase !== 'on' || (on.i === state.i && riding) || aboard(on.i, on.d)) && (!riding || on.i === state.i || offEnd(p, state.i, true, true))) {
       if (on.i === state.i) {
         state.phase = 'on';
         state.where = null;
@@ -934,7 +982,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         } else state.leftAlong = null;
       } else {
         // On board once you've left the stop behind.
-        if (state.phase === 'before' && l.from?.lat && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 200 && left < meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon)) {
+        if (state.phase === 'before' && l.from?.lat && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 200 && left < meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) && aboard(state.i, meters(p.lat, p.lon, l.from.lat, l.from.lon))) {
           state.phase = 'on';
           state.where = null;
           saveNav(state);
@@ -967,7 +1015,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           state.alerted = state.i;
           buzz();
         }
-        if (state.phase === 'on' && left < (OFF_M[l.mode] || 120) && state.i < plan.legs.length - 1) return reach(state.i + 1, 'before', true);
+        if (state.phase === 'on' && state.i < plan.legs.length - 1 && (rs ? offEnd(p, state.i, false) : left < (OFF_M[l.mode] || 120))) return reach(state.i + 1, 'before', true);
       }
       arrive();
     }
@@ -1068,6 +1116,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // The countdown to the second; everything else said (to set out, till you're there) every 10 s.
   state.tick = setInterval(() => {
     if (state.done && Date.now() - state.doneAt >= END_MS) return finish();
+    // (Over 90 minutes past the planned arrival, the screen kept on: ended, as on coming back.)
+    if (!state.done && plan.arr < Date.now() - NAV_KEEP) {
+      stopNav();
+      return onEnd?.();
+    }
     if (document.visibilityState === 'visible' && Date.now() - Math.max(state.posAt || 0, state.watchAt || 0) > 30_000) watch();
     if (Date.now() - state.drawn >= 10_000) {
       arrive();
@@ -1081,7 +1134,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const end = ev.target.closest('[data-nav-bike]')?.dataset.navBike;
     if (end) return swapStation(end);
     const k = ev.target.closest('[data-nav-go]')?.dataset.navGo;
-    if (k != null && Number(k) >= state.reached) return go(Number(k), Number(k) === state.i ? state.phase : 'before');
+    if (k != null && Number(k) >= state.reached) {
+      // (Looking ahead from a ride you're on: it's still followed, and a tap back is on it again.)
+      if (Number(k) !== state.i && state.i === state.reached && state.phase === 'on' && RIDE(plan.legs[state.i])) state.look = { k: state.i };
+      const back = Number(k) === state.look?.k;
+      if (back) state.look = null;
+      return go(Number(k), Number(k) === state.i ? state.phase : back ? 'on' : 'before');
+    }
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
     if (a === 'end') {
       // Asked first: 結束 sits where a thumb lands, and an ended ride can't be had back.
@@ -1150,12 +1209,22 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   const first = plan.legs.findIndex(l => l.arr > now - 60_000);
   const from = resume && resume.i >= (first > 0 ? first : 0) - 1 ? { i: resume.i, phase: resume.phase === 'on' ? 'on' : 'before' } : { i: first > 0 ? first : 0, phase: 'before' };
   // (Where the device was a few minutes ago at most: an old fix is no "here".)
-  const here0 = here && !(here.at && now - here.at > 3 * 60_000) ? tripAt(plan, here, 0, now) : null;
-  const start = here0 && (here0.i > from.i || (here0.i === from.i && here0.phase === 'on')) ? here0 : from;
+  const fresh = here && here.lat != null && !(here.at && now - here.at > 3 * 60_000) ? here : null;
+  const here0 = fresh ? tripAt(plan, fresh, 0, now) : null;
+  // (Started a few minutes late, still on a walk or ride of your own the clock has put behind: that step, not the next.)
+  const onOwn = k => {
+    const pts = !RIDE(plan.legs[k]) && legPts(plan.legs[k]);
+    const a = pts && alongRoute(pts, fresh, routeCum(pts));
+    return Boolean(a && a.off < (ON_WAY[plan.legs[k].mode] || 80));
+  };
+  const behind = !resume && fresh && !here0 && from.i > 0 ? [...Array(from.i).keys()].reverse().find(onOwn) : undefined;
+  const start = here0 && (here0.i > from.i || (here0.i === from.i && here0.phase === 'on')) ? here0 : behind != null ? { i: behind, phase: 'before' } : from;
   // (Opened again: as far as it had got, the step shown as it was.)
   state.reached = start === from && resume?.reached != null ? Math.min(Number(resume.reached) || 0, start.i) : start.i;
   // (Started where you are already riding a bike the trip takes: its timer too.)
-  if (start === here0 && start.i > 0) bikeTimer(state.reached);
+  // (Or at the station of a trip that starts with the bike.)
+  const atBike = start.i === 0 && plan.legs[0].mode === 'bike' && fresh && plan.legs[0].from?.lat != null && meters(fresh.lat, fresh.lon, plan.legs[0].from.lat, plan.legs[0].from.lon) < 60;
+  if ((start === here0 && start.i > 0) || atBike) bikeTimer(state.reached);
   go(start.i, start.phase);
   // Every ride's stops, for the map (each stop a dot on its line), ahead of
   // reaching it; refreshLive finds them kept.

@@ -1805,7 +1805,7 @@ test('navigation knows the step you are at from where you are: a step’s end mi
   });
   assert.equal(tripAt(plan, school, 0, T('17:02')), null, 'at the start: nothing to move on to');
   assert.deepEqual(tripAt(plan, P(24.7356, 121.0911), 0, T('17:05')), { i: 1, phase: 'before' }, 'half way on the bike, the walk’s end never seen');
-  assert.deepEqual(tripAt(plan, P(24.76, 121.06), 0, T('17:20')), { i: 3, phase: 'on' }, 'started on the train');
+  assert.deepEqual((({ i, phase }) => ({ i, phase }))(tripAt(plan, P(24.76, 121.06), 0, T('17:20'))), { i: 3, phase: 'on' }, 'started on the train');
   assert.equal(tripAt(plan, P(24.76, 121.06), 0, T('16:30')), null, 'not on a train that can’t have come yet');
   assert.equal(tripAt(plan, zhudong, 2, T('17:11')), null, 'at the station, waiting: still the walk to it');
 });
