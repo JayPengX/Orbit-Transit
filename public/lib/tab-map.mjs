@@ -9,7 +9,7 @@
 
 import { createMap } from './map.mjs';
 import { fitNumbers, netState } from '#kit/quadra.mjs';
-import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, PROXY, liveMs, bikeMs, onFresh } from './api.mjs';
+import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
@@ -448,8 +448,7 @@ async function tap(pt) {
   if (card) return closeCard();
   openCard({ kind: 'point', item: { name: MAP_SPOT, lat: pt.lat, lon: pt.lon }, lat: pt.lat, lon: pt.lon });
   try {
-    const res = await fetch(`${PROXY}/weather/where?lat=${pt.lat.toFixed(5)}&lon=${pt.lon.toFixed(5)}&qt=${encodeURIComponent(await ctx.q.ensureToken())}`);
-    const w = res.ok ? await res.json() : null;
+    const w = await whereIs(pt);
     if (card?.kind === 'point' && card.lat === pt.lat && w?.town) {
       card.item.name = W([w.town, w.village].filter(Boolean).join(' ') + '附近', `Near ${[w.town, w.village].filter(Boolean).join(' ')}`);
       card.item.sub = w.county || '';
@@ -866,7 +865,7 @@ function alertSheet(c, x) {
       ctx.status(W(`${x.route} 到站前 ${m.dataset.min} 分鐘會提醒你`, `Alert ${m.dataset.min} min before ${x.route}`));
     } else if (ev.target.closest('[data-off]')) removeAlert(on.id);
     else return;
-    d.close();
+    d.shut();
     if (card) renderCard();
   });
 }
@@ -1011,7 +1010,7 @@ export function pickPoint(title, { here = false, onMap = true } = {}) {
       if (v && !v.here && v.lat != null && !inTaiwan(v.lat, v.lon)) return ctx.status(OUTSIDE);
       if (done) return;
       done = true;
-      d.close();
+      d.shut();
       resolve(v);
     };
     const session = uid() + uid();
@@ -1213,7 +1212,7 @@ async function rentalSheet() {
   d.addEventListener('click', ev => {
     const b = ev.target.closest('[data-rent]');
     if (b) {
-      d.close();
+      d.shut();
       if (b.dataset.rent === 'end') {
         endRental();
         ctx.status(W(`已還車，騎了 ${rentClock(Date.now() - r.at)}`, `Returned after ${rentClock(Date.now() - r.at)}`));
@@ -1225,7 +1224,7 @@ async function rentalSheet() {
     }
     const st = near.find(x => x.s.uid === ev.target.closest('[data-rent-st]')?.dataset.rentSt)?.s;
     if (st) {
-      d.close();
+      d.shut();
       arrive({ kind: 'bike', item: st, lat: st.lat, lon: st.lon });
     }
   });
@@ -1295,7 +1294,7 @@ function pinSheet(p) {
       } else ctx.data.places = ctx.data.places.filter(x => x.id !== del.dataset.del);
       ctx.save();
       drawChips();
-      d.close();
+      d.shut();
       return pinSheet(p);
     }
     if (ev.target.closest('[data-save]')) {
@@ -1304,7 +1303,7 @@ function pinSheet(p) {
       ctx.data.places = [...ctx.data.places, clean];
       ctx.save();
       drawChips();
-      d.close();
+      d.shut();
       if (card) renderCard();
     }
   });
@@ -1487,7 +1486,7 @@ function setWhen(kind) {
     m.addEventListener('click', ev => {
       const b = ev.target.closest('[data-pick-when]');
       if (!b) return;
-      m.close();
+      m.shut();
       setWhen(b.dataset.pickWhen);
     });
     return;
@@ -1512,7 +1511,7 @@ function setWhen(kind) {
     let at = twAt(date, time);
     if (at < Date.now() - 5 * 60_000 && date === today) at = twAt(addDays(today, 1), time);
     when = { by: kind, at: Math.max(at, Date.now()) };
-    d.close();
+    d.shut();
     replan();
   });
 }
@@ -2098,7 +2097,7 @@ function navMore() {
   d.addEventListener('click', async ev => {
     const m = ev.target.closest('[data-m]')?.dataset.m;
     if (!m) return;
-    d.close();
+    d.shut();
     if (m === 'min') return shrinkNav(true);
     if (m === 'replan') return replanFromHere();
     if (m === 'off') return changeOffSheet();
@@ -2130,7 +2129,7 @@ function editTripSheet() {
     const k = ev.target.closest('[data-ed]')?.dataset.ed;
     const add = ev.target.closest('[data-ed-add]')?.dataset.edAdd;
     if (x == null && k == null && !add) return;
-    d.close();
+    d.shut();
     let list = places.slice();
     if (x != null) list.splice(Number(x), 1);
     else {
@@ -2172,7 +2171,7 @@ function changeOffSheet() {
   d.addEventListener('click', async ev => {
     const k = Number(ev.target.closest('[data-k]')?.dataset.k);
     if (!Number.isFinite(k)) return;
-    d.close();
+    d.shut();
     if (k === rs.j) return;
     const stop = rs.stops[k];
     const at = navStopAt(k) ?? Date.now();
@@ -2355,7 +2354,7 @@ export function saveTripSheet(c, { edit = null } = {}) {
     if (ev.target.closest('[data-del]')) {
       ctx.data.saved = ctx.data.saved.filter(y => y.id !== edit.id);
       ctx.save();
-      d.close();
+      d.shut();
       ctx.refreshTabs?.();
       return;
     }
@@ -2375,7 +2374,7 @@ export function saveTripSheet(c, { edit = null } = {}) {
     if (!clean) return;
     ctx.data.saved = edit ? ctx.data.saved.map(y => (y.id === edit.id ? clean : y)) : [...ctx.data.saved, clean];
     ctx.save();
-    d.close();
+    d.shut();
     ctx.status(edit ? W('已更新行程', 'Trip updated') : W(`已釘選「${clean.name}」，在「交通」看接下來的班次`, `Pinned ${clean.name}: see its next rides under Transit`));
     if (card) renderCard();
     ctx.refreshTabs?.();

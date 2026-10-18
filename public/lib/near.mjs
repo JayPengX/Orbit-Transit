@@ -14,39 +14,18 @@
 // Each falls back to TDX's own search around the point when the packs
 // can't be had.
 
-import { kept, keep, tdx, rows, dataAt, liveMs } from './api.mjs';
+import * as kit from '#kit/quadra.mjs';
+import { tdx, rows, dataAt, liveMs } from './api.mjs';
 import { pack } from './packs.mjs';
 import { stationsNear, etaOf, routeCity } from './bus.mjs';
 import { cityBikes, bikesNear } from './bike.mjs';
 import { meters, zh } from './util.mjs';
 
-export const WHERE = 'https://orbit-workers-proxy.pengzjay.workers.dev/data/where.json';
-const FRESH = 20 * 3_600_000;
-
-// where.json (kept a day): { cell, packs: [name…], cells: { "<i>_<j>": [k…] } }.
-let whereP = null;
-let whereAt = 0;
-export function where({ fetchFn = fetch } = {}) {
-  if (whereP && Date.now() - whereAt < FRESH) return whereP;
-  whereAt = Date.now();
-  whereP = (async () => {
-    const disk = await kept('where');
-    if (disk && Date.now() - disk.at < FRESH) return disk.data;
-    try {
-      const res = await fetchFn(WHERE);
-      if (!res.ok) throw new Error(String(res.status));
-      const data = await res.json();
-      keep('where', data, Date.now());
-      return data;
-    } catch {
-      if (disk) return disk.data;
-      whereAt = Date.now() - FRESH + 60_000; // asked again in a minute
-      return null;
-    }
-  })();
-  return whereP;
-}
-export const useWhere = w => ((whereP = Promise.resolve(w)), (whereAt = Date.now()));
+// where.json (kept a day, the kit's packJson): { cell, packs: [name…], cells: { "<i>_<j>": [k…] } }; null when it can't be had.
+let given = null;
+export const where = () => given || kit.packJson('where.json', { ttl: 20 * 3_600_000 }).catch(() => null);
+// (The tests' own.)
+export const useWhere = w => (given = Promise.resolve(w));
 
 // The packs (and bike cities: 'bike:Hsinchu') with something within r metres of a point.
 export function namesAround(w, lat, lon, r) {

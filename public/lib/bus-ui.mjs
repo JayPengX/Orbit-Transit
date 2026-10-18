@@ -420,7 +420,7 @@ export function chooseGroup(raw, done) {
     if (g.items.length >= MAX_ITEMS) return ctx.status(W(`一個群組最多 ${MAX_ITEMS} 個站牌`, `Up to ${MAX_ITEMS} stops a group`));
     g.items.push(item);
     ctx.save();
-    d.close();
+    d.shut();
     ctx.refreshTabs?.();
     done?.();
     ctx.status(W(`已加入「${g.name}」`, `Added to ${g.name}`));

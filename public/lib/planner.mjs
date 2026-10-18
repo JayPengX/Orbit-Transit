@@ -18,7 +18,7 @@ import { railNetwork } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
-import { coverage, fareOf, tpassOf, inPass, passOk, PREMIUM, bikeSwap } from './tpass.mjs';
+import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
 import { meters, tw, hm } from './util.mjs';
@@ -150,7 +150,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const pass = tpassOf(prefs.tpass);
   const passTrip = inPass(from, to, pass, cityOf);
   // Inside your TPASS's area, our router looks only at the trains the pass takes.
-  const useTrain = x => modes[x.sys] !== false && (!passTrip || (x.sys === 'tra' && !PREMIUM.has(String(x.code))));
+  const useTrain = x => modes[x.sys] !== false && (!passTrip || passTrainTrip(x));
   // While the planners think (a second or two): the packs and bikes near
   // both ends, and the buses due at the stops near you, so what comes after
   // finds them here; and the walks to the YouBike stations near each end

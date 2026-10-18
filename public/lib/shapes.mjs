@@ -11,40 +11,12 @@
 // way between them taken. Null when there's no such way (a pack not built,
 // a stop off every line): the map draws through the stops, as before.
 
-import { kept, keep } from './api.mjs';
+import * as kit from '#kit/quadra.mjs';
 import { decodeLine } from './util.mjs';
 import { squareOf } from './packs.mjs';
 
-export const SHAPES = 'https://orbit-workers-proxy.pengzjay.workers.dev/data/shape/';
-const FRESH = 6 * 86_400_000;
-const memory = new Map();
-const inflight = new Map();
-export async function shapePack(name, { fetchFn = fetch } = {}) {
-  const now = Date.now();
-  const mem = memory.get(name);
-  if (mem && now - mem.at < FRESH) return mem.data;
-  const disk = mem ? null : await kept(`shape/${name}`).catch(() => null);
-  const old = mem || disk || null;
-  if (old && now - old.at < FRESH) return memory.set(name, old), old.data;
-  if (inflight.has(name)) return inflight.get(name);
-  const p = (async () => {
-    try {
-      const res = await fetchFn(`${SHAPES}${name}.json`);
-      if (!res.ok) throw new Error(String(res.status));
-      const data = await res.json();
-      memory.set(name, { at: now, data });
-      keep(`shape/${name}`, data, now);
-      return data;
-    } catch {
-      if (old) return memory.set(name, old), old.data;
-      return null;
-    } finally {
-      inflight.delete(name);
-    }
-  })();
-  inflight.set(name, p);
-  return p;
-}
+// A shape pack ('rail', 'bus/Hsinchu'), as every app reads the family's data (the kit's packJson). null: none.
+const shapePack = name => kit.packJson(`shape/${name}.json`, { ttl: 6 * 86_400_000 }).catch(() => null);
 
 // ---- The way along the pieces --------------------------------------------------------------
 

@@ -342,9 +342,9 @@ the phone's position:
 | --- | --- | --- |
 | Live bus arrivals (each estimate counted from its `DataTime`, when TDX made it: `util.mjs etaAge`), train boards, metro boards, YouBike now | TDX | `/transit/tdx` (Shared-Proxy `transit.js`): cached and shared on the Worker (`tdxLive` 10 s, `tdxBike` 30 s), read by the app every `transitLive` / `transitBike` |
 | Stations, routes, a day's timetables | TDX | `/transit/tdx` (stations a day, timetables 6 h) and the device (`orbit-transit-data` cache: stations a week, a day's 台鐵 timetable in a compact form, a tenth of TDX's 3.7 MB) |
-| Bus routes and timetables | The family's data (R2, the proxy's `/data/`): `bus/<City>.json`, `bus/InterCity/<square>.json` (a city weekly, Shared-Proxy `builders/buses.js`) | `packs.mjs`: kept on the phone (under 20 h fresh, any age when the site can't be reached); a route not in its pack asked of TDX |
-| What's near a point | `/data/where.json` (weekly, with the packs) | `near.mjs`, kept a day |
-| The lines' shapes | `/data/shape/rail.json`, `shape/bus/…` (weekly) | `shapes.mjs`, kept a week |
+| Bus routes and timetables | The family's data (R2, the proxy's `/data/`): `bus/<City>.json`, `bus/InterCity/<square>.json` (a city weekly, Shared-Proxy `builders/buses.js`) | `packs.mjs`, read with the kit's `packJson` as every app reads the family's data: kept on the phone (under 20 h fresh, any age when the site can't be reached); a route not in its pack asked of TDX |
+| What's near a point | `/data/where.json` (weekly, with the packs) | `near.mjs` (the kit's `packJson`), kept a day |
+| The lines' shapes | `/data/shape/rail.json`, `shape/bus/…` (weekly) | `shapes.mjs` (the kit's `packJson`), kept up to a week (the kit lets a copy go after 4 days unused) |
 | The map | Google Maps JS (the browser key, counted as a map load) or NLSC | `/transit/config` |
 | Place search, details (Autocomplete beside Text Search's 20 near you: a chain's branches nearest first, a typo still found, the same chain far away left out while one is near, a place's parts folded into it: LaLaport, not its cinema or car parks; Shared-Proxy `nearFirst`, `folded`) | Google Places (New), OpenStreetMap past the cap | `/transit/search`, `/transit/place` |
 | Plans | Google's transit routes and TDX's planner | `/transit/route` |
@@ -366,7 +366,7 @@ slow.
   - `ot.trips.v2`: each saved trip's ways as planned and where from (12 hours at most), timed again from what's live;
   - `ot.nav.v1`: the ride being followed;
   - where the device was last (the map opens there at once);
-  - the `orbit-transit-data` cache, kept across versions.
+  - the `orbit-transit-data` cache, kept across versions (stations, the day's trains, walks); the family's packs in the kit's cache.
 - **除錯紀錄** (the kit's `rec`): a trip's plans and the bikes around them,
   before ranking. `scripts/replay.mjs` runs one again here. **Logs hold
   places**: keep them in `captures/` (git-ignored), never in the repo.

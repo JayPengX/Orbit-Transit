@@ -12,8 +12,8 @@ const DATA_CACHE = 'orbit-transit-data';
 
 let session = null;
 export const useSession = s => (session = s);
-const token = async () => {
-  const t = await session?.ensureToken();
+const token = async (renew = false) => {
+  const t = await session?.ensureToken({ renew });
   if (!t) throw Object.assign(new Error('signed out'), { code: 'SIGNED_OUT', status: 401 });
   return t;
 };
@@ -24,8 +24,8 @@ const token = async () => {
 // 5xx, TDX busy): most of what used to say 暫時無法取得資料 was one of those.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const passing = err => !err.status || err.status === 429 || err.status >= 500;
-async function ask(path, { signal, wait = 15_000, meta = null } = {}) {
-  const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(await token())}`;
+async function ask(path, { signal, wait = 15_000, meta = null, renew = false } = {}) {
+  const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(await token(renew))}`;
   const timer = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const stop = setTimeout(() => timer?.abort(), wait);
   signal?.addEventListener?.('abort', () => timer?.abort());
@@ -51,6 +51,8 @@ async function get(path, opts = {}) {
   try {
     return await ask(path, opts);
   } catch (err) {
+    // Turned away for its token (signed before the proxy's secret changed, or run out): once more with a new one, as the kit's own asks do.
+    if (err.status === 401 && err.code !== 'SIGNED_OUT') return ask(path, { ...opts, renew: true });
     if (!passing(err) || err.code === 'OFFLINE' || err.code === 'ABORTED' || err.code === 'SIGNED_OUT' || opts.signal?.aborted) throw err;
     await sleep(err.status === 429 ? 1500 : 700);
     return ask(path, opts);
@@ -69,6 +71,15 @@ export async function kept(path) {
   } catch {
     return null;
   }
+}
+// The family's data packs (bus, shapes, where.json) are the kit's to keep now
+// (2026-10-18): this device's old copies of them go, once.
+export async function dropOldPacks() {
+  if (!hasCaches()) return;
+  try {
+    const cache = await caches.open(DATA_CACHE);
+    for (const req of await cache.keys()) if (/^https:\/\/data\.transit\/(pack\/|shape\/|where$)/.test(req.url)) await cache.delete(req);
+  } catch {}
 }
 export async function keep(path, data, at, max = Infinity) {
   if (!hasCaches()) return;
@@ -175,12 +186,14 @@ export function townships() {
   if (towns) return Promise.resolve(towns);
   return (townsAsk ||= readTownships().finally(() => (townsAsk = null)));
 }
+// The township and village at a point (a spot tapped on the map: 竹北市 斗崙里附近).
+export const whereIs = pt => get(`/weather/where?lat=${pt.lat.toFixed(5)}&lon=${pt.lon.toFixed(5)}`, { wait: 8000 });
 async function readTownships() {
   try {
     const k = JSON.parse(localStorage.getItem(TOWNS_KEY) || 'null');
     if (k && Date.now() - k.at < 30 * 86_400_000) return (towns = k.data);
   } catch {}
-  const res = await fetch(`${PROXY}/weather/places`);
+  const res = await fetch(`${PROXY}/weather/places`, { signal: AbortSignal.timeout?.(10_000) });
   if (!res.ok) throw new Error(`places ${res.status}`);
   towns = await res.json();
   try {

@@ -10,7 +10,7 @@ import { errorText } from './api.mjs';
 import { CITIES, cityShort } from './city.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
-import { tpassOf, PREMIUM } from './tpass.mjs';
+import { tpassOf, passTrainTrip } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind } from './ui.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
@@ -118,7 +118,7 @@ const fareKey = l => `${l.from}>${l.to}:${l.trip.code}`;
 // Your TPASS (我的 → TPASS): a 台鐵 ride inside its cities, not a 太魯閣, 普悠瑪 or EMU3000.
 const pass = () => tpassOf(ctx.data.prefs.tpass);
 const inPassSt = key => Boolean(pass()?.cities.includes(net?.st.get(key)?.city));
-const onPass = l => Boolean(pass()) && l.trip.sys === 'tra' && !PREMIUM.has(String(l.trip.code)) && inPassSt(l.from) && inPassSt(l.to);
+const onPass = l => Boolean(pass()) && passTrainTrip(l.trip) && inPassSt(l.from) && inPassSt(l.to);
 // What a journey costs you: the legs your pass doesn't take.
 function fareText(rides) {
   const paid = rides.filter(l => !onPass(l));
@@ -184,7 +184,7 @@ async function search() {
     // Both stations inside your TPASS's cities: only the trains it takes (unless there are none).
     state.passOnly = false;
     if (state.mode !== 'hsr' && inPassSt(fromKey) && inPassSt(toKey)) {
-      const mine = journeys(net, starts, ends, t, { use: x => x.sys === 'tra' && !PREMIUM.has(String(x.code)) && use(x), n: 6 });
+      const mine = journeys(net, starts, ends, t, { use: x => passTrainTrip(x) && use(x), n: 6 });
       if (mine.length) {
         state.passOnly = true;
         state.results = mine;
@@ -286,7 +286,7 @@ async function pickStation(which) {
   const choose = s => {
     state[which] = { sys: s.sys, id: s.id, name: s.name };
     state.results = null;
-    d.close();
+    d.shut();
     render();
     if (state.from && state.to) search();
   };

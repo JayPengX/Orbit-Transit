@@ -164,7 +164,7 @@ function stationSheet(list) {
   d.onclosed = () => clearInterval(t);
   d.addEventListener('click', ev => {
     if (ev.target.closest('[data-route-here]')) {
-      d.close();
+      d.shut();
       ctx.openTrip(null, { name: stationTitle(name), lat: list[0].lat, lon: list[0].lon });
     }
   });

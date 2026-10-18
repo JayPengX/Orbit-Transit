@@ -5,45 +5,23 @@
 // here, in TDX's own shape, so nothing else changes; a route not in its pack
 // (or no pack to be had) is asked of TDX as before.
 
-import { kept, keep } from './api.mjs';
+import * as kit from '#kit/quadra.mjs';
 
-export const PACKS = 'https://orbit-workers-proxy.pengzjay.workers.dev/data/bus/';
 const SQUARE = 0.25;
 export const squareOf = (lat, lon) => `${(Math.floor(lat / SQUARE) * SQUARE).toFixed(2)}_${(Math.floor(lon / SQUARE) * SQUARE).toFixed(2)}`;
 const FRESH = 20 * 3_600_000;
-const memory = new Map();
-const inflight = new Map();
 
-// A pack by its name ('Hsinchu', 'InterCity/24.75_121.00'): the copy kept
-// here when it's under 20 hours old, else the site's; the kept one (any age)
-// when the site can't be reached. null: no pack.
-export async function pack(name, { fetchFn = fetch } = {}) {
-  const now = Date.now();
-  const mem = memory.get(name);
-  if (mem && now - mem.at < FRESH) return mem.data;
-  const disk = mem ? null : await kept(`pack/${name}`);
-  const old = mem || (disk ? { at: disk.at, data: index(disk.data) } : null);
-  if (old && now - old.at < FRESH) return memory.set(name, old), old.data;
-  if (inflight.has(name)) return inflight.get(name);
-  const p = (async () => {
-    try {
-      const res = await fetchFn(`${PACKS}${name}.json`);
-      if (!res.ok) throw new Error(String(res.status));
-      const data = index(await res.json());
-      memory.set(name, { at: now, data });
-      keep(`pack/${name}`, data.raw, now);
-      return data;
-    } catch {
-      if (old) return memory.set(name, old), old.data;
-      return null;
-    } finally {
-      inflight.delete(name);
-    }
-  })();
-  inflight.set(name, p);
-  return p;
+// A pack by its name ('Hsinchu', 'InterCity/24.75_121.00'), read as every
+// app reads the family's data (the kit's packJson: the copy kept here under
+// 20 hours old, else the site's; the kept one, any age, when the site can't
+// be reached). null: no pack. (Each pack indexed once.)
+const indexed = new WeakMap();
+export async function pack(name) {
+  const raw = await kit.packJson(`bus/${name}.json`, { ttl: FRESH }).catch(() => null);
+  if (!raw) return null;
+  if (!indexed.has(raw)) indexed.set(raw, { raw, byUid: new Map((raw.routes || []).map(r => [r.uid, r])) });
+  return indexed.get(raw);
 }
-const index = raw => (raw?.byUid ? raw : { raw, byUid: new Map((raw?.routes || []).map(r => [r.uid, r])) });
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const days = bits => Object.fromEntries(DAYS.map((d, i) => [d, bits & (1 << i) ? 1 : 0]));

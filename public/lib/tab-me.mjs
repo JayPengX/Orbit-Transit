@@ -165,7 +165,7 @@ export function placeSheet(id) {
     if (ev.target.closest('[data-del]')) ctx.data.places = ctx.data.places.filter(x => x.id !== id);
     else if (ev.target.closest('[data-save]')) ctx.data.places = ctx.data.places.map(x => (x.id === id ? { ...x, name: d.querySelector('#pl-name').value.trim().slice(0, 30) || x.name, icon: ic } : x));
     else return;
-    d.close();
+    d.shut();
     done();
   });
 }
