@@ -14,34 +14,50 @@ import { W } from './lang.mjs';
 import { isRide } from './util.mjs';
 
 const TAO_HSIN_MIAO_SKIP = { HsinchuCounty: ['觀光8號'] };
+// 中彰投苗's 公路客運 leaves out 台灣好行 集集線 6333D and 溪頭線 6883 (from 台中).
+const CENTRAL_SKIP = { Taichung: ['6333D', '6883'], NantouCounty: ['6333D', '6883'] };
+// 嘉義's and 嘉嘉南's 公路客運 leave out 7302, 7322, 7329 and 6739.
+const CHIAYI_SKIP = Object.fromEntries(['Chiayi', 'ChiayiCounty', 'Tainan'].map(c => [c, ['7302', '7322', '7329', '6739']]));
 
+// 2026-10, from 臺鐵's 行政院通勤月票 pages (price, buyers and stations, per
+// 生活圈: railway.gov.tw → 行政院通勤月票) and 一卡通's plan pages (what else
+// each takes: i-pass.com.tw/Page/<Region>Region); tpass.gov.tw and the
+// counties' own sites refuse us. `modes`: what it takes (else bus, 台鐵 and
+// metro); `busCities`: where its buses count (北北宜's are 宜蘭's own, its
+// 國道客運 to 台北 left out: those routes can't be told apart here; 南嘉's
+// 臺南's, 嘉義 799's 嘉義's); `only`: the only bus routes it takes in a city
+// (花蓮 199's: the six 市區客運). Every pass's 台鐵 is every class but 太魯閣,
+// 普悠瑪 and EMU3000 (臺東's too). Left out: 雲林 399 (its 台鐵 runs 員林–民雄,
+// part of 彰化 and 嘉義縣) and 澎湖 (its price is only in the county's notice).
 export const TPASSES = [
   { id: 'kbnt', name: W('基北北桃', 'Greater Taipei'), price: 1200, cities: ['Keelung', 'Taipei', 'NewTaipei', 'Taoyuan'], bike: true },
   { id: 'thhm', name: W('桃竹竹苗', 'Taoyuan–Miaoli'), price: 1200, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
   { id: 'thh', name: W('桃竹竹', 'Taoyuan–Hsinchu'), price: 799, cities: ['Taoyuan', 'Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
   { id: 'hhm', name: W('竹竹苗', 'Hsinchu–Miaoli'), price: 699, cities: ['Hsinchu', 'HsinchuCounty', 'MiaoliCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
   { id: 'hh', name: W('竹竹', 'Hsinchu'), price: 288, cities: ['Hsinchu', 'HsinchuCounty'], bike: true, skip: TAO_HSIN_MIAO_SKIP },
-  { id: 'tcnm', name: W('中彰投苗', 'Central Taiwan'), price: 999, cities: ['Taichung', 'ChanghuaCounty', 'NantouCounty', 'MiaoliCounty'], bike: true },
-  { id: 'tkp', name: W('南高屏', 'Tainan–Pingtung'), price: 999, cities: ['Tainan', 'Kaohsiung', 'PingtungCounty'], bike: false },
-  // The others (2026-10, the prices each in two or more sources that agree:
-  // iPASS's 宜蘭 page for 北北宜 and 宜蘭; SOGI 2024-09, 台灣懶人包 2026-05,
-  // 早安健康 2023-09 for the rest). `modes`: what it takes (else bus, 台鐵 and
-  // metro); `busCities`: where its buses count (北北宜's are 宜蘭's own, its
-  // 國道客運 to 台北 left out: those routes can't be told apart here);
-  // `trains`: the 台鐵 classes it takes (臺東's: 非對號 only). A pass whose
-  // buses the sources disagree on takes only 台鐵 here (paid by the planner
-  // rather than shown free when it isn't).
+  { id: 'tcnm', name: W('中彰投苗', 'Central Taiwan'), price: 999, cities: ['Taichung', 'ChanghuaCounty', 'NantouCounty', 'MiaoliCounty'], bike: true, skip: CENTRAL_SKIP },
+  { id: 'tcnmr', name: W('中彰投苗（臺中市民）', 'Central Taiwan (Taichung residents)'), price: 699, cities: ['Taichung', 'ChanghuaCounty', 'NantouCounty', 'MiaoliCounty'], bike: true, skip: CENTRAL_SKIP },
+  { id: 'tkp', name: W('南高屏', 'Tainan–Pingtung'), price: 999, cities: ['Tainan', 'Kaohsiung', 'PingtungCounty'], bike: true },
   { id: 'tc', name: W('臺中市', 'Taichung'), price: 599, cities: ['Taichung'], bike: true },
   { id: 'tcr', name: W('臺中市（市民）', 'Taichung (residents)'), price: 299, cities: ['Taichung'], bike: true },
+  { id: 'ch', name: W('彰化縣', 'Changhua'), price: 699, cities: ['ChanghuaCounty'], bike: true },
+  { id: 'nt', name: W('南投縣', 'Nantou'), price: 699, cities: ['NantouCounty'], bike: false },
   { id: 'kh', name: W('高雄市', 'Kaohsiung'), price: 399, cities: ['Kaohsiung'], bike: true },
-  { id: 'kl', name: W('基隆市', 'Keelung'), price: 288, cities: ['Keelung'], bike: false, modes: ['tra'] },
-  { id: 'tpy', name: W('北北宜', 'Taipei–Yilan'), price: 1800, cities: ['Taipei', 'NewTaipei', 'YilanCounty'], bike: false, modes: ['tra', 'bus'], busCities: ['YilanCounty'] },
+  { id: 'tn', name: W('臺南市', 'Tainan'), price: 399, cities: ['Tainan'], bike: true },
+  { id: 'tnb', name: W('臺南市（公車）', 'Tainan (buses)'), price: 299, cities: ['Tainan'], bike: true, modes: ['bus'] },
+  { id: 'tncy', name: W('臺南公車＋南嘉臺鐵', 'Tainan buses + TRA to Chiayi'), price: 799, cities: ['Tainan', 'Chiayi', 'ChiayiCounty'], bike: true, modes: ['tra', 'bus'], busCities: ['Tainan'] },
+  { id: 'pt', name: W('屏東縣', 'Pingtung'), price: 399, cities: ['PingtungCounty'], bike: true },
+  { id: 'ptb', name: W('屏東縣（公車）', 'Pingtung (buses)'), price: 299, cities: ['PingtungCounty'], bike: true, modes: ['bus'] },
+  { id: 'kl', name: W('基隆市', 'Keelung'), price: 288, cities: ['Keelung'], bike: false, modes: ['tra', 'bus'] },
+  { id: 'tpy', name: W('北北宜', 'Taipei–Yilan'), price: 1800, cities: ['Keelung', 'Taipei', 'NewTaipei', 'YilanCounty'], bike: false, modes: ['tra', 'bus'], busCities: ['YilanCounty'] },
   { id: 'yl', name: W('宜蘭縣', 'Yilan'), price: 750, cities: ['YilanCounty'], bike: false, modes: ['tra', 'bus'] },
   { id: 'hl', name: W('花蓮縣', 'Hualien'), price: 399, cities: ['HualienCounty'], bike: false, modes: ['tra', 'bus'] },
-  { id: 'hlb', name: W('花蓮縣（基本）', 'Hualien (basic)'), price: 199, cities: ['HualienCounty'], bike: false, modes: ['tra'] },
-  { id: 'tt', name: W('臺東縣', 'Taitung'), price: 299, cities: ['TaitungCounty'], bike: false, modes: ['tra', 'bus'], trains: ['6', '7', '10'] },
+  { id: 'hlb', name: W('花蓮縣（基本）', 'Hualien (basic)'), price: 199, cities: ['HualienCounty'], bike: false, modes: ['tra', 'bus'], only: { HualienCounty: ['301', '302', '303', '305', '307', '308'] } },
+  { id: 'tt', name: W('臺東縣', 'Taitung'), price: 299, cities: ['TaitungCounty'], bike: false, modes: ['tra', 'bus'] },
   { id: 'cy', name: W('嘉義', 'Chiayi'), price: 399, cities: ['Chiayi', 'ChiayiCounty'], bike: true, modes: ['tra', 'bus'] },
-  { id: 'yla', name: W('雲林縣', 'Yunlin'), price: 199, cities: ['YunlinCounty'], bike: false, modes: ['tra'] }
+  { id: 'cyt', name: W('嘉義＋南嘉臺鐵', 'Chiayi + TRA to Tainan'), price: 799, cities: ['Chiayi', 'ChiayiCounty', 'Tainan'], bike: true, modes: ['tra', 'bus'], busCities: ['Chiayi', 'ChiayiCounty'], skip: CHIAYI_SKIP },
+  { id: 'cct', name: W('嘉嘉南', 'Chiayi–Tainan'), price: 999, cities: ['Chiayi', 'ChiayiCounty', 'Tainan'], bike: true, modes: ['tra', 'bus'], skip: CHIAYI_SKIP },
+  { id: 'yla', name: W('雲林縣', 'Yunlin'), price: 199, cities: ['YunlinCounty'], bike: true, modes: ['tra', 'bus'] }
 ];
 export const tpassOf = id => TPASSES.find(p => p.id === id) || null;
 // Long rides cut every 30 minutes (每 30 分鐘換車): when set, and always
@@ -54,24 +70,21 @@ const PAID = new Set(['bus', 'tra', 'metro', 'lightrail']);
 // 台鐵 trains no TPASS takes: 太魯閣, 普悠瑪 and the EMU3000 自強 (type
 // codes 1, 2, 11; Google names them). Every other class does (自強 too).
 const PREMIUM = new Set(['1', '2', '11']);
-// A pass with its own list of classes (臺東's 非對號: 區間, 普快, 區間快) takes only those.
-const classOk = (pass, code) => (pass?.trains ? pass.trains.includes(code) : !PREMIUM.has(code));
-const passTrain = (l, pass) => {
-  if (l.mode !== 'tra') return true;
-  const code = String(l.train?.code ?? l.trip?.code ?? '');
-  if (pass?.trains) return classOk(pass, code);
-  return !(PREMIUM.has(code) || /普悠瑪|太魯閣|3000/.test(`${l.name || ''} ${l.short || ''} ${l.typeFull || ''}`));
-};
-// The same for a train in the day's timetable (rail.mjs's trips): a 台鐵 one of a class the pass takes.
-export const passTrainTrip = (x, pass = null) => x.sys === 'tra' && classOk(pass, String(x.code));
+const passTrain = l => l.mode !== 'tra' || !(PREMIUM.has(String(l.train?.code ?? l.trip?.code ?? '')) || /普悠瑪|太魯閣|3000/.test(`${l.name || ''} ${l.short || ''} ${l.typeFull || ''}`));
+// The same for a train in the day's timetable (rail.mjs's trips): a 台鐵 one a pass takes.
+export const passTrainTrip = x => x.sys === 'tra' && !PREMIUM.has(String(x.code));
 // The kinds of ride a pass takes, and where its buses count.
 const modeOn = (pass, mode) => PAID.has(mode) && (!pass?.modes || pass.modes.includes(mode));
 const busCity = (pass, city) => !pass?.busCities || pass.busCities.includes(city);
 // Can a ride ever be on the pass (高鐵 and a taxi never are)?
-const passMode = (l, pass) => !isRide(l) || (modeOn(pass, l.mode) && passTrain(l, pass));
+const passMode = (l, pass) => !isRide(l) || (modeOn(pass, l.mode) && passTrain(l));
 
-// A route the pass leaves out though it runs inside its cities (its skip list).
-const skipped = (pass, city, name) => Boolean(pass?.skip?.[city]?.includes(String(name || '').trim()));
+// A route the pass leaves out though it runs inside its cities (on its skip
+// list, or off its list of the only routes it takes there).
+const skipped = (pass, city, name) => {
+  const n = String(name || '').trim();
+  return Boolean(pass?.skip?.[city]?.includes(n) || (pass?.only?.[city] && !pass.only[city].includes(n)));
+};
 // A bus route by its city and number: on the pass?
 export const routeOnPass = (pass, city, name) => Boolean(pass) && modeOn(pass, 'bus') && pass.cities.includes(city) && busCity(pass, city) && !skipped(pass, city, name);
 // A plan's bus ride on a skipped route (its city from the ride, else either end's).
