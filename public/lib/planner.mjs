@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -344,7 +344,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // next times), each saying how late, not the trains of the day after it.
   // The direct buses come in the second round: one of them in time, the
   // arrival-time plans after all (竹東站 → 縣體育場 by 09:00 at 07:40).
-  const inTime = p => p.lead !== false && !p.weak && p.arr <= at + 2 * 60_000 && p.dep >= now - 2 * 60_000;
+  const inTime = p => p.lead !== false && !p.weak && p.arr <= at + 2 * 60_000 && p.arr >= at - ARRIVE_WINDOW && p.dep >= now - 2 * 60_000;
   // A deadline hours off (08:00 tomorrow) is searched again from six hours
   // before it instead: leaving now would be tonight's trains.
   const retry = by === 'arrive' && at && !first.some(inTime) ? missedRetry(at, now, wide) : null;
