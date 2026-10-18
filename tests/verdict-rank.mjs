@@ -6,8 +6,11 @@ import { coverage, fareOf, tpassOf, inPass, passOk, bikeSwap } from '../public/l
 
 // `jitter(i)`: minutes to move plan i by when it has a bus (live times move
 // a few minutes from one reading to the next): the verdicts must not flip.
-export function rankSaved(name, { jitter = null } = {}) {
+// `shuffle(list)`: the plans and bikes in another order (as the planners
+// answer in any order): the ranking must not change.
+export function rankSaved(name, { jitter = null, shuffle = null } = {}) {
   const t = JSON.parse(readFileSync(new URL(`./verdicts/${name}.json`, import.meta.url), 'utf8'));
+  if (shuffle) Object.assign(t, { plans: shuffle(t.plans), bikes: shuffle(t.bikes) });
   if (jitter)
     t.plans = t.plans.map((p, i) => {
       const m = p.legs.some(l => l.mode === 'bus') ? jitter(i) * 60_000 : 0;

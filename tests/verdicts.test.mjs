@@ -102,6 +102,13 @@ CASES['成功九街 → 竹東高中 at 06:45 (the north half of the street, 成
   assert.deepEqual(s.filter(p => p.legs.some(l => l.mode === 'walk' && l.dur > 10 * 60 && /文興嘉興/.test(l.to?.name || ''))).map(sayPlan), []);
 };
 
+CASES['竹東南 → 成功九街 at 16:02: 5608 to 科學園區 and a 20′ ride over 頭前溪 (17:19, half an hour before any other way) is recommended; a bus then a bus (5608, 182), set aside itself, never sets it aside (the owner, 2026-10-18)'] = opts => {
+  const r = rankSaved('zhudongsouth-chenggong-1622', opts);
+  always('zhudongsouth', r);
+  // (With the buses a few minutes off, an earlier 5608 is caught: off at 豐邦公司 for the 六家線, or 光武國中 and a ride: a 5608 way still first.)
+  assert.ok(r.some(p => p.top && !busChain(p) && /^bus:5608:竹東高中>/.test(sayPlan(p))), say(shown(r)));
+};
+
 for (const [name, check] of Object.entries(CASES)) test(name, () => check());
 
 // Reliable, not lucky: every verdict again with each plan that has a bus a
@@ -125,5 +132,25 @@ for (const [name, check] of Object.entries(CASES)) test(`${name} (buses a few mi
       err.message = `pattern ${n}: ${err.message}`;
       throw err;
     }
+  }
+});
+
+test('every verdict ranks the same whatever order the planners answered in (the same train named by two planners, 內灣-新竹 and 區間 1831, was shown by whichever came first)', async () => {
+  const { readdirSync } = await import('node:fs');
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const shuffle = a => {
+    const b = [...a];
+    for (let i = b.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [b[i], b[j]] = [b[j], b[i]];
+    }
+    return b;
+  };
+  const view = r => shown(r).map(p => `${p.top ? '*' : ''}${p.score} ${sayPlan(p)}`).join('\n');
+  for (const f of readdirSync(new URL('./verdicts/', import.meta.url))) {
+    const name = f.replace(/\.json$/, '');
+    const base = view(rankSaved(name));
+    for (let k = 0; k < 12; k++) assert.equal(view(rankSaved(name, { shuffle })), base, name);
   }
 });

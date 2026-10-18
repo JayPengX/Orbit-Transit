@@ -41,14 +41,22 @@ export function bridgesFor(a, b) {
 export const bridgeExtra = (a, b) => bridgesFor(a, b).reduce((t, x) => t + x.extra, 0);
 
 const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
-// The rivers the straight line from a to b crosses (a name once per crossing).
+// The rivers between a and b (each name once): a course the straight line
+// crosses an odd number of times. Crossing a bend twice starts and ends on
+// the same bank: no river between them, no bridge to go round by.
 export function crossed(a, b) {
   if (a?.lat == null || b?.lat == null) return [];
   const [p, q] = [[a.lat, a.lon], [b.lat, b.lon]];
   const out = [];
   for (const [name, lines] of Object.entries(RIVERS))
-    for (const c of lines)
-      for (let i = 0; i + 1 < c.length; i++) if (side(p, q, c[i]) * side(p, q, c[i + 1]) < 0 && side(c[i], c[i + 1], p) * side(c[i], c[i + 1], q) < 0) out.push(name);
+    if (
+      lines.some(c => {
+        let n = 0;
+        for (let i = 0; i + 1 < c.length; i++) if (side(p, q, c[i]) * side(p, q, c[i + 1]) < 0 && side(c[i], c[i + 1], p) * side(c[i], c[i + 1], q) < 0) n++;
+        return n % 2 === 1;
+      })
+    )
+      out.push(name);
   return out;
 }
 export const crossings = (a, b) => crossed(a, b).length;

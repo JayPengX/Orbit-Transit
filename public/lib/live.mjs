@@ -189,7 +189,8 @@ export function wayOf(ways, from, to) {
 // stop (etaNear). Three at most.
 export async function laterBuses(list, l, after, { now = Date.now(), stops = routeStops, schedule = routeSchedule } = {}) {
   const name = l.short || l.name;
-  const r = list.find(x => sameRoute(zh(x.RouteName), name) && x.RouteUID);
+  // Its own route (by id, else by its exact name) before a name like it: 快捷8號支 never takes 快捷8號's buses.
+  const r = (l.route?.uid && list.find(x => x.RouteUID === l.route.uid)) || list.find(x => x.RouteUID && routeNorm(zh(x.RouteName)) === routeNorm(name)) || list.find(x => sameRoute(zh(x.RouteName), name) && x.RouteUID);
   if (!r) return [];
   const route = { uid: r.RouteUID, name: zh(r.RouteName), city: routeCity(r.RouteUID) };
   const [ways, sched] = await Promise.all([stops(route, l.from).catch(() => []), schedule(route, l.from).catch(() => [])]);

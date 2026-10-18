@@ -2280,3 +2280,92 @@ test('one rule for names: a station however written (新竹火車站 finds 新�
   // Pinned as the old rule wrote it (no numerals read): still the same way.
   assert.equal(pinSig('bus:快捷八|tra:竹北>新竹'), pickSig(q) + '|tra:竹北>新竹');
 });
+
+test("the pass's copy with every list full still fits what the Worker takes (200,000 characters: at 100,000 a full one was refused, and lost without a word)", async () => {
+  const { encodeData, MAX_GROUPS, MAX_ITEMS, MAX_SAVED, MAX_PINS, MAX_PLACES } = await import('../public/lib/store.mjs');
+  const stop = n => ({ stopUID: 'HSZ' + (300000 + n), stop: '新竹轉運站(中華路二段)', lat: 24.801612, lon: 120.971589 });
+  const item = n => ({ id: 'i' + n.toString(36).padStart(8, 'x'), city: 'HsinchuCounty', routeUID: 'HSQ' + (5000 + n), route: '快捷8號支', dir: 0, stopUID: 'HSQ' + (200000 + n), stop: '竹北市公所(縣政九路)', headsign: '竹東高中→新竹高鐵站', lat: 24.827345, lon: 121.012845, off: stop(n), n: 12, back: { ...stop(n + 1), dir: 1, headsign: '新竹高鐵站→竹東高中', off: stop(n + 2) } });
+  const text = encodeData({
+    groups: Array.from({ length: MAX_GROUPS }, (_, g) => ({ id: 'g' + g, name: '上學路線', items: Array.from({ length: MAX_ITEMS }, (_, i) => item(g * 100 + i)) })),
+    places: Array.from({ length: MAX_PLACES }, (_, i) => ({ id: 'p' + i, name: '新竹縣政府第二辦公大樓', icon: 'work', lat: 24.82, lon: 121.01, address: '302新竹縣竹北市光明六路10號', gid: 'ChIJ' + 'x'.repeat(23) })),
+    saved: Array.from({ length: MAX_SAVED }, (_, i) => ({ id: 's' + i, name: '家 → 學校', from: { name: '家', lat: 24.8, lon: 121.0 }, to: { name: '竹東高中', lat: 24.73, lon: 121.09 }, time: '07:10', by: 'arrive', days: [1, 2, 3, 4, 5], back: '17:00', alt: [{ days: [5], time: '07:00', back: '16:00' }], picks: Array.from({ length: 6 }, (_, k) => `bus:快捷8號支|tra:竹中>新竹|metro:板南線${k}`) })),
+    pins: Array.from({ length: MAX_PINS }, (_, i) => ({ id: 'n' + i, kind: 'trainNo', sys: 'tra', no: '1831', type: '區間', dep: '07:10', from: { sys: 'tra', id: '1194', name: '竹中' }, to: { sys: 'tra', id: '1210', name: '新竹' } })),
+    t: 1
+  });
+  assert.ok(text.length > 100_000, 'the case that was refused');
+  assert.ok(text.length <= 200_000, `${text.length}`);
+});
+
+test("the metro after midnight: tonight's last trains (00:05, 00:20), then the morning's first, never tomorrow night's", async () => {
+  const { upcoming } = await import('../public/lib/metro.mjs');
+  const { hm } = await import('../public/lib/util.mjs');
+  const all = Object.fromEntries(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => [d, true]));
+  const row = { DestinationStationName: { Zh_tw: '南港展覽館' }, LineID: 'BL', Direction: 0, ServiceDay: all, Timetables: ['06:00', '06:06', '23:50', '00:05', '00:20'].map(t => ({ DepartureTime: t })) };
+  assert.deepEqual(upcoming([row], Date.parse('2026-10-19T23:45:00+08:00'), 3)[0].times.map(hm), ['23:50', '00:05', '00:20']);
+  assert.deepEqual(upcoming([row], Date.parse('2026-10-20T00:02:00+08:00'), 3)[0].times.map(hm), ['00:05', '00:20', '06:00']);
+  // A night that began on a day the line doesn't run: none of its after-midnight trains.
+  const weekdays = { ...all, Sunday: false };
+  assert.deepEqual(upcoming([{ ...row, ServiceDay: weekdays }], Date.parse('2026-10-19T00:02:00+08:00'), 3)[0].times.map(hm), ['06:00', '06:06', '23:50']);
+});
+
+test('by an arrival time, each plan catches its own bus (the 09:00 for 09:30), never every one pulled to the first bus from now', async () => {
+  const { withBikes, finish } = await import('../public/lib/plan.mjs');
+  const { adjustPlan } = await import('../public/lib/live.mjs');
+  const { twAt, hm } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-10-19', x);
+  const o = { name: 'home', lat: 24.8, lon: 121.0 };
+  const stop = { name: '站牌', lat: 24.8018, lon: 121.0 };
+  const d = { name: 'school', lat: 24.74, lon: 121.09 };
+  const plan = finish({ src: 'google', legs: [{ mode: 'walk', from: o, to: stop, dep: T('08:56'), arr: T('08:59'), dur: 180, dist: 250 }, { mode: 'bus', short: '5608', name: '5608', from: stop, to: d, dep: T('09:00'), arr: T('09:25'), dur: 1500, route: { uid: 'HSQ5608', dir: 0 } }] });
+  const row = sec => ({ RouteUID: 'HSQ5608', RouteName: { Zh_tw: '5608' }, Direction: 0, StopStatus: 0, EstimateTime: sec, DataTime: new Date(T('07:30')).toISOString() });
+  const adj = await adjustPlan(plan, T('07:30'), { near: async () => [row(360), row(80 * 60)] });
+  const out = withBikes([adj], o, d, [], T('09:30'), { modes: { bus: true, bike: false }, by: 'arrive', deadline: T('09:30'), clock: T('07:30') });
+  assert.deepEqual(out.map(p => hm(p.legs[1].dep)), ['09:00']);
+});
+
+test('a bus with live times keeps its later departures on its card (each later bus that bus, never caught again as the first)', async () => {
+  const { moreBuses, withBikes, finish } = await import('../public/lib/plan.mjs');
+  const { twAt, hm } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-10-19', x);
+  const o = { name: 'home', lat: 24.8, lon: 121.0 };
+  const stop = { name: '站牌', lat: 24.802, lon: 121.0 };
+  const d = { name: 'school', lat: 24.74, lon: 121.09 };
+  const seen = [T('08:06'), T('08:21'), T('08:36')].map(at => ({ at, planned: false, last: false }));
+  const plan = finish({ src: 'google', live: true, legs: [{ mode: 'walk', from: o, to: stop, dep: T('08:02'), arr: T('08:05'), dur: 180, dist: 250 }, { mode: 'bus', short: '5608', name: '5608', from: stop, to: d, dep: T('08:06'), arr: T('08:36'), dur: 1800, live: { at: T('08:06') }, seen, next: [T('08:21'), T('08:36')] }] });
+  const out = withBikes([plan, ...moreBuses(plan, T('08:00'))], o, d, [], T('08:00'), { modes: { bus: true, bike: false }, clock: T('08:00') });
+  assert.deepEqual(out.map(p => hm(p.legs[1].dep)).sort(), ['08:06', '08:21', '08:36']);
+});
+
+test('a bus’s later buses are its own route’s (快捷8號支 at a stop 快捷8號 shares never shows 快捷8號’s)', async () => {
+  const { laterBuses } = await import('../public/lib/live.mjs');
+  const now = Date.parse('2026-10-19T07:00:00+08:00');
+  const row = (uid, name, sec) => ({ RouteUID: uid, RouteName: { Zh_tw: name }, Direction: 0, StopStatus: 0, EstimateTime: sec, DataTime: new Date(now).toISOString() });
+  const list = [row('HSQ0747', '快捷8號', 180), row('HSQ0747', '快捷8號', 780), row('HSQ0748', '快捷8號支', 480), row('HSQ0748', '快捷8號支', 2280)];
+  const leg = { mode: 'bus', name: '快捷8號支', short: '快捷8號支', from: { lat: 24.8, lon: 121.0 }, to: { lat: 24.79, lon: 121.05 }, dep: now + 480_000, arr: now + 1_500_000, dur: 1020, route: { uid: 'HSQ0748', dir: 0 } };
+  const out = await laterBuses(list, leg, now + 480_000, { now, stops: async () => [], schedule: async () => [] });
+  assert.deepEqual(out.map(t => (t - now) / 60_000), [38]);
+});
+
+test('there is always a recommendation: a way set aside itself (a bus to a bus) never sets the only other aside', async () => {
+  const { rank, finish } = await import('../public/lib/plan.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-10-19', x);
+  const o = { name: '新竹市', lat: 24.79, lon: 120.96 };
+  const d = { name: '竹北', lat: 24.85, lon: 121.02 };
+  const S = { name: '南岸站', lat: 24.815, lon: 120.99 };
+  const N = { name: '北岸站', lat: 24.838, lon: 121.0 };
+  const leg = (mode, short, a, b, dep, arr, x = {}) => ({ mode, short, name: short, from: a, to: b, dep: T(dep), arr: T(arr), dur: (T(arr) - T(dep)) / 1000, dist: 0, ...x });
+  const R = finish({ src: 'g', legs: [leg('bus', '15', o, S, '08:05', '08:20'), leg('bike', 'YouBike', S, d, '08:21', '08:40', { dist: 6000 })] });
+  const Q = finish({ src: 'g', legs: [leg('bus', '5608', o, N, '08:03', '08:25'), leg('bus', '5700', N, d, '08:30', '08:45')] });
+  assert.equal(rank([R, Q], { now: T('08:00'), o, d }).filter(p => p.top).length, 1);
+});
+
+test('a river is between two places only when its course is crossed an odd number of times (a bend cut twice: the same bank, no bridge)', async () => {
+  const { crossed, bridgeExtra } = await import('../public/lib/rivers.mjs');
+  const a = { lat: 24.753, lon: 121.0837 };
+  const b = { lat: 24.7651, lon: 121.0691 };
+  assert.deepEqual(crossed(a, b), []);
+  assert.equal(bridgeExtra(a, b), 0);
+  // Over it once: still there, round by its bridge.
+  assert.deepEqual(crossed({ lat: 24.79, lon: 120.98 }, { lat: 24.84, lon: 121.0 }), ['頭前溪']);
+});

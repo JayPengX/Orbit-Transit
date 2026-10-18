@@ -153,7 +153,10 @@ Each falls back to TDX's own search when the packs can't be had.
    - **over the river on the bike** before or after a bus or train, when a
      way whose bus or train crosses it, or riding the whole way (40 minutes
      at most), gets there within 20 minutes (新竹站 → 成功九街: the 竹北 train
-     and a ride, not to 千甲 and a ride over 頭前溪);
+     and a ride, not to 千甲 and a ride over 頭前溪); a way set aside itself
+     (a bus then a bus, a 2 km walk) never counts here (竹東南 → 成功九街:
+     5608 and a ride over 頭前溪 is recommended, not set aside by 5608 then
+     182; the owner, 2026-10-18);
      but one such way by train and one by bus stay listed under the
      recommendations (never one) when they get there sooner than the
      recommendations of their kind (竹東高中 → 成功九街: the train to 竹中
@@ -178,7 +181,10 @@ Each falls back to TDX's own search when the packs can't be had.
 
    "Bother" is everything but time: changes, buses, walking, riding, the
    long way round, money. Folded ways fold nothing else. The same train left
-   at stations a kilometre or more apart is two ways, each kept.
+   at stations a kilometre or more apart is two ways, each kept. Ways equal
+   in every way are ordered the same whatever order the planners answered
+   in (the one naming its trains' numbers first: 區間 1831 over a planner's
+   內灣-新竹); `tests/verdicts.test.mjs` shuffles every verdict to hold it.
 2. **The order of what's left**: door to door in minutes, plus a short
    table of what each bother is worth (`scoreParts`, `scripts/replay.mjs
    --why` shows them):
@@ -204,7 +210,8 @@ bus a few minutes earlier or later (seven patterns, as live times move):
 a verdict that flips fails the tests. Every trip the owner judges is added.
 
 The first few plans with different main lines show as **推薦**, and the
-rest fold.
+rest fold. There's always one: when every way left is one listed under the
+recommendations, the best of them is it.
 
 ## Navigation
 
@@ -349,7 +356,7 @@ slow.
 
 ## What's kept
 
-- **On the pass** (`store.mjs`, `t1:` + JSON, ≤ 100,000 characters,
+- **On the pass** (`store.mjs`, `t1:` + JSON, ≤ 200,000 characters (Shared-Proxy `eco.js`),
   collection `orbit-transit`): the bus groups (pinned stops and lines),
   pinned places, saved trips (with time and days), pinned trains (a
   connection or one train), recent trips and train searches, the map's

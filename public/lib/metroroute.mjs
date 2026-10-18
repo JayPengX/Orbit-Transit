@@ -97,7 +97,8 @@ export function buildNet(systems, extra = []) {
 // unknown), or null when it isn't running (after its last train).
 export function waitSec(line, at) {
   const t = tw(at);
-  const day = DAYS[t.dow];
+  // (Before 04:00 it's still the night that began yesterday: yesterday's service day.)
+  const day = DAYS[t.min < 240 ? tw(at - 86_400_000).dow : t.dow];
   const hmv = t.hm;
   const list = line.freq.filter(r => !r.ServiceDay || r.ServiceDay[day] === true || r.ServiceDay[day] === 1);
   if (!list.length) return hmv >= '06:00' ? 180 : null;
