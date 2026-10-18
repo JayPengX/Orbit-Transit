@@ -22,7 +22,7 @@ import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
-import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, readJson, writeJson } from './util.mjs';
+import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -306,7 +306,9 @@ function readTrips() {
 function keepTrip(key, kept) {
   try {
     writeJson('ot.trips.v1', null);
-    const all = readTrips();
+    const read = readSaved(TRIP_CACHE, {});
+    if (read === UNREAD) return; // (never saved over)
+    const all = read || {};
     const now = Date.now();
     for (const k of Object.keys(all)) if (now - all[k].at > KEEP_AHEAD_MS) delete all[k];
     // (Promises, the later buses on their way, aren't kept.)

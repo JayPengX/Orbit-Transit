@@ -4,7 +4,7 @@
 // timetable) in this device's cache, so a second look costs nothing.
 
 import { dev } from '#kit/quadra.mjs';
-import { WALK_M_MIN, readJson, writeJson } from './util.mjs';
+import { WALK_M_MIN, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
 const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
@@ -240,12 +240,11 @@ export const errorText = err =>
 // phone, the newest 400 (without their lines): a reopen has them at once.
 //   → [{ dist, sec, poly? } | null]
 const WALKS_KEY = 'orbit-transit.walks';
-const walksKept = (() => {
-  const kept = readJson(WALKS_KEY, []);
-  return new Map(Array.isArray(kept) ? kept.filter(Array.isArray) : []);
-})();
+const walksRead = readSaved(WALKS_KEY, []);
+const walksKept = new Map(Array.isArray(walksRead) ? walksRead.filter(Array.isArray) : []);
 let walksSave = 0;
 const keepWalks = () => {
+  if (walksRead === UNREAD) return; // (never saved over)
   clearTimeout(walksSave);
   walksSave = setTimeout(() => {
     writeJson(WALKS_KEY, [...walksKept].slice(-400).map(([k, w]) => [k, { dist: w.dist, sec: w.sec }]));

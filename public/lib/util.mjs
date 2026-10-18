@@ -163,6 +163,17 @@ export function readJson(key, fallback = null) {
     return fallback;
   }
 }
+// The same, for a copy that's added to and saved back: UNREAD when it threw or
+// isn't JSON (the kit's readJson answers `fallback` then, as for nothing
+// there), so a failed read is never saved over what's kept.
+export const UNREAD = Symbol('unread');
+export function readSaved(key, fallback = null) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback;
+  } catch {
+    return UNREAD;
+  }
+}
 export function writeJson(key, value, replacer) {
   if (kit.writeJson) return kit.writeJson(key, value, replacer);
   try {
