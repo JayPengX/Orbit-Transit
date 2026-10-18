@@ -1634,6 +1634,41 @@ test('a bus leg’s live line: a later bus chosen isn’t “趕不上” becaus
   assert.equal(liveLegText({ dep: at('12:20') }, [{ at: at('12:25') }], 0, at('12:15'), now), '即時 12:25 到站 · 16 分後 · 晚 5 分');
 });
 
+test('a way whose first bus comes before you can be at its stop is set aside; one with another bus soon after is kept', async () => {
+  const { busGone } = await import('../public/lib/tab-map.mjs');
+  const at = hhmm => Date.parse(`2026-10-18T${hhmm}:00+08:00`);
+  const now = at('12:09');
+  const plan = { dep: at('12:06'), legs: [{ mode: 'walk', dep: at('12:06'), arr: at('12:10') }, { mode: 'bus', dep: at('12:10'), arr: at('12:30') }] };
+  // You'd leave now (3 minutes after the plan's start): at the stop 12:13, the bus there 12:10.
+  assert.equal(busGone(plan, [{ at: at('12:10') }], now), true);
+  // Another of its line at 12:20: still a way.
+  assert.equal(busGone(plan, [{ at: at('12:10') }, { at: at('12:20') }], now), false);
+  // No live times: kept.
+  assert.equal(busGone(plan, [], now), false);
+  // A train first: never.
+  assert.equal(busGone({ dep: now, legs: [{ mode: 'mrt', dep: now }] }, [{ at: now }], now), false);
+});
+
+test('search results: one row a place (the same name at the same spot, or the same Google place), branches kept', async () => {
+  const { uniqueResults } = await import('../public/lib/tab-map.mjs');
+  const rows = uniqueResults([
+    { kind: 'trip', name: '巨城購物中心', lat: 24.8096, lon: 120.9748 },
+    { kind: 'google', id: 'g1', name: '巨城購物中心', sub: '新竹市東區中央路229號' },
+    { kind: 'geo', id: 'g1', name: '巨城購物中心', sub: '新竹市東區中央路229號', lat: 24.8097, lon: 120.9749 },
+    { kind: 'geo', id: 'g2', name: '巨城購物中心 Big City', sub: '中央路229號', lat: 24.8098, lon: 120.9747 },
+    { kind: 'geo', id: 'g3', name: '全家 竹北店', sub: '竹北市', lat: 24.83, lon: 121.01 },
+    { kind: 'geo', id: 'g4', name: '全家 竹北店', sub: '竹北市光明六路', lat: 24.84, lon: 121.03 },
+    { kind: 'google', id: 'g5', name: '八方雲集', sub: '新竹市北區' },
+    { kind: 'google', id: 'g6', name: '八方雲集', sub: '新竹市東區' }
+  ]);
+  assert.deepEqual(rows.map(r => r.id || r.kind), ['trip', 'g3', 'g4', 'g5', 'g6']);
+  const { shortAddress } = await import('../public/lib/tab-map.mjs');
+  assert.equal(shortAddress('新竹市東區復中里中央路229 號4 樓'), '新竹市東區中央路229號4樓');
+  assert.equal(shortAddress('新竹市東區南市里西大路323號'), '新竹市東區西大路323號');
+  assert.equal(shortAddress('新竹縣竹北市東興里嘉興路'), '新竹縣竹北市嘉興路');
+  assert.equal(shortAddress('新竹市北區'), '新竹市北區');
+});
+
 test('a route that runs seldom (5615, a few buses a day) still offers its next buses to pick, hours apart; a frequent one its next 90 minutes', () => {
   const ride = (short, dep) => finish({ legs: [{ mode: 'walk', dep: T(dep) - 300e3, arr: T(dep), dur: 300 }, { mode: 'bus', short, name: short, from: { name: '縣體育場', lat: 24.8196, lon: 121.0183 }, to: { name: '國賓大飯店', lat: 24.8096, lon: 120.9765 }, dep: T(dep), arr: T(dep) + 14 * 60e3, dur: 840 }] });
   const out = rank([ride('5615', '12:29'), ride('5615', '14:39'), ride('5615', '16:19'), ride('5615', '20:09')], { now: T('12:10') });
