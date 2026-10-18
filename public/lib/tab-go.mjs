@@ -24,7 +24,7 @@ import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { icon, legChips, depChips, tagText, trainKind } from './ui.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 let timer = 0;

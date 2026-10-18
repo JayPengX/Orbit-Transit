@@ -12,7 +12,7 @@ import { etaStops } from './near.mjs';
 import { uid } from './util.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 const KEY = 'orbit-transit.alerts';
 const TTL = 2 * 60 * 60_000;
 let list = load();

@@ -9,7 +9,7 @@
 // pass's official route table: 桃竹竹苗's Q&A (2024-09-27) names 新竹縣's
 // 觀光8號 (觀霧線, crossing the county line, no commuters); its 觀光1號 and
 // 2號 are on it.
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 
 const TAO_HSIN_MIAO_SKIP = { HsinchuCounty: ['觀光8號'] };
 

@@ -231,6 +231,7 @@ async function boot() {
   }
   if (want === 'metro') ctx.openMetro?.();
   if ((OLD[want] || want) === 'map') await Promise.race([mapTab.ready, new Promise(r => setTimeout(r, 4000))]);
+  else await Promise.race([TABS.find(t => t.id === (OLD[want] || want))?.mod.ready?.(), new Promise(r => setTimeout(r, 1500))]);
   $('loading').hidden = true;
   ctx.locate();
   startAlerts(t => ctx.status(t), {

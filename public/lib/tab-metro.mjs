@@ -12,7 +12,7 @@ import { sheet, sheetHead, icon } from './ui.mjs';
 import { metroBoardHtml } from './tab-map.mjs';
 import { e, meters } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
 const KEY = 'orbit-transit.metro';
 let ctx = null;

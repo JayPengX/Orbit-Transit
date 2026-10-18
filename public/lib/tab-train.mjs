@@ -14,10 +14,12 @@ import { tpassOf, PREMIUM } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind } from './ui.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 let shownNow = '';
+// The nearest station filled in (the opening waits for it a moment: never popping in after the loading screen).
+export let ready = Promise.resolve();
 const state = { from: null, to: null, mode: 'all', date: null, time: null, results: null, open: -1, error: '', delays: new Map(), fares: new Map(), passOnly: false };
 
 export function init(c) {
@@ -30,7 +32,7 @@ export function init(c) {
   const last = ctx.data.trains[0];
   if (last) Object.assign(state, { from: last.from, to: last.to });
   render();
-  if (!state.from) nearestStart();
+  if (!state.from) ready = nearestStart();
 }
 
 export function show() {

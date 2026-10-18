@@ -12,7 +12,7 @@ import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
 import { e, meters } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W } from './lang.mjs';
 const $ = id => document.getElementById(id);
 const KEY = 'orbit-transit.times';
 let ctx = null;
@@ -31,6 +31,9 @@ export function init(c) {
   });
   busInit();
 }
+
+// What the opening waits for (a moment at most) when it opens on this tab.
+export const ready = () => (view === 'train' ? trainTab.ready : Promise.resolve());
 
 export function show() {
   if (ctx.trainQuery || ctx.trainFrom) view = 'train';
