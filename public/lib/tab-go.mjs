@@ -11,6 +11,7 @@
 //
 // What's recommended is never pinned by itself: ☆ pins it.
 
+import * as kitUI from '#kit/ui.mjs';
 import { errorText, liveMs } from './api.mjs';
 import { stopsEta, etaRank } from './bus.mjs';
 import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
@@ -22,7 +23,7 @@ import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
-import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero, navTitle } from './look.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -179,6 +180,8 @@ async function plannedTimes(items) {
   if (todo.length) render();
 }
 
+// A pull down on the page (the kit's pull-to-refresh): the same read as the tab's own.
+export const pull = () => (shown ? refresh() : undefined);
 let refreshing = false;
 async function refresh() {
   if (refreshing) return;
@@ -664,12 +667,14 @@ function render() {
   const keep = box.scrollTop;
   const railX = box.querySelector('.ot-places')?.scrollLeft || 0;
   box.innerHTML = `<div class="ot-page">
+    ${navTitle(W('交通', 'Transit'))}
     ${lead.html}
     ${placesRail()}
     ${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}
     ${pinnedHtml(lead.key)}
     ${nearHtml(lead.key)}
   </div>`;
+  kitUI.wireNavTitles?.(box, { scroller: box });
   fitStrips(box);
   box.scrollTop = keep;
   const rail = box.querySelector('.ot-places');

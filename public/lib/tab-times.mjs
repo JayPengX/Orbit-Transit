@@ -13,7 +13,7 @@ import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
-import { COLOR, tile, section, rowCard, hero } from './look.mjs';
+import { COLOR, tile, section, rowCard, hero, emptyNote } from './look.mjs';
 import { e, meters, distText, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -242,7 +242,7 @@ function busDraw() {
       ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || W('載入路線中…', 'Loading routes…'))}</p>`
       : found.length
         ? section(W(`${found.length} 條路線`, `${found.length} routes`), rowCard(found.map(row).join('')))
-        : `<p class="ot-note">${W('沒有符合的路線', 'No matching route')}</p>`;
+        : emptyNote(W('沒有符合的路線', 'No matching route'));
   }
   fitStrips($('tb-list'));
   watchRows();

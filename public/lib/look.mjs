@@ -6,6 +6,7 @@
 import { e, hm } from './util.mjs';
 import { icon } from './ui.mjs';
 import { W, en } from './lang.mjs';
+import * as kitUI from '#kit/ui.mjs';
 
 // One colour per way of moving, the same on the map, in a plan's legs and here.
 export const PLACE_COLOR = { home: '#ff9500', work: '#6155f5', school: '#0a84ff', pin: '#ff383c', star: '#f5b301' };
@@ -44,3 +45,8 @@ export function hero({ eyebrow = '', glyph = '', big = '', title = '', sub = '',
   const inner = `${eyebrow || glyph ? `<span class="q-hc-eyebrow">${glyph ? icon(glyph) : ''}<span>${e(eyebrow)}</span></span>` : ''}${big}${title ? `<strong class="q-hc-title">${e(title)}</strong>` : ''}${sub ? `<p class="q-hc-sub">${e(sub)}</p>` : ''}${tagHtml ? `<span class="q-tags ot-hc-tags">${tagHtml}</span>` : ''}${body}${actions.length ? `<div class="q-hc-row">${actions.map(a => `<button class="q-hc-btn${a.ghost ? ' ghost' : ''}" type="button" ${a.attrs}>${a.label}</button>`).join('')}</div>` : ''}`;
   return attrs ? `<button class="q-hero-card q-press ot-hero" type="button" ${attrs}${style}>${inner}</button>` : `<div class="q-hero-card ot-hero"${style}>${inner}</div>`;
 }
+
+// Nothing here: the kit's empty state (an older kit keeps the plain note).
+export const emptyNote = title => kitUI.emptyHtml?.({ title }) ?? `<p class="ot-note">${e(title)}</p>`;
+// A non-first tab's large title (the kit's navTitle; nothing on an older kit).
+export const navTitle = title => kitUI.navTitleHtml?.(title) ?? '';

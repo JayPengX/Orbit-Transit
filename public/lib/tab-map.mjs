@@ -26,7 +26,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { COLOR, tile } from './look.mjs';
+import { COLOR, tile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
@@ -666,7 +666,7 @@ function renderCard() {
             const al = alertFor(r.st || s, r.routeUID, r.dir);
             return `${heading}<div class="ot-strip">${strip({ no: r.route, main: r.toward ? `${W('往', 'to')} ${e(r.toward)}` : '', eta: { ...t, sub: al ? W(`${al.min} 分前提醒你`, `alert ${al.min} min before`) : t.sub }, attrs: `data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"` })}<button class="q-icon-btn ot-bell ot-strip-act${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir, stop: r.stopUID }))}" aria-label="${W('到站提醒', 'Arrival alert')}">${icon('bell')}</button></div>`;
           })
-          .join('') || `<p class="ot-note">${W('這個站牌現在沒有公車資料。', 'No buses at this stop right now.')}</p>`
+          .join('') || emptyNote(W('現在沒有公車資料', 'No buses right now'))
       : `<p class="ot-note">${W('載入中…', 'Loading…')}</p>`;
     html = `${head(s.name, [sides.length > 1 ? '' : BEARING[s.bearing], s.routes.length ? W(`${s.routes.length} 條路線`, `${s.routes.length} routes`) : ''].filter(Boolean).join(' · '), 'bus')}${err}<div class="q-rowcard ot-eta-list">${rowsHtml}</div>${goThere(c)}${actions(c)}`;
   } else if (c.kind === 'tra') {
@@ -718,7 +718,7 @@ export function metroBoardHtml(live) {
     .join('');
   if (liveHtml || tableHtml) return `<div class="ot-board">${liveHtml}${tableHtml}</div>`;
   if (live.op === 'TMRT') return `<p class="ot-note">${W('台中捷運沒有提供即時或時刻資料。', 'Taichung Metro shares no live or timetable data.')}</p>`;
-  return `<p class="ot-note">${W('現在沒有列車資料（可能已收班）。', 'No trains right now (maybe done for the day).')}</p>`;
+  return emptyNote(W('現在沒有列車資料', 'No trains right now'));
 }
 
 async function cardClick(ev) {
