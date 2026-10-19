@@ -34,7 +34,7 @@ export const sheetHead = (title, sub = '', lead = '') =>
 
 // 24×24 stroked icons, one per way of moving.
 const I = {
-  walk: '<circle cx="13" cy="4.5" r="2"/><path d="M10.5 21l2-6.5 3 3V21M7 12.5l2.5-4.5 4 1 2.5 3.5M12.5 9l-1.5 5.5"/>',
+  walk: '<circle cx="13.5" cy="4.3" r="1.9" fill="currentColor" stroke="none"/><path d="M12.6 8.2 11 14.2l-2.6 6.3M11 14.2l2.8 2.6.9 3.7M7.5 12l2.2-3.3 2.9-.5 2.1 3 2.8 1"/>',
   // Where a YouBike goes back: a parking sign's P, centred in its square.
   dock: '<rect x="3" y="3" width="18" height="18" rx="4.5"/><path d="M9 16.5v-9h3a2.75 2.75 0 0 1 0 5.5H9"/>',
   bike: '<circle cx="6" cy="16.5" r="3.5"/><circle cx="18" cy="16.5" r="3.5"/><path d="M6 16.5l4-8h5l3 8M10 8.5L12.5 16.5h-6.5M14 5.5h2.5"/>',
