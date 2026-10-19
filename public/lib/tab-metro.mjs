@@ -1,4 +1,4 @@
-// 捷運路網圖 (in 我的): each city's metro on the real map (Google's, or
+// 捷運路網圖 (查時刻 → 捷運): each city's metro on the real map (Google's, or
 // Taiwan's NLSC map past the month's cap) instead of a drawing of our own:
 // the lines in their colours along the stations, the stations with their
 // names once zoomed in. Tap a station for its next trains: live where the
@@ -9,6 +9,7 @@ import { MAPS, OPERATORS, loadSystem, lineRuns, interchanges, liveBoard, nextTra
 import { createMap } from './map.mjs';
 import { errorText, liveMs } from './api.mjs';
 import { sheet, sheetHead, icon } from './ui.mjs';
+import { tile } from './look.mjs';
 import { metroBoardHtml } from './tab-map.mjs';
 import { e, meters } from './util.mjs';
 
@@ -20,18 +21,15 @@ let map = null;
 let current = null;
 let systems = [];
 let retry = 0;
-let onClose = () => {};
 
-export function init(c, opts = {}) {
+export function init(c) {
   ctx = c;
-  onClose = opts.onClose || onClose;
   const panel = $('panel-metro');
-  panel.innerHTML = `<div class="ot-metro-top"><button class="q-icon-btn" type="button" data-m="close" aria-label="${W('返回', 'Back')}">${icon('back')}</button><b>${W('捷運路網圖', 'Metro map')}</b><nav class="q-chips ot-metro-chips" id="m-maps">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(m.name)}</button>`).join('')}</nav></div>
-    <div class="ot-metro-view"><div id="m-map" class="ot-map"></div><div class="ot-metro-legend" id="m-legend"></div><p class="ot-note ot-metro-msg" id="m-msg"></p></div>`;
+  panel.innerHTML = `<nav class="q-chips ot-chip-rail" id="m-maps" aria-label="${W('城市', 'City')}">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(m.name)}</button>`).join('')}</nav>
+    <div class="ot-metro-view"><div id="m-map" class="ot-map"></div><div class="ot-metro-legend" id="m-legend"></div><p class="ot-metro-msg" id="m-msg"></p></div>`;
   panel.addEventListener('click', ev => {
     const b = ev.target.closest('[data-map]');
-    if (b) return open(b.dataset.map);
-    if (ev.target.closest('[data-m="close"]')) onClose();
+    if (b) open(b.dataset.map);
   });
 }
 
@@ -153,10 +151,10 @@ function stationSheet(list) {
   if (!list?.length) return;
   const name = list[0].name;
   const lines = systems.flatMap(s => s.lines).filter(l => list.some(st => l.seq.includes(st.key)));
-  const d = sheet(`${sheetHead(e(stationTitle(name)), [...new Set(list.map(s => OPERATORS[s.op]))].map(e).join('・'))}
+  const d = sheet(`${sheetHead(e(stationTitle(name)), [...new Set(list.map(s => OPERATORS[s.op]))].map(e).join('・'), tile('metro', '#3b82f6'))}
     <div class="ot-line-chips">${lines.filter((l, i, a) => a.findIndex(x => x.name === l.name) === i).map(l => `<span style="--c:${e(l.color)}">${e(l.name)}</span>`).join('')}</div>
     <div id="mb"><p class="ot-note">${W('載入中…', 'Loading…')}</p></div>
-    <div class="ot-row ot-actions"><button class="q-btn" type="button" data-route-here="1">${icon('route')} ${W('怎麼去', 'Directions')}</button></div>`);
+    <button class="q-btn primary block ot-sheet-go" type="button" data-route-here="1">${icon('route')} ${W('怎麼去', 'Directions')}</button>`);
   const load = async () => {
     const parts = await Promise.all(
       list.map(async st => {

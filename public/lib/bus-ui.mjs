@@ -272,8 +272,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
               return `<li class="${t.tone}${busAt(lives, k) ? ' at' : ''}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span>${between(k) ? `<i class="ot-rs-bus" aria-label="${W('公車在這兩站之間', 'Bus between these stops')}">${icon('bus')}</i>` : ''}<span class="ot-rs-dot">${busAt(lives, k) ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? `<small>${W('上車', 'Board')}</small>` : ride?.off ? `<small>${icon('star')} ${W('到', 'to')} ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? W('取消釘選', 'Unpin') : W('從這站上車，釘選', 'Board here and pin')}">${icon('star')}</button>`}</li>`;
             })
             .join('')}</ol>`;
-    const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`從「${e(boarding.name)}」上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('點你下車的站，回程會自動對調', 'Tap where you get off; the way back flips')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
-    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding ? `<p class="ot-note center">${e(ago(at))}・${W('每 20 秒更新・☆ 釘選你搭的這段', 'every 20 s・☆ pins your ride')}</p>` : ''}`;
+    const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(boarding.name)} 上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
     d.scrollTop = keep;
   };
   // A ride pinned on at this stop, either way (the way back gets on where the ride gets off).
@@ -415,7 +415,7 @@ export function chooseGroup(raw, done) {
         return `<button class="ot-row-btn" type="button" data-to="${i}" ${has ? 'disabled' : ''}><span><b>${e(g.name)}</b><small>${W(`${g.items.length} 個站牌`, `${g.items.length} stops`)}${has ? W(' · 已在這裡', ' · already here') : ''}</small></span>${icon('plus')}</button>`;
       })
       .join('')}</div>
-    ${ctx.data.groups.length < MAX_GROUPS ? `<label class="ot-field"><span>${W('或新的群組', 'Or a new group')}</span><div class="ot-row"><input id="g-new" maxlength="12" placeholder="${W('例如：上班、回家', 'e.g. Work, Home')}"><button class="q-btn" type="button" data-new="1">${W('建立並加入', 'Create')}</button></div></label>` : ''}`);
+    ${ctx.data.groups.length < MAX_GROUPS ? `<label class="ot-field"><span>${W('或新的群組', 'Or a new group')}</span><div class="ot-row"><input id="g-new" maxlength="12" placeholder="${W('上班、回家', 'Work, Home')}"><button class="q-btn" type="button" data-new="1">${W('建立並加入', 'Create')}</button></div></label>` : ''}`);
   d.addEventListener('click', ev => {
     const to = ev.target.closest('[data-to]');
     let g = null;
@@ -442,7 +442,7 @@ export function chooseGroup(raw, done) {
 export function manageSheet() {
   const d = sheet('', 'ot-tall-sheet');
   const draw = () => {
-    d.innerHTML = `${sheetHead(W('管理群組', 'Groups'), W('上下移動調整順序；左右滑動就照這個順序切換', 'Reorder; swipe sideways in this order'))}
+    d.innerHTML = `${sheetHead(W('公車站牌', 'Bus stops'))}
       ${ctx.data.groups
         .map(
           (g, i, all) => `<section class="ot-manage">
@@ -461,7 +461,7 @@ export function manageSheet() {
         </section>`
         )
         .join('')}
-      ${ctx.data.groups.length < MAX_GROUPS ? `<button class="q-btn ot-wide" type="button" data-gadd="1">${icon('plus')} ${W('新增群組', 'New group')}</button>` : ''}`;
+      ${ctx.data.groups.length < MAX_GROUPS ? `<button class="q-btn block ot-sheet-go" type="button" data-gadd="1">${icon('plus')} ${W('新增群組', 'New group')}</button>` : ''}`;
   };
   draw();
   d.addEventListener('change', ev => {
