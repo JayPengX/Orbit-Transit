@@ -3319,13 +3319,25 @@ span.ot-pass {
 .ot-stop-row {
   align-items: flex-start;
 }
+.ot-stop-row .q-ritem-text {
+  min-width: 0;
+}
+/* One row of routes, a rail when there are many (never a wall of buttons). */
 .ot-bus-nos {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   margin-top: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+}
+.ot-bus-nos::-webkit-scrollbar {
+  display: none;
 }
 .ot-bus-no {
+  flex: none;
   min-width: 40px;
   min-height: 30px;
   padding: 0 10px;
