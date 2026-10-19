@@ -83,7 +83,7 @@ function render() {
     ${section(W('行程', 'Trips'), rowCard(trips + addRow('add-trip', W('新增行程', 'Add a trip'))))}
     ${section(
       W('釘選', 'Pinned'),
-      rowCard(`<button class="q-ritem chevron" type="button" data-act="groups">${tile('bus', COLOR.bus)}<span class="q-ritem-text"><span class="q-ritem-title">${W('公車站牌', 'Bus stops')}</span>${D.groups.length ? `<span class="q-tags">${D.groups.map(g => tag(`${g.name} ${g.items.length}`)).join('')}</span>` : ''}</span><span class="q-ritem-value">${stops}</span></button>${pins}${addRow('times', W('查時刻', 'Find times'))}`)
+      rowCard(`<button class="q-ritem chevron" type="button" data-act="groups">${tile('bus', COLOR.bus)}<span class="q-ritem-text"><span class="q-ritem-title">${W('公車站牌', 'Bus stops')}</span>${D.groups.some(g => g.items.length) ? `<span class="q-tags">${D.groups.filter(g => g.items.length).map(g => tag(`${g.name} ${g.items.length}`)).join('')}</span>` : ''}</span>${Number(stops) ? `<span class="q-ritem-value">${stops}</span>` : ''}</button>${pins}${addRow('times', W('查時刻', 'Find times'))}`)
     )}
     ${section(
       W('設定', 'Settings'),

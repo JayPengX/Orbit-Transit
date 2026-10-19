@@ -3220,10 +3220,18 @@ button.ot-trip-foot {
   font: 600 12px/16px var(--q-font);
 }
 .ot-tq-st b {
+  display: -webkit-box;
   overflow: hidden;
   font: 700 22px/28px var(--q-font-rounded);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+@media (max-width: 340px) {
+  .ot-tq-st b {
+    font-size: 18px;
+    line-height: 24px;
+  }
 }
 .ot-tq-st b.muted {
   color: rgb(255 255 255 / 0.7);
@@ -4372,3 +4380,8 @@ span.ot-pass {
   color: var(--q-label-2);
   font-weight: 500;
 }
+
+/* A place search's field takes typing and pasting inside a sheet (iOS's selection, never switched off). */
+.ot-pick-form, .ot-pick-form * { -webkit-user-select: text; user-select: text; }
+.ot-pick-form .q-search-clear { -webkit-user-select: none; user-select: none; }
+.ot-pick-form input { pointer-events: auto; touch-action: manipulation; }
