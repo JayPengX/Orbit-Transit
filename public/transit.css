@@ -1,5 +1,6 @@
-/* Orbit Transit on the Quadra kit (quadra.css): always dark
-   (html[data-theme=dark]), the app's green, and its own pieces: the map
+/* Orbit Transit on the Quadra kit (quadra.css): light or dark with the
+   phone (the kit's tokens; the few of its own are set per theme at the
+   top), the app's green, and its own pieces: the map
    under a floating search, the cards that rise from the bottom, the bus
    groups swiped sideways, the train search, the metro map. */
 
@@ -8,13 +9,42 @@
   --q-accent-ink: #04110a;
   --q-status-bg: var(--q-page);
   --ot-max: 640px;
-  --ot-card: #12151c;
-  --ot-line: rgba(255, 255, 255, 0.07);
+  --ot-card: var(--q-surface);
+  --ot-line: color-mix(in srgb, var(--q-text) 7%, transparent);
+  --ot-k: 0.4; /* shadows are lighter on a light page */
+  --ot-good: #1f9d55;
+  --ot-warn: #b45f06;
+  --ot-bad: #d93a35;
+  --ot-bike: #d99a00;
+  --ot-green-ink: #15803d; /* green words on the page */
+  --ot-blue-ink: #0369a1;
+  --ot-orange-ink: #c2410c;
+  --ot-amber-ink: #92400e;
+  --ot-tabs: var(--q-nav, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ot-k: 1;
+    --ot-good: #3dd598;
+    --ot-warn: #ffb547;
+    --ot-bad: #ff6b66;
+    --ot-bike: #f5b301;
+    --ot-green-ink: #4ade80;
+    --ot-blue-ink: #7dd3fc;
+    --ot-orange-ink: #fdba74;
+    --ot-amber-ink: #fcd34d;
+  }
+}
+:root[data-theme='dark'] {
+  --ot-k: 1;
   --ot-good: #3dd598;
   --ot-warn: #ffb547;
   --ot-bad: #ff6b66;
   --ot-bike: #f5b301;
-  --ot-tabs: var(--q-nav, 0px);
+  --ot-green-ink: #4ade80;
+  --ot-blue-ink: #7dd3fc;
+  --ot-orange-ink: #fdba74;
+  --ot-amber-ink: #fcd34d;
 }
 html,
 body {
@@ -90,7 +120,7 @@ main {
   right: 0;
   z-index: 40;
   border: 0;
-  background: linear-gradient(to bottom, rgba(10, 11, 15, 0.92), rgba(10, 11, 15, 0.55) 70%, rgba(10, 11, 15, 0));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--q-page) 92%, transparent), color-mix(in srgb, var(--q-page) 55%, transparent) 70%, color-mix(in srgb, var(--q-page) 0%, transparent));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -106,10 +136,10 @@ main {
   height: 46px;
   margin: 2px 0;
   padding: 0 8px 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--q-text) 10%, transparent);
   border-radius: 23px;
-  background: rgba(22, 25, 33, 0.94);
-  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.8);
+  background: color-mix(in srgb, var(--q-surface) 94%, transparent);
+  box-shadow: 0 10px 30px -12px rgb(0 0 0 / calc(0.8 * var(--ot-k)));
   color: var(--q-muted);
 }
 .ot-search input {
@@ -134,7 +164,7 @@ main {
   height: 30px;
   border: 0;
   border-radius: 15px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--q-text) 8%, transparent);
   color: var(--q-text-2);
   font-size: 18px;
   line-height: 1;
@@ -151,7 +181,7 @@ main {
   max-width: calc(100% - 40px);
   padding: 8px 14px;
   border-radius: 18px;
-  background: rgba(22, 25, 33, 0.96);
+  background: color-mix(in srgb, var(--q-surface) 96%, transparent);
   color: var(--q-text);
   font-size: 13px;
   box-shadow: var(--q-shadow);
@@ -167,18 +197,23 @@ main {
   position: absolute;
   inset: 0;
   z-index: 0; /* the map's own panes (Leaflet's go to 700) stay under the app's buttons */
-  background: #0d0f14;
+  background: var(--q-page);
 }
-/* Taiwan's NLSC map is light: turned dark to match. */
-.ot-tiles {
+/* Taiwan's NLSC map is light: as it is in light mode, turned dark to match in dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ot-tiles {
+    filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.92) contrast(0.92);
+  }
+}
+:root[data-theme='dark'] .ot-tiles {
   filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.92) contrast(0.92);
 }
 .leaflet-container {
-  background: #0d0f14;
+  background: var(--q-page);
   font-family: var(--q-font);
 }
 .leaflet-control-attribution {
-  background: rgba(10, 11, 15, 0.6) !important;
+  background: color-mix(in srgb, var(--q-page) 60%, transparent) !important;
   color: var(--q-muted) !important;
   font-size: 10px;
 }
@@ -198,8 +233,8 @@ main {
 }
 .ot-map-chips .q-chip {
   flex: none;
-  background: rgba(22, 25, 33, 0.94);
-  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.9);
+  background: color-mix(in srgb, var(--q-surface) 94%, transparent);
+  box-shadow: 0 6px 18px -10px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-layer-chip[aria-pressed='false'] {
   opacity: 0.55;
@@ -226,11 +261,11 @@ main {
   place-items: center;
   width: 46px;
   height: 46px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--q-text) 10%, transparent);
   border-radius: 23px;
-  background: rgba(22, 25, 33, 0.95);
+  background: color-mix(in srgb, var(--q-surface) 95%, transparent);
   color: var(--q-text);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 10px 26px -10px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-fab:active {
   transform: scale(0.94);
@@ -254,8 +289,8 @@ main {
   padding: 6px;
   border: 1px solid var(--ot-line);
   border-radius: 20px;
-  background: rgba(18, 21, 28, 0.98);
-  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+  background: color-mix(in srgb, var(--q-surface) 98%, transparent);
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-res {
   display: flex;
@@ -272,7 +307,7 @@ main {
 }
 .ot-res:active,
 .ot-res:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--q-text) 5%, transparent);
 }
 .ot-res-i {
   display: grid;
@@ -281,7 +316,7 @@ main {
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--q-text) 6%, transparent);
   color: var(--q-text-2);
   font-size: 17px;
 }
@@ -613,7 +648,7 @@ main {
   border-bottom: 0;
   border-radius: 24px 24px 0 0;
   background: var(--ot-card);
-  box-shadow: 0 -18px 50px -20px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 -18px 50px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
   animation: ot-rise 0.22s ease-out;
 }
 .ot-card.tall {
@@ -630,7 +665,7 @@ main {
   height: 5px;
   margin: 4px auto 8px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.18);
+  background: color-mix(in srgb, var(--q-text) 18%, transparent);
   cursor: pointer;
 }
 .ot-card-head {
@@ -678,7 +713,7 @@ main {
   background: #2563eb;
 }
 .ot-badge.place {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--q-text) 8%, transparent);
   color: var(--q-accent);
 }
 .ot-card-acts {
@@ -812,7 +847,7 @@ main {
   padding: 6px 10px;
   border: 1px solid var(--ot-line);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--q-text) 4%, transparent);
   color: inherit;
   font: inherit;
   font-size: 14.5px;
@@ -826,7 +861,7 @@ main {
   text-overflow: ellipsis;
 }
 .ot-od button:active {
-  background: rgba(255, 255, 255, 0.09);
+  background: color-mix(in srgb, var(--q-text) 9%, transparent);
 }
 .ot-pick-form {
   margin: 4px 0 8px;
@@ -867,7 +902,7 @@ main {
   padding: 12px 14px;
   border: 1px solid var(--ot-line);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.025);
+  background: color-mix(in srgb, var(--q-text) 2.5%, transparent);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -893,18 +928,18 @@ main {
 .ot-tag {
   padding: 2px 8px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--q-text) 8%, transparent);
   color: var(--q-text-2);
   font-size: 11.5px;
   font-weight: 700;
 }
 .ot-tag.best {
   background: color-mix(in srgb, var(--q-accent) 22%, transparent);
-  color: #86efac;
+  color: var(--ot-green-ink);
 }
 .ot-tag.bike {
   background: rgba(245, 179, 1, 0.18);
-  color: #fcd34d;
+  color: var(--ot-amber-ink);
 }
 .ot-legs {
   display: flex;
@@ -1000,7 +1035,7 @@ main {
   bottom: -6px;
   width: 3px;
   border-radius: 2px;
-  background: var(--c, rgba(255, 255, 255, 0.15));
+  background: var(--c, color-mix(in srgb, var(--q-text) 15%, transparent));
   opacity: 0.8;
 }
 .ot-steps li.end::before,
@@ -1020,7 +1055,7 @@ main {
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: var(--c, rgba(255, 255, 255, 0.08));
+  background: var(--c, color-mix(in srgb, var(--q-text) 8%, transparent));
   color: #fff;
 }
 .ot-step-i .ot-i {
@@ -1119,7 +1154,7 @@ main {
   padding: 8px 12px;
   border: 1px solid var(--ot-line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.025);
+  background: color-mix(in srgb, var(--q-text) 2.5%, transparent);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -1282,7 +1317,7 @@ main {
   justify-items: center;
   gap: 4px;
   padding: 36px 20px;
-  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border: 1px dashed color-mix(in srgb, var(--q-text) 12%, transparent);
   border-radius: 22px;
   text-align: center;
 }
@@ -1330,7 +1365,7 @@ main {
   margin-left: 4px;
   border: 3px solid #22c55e;
   border-radius: 50%;
-  background: #0d0f14;
+  background: var(--q-page);
   box-sizing: border-box;
 }
 .ot-route-stops li.at .ot-rs-dot {
@@ -1387,7 +1422,7 @@ main {
   padding: 8px 64px 8px 14px;
   border: 0;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--q-text) 3.5%, transparent);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -1413,11 +1448,11 @@ main {
 }
 .ot-sys.tra {
   background: rgba(2, 132, 199, 0.2);
-  color: #7dd3fc;
+  color: var(--ot-blue-ink);
 }
 .ot-sys.hsr {
   background: rgba(234, 88, 12, 0.2);
-  color: #fdba74;
+  color: var(--ot-orange-ink);
 }
 .ot-swap {
   position: absolute;
@@ -1503,15 +1538,15 @@ main {
   font-size: 12.5px;
   font-weight: 800;
   background: rgba(2, 132, 199, 0.22);
-  color: #bae6fd;
+  color: var(--ot-blue-ink);
 }
 .ot-train-chip.local {
   background: rgba(148, 163, 184, 0.18);
-  color: #e2e8f0;
+  color: var(--q-text-2);
 }
 .ot-train-chip.hsr {
   background: rgba(234, 88, 12, 0.25);
-  color: #fed7aa;
+  color: var(--ot-orange-ink);
 }
 .ot-jny-sub {
   display: flex;
@@ -1521,7 +1556,7 @@ main {
 .ot-jny-sub span {
   padding: 2px 8px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--q-text) 6%, transparent);
   color: var(--q-text-2);
   font-size: 12px;
 }
@@ -1542,7 +1577,7 @@ main {
 }
 .ot-steps.rail li.change .ot-step-i,
 .ot-steps.rail li.walk .ot-step-i {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--q-text) 8%, transparent);
   color: var(--q-text-2);
 }
 .ot-leg-times {
@@ -1566,7 +1601,7 @@ main {
   padding: 6px;
   border: 1px solid var(--ot-line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--q-text) 3%, transparent);
   color: inherit;
   font: 600 15px var(--q-font);
 }
@@ -1629,7 +1664,7 @@ main {
   max-width: calc(100% - 90px);
   padding: 8px 10px;
   border-radius: 14px;
-  background: rgba(10, 11, 15, 0.75);
+  background: color-mix(in srgb, var(--q-page) 75%, transparent);
   color: var(--q-text-2);
   font-size: 11.5px;
   pointer-events: none;
@@ -1715,7 +1750,7 @@ main {
   align-self: stretch;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--q-text) 4%, transparent);
   color: var(--q-muted);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
@@ -1881,7 +1916,7 @@ main {
   border: 1px solid var(--ot-line);
   border-radius: 20px;
   background: var(--ot-card);
-  box-shadow: 0 -18px 50px -20px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 -18px 50px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
   pointer-events: auto;
 }
 .ot-pickbar-box p {
@@ -2224,8 +2259,8 @@ main {
   margin-top: -5px;
   padding: 1px 5px;
   border-radius: 6px;
-  background: rgba(10, 11, 15, 0.78);
-  color: #e6ebf3;
+  background: color-mix(in srgb, var(--q-page) 78%, transparent);
+  color: var(--q-text);
   font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -2354,9 +2389,9 @@ main {
   min-height: 48px;
   box-sizing: border-box;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid color-mix(in srgb, var(--q-text) 9%, transparent);
   border-radius: 14px;
-  background: #171a22;
+  background: var(--q-surface);
   color: var(--q-text);
   font: 500 16px var(--q-font);
   line-height: 48px;
@@ -2466,7 +2501,7 @@ main {
   border: 2px solid #fff;
   border-radius: 50%;
   background: #16a34a;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 4px rgb(0 0 0 / calc(0.55 * var(--ot-k)));
 }
 .ot-mk.bus .ot-i {
   width: 11px;
@@ -2532,15 +2567,15 @@ main {
   gap: 5px;
   width: min(62vw, 230px);
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--q-text) 8%, transparent);
   border-left: 4px solid var(--ot-bike);
   border-radius: 16px;
-  background: rgba(20, 23, 31, 0.96);
+  background: color-mix(in srgb, var(--q-surface) 96%, transparent);
   color: inherit;
   font: inherit;
   text-align: left;
   scroll-snap-align: start;
-  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.95);
+  box-shadow: 0 12px 28px -14px rgb(0 0 0 / calc(0.95 * var(--ot-k)));
 }
 .ot-nb.few {
   border-left-color: #f59e0b;
@@ -2590,11 +2625,11 @@ main {
 }
 .ot-nb-n em.e {
   margin-left: 6px;
-  color: #fcd34d;
+  color: var(--ot-amber-ink);
 }
 .ot-nb-n em.d {
   margin-left: 6px;
-  color: #93c5fd;
+  color: var(--ot-blue-ink);
 }
 .ot-nb-d {
   display: flex;
@@ -2641,9 +2676,9 @@ main {
   gap: 4px;
   min-width: 66px;
   padding: 10px 8px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid color-mix(in srgb, var(--q-text) 7%, transparent);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--q-text) 4%, transparent);
   color: inherit;
   font: inherit;
   font-size: 12.5px;
@@ -2697,7 +2732,7 @@ main {
   color: var(--q-muted);
 }
 .ot-bell.on {
-  color: #fbbf24;
+  color: var(--ot-amber-ink);
 }
 .ot-bell.on .ot-i {
   fill: currentColor;
@@ -2794,7 +2829,7 @@ main {
   padding: 10px;
   border: 1px solid var(--ot-line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.025);
+  background: color-mix(in srgb, var(--q-text) 2.5%, transparent);
 }
 
 /* ---- Round 4: 捷運路網圖 above the solid header (its city buttons were under it) ---- */
@@ -2858,7 +2893,7 @@ main {
   background: var(--ot-card);
 }
 .ot-bus-chip:active {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--q-text) 6%, transparent);
 }
 .ot-times-l.wide {
   width: 92px;
@@ -2936,7 +2971,7 @@ main {
   border: 1px solid rgba(34, 197, 94, 0.3);
   border-radius: 10px;
   background: rgba(34, 197, 94, 0.1);
-  color: #bbf7d0;
+  color: var(--ot-green-ink);
   font: 800 15px/1 var(--q-font);
 }
 
@@ -2960,7 +2995,7 @@ main {
   padding: 6px 0;
   border: 0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--q-text) 5%, transparent);
   color: inherit;
   font: inherit;
 }
@@ -3080,7 +3115,7 @@ main {
   border: 0;
   border-radius: 8px;
   background: rgba(34, 197, 94, 0.16);
-  color: #4ade80;
+  color: var(--ot-green-ink);
   font: 700 15px/30px var(--q-font);
   font-variant-numeric: tabular-nums;
 }
@@ -3180,7 +3215,7 @@ main {
   height: 14px;
   margin-left: 8px;
   border: 3px solid #22c55e;
-  background: var(--q-sheet, #15171d);
+  background: var(--q-sheet, var(--q-surface));
 }
 .ot-route-sheet li.at .ot-rs-dot {
   width: 26px;
@@ -3235,7 +3270,7 @@ main {
   background: rgba(34, 197, 94, 0.1);
 }
 .ot-route-sheet li.mine .ot-rs-name b {
-  color: #4ade80;
+  color: var(--ot-green-ink);
 }
 .ot-rs-star {
   display: grid;
@@ -3276,7 +3311,7 @@ main {
 }
 .ot-ride-pick b {
   overflow: hidden;
-  color: #4ade80;
+  color: var(--ot-green-ink);
   font-size: 15px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -3306,7 +3341,7 @@ main {
 }
 .ot-route-sheet li.on-here .ot-rs-name small,
 .ot-route-sheet .ot-rs-name small .ot-i {
-  color: #4ade80;
+  color: var(--ot-green-ink);
 }
 
 /* A bus route as a row, one look wherever a route is listed (查時刻, 交通,
@@ -3341,14 +3376,14 @@ main {
   padding: 10px 16px;
 }
 .ot-bus-group .ot-strip-main:active {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--q-text) 6%, transparent);
 }
 .ot-strip-no {
   width: 64px;
   padding: 5px 0;
   border-radius: 9px;
   background: rgba(34, 197, 94, 0.16);
-  color: #4ade80;
+  color: var(--ot-green-ink);
   font: 700 15px/1.25 var(--q-font);
   text-align: center;
   white-space: nowrap;
@@ -3389,7 +3424,7 @@ main {
   white-space: nowrap;
 }
 .ot-strip-note em {
-  color: #86efac;
+  color: var(--ot-green-ink);
   font-style: normal;
   font-weight: 700;
 }
@@ -3413,7 +3448,7 @@ main {
   white-space: nowrap;
 }
 .ot-strip-eta.live b {
-  color: #4ade80;
+  color: var(--ot-green-ink);
 }
 .ot-strip-eta.words b {
   color: var(--q-muted);
@@ -3422,7 +3457,7 @@ main {
 }
 /* (即將進站 is the bus there now: live, not a quiet word.) */
 .ot-strip-eta.live.words b {
-  color: #4ade80;
+  color: var(--ot-green-ink);
 }
 /* 進站中 / 即將進站 breathe, as a Live Activity's does: the bus is there. */
 .ot-strip-eta.now b {
@@ -3442,7 +3477,7 @@ main {
   display: inline-block;
   height: 0.75em;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.09);
+  background: color-mix(in srgb, var(--q-text) 9%, transparent);
   vertical-align: -0.05em;
 }
 :root[data-theme='light'] .ot-skel {
@@ -3464,7 +3499,7 @@ main {
   margin-right: 6px;
   padding: 1px 7px 1px 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--q-text) 8%, transparent);
   color: var(--q-text-2);
   font-size: 12px;
   font-weight: 600;
@@ -3511,7 +3546,7 @@ main {
   pointer-events: auto;
   border: 1px solid var(--ot-line);
   background: var(--ot-card);
-  box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 18px 50px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-nav-top {
   top: calc(8px + env(safe-area-inset-top));
@@ -3550,7 +3585,7 @@ main {
   overflow: hidden;
   font-size: 19px;
   line-height: 1.25;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 /* The line under a step's title whole: a second line rather than cut. */
@@ -3698,7 +3733,7 @@ main {
   height: 5px;
   margin: 0 auto;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.18);
+  background: color-mix(in srgb, var(--q-text) 18%, transparent);
 }
 .ot-nav-top .ot-nav-grip {
   margin-top: -4px;
@@ -3867,7 +3902,7 @@ main {
 }
 .ot-track-line::before {
   left: 0;
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--q-text) 12%, transparent);
   content: '';
 }
 .ot-track-lit {
@@ -3885,7 +3920,7 @@ main {
   box-shadow: 0 0 0 2px var(--ot-card);
 }
 .ot-track-line i.past {
-  background: rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, var(--q-text) 30%, transparent);
 }
 .ot-track-line i.you {
   width: 16px;
@@ -3906,7 +3941,7 @@ main {
   border-radius: 50%;
   background: var(--c);
   color: #fff;
-  box-shadow: 0 0 0 3px var(--ot-card), 0 3px 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px var(--ot-card), 0 3px 10px rgb(0 0 0 / calc(0.5 * var(--ot-k)));
   transition: left 0.9s var(--q-ease, ease);
   --ping: var(--c);
 }
@@ -4099,7 +4134,7 @@ main {
 /* The bus pulling in, the train at the platform: the card glows green. */
 .ot-nav-top.coming {
   border-color: color-mix(in srgb, var(--ot-good) 65%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ot-good) 40%, transparent), 0 0 32px -6px color-mix(in srgb, var(--ot-good) 70%, transparent), 0 18px 50px -20px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ot-good) 40%, transparent), 0 0 32px -6px color-mix(in srgb, var(--ot-good) 70%, transparent), 0 18px 50px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-nav-top.coming .ot-nav-main {
   background: color-mix(in srgb, var(--ot-good) 22%, transparent);
@@ -4313,7 +4348,7 @@ main {
 }
 .ot-mtog[aria-pressed='true'] {
   border-color: transparent;
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--q-text) 10%, transparent);
   color: var(--q-text);
 }
 .ot-mtog[aria-pressed='false'] {
@@ -4386,12 +4421,12 @@ main {
 }
 /* Over the map: lit at the rim, like the kit's glass. */
 .ot-card {
-  box-shadow: var(--q-glass-rim, none), 0 -18px 50px -20px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--q-glass-rim, none), 0 -18px 50px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-nav-top,
 .ot-nav-bottom,
 .ot-pickbar-box {
-  box-shadow: var(--q-glass-rim, none), 0 18px 50px -20px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--q-glass-rim, none), 0 18px 50px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 /* In a cell: iOS's grey fill. */
 .ot-od button,
@@ -4413,11 +4448,11 @@ main {
 .ot-alt,
 .ot-go-bike,
 .ot-manage {
-  background: var(--q-fill, rgba(255, 255, 255, 0.04));
+  background: var(--q-fill, color-mix(in srgb, var(--q-text) 4%, transparent));
 }
 .ot-row-btn,
 .ot-st-btn {
-  background: var(--q-fill, rgba(255, 255, 255, 0.03));
+  background: var(--q-fill, color-mix(in srgb, var(--q-text) 3%, transparent));
 }
 /* (The colour only: the search's magnifier and a select's chevron are its background-image.) */
 .ot-sheet select,
@@ -4445,7 +4480,7 @@ main {
   background: var(--q-fill, transparent);
 }
 .ot-mtog[aria-pressed='true'] {
-  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, var(--q-text) 16%, transparent);
 }
 /* Floating over the map: the kit's glass. */
 .tab-map .ot-search,
@@ -4453,19 +4488,19 @@ main {
 .ot-map-chips .q-chip,
 .ot-results {
   border-color: transparent;
-  background: var(--q-glass-strong, rgba(22, 25, 33, 0.94));
+  background: var(--q-glass-strong, color-mix(in srgb, var(--q-surface) 94%, transparent));
   -webkit-backdrop-filter: var(--q-glass-blur, none);
   backdrop-filter: var(--q-glass-blur, none);
 }
 .tab-map .ot-search,
 .ot-fab {
-  box-shadow: var(--q-glass-rim, none), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+  box-shadow: var(--q-glass-rim, none), var(--q-glass-drop, 0 10px 30px -12px rgb(0 0 0 / calc(0.8 * var(--ot-k))));
 }
 .ot-map-chips .q-chip {
-  box-shadow: var(--q-glass-rim, none), 0 6px 18px -10px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--q-glass-rim, none), 0 6px 18px -10px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-results {
-  box-shadow: var(--q-glass-rim, none), 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--q-glass-rim, none), 0 24px 60px -20px rgb(0 0 0 / calc(0.9 * var(--ot-k)));
 }
 .ot-fab {
   border-radius: 50%;
@@ -4480,13 +4515,13 @@ main {
 .ot-nb {
   border-color: transparent;
   border-left-color: var(--ot-bike);
-  background: var(--q-glass-strong, rgba(20, 23, 31, 0.96));
+  background: var(--q-glass-strong, color-mix(in srgb, var(--q-surface) 96%, transparent));
   -webkit-backdrop-filter: var(--q-glass-blur, none);
   backdrop-filter: var(--q-glass-blur, none);
-  box-shadow: var(--q-glass-rim, none), 0 12px 28px -14px rgba(0, 0, 0, 0.95);
+  box-shadow: var(--q-glass-rim, none), 0 12px 28px -14px rgb(0 0 0 / calc(0.95 * var(--ot-k)));
 }
 .tab-map .q-status {
-  background: var(--q-glass-strong, rgba(22, 25, 33, 0.96));
+  background: var(--q-glass-strong, color-mix(in srgb, var(--q-surface) 96%, transparent));
   -webkit-backdrop-filter: var(--q-glass-blur, none);
   backdrop-filter: var(--q-glass-blur, none);
   box-shadow: var(--q-glass-rim, none), var(--q-shadow);
@@ -4537,10 +4572,10 @@ body.ot-navigating.ot-nav-min .ot-nav-mini {
   padding: 7px 14px 7px 7px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--q-glass-strong, rgba(28, 28, 30, 0.94));
+  background: var(--q-glass-strong, color-mix(in srgb, var(--q-surface) 94%, transparent));
   -webkit-backdrop-filter: var(--q-glass-blur, none);
   backdrop-filter: var(--q-glass-blur, none);
-  box-shadow: var(--q-glass-rim, none), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+  box-shadow: var(--q-glass-rim, none), var(--q-glass-drop, 0 10px 30px -12px rgb(0 0 0 / calc(0.8 * var(--ot-k))));
   color: var(--q-text);
   font: inherit;
   text-align: left;
@@ -4563,10 +4598,10 @@ body.ot-navigating.ot-nav-min .ot-nav-mini {
   color: #1a1206;
 }
 .ot-nav-mini-b.alert {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ot-warn) 70%, transparent), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ot-warn) 70%, transparent), var(--q-glass-drop, 0 10px 30px -12px rgb(0 0 0 / calc(0.8 * var(--ot-k))));
 }
 .ot-nav-mini-b.coming {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ot-good) 70%, transparent), var(--q-glass-drop, 0 10px 30px -12px rgba(0, 0, 0, 0.8));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ot-good) 70%, transparent), var(--q-glass-drop, 0 10px 30px -12px rgb(0 0 0 / calc(0.8 * var(--ot-k))));
 }
 .ot-nav-mini-t {
   display: grid;
@@ -5049,7 +5084,7 @@ button.ot-hero {
   margin-top: 4px;
 }
 .ot-hero .q-tag {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--q-text) 20%, transparent);
   color: #fff;
 }
 .ot-hero .q-tag.solid {
@@ -5378,7 +5413,7 @@ button.ot-hero {
 .ot-od-card .ot-st-pick {
   min-height: 58px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, var(--q-text) 16%, transparent);
   color: #fff;
 }
 .ot-od-card .ot-st-pick small {
@@ -5392,7 +5427,7 @@ button.ot-hero {
   font-size: 17px;
 }
 .ot-od-card .ot-sys {
-  background: rgba(255, 255, 255, 0.22);
+  background: color-mix(in srgb, var(--q-text) 22%, transparent);
   color: #fff;
 }
 .ot-od-card .ot-swap {
@@ -5536,7 +5571,21 @@ button.ot-hero {
 }
 .ot-nb-top b {
   flex: 1;
-  font: 600 16px/21px var(--q-font);
+  min-width: 0;
+  /* A long name wraps onto a second or third line, not cut with …; every card keeps room for two so the row is one height. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-height: 42px;
+  font: 600 15px/21px var(--q-font);
+  text-overflow: clip;
+  align-content: center;
+}
+.ot-nb-top {
+  align-items: flex-start;
 }
 .ot-nb-n {
   display: grid;
@@ -5583,7 +5632,7 @@ button.ot-hero {
   height: 12px;
 }
 .ot-map-panel:has(.ot-nearbikes:not([hidden])) .ot-fabs {
-  bottom: 156px;
+  bottom: 178px;
 }
 
 .ot-mine .q-ritem-title {
@@ -5600,4 +5649,21 @@ button.ot-hero {
 }
 .ot-sel-row .q-ritem-title {
   white-space: nowrap;
+}
+
+/* ---- Light and dark, and the narrowest phone ---- */
+.ot-modes .q-chip[aria-pressed='true'] {
+  background: var(--q-accent);
+  border-color: var(--q-accent);
+  color: var(--q-accent-ink);
+}
+@media (max-width: 340px) {
+  .ot-sel-row select {
+    max-width: 40%;
+    padding: 0 22px 0 8px;
+    font-size: 13px;
+  }
+  .ot-sel-row .q-ritem-title {
+    white-space: normal;
+  }
 }

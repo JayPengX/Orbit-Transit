@@ -151,7 +151,7 @@ export function etaOf(r, now = Date.now()) {
   const age = etaAge(r, now);
   const sec = r.EstimateTime == null ? null : Math.max(0, Math.round(Number(r.EstimateTime) - age));
   const more = (r.Estimates || []).map(x => Math.round(Number(x.EstimateTime) - age)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
-  return { sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null };
+  return { t: now, sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null };
 }
 export function etaMap(j) {
   const out = new Map();

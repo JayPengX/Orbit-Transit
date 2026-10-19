@@ -10,7 +10,13 @@ import { W } from './lang.mjs';
 const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
 const NLSC = 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
 
-// Google's map in the app's dark colours (the page is always dark).
+// Is the page dark now (the phone's setting, or the page's own data-theme)?
+const darkNow = () => {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === 'dark' : Boolean(globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches);
+};
+
+// Google's map in the app's dark colours (its own default look in light).
 const DARK = [
   { elementType: 'geometry', stylers: [{ color: '#161a22' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#9aa3b5' }] },
@@ -134,8 +140,8 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
   const map = new g.Map(el, {
     center: { lat: center.lat, lng: center.lon },
     zoom,
-    styles: DARK,
-    backgroundColor: '#0a0b0f',
+    styles: darkNow() ? DARK : null,
+    backgroundColor: darkNow() ? '#0a0b0f' : '#e8eaed',
     disableDefaultUI: true,
     clickableIcons: true,
     gestureHandling: 'greedy',
@@ -145,6 +151,8 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
     restriction: { latLngBounds: { north: TAIWAN_BOX.n, south: TAIWAN_BOX.s, west: TAIWAN_BOX.w, east: TAIWAN_BOX.e }, strictBounds: false },
     minZoom: 7
   });
+  // (The phone changes between light and dark while the app is open.)
+  globalThis.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => map.setOptions({ styles: darkNow() ? DARK : null }));
   const transit = new g.TransitLayer();
   transit.setMap(map);
   // (The first screen's tiles in: what the loading screen waits for.)
