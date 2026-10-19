@@ -482,7 +482,9 @@ function openCard(c) {
   const planned = document.body.classList.contains('ot-planning');
   document.body.classList.remove('ot-planning');
   if (planned) setTimeout(drawLayers, 0);
-  const { marker, ...rest } = c;
+  const { marker: tapped, ...rest } = c;
+  // A stop, a station or a bike opened from a list (附近, the search) is its map marker, selected as a tap on it is, not a dropped pin over it.
+  const marker = tapped || markerOf(c);
   card = { ...rest, at: Date.now() };
   // A marker tapped shows itself selected; a spot or a place without one gets the pin.
   map.select(marker || null);
@@ -490,6 +492,17 @@ function openCard(c) {
   map.layer('sel').set(selDrop ? [{ id: 'sel', lat: c.lat, lon: c.lon, cls: 'sel', z: 40, html: '<i class="ot-drop-shadow"></i><i class="ot-drop"></i>' }] : []);
   renderCard();
   refreshCard();
+}
+function markerOf(c) {
+  const it = c.item;
+  if (!it || it.lat == null) return null;
+  if (c.kind === 'bike' && it.uid) return bikeMarker(it);
+  // (A bus stop only when it's on the map as it is: stops close together are drawn as one.)
+  if (c.kind === 'bus' && it.uid) return map.layer('bus').els?.get(`bus:${it.uid}`)?.it ?? null;
+  if ((c.kind === 'tra' || c.kind === 'hsr') && it.key) return railMarker(it);
+  if (c.kind === 'metro' && it.key) return metroMarker({ st: it });
+  if (c.kind === 'place' && it.pin) return { id: `place:${it.pin}`, lat: it.lat, lon: it.lon };
+  return null;
 }
 // The card's ✕, or a tap on the map beside it: the search that led to it ends too, and the sheet goes
 // to its lowest stop, as Maps does (it had come up to half for the card, or was left there).
@@ -1606,13 +1619,15 @@ const MODE_CHIP = { bus: W('公車', 'Bus'), tra: W('台鐵', 'TRA'), hsr: W('�
 function plansHtml(c) {
   const whenText = when.by === 'now' ? W('現在出發', 'Leave now') : `${when.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${hm(when.at)}`;
   const saved = Boolean(tripOf(c));
-  const top = `<div class="ot-card-head"><button class="q-icon-btn" type="button" data-card="back" aria-label="${W('返回', 'Back')}">${icon('back')}</button>
+  // A bar (back, 路線, ☆, ✕) over the fields, ⇅ beside them as in Maps: the four buttons in the start field's row had left it too short (the owner, 2026-10-19).
+  const top = `<div class="ot-card-head ot-plans-head"><button class="q-icon-btn ot-ph-back" type="button" data-card="back" aria-label="${W('返回', 'Back')}">${icon('back')}</button>
+      <h2 class="ot-ph-title">${W('路線', 'Directions')}</h2>
+      <button class="q-icon-btn ot-ph-star${saved ? ' on' : ''}" type="button" data-card="save-trip" aria-label="${W('釘選這個行程', 'Pin this trip')}">${icon('star')}</button>
+      <button class="q-close ot-ph-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button>
       <div class="ot-card-title ot-od"><button type="button" data-card="edit-from" aria-label="${W('改出發地', 'Change start')}"><i class="ot-dot from"></i><span>${e(c.from.name)}</span></button><button type="button" data-card="edit-to" aria-label="${c.then?.length ? W('改第一站', 'Change first stop') : W('改目的地', 'Change destination')}"><i class="ot-dot ${c.then?.length ? 'stop' : 'to'}"></i>${c.then?.length ? '<small class="ot-od-n">1</small>' : ''}<b>${e(c.to.name || W('目的地', 'Destination'))}</b></button>${(c.then || [])
         .map((x, k) => `<div class="ot-od-stop"><button type="button" data-card="stop-first" data-k="${k}" aria-label="${W('先去', 'Go first to')} ${e(x.name)}"><i class="ot-dot ${k === c.then.length - 1 ? 'to' : 'stop'}"></i><small class="ot-od-n">${k + 2}</small><b>${e(x.name || W('地點', 'Place'))}</b></button><button class="ot-od-x" type="button" data-card="stop-drop" data-k="${k}" aria-label="${W('移除這一站', 'Remove this stop')}">×</button></div>`)
         .join('')}${(c.then?.length || 0) < MAX_STOPS ? `<button class="ot-od-add" type="button" data-card="stop-add">${icon('plus')}<span>${W('加一站', 'Add stop')}</span></button>` : ''}</div>
-      <button class="q-icon-btn" type="button" data-card="swap" aria-label="${W('對調起訖', 'Swap ends')}">${icon('swap')}</button>
-      <button class="q-icon-btn${saved ? ' on' : ''}" type="button" data-card="save-trip" aria-label="${W('釘選這個行程', 'Pin this trip')}">${icon('star')}</button>
-      <button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>
+      <button class="q-icon-btn ot-ph-swap" type="button" data-card="swap" aria-label="${W('對調起訖', 'Swap ends')}">${icon('swap')}</button></div>
     <div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}${icon('down', 'ot-caret')}</button>
       <div class="ot-mtogs" role="group" aria-label="${W('這次搭什麼', 'Modes')}">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}</div></div>`;
   if (!c.plans) return `${top}<div class="ot-plans">${'<div class="ot-plan ot-plan-wait" aria-hidden="true"><i class="ot-skel" style="width:40%"></i><i class="ot-skel" style="width:70%"></i></div>'.repeat(3)}</div><span class="ot-sr">${e(whenText)}</span>`;
