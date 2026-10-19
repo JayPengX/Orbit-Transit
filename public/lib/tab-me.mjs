@@ -58,8 +58,7 @@ function render() {
     big: pass ? `<strong class="q-hc-big">NT$${pass.price}</strong>` : '',
     title: pass ? pass.name : W('沒有月票', 'No pass'),
     tags: pass ? [tag(W('公車', 'Bus')), tag(W('台鐵', 'TRA')), tag(W('捷運', 'Metro')), pass.bike ? tag(W('YouBike 30 分', 'YouBike 30 min')) : ''] : [],
-    body: `<select id="me-tpass" class="ot-cover" aria-label="TPASS"><option value="">${W('沒有 TPASS', 'No TPASS')}</option>${TPASSES.map(t => `<option value="${t.id}" ${t.id === P.tpass ? 'selected' : ''}>${e(t.name)}${W(`（NT$${t.price}）`, ` (NT$${t.price})`)}</option>`).join('')}</select>`,
-    actions: [{ label: pass ? W('更換', 'Change') : W('選擇月票', 'Pick a pass'), attrs: 'tabindex="-1"', ghost: !!pass }]
+    actions: [{ label: pass ? W('更換', 'Change') : W('選擇月票', 'Pick a pass'), attrs: 'data-act="tpass"', ghost: !!pass }]
   }).replace('<div class="q-hero-card ot-hero"', '<div class="q-hero-card ot-hero ot-pass"');
   const places = D.places
     .map(p => `<button class="q-ritem chevron" type="button" data-place-edit="${e(p.id)}">${placeTile(p)}<span class="q-ritem-text"><span class="q-ritem-title">${e(p.name)}</span>${p.address ? `<small>${e(p.address)}</small>` : ''}</span>${ctx.here ? `<span class="q-ritem-value">${e(distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon)))}</span>` : ''}</button>`)
@@ -129,7 +128,8 @@ function onClick(ev) {
     ctx.data.pins = ctx.data.pins.filter(p => p.id !== pin.dataset.pinDel);
     return done();
   }
-  const act = ev.target.closest('[data-act]')?.dataset.act;
+  const act = ev.target.closest('[data-act]')?.dataset.act || (ev.target.closest('.ot-pass') ? 'tpass' : '');
+  if (act === 'tpass') return tpassSheet();
   if (act === 'bike30') {
     ctx.data.prefs.bike30 = !ctx.data.prefs.bike30;
     return done();
@@ -144,11 +144,26 @@ function onClick(ev) {
   if (act === 'add-trip') return ctx.newTrip?.();
 }
 document.addEventListener('change', ev => {
-  if (!ctx || !['me-tpass', 'me-maps'].includes(ev.target.id)) return;
-  if (ev.target.id === 'me-maps') ctx.data.prefs.maps = ev.target.value === 'apple' ? 'apple' : 'google';
-  else ctx.data.prefs.tpass = ev.target.value;
+  if (!ctx || ev.target.id !== 'me-maps') return;
+  ctx.data.prefs.maps = ev.target.value === 'apple' ? 'apple' : 'google';
   done();
 });
+// The monthly pass, picked from a list in a sheet (a native picker wrapped
+// its long names): each with its price, the chosen one ticked.
+function tpassSheet() {
+  const now = ctx.data.prefs.tpass || '';
+  const row = (id, name, sub) =>
+    `<button class="q-ritem" type="button" data-tp="${e(id)}" aria-pressed="${id === now}">${tile(id ? 'tra' : 'x', id ? COLOR.tra : 'var(--q-gray)')}<span class="q-ritem-text"><span class="q-ritem-title">${e(name)}</span>${sub ? `<small>${e(sub)}</small>` : ''}</span>${id === now ? `<span class="q-ritem-value ot-tick">${icon('check')}</span>` : ''}</button>`;
+  const d = sheet(`${sheetHead(W('選擇月票', 'Pick a pass'))}${rowCard(row('', W('沒有 TPASS', 'No TPASS'), '') + TPASSES.map(t => row(t.id, t.name, `NT$${t.price}${W(' / 月', ' a month')}`)).join(''))}`, 'ot-tpass-sheet');
+  d.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-tp]');
+    if (!b) return;
+    ctx.data.prefs.tpass = b.dataset.tp;
+    d.shut();
+    done();
+  });
+}
+
 // A pinned place: its name and icon, its place in the list, or gone.
 function placeSheet(id) {
   const p = ctx.data.places.find(x => x.id === id);

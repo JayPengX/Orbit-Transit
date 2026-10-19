@@ -27,7 +27,10 @@ export function sheet(html, cls = '') {
   return d;
 }
 // A sheet's head: its title (html), a small line under it, a colour tile before it (`lead`, html).
-export const sheetHead = (title, sub = '', lead = '') => `<div class="q-sheet-head${lead ? ' ot-sheet-tile' : ''}">${lead}<div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" data-q-close aria-label="${W('關閉', 'Close')}">✕</button></div>`;
+// Just a title: centred between the ✕ and a spacer, as the kit's sheets (iOS's).
+const closeBtn = () => `<button class="q-close" type="button" data-act="close" data-q-close aria-label="${W('關閉', 'Close')}">✕</button>`;
+export const sheetHead = (title, sub = '', lead = '') =>
+  !lead && !sub ? `<div class="q-sheet-head"><span></span><h2>${title}</h2>${closeBtn()}</div>` : `<div class="q-sheet-head${lead ? ' ot-sheet-tile' : ''}">${lead}<div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div>${closeBtn()}</div>`;
 
 // 24×24 stroked icons, one per way of moving.
 const I = {
@@ -67,6 +70,7 @@ const I = {
   back: '<path d="M15 5l-7 7 7 7"/>',
   bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   history: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5M12 8v4l3 2"/>',
   live: '<circle cx="12" cy="12" r="2.3"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8"/>'
 };

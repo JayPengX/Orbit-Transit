@@ -1610,6 +1610,15 @@ body.tab-map {
   margin-right: 4px;
   color: var(--q-label-3);
 }
+/* In a row: a plain bell inside the card's edge, not a glass button cut by it. */
+.ot-strip > .ot-bell {
+  width: 40px;
+  margin-right: 8px;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 .ot-bell.on {
   color: var(--ot-bike);
 }
@@ -4385,3 +4394,13 @@ span.ot-pass {
 .ot-pick-form, .ot-pick-form * { -webkit-user-select: text; user-select: text; }
 .ot-pick-form .q-search-clear { -webkit-user-select: none; user-select: none; }
 .ot-pick-form input { pointer-events: auto; touch-action: manipulation; }
+
+/* The pass list's tick: the app's colour. */
+.ot-tpass-sheet .ot-tick {
+  color: var(--q-accent);
+}
+.ot-tpass-sheet .ot-tick .ot-i {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.6;
+}
