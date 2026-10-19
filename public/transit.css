@@ -4252,3 +4252,22 @@ span.ot-pass {
     left: 83px;
   }
 }
+
+/* 我的: addresses, route lines and tags stay on one line */
+.ot-page .q-ritem-text small,
+.ot-page .q-ritem-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-page .q-ritem-text .q-tags {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.ot-page .q-ritem-text .q-tags > * {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

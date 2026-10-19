@@ -3,7 +3,7 @@
 Taiwan's public transport in one app: buses, 台鐵, 高鐵, the metros and
 YouBike; trips planned the way a person really travels; navigation that
 follows the trip. Signs in with the Quadra Pass, which keeps places, trips
-and pins. Always dark.
+and pins. Light or dark follows the phone; the look is `lib/look.mjs` (was `premium.mjs`) on the kit.
 
 Live: https://jaypengx.github.io/Orbit-Transit/
 
@@ -15,11 +15,11 @@ Live: https://jaypengx.github.io/Orbit-Transit/
     a trip planned from anywhere. A stop's signs a few metres apart are one
     stop (`stopGroups`).
   - **交通:** saved trips' next departures with real bus times, pinned
-    rides and places.
+    rides, and the places rail (家, 學校 and your pins).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster), bus
-    routes by number or stop, stop timetables.
+    routes by number or stop, stop timetables, and 捷運 (maps and boards).
   - **我的:** places, trips, pinned stops, 交通偏好 (ways of moving, TPASS,
-    the maps app), metro maps.
+    the maps app).
 - **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by
   side, plus our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and
   metro router. A planner's YouBike ride needs a real station at each end
