@@ -4579,3 +4579,16 @@ span.ot-pass {
   height: 20px;
   stroke-width: 2.6;
 }
+
+/* A route's many ways (5 to 10 on some): chips to scroll, bleeding to the sheet's edges. */
+.ot-dir-chips {
+  position: relative;
+  margin: 8px -16px 0;
+  padding: 2px 16px 4px;
+  scroll-padding-inline: 16px;
+}
+.ot-dir-chips::after {
+  content: '';
+  flex: none;
+  width: 1px;
+}

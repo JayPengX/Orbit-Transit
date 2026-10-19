@@ -240,7 +240,10 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // Two ways: the segmented control under the head names them, so the head says where (not 往 … twice).
     const both = Boolean(ways && ways.length > 1);
     const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${both ? e(where) : w ? `${W('往', 'To')} ${e(w.headsign)}` : W('路線', 'Route')}</h2>${both ? (w?.subName && w.subName !== route.name ? `<p class="ot-sheet-sub">${e(w.subName)}</p>` : '') : `<p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}</p>`}</div></div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">✕</button></div>`;
-    const tabs = ways && ways.length > 1 ? `<div class="q-seg ot-dir" role="group" aria-label="${W('方向', 'Direction')}">${ways.map((x, i) => `<button type="button" data-way="${i}" aria-pressed="${i === way}">${W('往', 'To')} ${e(x.headsign)}</button>`).join('')}</div>` : '';
+    // Two short ways: a segmented control. More (a loop's branches, 5 to 10 on
+    // some intercity routes) or long names: chips in a row to scroll, each said whole.
+    const many = Boolean(ways && (ways.length > 2 || ways.some(x => String(x.headsign || '').length > 7)));
+    const tabs = ways && ways.length > 1 ? `<div class="${many ? 'q-chips ot-dir ot-dir-chips' : 'q-seg ot-dir'}" role="group" aria-label="${W('方向', 'Direction')}">${ways.map((x, i) => `<button type="button"${many ? ' class="q-chip"' : ''} data-way="${i}" aria-pressed="${i === way}">${W('往', 'To')} ${e(x.headsign)}</button>`).join('')}</div>` : '';
     const views = `<div class="q-seg ot-view" role="group" aria-label="${W('即時或時刻表', 'Live or timetable')}"><button type="button" data-view="live" aria-pressed="${view === 'live'}">${W('即時到站', 'Live')}</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">${W('時刻表', 'Timetable')}</button></div>`;
     // Each stop's live time, trusted: a bus 'coming' that the timetable has
     // nowhere near (resting with its tracker on) isn't taken (the
@@ -276,7 +279,15 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
             })
             .join('')}</ol>`;
     const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(boarding.name)} 上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
+    const dirLeft = d.querySelector('.ot-dir-chips')?.scrollLeft || 0;
     d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
+    // (The row of ways where it was; the one chosen in sight.)
+    const row = d.querySelector('.ot-dir-chips');
+    if (row) {
+      row.scrollLeft = dirLeft;
+      const on = row.querySelector('[aria-pressed="true"]');
+      if (on && (on.offsetLeft < row.scrollLeft || on.offsetLeft + on.offsetWidth > row.scrollLeft + row.clientWidth)) row.scrollLeft = on.offsetLeft - 16;
+    }
     d.scrollTop = keep;
   };
   // A ride pinned on at this stop, either way (the way back gets on where the ride gets off).
