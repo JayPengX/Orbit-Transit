@@ -4657,3 +4657,11 @@ span.ot-pass {
 .ot-page > .q-nav-title {
   padding-inline: 0;
 }
+
+/* A marker's name that would run into another's: hidden (map.mjs declutter), its icon stays. */
+.ot-mk > span {
+  transition: opacity 0.2s;
+}
+.ot-mk.ot-lb-hide > span {
+  opacity: 0;
+}
