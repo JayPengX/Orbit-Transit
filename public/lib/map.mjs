@@ -133,6 +133,25 @@ export async function createMap(el, { provider = 'nlsc', key = '', center, zoom 
 // background (its size not known yet, or the cards over the map taller than
 // it), and a fit then zooms out to the whole island (the owner, navigating,
 // 2026-10-13); it's left for the next one.
+// The pin nearest a tap that missed it by a finger's width (a pin's own tap is lost when its
+// icon is redrawn under the finger, or the finger lands beside it): the tap's page point, the
+// marker layers' items → the item or null.
+const HIT_PAD = 14;
+function pinAt(event, itemSets) {
+  const t = event?.changedTouches?.[0] || event;
+  if (!Number.isFinite(t?.clientX)) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const els of itemSets)
+    for (const rec of els.values()) {
+      const r = rec.it.kind && rec.el?.()?.getBoundingClientRect();
+      if (!r || !r.width) continue;
+      if (t.clientX < r.left - HIT_PAD || t.clientX > r.right + HIT_PAD || t.clientY < r.top - HIT_PAD || t.clientY > r.bottom + HIT_PAD) continue;
+      const d = Math.hypot(t.clientX - (r.left + r.right) / 2, t.clientY - (r.top + r.bottom) / 2);
+      if (d < bestD) [best, bestD] = [rec.it, d];
+    }
+  return best;
+}
 const roomFor = (el, p) => el.clientWidth - p.left - p.right >= 60 && el.clientHeight - p.top - p.bottom >= 60;
 
 function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag }) {
@@ -163,7 +182,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
       ev.stop();
       return onPlace({ id: ev.placeId, lat: ev.latLng.lat(), lon: ev.latLng.lng() });
     }
-    onTap({ lat: ev.latLng.lat(), lon: ev.latLng.lng() });
+    onTap({ lat: ev.latLng.lat(), lon: ev.latLng.lng() }, pinAt(ev.domEvent, [...layers.values()].map(l => l.items.els)));
   });
   map.addListener('idle', () => onIdle());
   map.addListener('dragstart', () => onDrag());
@@ -195,6 +214,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
       const rec = {
         it,
         node,
+        el: () => node,
         update: x => {
           if (x.html !== rec.it.html) node.innerHTML = x.html;
           if (x.cls !== rec.it.cls) node.className = `ot-mk ${x.cls || ''}`;
@@ -242,19 +262,20 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
       const sw = b.getSouthWest();
       return { n: ne.lat(), e: ne.lng(), s: sw.lat(), w: sw.lng() };
     },
-    // `dy`: the point `dy` px above the middle (the middle of what a sheet over the map leaves in view).
-    setView(lat, lon, z, dy = 0) {
+    // `dy`: the point `dy` px above the middle (the middle of what a sheet over the map leaves in view),
+    // `dx`: and `dx` px left of it (the middle of what the round buttons at the right leave).
+    setView(lat, lon, z, dy = 0, dx = 0) {
       byApp = Date.now();
       map.panTo({ lat, lng: lon });
       if (z) map.setZoom(z);
-      if (Math.round(dy)) map.panBy(0, Math.round(dy));
+      if (Math.round(dy) || Math.round(dx)) map.panBy(Math.round(dx), Math.round(dy));
     },
     // A point `dy` px above the map's middle (the middle of what the
     // search bar and a card over the map leave in view).
-    focus(lat, lon, dy = 0) {
+    focus(lat, lon, dy = 0, dx = 0) {
       byApp = Date.now();
       map.panTo({ lat, lng: lon });
-      if (Math.round(dy)) map.panBy(0, Math.round(dy));
+      if (Math.round(dy) || Math.round(dx)) map.panBy(Math.round(dx), Math.round(dy));
     },
     fit(points, pad = 60) {
       if (!points.length) return;
@@ -309,7 +330,7 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   const layer = L.tileLayer(NLSC, { maxZoom: 19, maxNativeZoom: 19, attribution: W('© 內政部國土測繪中心', '© NLSC'), className: 'ot-tiles' });
   const tiles = new Promise(r => layer.once('load', r));
   layer.addTo(map);
-  map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }));
+  map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }, pinAt(ev.originalEvent, [...layers.values()].map(l => l.els))));
   map.on('moveend', () => onIdle());
   map.on('dragstart', () => onDrag());
   let byApp = 0;
@@ -323,6 +344,7 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
       const m = L.marker([it.lat, it.lon], { icon: icon(it), zIndexOffset: (it.z || 1) * 100, keyboard: false }).addTo(map);
       const rec = {
         it,
+        el: () => m.getElement(),
         update: x => {
           if (x.html !== rec.it.html || x.cls !== rec.it.cls) m.setIcon(icon(x));
           if (x.lat !== rec.it.lat || x.lon !== rec.it.lon) m.setLatLng([x.lat, x.lon]);
@@ -351,15 +373,15 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
       const b = map.getBounds();
       return { n: b.getNorth(), e: b.getEast(), s: b.getSouth(), w: b.getWest() };
     },
-    setView(lat, lon, z, dy = 0) {
+    setView(lat, lon, z, dy = 0, dx = 0) {
       byApp = Date.now();
       const zoom = z || map.getZoom();
-      map.setView(dy ? map.unproject(map.project([lat, lon], zoom).add([0, Math.round(dy)]), zoom) : [lat, lon], zoom);
+      map.setView(dy || dx ? map.unproject(map.project([lat, lon], zoom).add([Math.round(dx), Math.round(dy)]), zoom) : [lat, lon], zoom);
     },
-    focus(lat, lon, dy = 0) {
+    focus(lat, lon, dy = 0, dx = 0) {
       byApp = Date.now();
       const z = map.getZoom();
-      map.panTo(map.unproject(map.project([lat, lon], z).add([0, Math.round(dy)]), z));
+      map.panTo(map.unproject(map.project([lat, lon], z).add([Math.round(dx), Math.round(dy)]), z));
     },
     fit(points, pad = 60) {
       if (!points.length) return;
