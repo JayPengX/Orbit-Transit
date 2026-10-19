@@ -4652,3 +4652,8 @@ span.ot-pass {
   flex: none;
   width: 1px;
 }
+
+/* 交通's large title sits in the page's own margin (the kit's title brings one too: not twice). */
+.ot-page > .q-nav-title {
+  padding-inline: 0;
+}
