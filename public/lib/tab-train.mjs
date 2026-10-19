@@ -12,7 +12,7 @@ import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind, stationLabel } from './ui.mjs';
-import { COLOR, tile, tag, section, rowCard } from './look.mjs';
+import { COLOR, tile, tag, section, rowCard, emptyNote } from './look.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -91,7 +91,7 @@ function resultsHtml() {
   if (state.results === 'loading') return `<p class="ot-note">${W('找班次…', 'Finding trains…')}</p>`;
   if (!state.results) return '';
   const pin = `<button type="button" data-act="pin-conn" aria-pressed="${pinnedConn()}">${pinnedConn() ? W('已釘選', 'Pinned') : W('釘選', 'Pin')}</button>`;
-  if (!state.results.length) return section(W('班次', 'Trains'), `<p class="ot-note">${W('這個時間之後沒有班次', 'No trains after this time')}</p>`, pin);
+  if (!state.results.length) return section(W('班次', 'Trains'), emptyNote(W('這個時間之後沒有班次', 'No trains after this time')), pin);
   const labels = tags(state.results);
   const passTag = state.passOnly ? `<span class="q-tags ot-pass">${tag(W(`${pass().name} 範圍內`, `Inside ${pass().name}`), 'green')}</span>` : '';
   return section(

@@ -26,7 +26,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { COLOR, tile } from './look.mjs';
+import { COLOR, tile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
@@ -298,7 +298,7 @@ async function nearBikesNow() {
     .map(({ s, walk }) => {
       const lv = bikeLevel(s);
       const mins = Math.max(1, Math.round(walk.sec / 60));
-      return `<button class="ot-nb ${lv}" type="button" data-nb="${e(s.uid)}"><small>${e(s.name)}</small><span class="ot-nb-n">${s.ok === false ? `<b>—</b><em>${W('暫停', 'Closed')}</em>` : `<b>${s.bikes}</b>${s.ebike ? `<em>⚡${s.ebike}</em>` : ''}<i>${icon('dock')}${s.ret}</i>`}</span><span class="ot-nb-walk">${icon('walk')}${mins} ${W('分', 'min')}</span></button>`;
+      return `<button class="ot-nb ${lv}" type="button" data-nb="${e(s.uid)}"><small>${e(s.name)}</small><span class="ot-nb-n">${s.ok === false ? `<b>—</b><em>${W('暫停', 'Closed')}</em>` : `<b>${s.bikes}</b>${s.ebike ? `<em>${icon('bolt')}${s.ebike}</em>` : ''}<i>${icon('dock')}${s.ret}</i>`}</span><span class="ot-nb-walk">${icon('walk')}${mins} ${W('分', 'min')}</span></button>`;
     })
     .join('');
 }
@@ -395,7 +395,7 @@ async function drawLayersNow() {
 
 const bikeMarker = s => {
   const lv = bikeLevel(s);
-  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: `${icon('bike')}<b>${s.ok === false ? W('停', '–') : s.bikes}</b>${s.ebike ? `<i>⚡${s.ebike}</i>` : ''}` };
+  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: `${icon('bike')}<b>${s.ok === false ? W('停', '–') : s.bikes}</b>${s.ebike ? `<i>${icon('bolt')}${s.ebike}</i>` : ''}` };
 };
 const busMarker = s => ({ id: `bus:${s.uid}`, lat: s.lat, lon: s.lon, cls: 'bus', z: 2, kind: 'bus', data: s, html: icon('bus') });
 // A stop with a side on each side of the street, close in (zoom 17 on): a
@@ -646,7 +646,7 @@ function renderCard() {
     html = `${head(s.name, s.kind, 'bike')}
       <div class="q-stats ot-bike-now" style="--q-stats-n:3">
         <div class="q-stat"><small>${W('一般', 'Bikes')}</small><strong>${s.bikes}</strong></div>
-        <div class="q-stat e"><small>⚡ ${W('電輔', 'E-bikes')}</small><strong>${s.ebike}</strong></div>
+        <div class="q-stat e"><small>${icon('bolt')} ${W('電輔', 'E-bikes')}</small><strong>${s.ebike}</strong></div>
         <div class="q-stat d"><small>${W('空位', 'Docks')}</small><strong>${s.ret}</strong></div>
       </div>
       <span class="q-tags ot-card-tags">${s.ok === false ? `<span class="q-tag red">${W('暫停營運', 'Closed')}</span>` : ''}${s.cap ? `<span class="q-tag">${W(`共 ${s.cap} 柱`, `${s.cap} docks`)}</span>` : ''}${s.at ? `<span class="q-tag">${e(ago(s.at))}</span>` : ''}</span>${err}${rentButtons(c)}${actions(c)}`;
@@ -666,7 +666,7 @@ function renderCard() {
             const al = alertFor(r.st || s, r.routeUID, r.dir);
             return `${heading}<div class="ot-strip">${strip({ no: r.route, main: r.toward ? `${W('往', 'to')} ${e(r.toward)}` : '', eta: { ...t, sub: al ? W(`${al.min} 分前提醒你`, `alert ${al.min} min before`) : t.sub }, attrs: `data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"` })}<button class="q-icon-btn ot-bell ot-strip-act${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir, stop: r.stopUID }))}" aria-label="${W('到站提醒', 'Arrival alert')}">${icon('bell')}</button></div>`;
           })
-          .join('') || `<p class="ot-note">${W('這個站牌現在沒有公車資料。', 'No buses at this stop right now.')}</p>`
+          .join('') || emptyNote(W('現在沒有公車資料', 'No buses right now'))
       : `<p class="ot-note">${W('載入中…', 'Loading…')}</p>`;
     html = `${head(s.name, [sides.length > 1 ? '' : BEARING[s.bearing], s.routes.length ? W(`${s.routes.length} 條路線`, `${s.routes.length} routes`) : ''].filter(Boolean).join(' · '), 'bus')}${err}<div class="q-rowcard ot-eta-list">${rowsHtml}</div>${goThere(c)}${actions(c)}`;
   } else if (c.kind === 'tra') {
@@ -718,7 +718,7 @@ export function metroBoardHtml(live) {
     .join('');
   if (liveHtml || tableHtml) return `<div class="ot-board">${liveHtml}${tableHtml}</div>`;
   if (live.op === 'TMRT') return `<p class="ot-note">${W('台中捷運沒有提供即時或時刻資料。', 'Taichung Metro shares no live or timetable data.')}</p>`;
-  return `<p class="ot-note">${W('現在沒有列車資料（可能已收班）。', 'No trains right now (maybe done for the day).')}</p>`;
+  return emptyNote(W('現在沒有列車資料', 'No trains right now'));
 }
 
 async function cardClick(ev) {
@@ -940,7 +940,7 @@ function wireSearch() {
       const places = ctx.data.places;
       const recent = ctx.data.trips.slice(0, 8);
       box.innerHTML =
-        (places.length ? `<div class="ot-res-places">${places.map(p => `<button class="ot-res-place" type="button" data-res="${e(JSON.stringify({ kind: 'place', icon: p.icon, name: p.name, sub: p.address || W('我的地點', 'My place'), lat: p.lat, lon: p.lon, gid: p.gid }))}"><i>${PLACE_ICONS[p.icon] || '📍'}</i><span>${e(p.name)}</span></button>`).join('')}</div>` : '') +
+        (places.length ? `<div class="ot-res-places">${places.map(p => `<button class="ot-res-place" type="button" data-res="${e(JSON.stringify({ kind: 'place', icon: p.icon, name: p.name, sub: p.address || W('我的地點', 'My place'), lat: p.lat, lon: p.lon, gid: p.gid }))}"><i>${icon(PLACE_ICONS[p.icon] || 'pin')}</i><span>${e(p.name)}</span></button>`).join('')}</div>` : '') +
         (recent.length
           ? `<h4 class="ot-res-h">${W('最近', 'Recent')}<button class="ot-res-clear" type="button" data-clear-recent="1">${W('全部清除', 'Clear all')}</button></h4>${recent
               .map(x => `<div class="ot-res-w">${resultRow({ kind: 'trip', name: x.name || MAP_SPOT, sub: ctx.here ? distText(meters(ctx.here.lat, ctx.here.lon, x.lat, x.lon)) : '', lat: x.lat, lon: x.lon, gid: x.gid })}<button class="q-icon-btn ot-res-del" type="button" data-del-recent="${e(tripKey(x))}" aria-label="${W('刪除這筆', 'Delete')}">${icon('x')}</button></div>`)
@@ -995,7 +995,7 @@ export function uniqueResults(rows) {
 // An address without its 里 (新竹市東區復中里中央路229號 -> 新竹市東區中央路229號): shorter, as Maps says it.
 export const shortAddress = s => String(s || '').replace(/([區鄉鎮市])[^\s區鄉鎮路街段巷道里]{1,4}里(?=\S)/, '$1').replace(/(\d)\s+(?=[號樓])/g, '$1');
 const resultRow = r =>
-  `<button class="ot-res" type="button" data-res="${e(JSON.stringify(r))}"><span class="ot-res-i">${r.kind === 'place' ? PLACE_ICONS[r.icon] || '📍' : r.kind === 'trip' ? icon('clock') : r.kind === 'tra' ? icon('tra') : r.kind === 'hsr' ? icon('hsr') : r.kind === 'metro' ? icon('metro') : r.kind === 'here' ? icon('locate') : r.kind === 'map' ? icon('layers') : icon('pin')}</span><span class="ot-res-t"><b>${e(r.name)}</b><small>${e([r.dist ? distText(r.dist) : '', shortAddress(r.sub)].filter(Boolean).join(' · '))}</small></span></button>`;
+  `<button class="ot-res" type="button" data-res="${e(JSON.stringify(r))}"><span class="ot-res-i">${r.kind === 'place' ? icon(PLACE_ICONS[r.icon] || 'pin') : r.kind === 'trip' ? icon('clock') : r.kind === 'tra' ? icon('tra') : r.kind === 'hsr' ? icon('hsr') : r.kind === 'metro' ? icon('metro') : r.kind === 'here' ? icon('locate') : r.kind === 'map' ? icon('layers') : icon('pin')}</span><span class="ot-res-t"><b>${e(r.name)}</b><small>${e([r.dist ? distText(r.dist) : '', shortAddress(r.sub)].filter(Boolean).join(' · '))}</small></span></button>`;
 
 // A sheet to choose a trip's end: 目前位置, your places, stations, Google's
 // places. → { name, lat, lon } (here: true for 目前位置), or null.
@@ -1130,7 +1130,7 @@ function arrive(c) {
 
 // On the map at every zoom (their icon and name), a tap opening the place's card, as its chip does.
 const placeCard = p => ({ kind: 'place', item: { name: p.name, sub: p.address, lat: p.lat, lon: p.lon, pin: p.id, gid: p.gid }, lat: p.lat, lon: p.lon });
-export const placeMarker = p => ({ id: `place:${p.id}`, lat: p.lat, lon: p.lon, cls: 'place', z: 6, kind: 'place', data: placeCard(p).item, html: `<i>${PLACE_ICONS[p.icon] || '📍'}</i><span>${e(p.name)}</span>` });
+export const placeMarker = p => ({ id: `place:${p.id}`, lat: p.lat, lon: p.lon, cls: 'place', z: 6, kind: 'place', data: placeCard(p).item, html: `<i>${icon(PLACE_ICONS[p.icon] || 'pin')}</i><span>${e(p.name)}</span>` });
 function drawPlaces() {
   map?.layer('places').set(navFull() ? [] : ctx.data.places.map(placeMarker));
 }
@@ -1237,7 +1237,7 @@ function drawChips() {
   drawPlaces();
   $('map-chips').innerHTML =
     rentalChip() +
-    ctx.data.places.map(p => `<button class="q-chip" type="button" data-place="${e(p.id)}">${PLACE_ICONS[p.icon] || '📍'} ${e(p.name)}</button>`).join('') +
+    ctx.data.places.map(p => `<button class="q-chip" type="button" data-place="${e(p.id)}">${icon(PLACE_ICONS[p.icon] || 'pin')} ${e(p.name)}</button>`).join('') +
     `<button class="q-chip ot-chip-add" type="button" data-chip="pin" aria-label="${W('釘選地點', 'Pin a place')}">${icon('plus')}</button>`;
   $('map-chips').onclick = ev => {
     if (ev.target.closest('[data-chip="rental"]')) return rentalSheet();
@@ -1266,7 +1266,7 @@ function pinSheet(p) {
   let iconKey = 'pin';
   const d = sheet(`${sheetHead(W('釘選地點', 'Pin a place'), '', tile('star', COLOR.place))}
     <label class="ot-field"><span>${W('名稱', 'Name')}</span><input id="pin-name" maxlength="20" value="${e(p.name)}" placeholder="${W('家、公司、學校', 'Home, Work, School')}"></label>
-    <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === iconKey}">${v}</button>`).join('')}</div></div>
+    <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === iconKey}" aria-label="${k}">${icon(v)}</button>`).join('')}</div></div>
     <button class="q-btn primary block ot-sheet-go" type="button" data-save="1">${W('儲存', 'Save')}</button>`);
   d.addEventListener('click', ev => {
     const ic = ev.target.closest('[data-icon]');
@@ -1714,7 +1714,7 @@ export function planBikeMarker({ st, rent, ret }, live = null) {
   const s = live || st;
   const lv = [rent && bikeLevel(s), ret && dockLevel(s)].filter(Boolean).sort((a, b) => LEVELS.indexOf(b) - LEVELS.indexOf(a))[0];
   // (Docks as a parking sign's P, bikes as the map's own: its bike, the count, ⚡.)
-  const parts = s.ok === false ? [`${icon('bike')}<b>${W('停', '–')}</b>`] : [ret && `${icon('dock')}<b>${s.ret}</b>`, rent && `${icon('bike')}<b>${s.bikes}</b>${s.ebike ? `<i>⚡${s.ebike}</i>` : ''}`].filter(Boolean);
+  const parts = s.ok === false ? [`${icon('bike')}<b>${W('停', '–')}</b>`] : [ret && `${icon('dock')}<b>${s.ret}</b>`, rent && `${icon('bike')}<b>${s.bikes}</b>${s.ebike ? `<i>${icon('bolt')}${s.ebike}</i>` : ''}`].filter(Boolean);
   return { id: `pbike:${st.uid}`, lat: st.lat, lon: st.lon, cls: `bike plan ${lv}`, z: 20, kind: 'bike', data: s, html: parts.join('<s></s>') };
 }
 // A ride's end without its station (a plan from elsewhere): a bike at the spot.
