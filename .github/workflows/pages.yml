@@ -6,6 +6,10 @@ name: Deploy to Pages
 on:
   push:
     branches: ['main']
+    # (Notes alone don't deploy.)
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -13,9 +17,10 @@ permissions:
   pages: write
   id-token: write
 
+# A newer push replaces a deploy still running or waiting: only the latest goes out.
 concurrency:
   group: 'pages'
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
