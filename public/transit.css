@@ -932,15 +932,15 @@ body.tab-map {
   overflow: hidden;
 }
 /* One thing in it at a time: the shelves, the search's results, a card. */
-.ot-msheet[data-mode='results'] .ot-home,
-.ot-msheet[data-mode='card'] .ot-home,
-.ot-msheet[data-mode='card'] .ot-results {
+.ot-msheet[data-shows='results'] .ot-home,
+.ot-msheet[data-shows='card'] .ot-home,
+.ot-msheet[data-shows='card'] .ot-results {
   display: none;
 }
-.ot-msheet[data-mode='card'] .ot-ms-row {
+.ot-msheet[data-shows='card'] .ot-ms-row {
   display: none;
 }
-.ot-msheet[data-mode='card'] .ot-ms-head {
+.ot-msheet[data-shows='card'] .ot-ms-head {
   padding-bottom: 0;
 }
 
