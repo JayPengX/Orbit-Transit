@@ -218,7 +218,7 @@ function onClick(ev) {
       return;
     }
     if (pinTrain(ctx, { kind: 'trainNo', sys: x.sys, no: x.no, type: x.type, dep: x.dep, from: keyStation(x.from), to: keyStation(x.to) })) {
-      ctx.status(W(`已釘選 ${x.no} 次，在「交通」看它的時間和誤點`, `Pinned train ${x.no}: see it under Transit`));
+      ctx.status(W(`已釘選 ${x.no} 次到「交通」`, `Train ${x.no} pinned to Transit`));
       $('t-results').innerHTML = resultsHtml();
     }
     return;
@@ -255,7 +255,7 @@ function onClick(ev) {
       ctx.status(W('已取消釘選', 'Unpinned'));
       return ($('t-results').innerHTML = resultsHtml());
     }
-    if (pinTrain(ctx, { kind: 'train', from: state.from, to: state.to })) ctx.status(W('已釘選，在「交通」看接下來的車', 'Pinned: see the next trains under Transit'));
+    if (pinTrain(ctx, { kind: 'train', from: state.from, to: state.to })) ctx.status(W('已釘選到「交通」', 'Pinned to Transit'));
     return ($('t-results').innerHTML = resultsHtml());
   }
   if (act === 'go') {

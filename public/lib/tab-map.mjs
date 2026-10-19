@@ -2441,7 +2441,7 @@ function saveTripSheet(c, { edit = null } = {}) {
     ctx.data.saved = edit ? ctx.data.saved.map(y => (y.id === edit.id ? clean : y)) : [...ctx.data.saved, clean];
     ctx.save();
     d.shut();
-    ctx.status(edit ? W('已更新行程', 'Trip updated') : W(`已釘選「${clean.name}」，在「交通」看接下來的班次`, `Pinned ${clean.name}: see its next rides under Transit`));
+    ctx.status(edit ? W('已更新行程', 'Trip updated') : W('已釘選到「交通」', 'Pinned to Transit'));
     if (card) renderCard();
     ctx.refreshTabs?.();
   });
