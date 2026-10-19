@@ -8,6 +8,7 @@
 // round when yours is next; off it, what's next. Each step moves on by itself
 // when you get there.
 
+import { emptyNote } from './look.mjs';
 import * as kit from '#kit/quadra.mjs';
 import { watchPosition, getPosition, roadPath, liveMs } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
@@ -365,7 +366,7 @@ function bikesText(bk, plan, i, pos) {
   if (bk.moved) out.push(`<span class="note warn">${icon('bike')}${e(bk.moved)}</span>`);
   if (bk.none) out.push(`<span class="note bad">${icon('bike')}${e(bk.none)}${W('，按「換一條路」重新規劃', '. Tap Another way to replan')}</span>`);
   const taking = !kept && (park || bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150);
-  if (bk.rent && taking) out.push(`<span>${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・⚡${bk.rent.ebike}` : ''}</span>`);
+  if (bk.rent && taking) out.push(`<span>${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・${icon('bolt')}${bk.rent.ebike}` : ''}</span>`);
   if (bk.ret) out.push(`<span>${W('還車空位', 'Docks')} ${bk.ret.ret}</span>`);
   const btn = (end, text) => `<button class="ot-nav-gm" type="button" data-nav-bike="${end}">${icon('route')}${text}</button>`;
   out.push(taking ? btn('rent', W('這站沒車，換附近的站', 'No bikes: nearby dock')) : btn('return', W('還車站沒位，換附近的站', 'Full: nearby dock')));
@@ -1063,7 +1064,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (nav !== state) return;
     const cur = state.liveAt.get(k) ?? l.dep;
     const rows = opts.map((o, n) => `<button class="ot-row-btn ot-pick-dep${Math.abs(o.dep - cur) < 90_000 ? ' on' : ''}" type="button" data-n="${n}"><span><b>${e(optText(o, l))}</b><small>${o.live ? (o.delay ? W(`即時・晚 ${o.delay} 分`, `live・${o.delay} min late`) : W('即時', 'live')) : W('時刻表', 'timetable')}${Math.abs(o.dep - cur) < 90_000 ? W('・現在這班', '・this one') : ''}</small></span><time>${W('', 'in ')}${e(minsText(Math.max(0, Math.round((o.dep + (o.delay || 0) * 60_000 - Date.now()) / 1000))))}${W('後', '')}</time></button>`);
-    const d = sheet(`${sheetHead(W('改搭別班', 'Another departure'), e(`${rideName(l)}・${l.from?.name || ''}`))}<div class="ot-nav-menu">${rows.join('') || `<p class="ot-empty">${W('接下來沒有班次', 'Nothing later')}</p>`}</div>`);
+    const d = sheet(`${sheetHead(W('改搭別班', 'Another departure'), e(`${rideName(l)}・${l.from?.name || ''}`))}<div class="ot-nav-menu">${rows.join('') || emptyNote(W('接下來沒有班次', 'Nothing later'))}</div>`);
     d.addEventListener('click', ev => {
       const n = ev.target.closest('[data-n]')?.dataset.n;
       if (n == null) return;

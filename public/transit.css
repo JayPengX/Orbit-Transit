@@ -19,8 +19,6 @@
 /* ==== 1. Base ==================================================================================== */
 
 :root {
-  --q-accent: #22c55e;
-  --q-accent-ink: #04110a;
   --q-status-bg: var(--q-page);
   --ot-max: 640px;
   --ot-tabs: var(--q-nav, 0px);
@@ -517,12 +515,15 @@ button.ot-hero {
 /* A route's other departures: times to pick, the one shown filled. */
 .ot-plan-deps {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.ot-plan-deps::-webkit-scrollbar {
-  display: none;
+/* (Its label, once: 下一班, then the times.) */
+.ot-dep-l {
+  margin-right: 2px;
+  color: var(--q-label-2);
+  font: 500 13px/18px var(--q-font);
 }
 .ot-dep {
   flex: none;
@@ -571,9 +572,18 @@ button.ot-hero {
   font-variant-numeric: tabular-nums;
 }
 .ot-bike-n em {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
   color: var(--ot-ink-amber);
   font: 700 15px/1 var(--q-font-rounded);
   font-style: normal;
+}
+.ot-bike-n em .ot-i {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: none;
 }
 .ot-bike-card.few .ot-bike-n strong {
   color: var(--q-orange);
@@ -818,15 +828,25 @@ body.tab-map {
   scroll-snap-type: x mandatory;
   scroll-padding-inline: 16px;
   scrollbar-width: none;
+  /* The edge fades out, so the card peeking there reads as more to scroll, not a cut. */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 .ot-nearbikes::-webkit-scrollbar {
   display: none;
+}
+/* (A flex scroller loses its end padding on some phones: a spacer keeps it.) */
+.ot-nearbikes::after {
+  content: '';
+  flex: none;
+  width: 6px;
 }
 .ot-nb {
   flex: none;
   display: grid;
   gap: 4px;
-  width: 148px;
+  align-content: start;
+  width: max(136px, calc((100% - 20px) / 2.3));
   padding: 10px 12px;
   border: 0;
   border-radius: 20px;
@@ -840,11 +860,9 @@ body.tab-map {
   box-shadow: var(--q-glass-rim), 0 12px 28px -14px rgb(0 0 0 / 0.6);
 }
 .ot-nb > small {
-  overflow: hidden;
   color: var(--q-label-2);
-  font: 600 12.5px/17px var(--q-font);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  font: 600 13px/17px var(--q-font);
+  overflow-wrap: anywhere;
 }
 .ot-nb-n {
   display: flex;
@@ -858,9 +876,18 @@ body.tab-map {
   font-variant-numeric: tabular-nums;
 }
 .ot-nb-n em {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
   color: var(--ot-ink-amber);
   font: 700 14px/1 var(--q-font-rounded);
   font-style: normal;
+}
+.ot-nb-n em .ot-i {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+  stroke: none;
 }
 .ot-nb-n i {
   display: inline-flex;
@@ -887,7 +914,7 @@ body.tab-map {
   align-items: center;
   gap: 3px;
   color: var(--q-label-2);
-  font: 500 12px/16px var(--q-font);
+  font: 500 13px/16px var(--q-font);
 }
 .ot-nb-walk .ot-i {
   width: 13px;
@@ -2953,9 +2980,11 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
   text-align: left;
   cursor: pointer;
 }
-.ot-place-i {
-  font-size: 24px;
-  line-height: 30px;
+.ot-place {
+  gap: 4px;
+}
+.ot-place .q-tile {
+  margin-bottom: 6px;
 }
 .ot-place strong {
   overflow: hidden;
@@ -3011,9 +3040,6 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
 .ot-ride {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  padding-right: 6px;
 }
 .ot-ride + .ot-ride::before {
   content: '';
@@ -3024,15 +3050,14 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
   border-top: 0.5px solid var(--q-sep);
 }
 .ot-ride > .ot-plan-deps {
-  grid-column: 1 / -1;
-  padding: 0 16px 10px 92px;
+  padding: 0 16px 12px;
 }
+/* A ride: the time big with when it arrives and how long (one row), under it its legs, full width. */
 .ot-ride-main {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  display: grid;
+  gap: 8px;
   min-width: 0;
-  padding: 10px 0 10px 16px;
+  padding: 12px 58px 12px 16px;
   border: 0;
   background: none;
   color: inherit;
@@ -3043,37 +3068,61 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
 .ot-ride-main:active {
   background: var(--q-fill-4);
 }
+.ot-ride-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
 .ot-ride-when {
   display: grid;
   flex: none;
-  width: 62px;
-  gap: 1px;
+  min-width: 56px;
 }
 .ot-ride-n {
   color: var(--q-label);
-  font: 700 28px/30px var(--q-font-rounded);
+  font: 700 28px/32px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+.ot-ride-n small {
+  margin-left: 2px;
+  font-size: 15px;
 }
 .ot-ride-when small {
   color: var(--q-label-2);
   font: 500 12px/15px var(--q-font);
   white-space: nowrap;
 }
-.ot-ride-what {
-  display: grid;
-  gap: 5px;
+.ot-ride-top .q-tags {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   min-width: 0;
 }
-.ot-ride-what .q-tags {
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-.ot-ride-what .ot-warn {
+.ot-ride-main .ot-warn {
   font: 500 13px/17px var(--q-font);
 }
+/* The pin: a 36px icon button beside the time (a 44px target). */
 .ot-star {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
   color: var(--q-label-3);
+}
+.ot-star::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+.ot-star svg {
+  width: 20px;
+  height: 20px;
+}
+.ot-star.on {
+  color: var(--q-orange);
 }
 .ot-trip-note {
   margin: 4px 16px 10px;
@@ -3171,10 +3220,18 @@ button.ot-trip-foot {
   font: 600 12px/16px var(--q-font);
 }
 .ot-tq-st b {
+  display: -webkit-box;
   overflow: hidden;
   font: 700 22px/28px var(--q-font-rounded);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+@media (max-width: 340px) {
+  .ot-tq-st b {
+    font-size: 18px;
+    line-height: 24px;
+  }
 }
 .ot-tq-st b.muted {
   color: rgb(255 255 255 / 0.7);
@@ -4246,14 +4303,8 @@ span.ot-pass {
 /* ==== 10. The narrowest phone ===================================================================== */
 
 @media (max-width: 360px) {
-  .ot-ride-when {
-    width: 54px;
-  }
   .ot-ride-n {
-    font-size: 24px;
-  }
-    .ot-ride > .ot-plan-deps {
-    padding-left: 84px;
+    font-size: 26px;
   }
   .ot-tq-st {
     padding: 10px 12px;
@@ -4308,3 +4359,29 @@ span.ot-pass {
 .ot-board-row .ot-train small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 @media (max-width: 400px) { .ot-board-row .ot-times b:nth-child(n+4) { display: none; } }
 @media (max-width: 350px) { .ot-board-row .ot-times b:nth-child(n+3) { display: none; } }
+
+/* A saved trip's schedule: plain tokens (抵達 08:00, 平日, 回程 16:45) that wrap whole, never cut. */
+.ot-sched {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-top: 2px;
+  color: var(--q-label-2);
+  font: 500 13px/18px var(--q-font);
+}
+.ot-sched > span {
+  white-space: nowrap;
+}
+.ot-sched > span:first-child {
+  color: var(--q-label);
+  font-weight: 600;
+}
+.ot-sched.alt > span:first-child {
+  color: var(--q-label-2);
+  font-weight: 500;
+}
+
+/* A place search's field takes typing and pasting inside a sheet (iOS's selection, never switched off). */
+.ot-pick-form, .ot-pick-form * { -webkit-user-select: text; user-select: text; }
+.ot-pick-form .q-search-clear { -webkit-user-select: none; user-select: none; }
+.ot-pick-form input { pointer-events: auto; touch-action: manipulation; }

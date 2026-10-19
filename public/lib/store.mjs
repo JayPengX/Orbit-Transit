@@ -18,7 +18,8 @@ export const MAX_PINS = 24;
 export const MODES = { bus: W('公車', 'Bus'), tra: W('台鐵', 'TRA'), hsr: W('高鐵', 'HSR'), metro: W('捷運・輕軌', 'Metro'), bike: 'YouBike' };
 export const DAYS = '日一二三四五六';
 export const LAYERS = { bike: 'YouBike', bus: W('公車站', 'Bus stops'), rail: W('火車・高鐵', 'Trains'), metro: W('捷運', 'Metro') };
-export const PLACE_ICONS = { home: '🏠', work: '💼', school: '🎓', pin: '📍', star: '⭐' };
+// A place's glyph: the name of one of ui.mjs's icons (drawn by look.mjs's placeTile).
+export const PLACE_ICONS = { home: 'home', work: 'work', school: 'school', pin: 'pin', star: 'star' };
 
 export const emptyData = () => ({
   v: 1,

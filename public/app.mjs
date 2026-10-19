@@ -12,6 +12,7 @@
 //           route, the metro maps
 //   我的    TPASS, places, trips, pinned transit, settings
 
+import * as kitUI from '#kit/ui.mjs';
 import { quadraSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate, keepOffline, onlineOnly } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition, dropOldPacks } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
@@ -173,7 +174,15 @@ function select(id, { again = false } = {}) {
 window.__fxStarted = true;
 const gated = installGate('transit', 'zh');
 watchUpdates({ current: VERSION, key: 'orbitTransit', cachePrefix: 'orbit-transit-', busy: () => Boolean(document.querySelector('dialog[open]')) });
-topActions(q);
+// Pull to refresh (the page's, on a phone): the 交通 tab's read again; the map pans, so it keeps its drags.
+topActions(q, { refresh: () => (bar?.current === 'go' ? goTab.pull?.() : undefined) });
+$('panel-map')?.setAttribute('data-no-ptr', '');
+// A large title at the top of each tab but the first (the kit's navTitle, in the panel that scrolls).
+for (const [id, title, before] of [['times', W('查時刻', 'Times'), '.ot-page'], ['me', W('我的', 'Me'), '#me-main']]) {
+  const panel = $(`panel-${id}`);
+  const h = kitUI.navTitle?.(title, { scroller: panel });
+  if (h && panel) panel.insertBefore(h, panel.querySelector(before));
+}
 
 async function boot() {
   bar = tabBar({ tabs: TABS, onSelect: (id, o) => select(id, o), label: W('分頁', 'Tabs') });

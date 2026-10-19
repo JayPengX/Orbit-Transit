@@ -4,6 +4,7 @@
 // (常用, 上班, 回家…), managing the groups, and the stops around a point with
 // every bus due.
 
+import { emptyNote } from './look.mjs';
 import { routeStops, routeEta, routeEtaPath, etaText, etaOf, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/quadra.mjs';
 import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
@@ -250,7 +251,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const stops = !ways
       ? `<p class="ot-note">${W('載入站牌中…', 'Loading stops…')}</p>`
       : !w
-        ? `<p class="ot-note">${W('這條路線沒有站牌資料。', 'No stops for this route.')}</p>`
+        ? emptyNote(W('這條路線沒有站牌資料', 'No stops for this route'))
         : view === 'table'
           ? tableHtml(w)
           : `${off ? `<p class="ot-note ot-off-note">${e(off)}</p>` : ''}<ol class="ot-route-stops">${w.stops

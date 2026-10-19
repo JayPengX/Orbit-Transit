@@ -11,6 +11,7 @@
 //
 // What's recommended is never pinned by itself: ☆ pins it.
 
+import * as kitUI from '#kit/ui.mjs';
 import { errorText, liveMs } from './api.mjs';
 import { stopsEta, etaRank } from './bus.mjs';
 import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
@@ -22,7 +23,7 @@ import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
-import { COLOR, tile, tag, section, rowCard, countHtml, tick, hero } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero, navTitle } from './look.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -179,6 +180,8 @@ async function plannedTimes(items) {
   if (todo.length) render();
 }
 
+// A pull down on the page (the kit's pull-to-refresh): the same read as the tab's own.
+export const pull = () => (shown ? refresh() : undefined);
 let refreshing = false;
 async function refresh() {
   if (refreshing) return;
@@ -457,7 +460,12 @@ const planTags = p => [
 ].join('');
 const planWarn = p => (p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length ? `<small class="ot-warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? W(`晚 ${lateBy(p, p.arr)} 分到`, `${lateBy(p, p.arr)} min late`) : '') || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')}`))}</small>` : '');
 // Under a ride's countdown: its clock time, or its day when not today.
-const whenSmall = at => (tw(at).date !== tw().date ? dayLabel(tw(at).date) : hm(at));
+// (Never the clock the big number already shows: past an hour it is the clock.)
+const whenSmall = at => {
+  const far = (at - Date.now()) / 60_000 >= 59.5;
+  const other = tw(at).date !== tw().date;
+  return other ? `${dayLabel(tw(at).date)}${far ? '' : ` ${hm(at)}`}` : far ? '' : hm(at);
+};
 
 function tripCard({ t, w }) {
   const st = tripOf(w);
@@ -473,7 +481,7 @@ function tripCard({ t, w }) {
     const pin = t.picks.includes(pickSig(p));
     const times = (lead.times || []).filter(j => all[j] && all[j].dep >= Date.now() - 2 * 60_000);
     const deps = depChips(all, times, i, j => `data-go-dep="${e(w.id)}" data-lead="${at}" data-i="${j}"`);
-    return `<div class="ot-ride"><button class="ot-ride-main" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ot-ride-when">${countHtml(p.dep, { cls: 'ot-ride-n' })}<small>${e(whenSmall(p.dep))}</small></span><span class="ot-ride-what"><span class="ot-legs">${legChips(p.legs)}</span><span class="q-tags">${planTags(p)}</span>${planWarn(p)}</span></button><button class="q-icon-btn ot-star${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? W('取消釘選這個方案', 'Unpin this route') : W('釘選這個方案', 'Pin this route')}">${icon('star')}</button>${deps}</div>`;
+    return `<div class="ot-ride"><button class="ot-ride-main" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ot-ride-top"><span class="ot-ride-when">${countHtml(p.dep, { cls: 'ot-ride-n' })}${whenSmall(p.dep) ? `<small>${e(whenSmall(p.dep))}</small>` : ''}</span><span class="q-tags">${planTags(p)}</span></span><span class="ot-legs">${legChips(p.legs)}</span>${planWarn(p)}</button><button class="q-icon-btn ot-star${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? W('取消釘選這個方案', 'Unpin this route') : W('釘選這個方案', 'Pin this route')}">${icon('star')}</button>${deps}</div>`;
   };
   const behind = w.by === 'arrive' && w.at && first.length && first.every(p => lateBy(p, p.arr)) ? `<p class="ot-trip-note ot-warn">${W(`${e(hm(w.at))} 前到不了`, `Can’t make ${e(hm(w.at))}`)}</p>` : '';
   const more = S.more.has(w.id);
@@ -532,14 +540,14 @@ function placesRail() {
   const here = ctx.here;
   const list = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
   if (!list.length) return '';
-  return `<div class="q-rail small ot-places">${list.map(p => `<button class="q-rail-card q-press ot-place" type="button" data-place="${e(p.id)}"><span class="ot-place-i" aria-hidden="true">${PLACE_ICONS[p.icon] || '📍'}</span><strong>${e(p.name)}</strong>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`).join('')}</div>`;
+  return `<div class="q-rail small ot-places">${list.map(p => `<button class="q-rail-card q-press ot-place" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place, 'lg')}<strong>${e(p.name)}</strong>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`).join('')}</div>`;
 }
 
 // YouBike stations as a small rail: the bikes there now, big.
 const bikeLevelOf = b => (b.ok === false ? 'off' : b.bikes + b.ebike === 0 ? 'none' : b.bikes + b.ebike <= 3 ? 'few' : 'ok');
 const bikeCard = b => {
   const lv = bikeLevelOf(b);
-  return `<div class="q-rail-card ot-bike-card ${lv}"><small>${e(b.name)}</small><span class="ot-bike-n"><strong>${b.ok === false ? '—' : b.bikes}</strong>${b.ebike ? `<em>⚡${b.ebike}</em>` : ''}</span><span class="q-tags">${b.ok === false ? tag(W('暫停', 'Closed'), 'red') : tag(`${W('空位', 'Docks')} ${b.ret}`, 'blue')}${b.d != null ? tag(distText(b.d)) : ''}</span></div>`;
+  return `<div class="q-rail-card ot-bike-card ${lv}"><small>${e(b.name)}</small><span class="ot-bike-n"><strong>${b.ok === false ? '—' : b.bikes}</strong>${b.ebike ? `<em>${icon('bolt')}${b.ebike}</em>` : ''}</span><span class="q-tags">${b.ok === false ? tag(W('暫停', 'Closed'), 'red') : tag(`${W('空位', 'Docks')} ${b.ret}`, 'blue')}${b.d != null ? tag(distText(b.d)) : ''}</span></div>`;
 };
 
 // What's around you now: the buses at the nearest stops (not the one the card leads with), the YouBike stations.
@@ -659,12 +667,14 @@ function render() {
   const keep = box.scrollTop;
   const railX = box.querySelector('.ot-places')?.scrollLeft || 0;
   box.innerHTML = `<div class="ot-page">
+    ${navTitle(W('交通', 'Transit'))}
     ${lead.html}
     ${placesRail()}
     ${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}
     ${pinnedHtml(lead.key)}
     ${nearHtml(lead.key)}
   </div>`;
+  kitUI.wireNavTitles?.(box, { scroller: box });
   fitStrips(box);
   box.scrollTop = keep;
   const rail = box.querySelector('.ot-places');
@@ -684,7 +694,7 @@ function openPlace(id) {
     const x = S.places.get(id);
     const here = ctx.here;
     const buses = x ? placeBuses(x.stops) : [];
-    d.innerHTML = `${sheetHead(e(p.name), here ? e(distText(meters(here.lat, here.lon, p.lat, p.lon))) : '', `<span class="q-tile" style="--t:${COLOR.place}" aria-hidden="true">${PLACE_ICONS[p.icon] || '📍'}</span>`)}
+    d.innerHTML = `${sheetHead(e(p.name), here ? e(distText(meters(here.lat, here.lon, p.lat, p.lon))) : '', tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place))}
       ${!x ? `<p class="ot-note">${W('載入中…', 'Loading…')}</p>` : x.error ? `<p class="ot-note bad">${e(x.error)}</p>` : ''}
       ${buses.length ? `<h3 class="q-sheet-h">${W('公車', 'Buses')}</h3>${rowCard(buses.map(busRow).join(''))}` : ''}
       ${x?.bikes.length ? `<h3 class="q-sheet-h">YouBike</h3><div class="q-rail small ot-bikes">${x.bikes.map(bikeCard).join('')}</div>` : ''}
