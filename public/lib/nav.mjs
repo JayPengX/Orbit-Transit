@@ -8,6 +8,7 @@
 // round when yours is next; off it, what's next. Each step moves on by itself
 // when you get there.
 
+import { emptyNote } from './look.mjs';
 import * as kit from '#kit/quadra.mjs';
 import { watchPosition, getPosition, roadPath, liveMs } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
@@ -1063,7 +1064,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (nav !== state) return;
     const cur = state.liveAt.get(k) ?? l.dep;
     const rows = opts.map((o, n) => `<button class="ot-row-btn ot-pick-dep${Math.abs(o.dep - cur) < 90_000 ? ' on' : ''}" type="button" data-n="${n}"><span><b>${e(optText(o, l))}</b><small>${o.live ? (o.delay ? W(`即時・晚 ${o.delay} 分`, `live・${o.delay} min late`) : W('即時', 'live')) : W('時刻表', 'timetable')}${Math.abs(o.dep - cur) < 90_000 ? W('・現在這班', '・this one') : ''}</small></span><time>${W('', 'in ')}${e(minsText(Math.max(0, Math.round((o.dep + (o.delay || 0) * 60_000 - Date.now()) / 1000))))}${W('後', '')}</time></button>`);
-    const d = sheet(`${sheetHead(W('改搭別班', 'Another departure'), e(`${rideName(l)}・${l.from?.name || ''}`))}<div class="ot-nav-menu">${rows.join('') || `<p class="ot-empty">${W('接下來沒有班次', 'Nothing later')}</p>`}</div>`);
+    const d = sheet(`${sheetHead(W('改搭別班', 'Another departure'), e(`${rideName(l)}・${l.from?.name || ''}`))}<div class="ot-nav-menu">${rows.join('') || emptyNote(W('接下來沒有班次', 'Nothing later'))}</div>`);
     d.addEventListener('click', ev => {
       const n = ev.target.closest('[data-n]')?.dataset.n;
       if (n == null) return;
