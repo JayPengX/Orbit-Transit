@@ -41,6 +41,9 @@ if (en) {
   set('#q', 'placeholder', 'Search places');
   set('#q', 'aria-label', 'Search');
   set('#q-clear', 'aria-label', 'Clear');
+  set('#ms-grab', 'aria-label', 'Resize the panel');
+  const cancel = document.getElementById('q-cancel');
+  if (cancel) cancel.textContent = 'Cancel';
   set('#tabs', 'aria-label', 'Tabs');
   set('#map', 'aria-label', 'Map');
   set('#fab-layers', 'aria-label', 'Layers');

@@ -69,11 +69,6 @@
         <p id="status" class="q-status" aria-live="polite"></p>
       </div>
     </div>
-    <form id="map-search" class="ot-search" role="search" autocomplete="off">
-      <svg class="ot-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/></svg>
-      <input id="q" type="search" enterkeyhint="search" placeholder="搜尋地點" aria-label="搜尋地點" />
-      <button id="q-clear" class="ot-x" type="button" aria-label="清除" hidden>×</button>
-    </form>
     <nav id="tabs" class="q-tabbar" aria-label="分頁"></nav>
     <div id="top-actions" class="q-actions"></div>
   </div>
@@ -81,14 +76,30 @@
 <main id="main">
   <section id="panel-map" class="ot-panel ot-map-panel" role="tabpanel" aria-labelledby="tab-map">
     <div id="map" class="ot-map" aria-label="地圖"></div>
-    <div id="map-chips" class="q-chips ot-map-chips"></div>
-    <div id="results" class="ot-results" hidden></div>
-    <div id="near-bikes" class="ot-nearbikes" hidden></div>
+    <div id="map-chips" class="ot-map-chips"></div>
     <div class="ot-fabs">
       <button id="fab-layers" class="ot-fab" type="button" aria-label="圖層"></button>
       <button id="fab-locate" class="ot-fab" type="button" aria-label="我的位置"></button>
     </div>
-    <div id="card" class="ot-card" hidden></div>
+    <!-- The one sheet over the map (Maps' model): search, the shelves, a result's card, a trip's plans. Never a dialog. -->
+    <aside id="msheet" class="ot-msheet" aria-label="地圖">
+      <div id="ms-head" class="ot-ms-head">
+        <button id="ms-grab" class="ot-ms-grab" type="button" role="slider" aria-label="面板高度" aria-valuemin="0" aria-valuemax="2"><i></i></button>
+        <div class="ot-ms-row">
+          <form id="map-search" class="ot-search" role="search" autocomplete="off">
+            <svg class="ot-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/></svg>
+            <input id="q" type="search" enterkeyhint="search" placeholder="搜尋地點" aria-label="搜尋地點" />
+            <button id="q-clear" class="ot-x" type="button" aria-label="清除" hidden>×</button>
+          </form>
+          <button id="q-cancel" class="ot-ms-act" type="button" hidden>取消</button>
+        </div>
+      </div>
+      <div id="ms-body" class="ot-ms-body">
+        <div id="home" class="ot-home"></div>
+        <div id="results" class="ot-results" hidden></div>
+        <div id="card" class="ot-card" hidden></div>
+      </div>
+    </aside>
     <div id="nav" class="ot-nav" hidden></div>
   </section>
   <section id="panel-go" class="ot-panel ot-scroll" role="tabpanel" aria-labelledby="tab-go" hidden></section>
