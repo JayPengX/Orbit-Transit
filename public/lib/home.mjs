@@ -69,14 +69,14 @@ export function createHome(box, ctx, act) {
     const here = ctx.here;
     const trips = ctx.data.saved
       .map(t => ({ t, w: tripNow(t, here, now) }))
-      .filter(x => x.w?.at)
+      // (A time just gone is still news for a few minutes: `late`.)
+      .filter(x => x.w && (x.w.at || x.w.late))
       .map(({ t, w }) => {
-        const plan = keptLead(w, { prefs: ctx.data.prefs, here, picks: t.picks, now });
-        // (By an arrival time, only a way found says when to leave.)
-        if (w.by === 'arrive' && !plan) return null;
-        return { id: w.id, label: w.label, from: w.from, to: w.to, leaveAt: plan ? plan.dep : w.at, plan, w, recurring: w.recurring, today: w.today };
-      })
-      .filter(Boolean);
+        const plan = w.at ? keptLead(w, { prefs: ctx.data.prefs, here, picks: t.picks, now }) : null;
+        // (By an arrival time with no way found yet, the time is when it must be there by, not when to leave.)
+        const arriveBy = w.by === 'arrive' && !plan && w.at ? w.at : null;
+        return { id: w.id, label: w.label, from: w.from, to: w.to, leaveAt: plan ? plan.dep : w.at || w.late, plan, arriveBy, w, recurring: w.recurring, today: w.today };
+      });
     const buses = ctx.data.groups
       .flatMap(g => g.items)
       .map(it => {
@@ -104,7 +104,7 @@ export function createHome(box, ctx, act) {
         eyebrow: x.label,
         title: `${x.from ? x.from.name : W('目前位置', 'Here')} → ${x.to.name}`,
         at: x.leaveAt,
-        tags: [tag(W(`${hm(x.leaveAt)} 出發`, `Leave ${hm(x.leaveAt)}`), 'solid'), p ? tag(W(`${hm(p.arr)} 到`, `Arrive ${hm(p.arr)}`), 'solid') : ''],
+        tags: [x.arriveBy ? tag(W(`${hm(x.arriveBy)} 前到`, `Arrive by ${hm(x.arriveBy)}`), 'solid') : tag(W(`${hm(x.leaveAt)} 出發`, `Leave ${hm(x.leaveAt)}`), 'solid'), p ? tag(W(`${hm(p.arr)} 到`, `Arrive ${hm(p.arr)}`), 'solid') : ''],
         body: p ? `<span class="ot-legs ot-hc-legs">${legChips(p.legs)}</span>` : '',
         tile: tile('route', COLOR.route)
       };
