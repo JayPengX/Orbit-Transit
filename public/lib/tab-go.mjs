@@ -398,7 +398,7 @@ async function loadNear() {
     const [stops, bikes] = await Promise.all([nearStops(h, { n: 3, r: 350 }), bikesAround(h.lat, h.lon).catch(() => [])]);
     S.near = { at: Date.now(), stops, bikes: bikes.map(s => ({ ...s, d: meters(h.lat, h.lon, s.lat, s.lon) })).filter(s => s.d <= 700).sort((a, b) => a.d - b.d).slice(0, 3) };
   } catch {
-    S.near = { at: Date.now(), stops: old?.stops || [], bikes: old?.bikes || [] };
+    S.near = { at: old?.at ?? Date.now(), stops: old?.stops || [], bikes: old?.bikes || [] };
   }
   render();
 }
@@ -485,7 +485,7 @@ function pinnedBuses() {
       const v = S.pinned.get(r.stopUID);
       const live = v?.status === 0 && v.sec != null;
       const planned = live ? null : S.planned.get(r.stopUID);
-      const at = live ? S.pinnedAt + v.sec * 1000 : planned?.at || null;
+      const at = live ? (v.t ?? S.pinnedAt) + v.sec * 1000 : planned?.at || null;
       return { it, r, v, planned, at };
     })
     .sort((a, b) => etaRank(a.v) - etaRank(b.v));
@@ -635,11 +635,11 @@ function heroHtml(ts) {
   const stop = S.near?.stops?.flatMap(st => st.rows.slice(0, 2).map(r => ({ ...r, dist: st.dist }))).filter(r => r.v?.status === 0 && r.v.sec != null).sort((a, b) => a.v.sec - b.v.sec)[0];
   if (stop) {
     cands.push({
-      at: S.near.at + stop.v.sec * 1000,
+      at: (stop.v.t ?? S.near.at) + stop.v.sec * 1000,
       html: hero({
         eyebrow: W('附近的下一班', 'Next near you'),
         glyph: 'bus',
-        big: countHtml(S.near.at + stop.v.sec * 1000, { floor: true }),
+        big: countHtml((stop.v.t ?? S.near.at) + stop.v.sec * 1000, { floor: true }),
         title: `${stop.route}${stop.stop ? `・${stop.stop}` : ''}`,
         sub: Number.isFinite(stop.dist) ? W(`距離 ${distText(stop.dist)}`, `${distText(stop.dist)} away`) : W('附近站牌', 'Nearby stop'),
         tags: [tag(W('即時', 'Live'), 'solid green'), stop.v.last ? tag(W('末班車', 'Last bus'), 'solid red') : ''],
