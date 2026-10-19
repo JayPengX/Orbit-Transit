@@ -322,6 +322,27 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
   };
 }
 
+// A marker's name (its `> span`) hidden where it would overlap a name or an
+// icon above it (by z-index; the selected one is never hidden).
+export function declutter(pane) {
+  if (!pane) return;
+  const els = [...pane.querySelectorAll('.ot-mk')].sort((a, b) => (Number(b.style.zIndex) || 0) - (Number(a.style.zIndex) || 0));
+  const taken = [];
+  const hits = r => taken.some(t => r.left < t.right - 1 && r.right > t.left + 1 && r.top < t.bottom - 1 && r.bottom > t.top + 1);
+  for (const m of els) {
+    const label = m.querySelector(':scope > span');
+    const icon = m.querySelector(':scope > svg, :scope > i');
+    const ir = (icon || m).getBoundingClientRect();
+    if (label) {
+      const lr = label.getBoundingClientRect();
+      const hide = !m.classList.contains('sel') && lr.width > 0 && hits(lr);
+      m.classList.toggle('ot-lb-hide', hide);
+      if (!hide) taken.push(lr);
+    }
+    if (ir.width) taken.push(ir);
+  }
+}
+
 function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   const L = globalThis.L;
   // (Taiwan only, as the Google map.)
@@ -333,6 +354,17 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   map.on('click', ev => onTap({ lat: ev.latlng.lat, lon: ev.latlng.lng }, pinAt(ev.originalEvent, [...layers.values()].map(l => l.els))));
   map.on('moveend', () => onIdle());
   map.on('dragstart', () => onDrag());
+  // Names that would run into each other (北新竹 under 千甲's icon) aren't
+  // shown: the higher marker's name stays, a lower one's hides, its icon kept.
+  let tidyRaf = 0;
+  const tidy = () => {
+    tidyRaf ||= requestAnimationFrame(() => {
+      tidyRaf = 0;
+      declutter(map.getPane('markerPane'));
+    });
+  };
+  map.on('zoomend moveend', tidy);
+  if (typeof MutationObserver === 'function') new MutationObserver(tidy).observe(map.getPane('markerPane'), { childList: true });
   let byApp = 0;
   map.on('zoomstart', () => Date.now() - byApp > 1500 && onDrag());
   const layers = new Map();
