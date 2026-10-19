@@ -37,7 +37,7 @@ document.documentElement.lang = en ? 'en' : 'zh-Hant';
 // The page's own words, in English.
 if (en) {
   const set = (sel, attr, v) => document.querySelector(sel)?.setAttribute(attr, v);
-  set('#q', 'placeholder', 'Search Orbit Transit');
+  set('#q', 'placeholder', 'Search places');
   set('#q', 'aria-label', 'Search');
   set('#q-clear', 'aria-label', 'Clear');
   set('#tabs', 'aria-label', 'Tabs');

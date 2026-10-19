@@ -10,10 +10,6 @@ import { W, en } from './lang.mjs';
 // One colour per way of moving, the same on the map, in a plan's legs and here.
 export const COLOR = { bus: '#22c55e', tra: '#0ea5e9', hsr: '#f97316', metro: '#3b82f6', bike: '#f5b301', walk: '#8e8e93', route: '#6155f5', place: '#ff383c' };
 
-// "10月19日 星期一": the small line over a page's title.
-export const dateLine = () => new Date().toLocaleDateString(en ? 'en-US' : 'zh-TW', { month: 'long', day: 'numeric', weekday: 'long', timeZone: 'Asia/Taipei' });
-
-export const pageHead = (title, over = dateLine()) => `<header class="q-page-head">${over ? `<p class="q-over">${e(over)}</p>` : ''}<h1>${e(title)}</h1></header>`;
 // A colour tile holding one of the app's glyphs (ui.mjs icon names), or a word (`word`).
 export const tile = (glyph, color = '', size = '', word = false) => `<span class="q-tile${size ? ` ${size}` : ''}"${color ? ` style="--t:${color}"` : ''} aria-hidden="true">${word ? e(glyph) : icon(glyph)}</span>`;
 export const tag = (text, tone = '') => `<span class="q-tag${tone ? ` ${tone}` : ''}">${e(text)}</span>`;

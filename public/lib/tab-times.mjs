@@ -13,7 +13,7 @@ import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
-import { COLOR, pageHead, tile, section, rowCard, hero } from './look.mjs';
+import { COLOR, tile, section, rowCard, hero } from './look.mjs';
 import { e, meters, distText, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -31,7 +31,6 @@ export function init(c) {
     const v = localStorage.getItem(KEY);
     if (VIEWS.includes(v)) view = v;
   } catch {}
-  $('times-title').innerHTML = pageHead(W('查時刻', 'Times'));
   $('times-seg').addEventListener('click', ev => {
     const b = ev.target.closest('[data-view]');
     if (b) pick(b.dataset.view);
