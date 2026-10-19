@@ -329,7 +329,35 @@ export function declutter(pane) {
   const els = [...pane.querySelectorAll('.ot-mk')].sort((a, b) => (Number(b.style.zIndex) || 0) - (Number(a.style.zIndex) || 0));
   const taken = [];
   const hits = r => taken.some(t => r.left < t.right - 1 && r.right > t.left + 1 && r.top < t.bottom - 1 && r.bottom > t.top + 1);
+  // (Leaflet adds each marker's height on the screen to its z: a step of a
+  // thousand keeps a station over a bike lower down, not just a hundred.)
   for (const m of els) {
+    // A YouBike count over a station's icon, a place or your dot steps aside
+    // the same way, by the other markers only (bikes side by side stay put).
+    if (m.classList.contains('bike') && !m.classList.contains('plan')) {
+      m.style.translate = '';
+      const r = m.getBoundingClientRect();
+      const others = taken.filter(t => !t.bike);
+      const over = x => others.some(t => x.left < t.right - 1 && x.right > t.left + 1 && x.top < t.bottom - 1 && x.bottom > t.top + 1);
+      const t = r.width ? others.find(t => r.left < t.right - 1 && r.right > t.left + 1 && r.top < t.bottom - 1 && r.bottom > t.top + 1) : null;
+      let box = r;
+      if (t) {
+        const moves = [
+          [t.right + 3 - r.left, 0],
+          [t.left - 3 - r.right, 0],
+          [0, t.top - 3 - r.bottom],
+          [0, t.bottom + 3 - r.top]
+        ].sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+        const at = ([dx, dy]) => ({ left: r.left + dx, right: r.right + dx, top: r.top + dy, bottom: r.bottom + dy });
+        const d = moves.find(d => !over(at(d)));
+        if (d) {
+          m.style.translate = `${Math.round(d[0])}px ${Math.round(d[1])}px`;
+          box = at(d);
+        }
+      }
+      if (r.width) taken.push({ left: box.left, right: box.right, top: box.top, bottom: box.bottom, bike: true });
+      continue;
+    }
     // A trip's station badge (its bikes, its docks) under a pin or your dot
     // moves to the nearest clear side instead (a badge can't hide: it's the plan).
     if (m.classList.contains('plan')) {
@@ -393,14 +421,14 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
   const markerLayer = () =>
     domItems(it => {
       const icon = x => L.divIcon({ className: `ot-mk ${x.cls || ''}`, html: x.html, iconSize: null });
-      const m = L.marker([it.lat, it.lon], { icon: icon(it), zIndexOffset: (it.z || 1) * 100, keyboard: false }).addTo(map);
+      const m = L.marker([it.lat, it.lon], { icon: icon(it), zIndexOffset: (it.z || 1) * 1000, keyboard: false }).addTo(map);
       const rec = {
         it,
         el: () => m.getElement(),
         update: x => {
           if (x.html !== rec.it.html || x.cls !== rec.it.cls) m.setIcon(icon(x));
           if (x.lat !== rec.it.lat || x.lon !== rec.it.lon) m.setLatLng([x.lat, x.lon]);
-          if (x.z !== rec.it.z) m.setZIndexOffset((x.z || 1) * 100);
+          if (x.z !== rec.it.z) m.setZIndexOffset((x.z || 1) * 1000);
           rec.it = x;
         },
         remove: () => m.remove()
