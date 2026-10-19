@@ -119,9 +119,9 @@ export async function init(c) {
     if (!centered) {
       // (And keeps you in the middle as you move, as 我的位置 does, until a finger moves the map.)
       centered = true;
-      map.setView(here.lat, here.lon, 16, aboveDy());
+      map.setView(here.lat, here.lon, 16, aboveDy(), aboveDx());
       follow();
-    } else if (following) map.setView(here.lat, here.lon, undefined, aboveDy());
+    } else if (following) map.setView(here.lat, here.lon, undefined, aboveDy(), aboveDx());
   };
   ctx.moved.push(arrived);
   reopened = () => {
@@ -309,7 +309,7 @@ function drawMe(h) {
 async function locateMe() {
   const h = await ctx.locate({ force: true });
   if (!h) return ctx.status(W('無法取得位置：請在設定允許定位', 'Can’t get your location: allow it in Settings'));
-  map.setView(h.lat, h.lon, Math.max(map.zoom(), 16), aboveDy());
+  map.setView(h.lat, h.lon, Math.max(map.zoom(), 16), aboveDy(), aboveDx());
   follow();
 }
 function follow() {
@@ -318,7 +318,7 @@ function follow() {
   stopWatch = watchPosition(p => {
     ctx.here = { ...p, at: Date.now() };
     drawMe(ctx.here);
-    if (following) map.setView(p.lat, p.lon, undefined, aboveDy());
+    if (following) map.setView(p.lat, p.lon, undefined, aboveDy(), aboveDx());
   });
 }
 
@@ -422,15 +422,18 @@ function focusAbove(p) {
   requestAnimationFrame(() => {
     if (!card || !msheet) return;
     const dy = aboveDy();
-    if (dy > 4) map.focus?.(p.lat, p.lon, dy);
+    const dx = aboveDx();
+    if (dy > 4 || dx) map.focus?.(p.lat, p.lon, dy, dx);
   });
 }
 // An empty spot: closes the card, or marks the spot (to plan a trip there).
-async function tap(pt) {
+async function tap(pt, hit = null) {
   if (navFull()) return dragged();
   following = false;
+  // (A tap that landed beside a pin is that pin's: it opens its card, not lowers the sheet.)
+  if (hit) return pick(hit);
   if (!$('results').hidden) return closeResults();
-  if (card) return closeCard();
+  if (card) return dismissCard();
   // (The sheet half up: a tap on the map under it lowers it, as Maps does; from its lowest a tap marks the spot.)
   if (msheet.detent !== 'peek') return msheet.set('peek');
   openCard({ kind: 'point', item: { name: MAP_SPOT, lat: pt.lat, lon: pt.lon }, lat: pt.lat, lon: pt.lon });
@@ -487,6 +490,14 @@ function openCard(c) {
   map.layer('sel').set(selDrop ? [{ id: 'sel', lat: c.lat, lon: c.lon, cls: 'sel', z: 40, html: '<i class="ot-drop-shadow"></i><i class="ot-drop"></i>' }] : []);
   renderCard();
   refreshCard();
+}
+// The card's ✕, or a tap on the map beside it: the search that led to it ends too, and the sheet goes
+// to its lowest stop, as Maps does (it had come up to half for the card, or was left there).
+function dismissCard() {
+  closeCard();
+  $('q').value = '';
+  $('q-clear').hidden = true;
+  msheet.set('peek');
 }
 function closeCard() {
   const planned = document.body.classList.contains('ot-planning');
@@ -752,7 +763,7 @@ async function cardClick(ev) {
   const pickWhen = ev.target.closest('[data-when]');
   if (pickWhen) return setWhen(pickWhen.dataset.when);
   if (!act || !card) return;
-  if (act === 'close') return closeCard();
+  if (act === 'close') return dismissCard();
   // From where you are; the start can be changed on the plan.
   // A new trip: from now (a time picked is for the trip it was picked for, not the next one: 2026-10-12).
   if (act === 'go') {
@@ -902,6 +913,14 @@ function aboveDy() {
   const bottom = room - msheet.heights()[msheet.detent] - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
   return bottom - top > 80 ? Math.round(room / 2 - (top + bottom) / 2) : 0;
 }
+// The room the round buttons take at the map's right, px: what is brought to the middle of the map
+// is the middle of what they leave (so a pin is never put under ⊙), and a trip is fitted clear of them.
+const fabGutter = () => {
+  const b = $('fab-locate')?.getBoundingClientRect();
+  const p = $('panel-map')?.getBoundingClientRect();
+  return b?.width && p?.width ? Math.max(0, Math.round(p.right - b.left + 10)) : 0;
+};
+const aboveDx = () => Math.round(fabGutter() / 2);
 let liftedFor = false;
 let backToPeek = false;
 function buildSheet() {
@@ -915,7 +934,7 @@ function buildSheet() {
       // (Down from large, the keyboard goes: the field is no longer the thing.)
       if (d !== 'large' && document.activeElement === $('q')) $('q').blur();
       // You, followed: kept in the middle of the map you can see as the sheet moves.
-      if (following && ctx.here && d !== 'large') map?.setView(ctx.here.lat, ctx.here.lon, undefined, aboveDy());
+      if (following && ctx.here && d !== 'large') map?.setView(ctx.here.lat, ctx.here.lon, undefined, aboveDy(), aboveDx());
     }
   });
   home = createHome($('home'), ctx, homeActs());
@@ -1421,7 +1440,7 @@ async function plan(from, to, opts = {}) {
     card.error = W('需要你的位置（請在設定允許定位），或點上面的出發地選一個地點。', 'Needs your location (allow it in Settings), or tap the start above to pick one.');
     return renderCard();
   }
-  map.fit([fromPt, dest], { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.48)) + 24, left: 40, right: 40 });
+  map.fit([fromPt, dest], { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.48)) + 24, left: 40, right: Math.max(40, fabGutter()) });
   ctx.data.trips = remember(ctx.data.trips, { name: dest.name, lat: dest.lat, lon: dest.lon, t: Date.now(), ...(dest.gid ? { gid: dest.gid } : {}) }, tripKey, 10);
   ctx.save();
   const c = card;
@@ -1853,7 +1872,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
       .then(city => city && cityBikes(city))
       .then(list => list && run === planDraw && map.layer('plan').set(marks(new Map(list.map(x => [x.uid, x])))))
       .catch(() => {});
-  if (fit && pts.length) map.fit(pts, { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.5)) + 24, left: 30, right: 30 });
+  if (fit && pts.length) map.fit(pts, { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.5)) + 24, left: 30, right: Math.max(30, fabGutter()) });
 }
 
 // A bus leg's live line, short enough for one row: the bus you'd catch

@@ -421,7 +421,6 @@ button.ot-hero {
 }
 .ot-strip-act {
   flex: none;
-  margin-right: 4px;
 }
 /* A pinned ride's 去程/回程: a tag in its note, a tap turns it round. */
 .ot-strip-dir {
@@ -1082,12 +1081,31 @@ body.tab-map {
   white-space: nowrap;
 }
 .ot-fav.ghost .q-tile {
-  background: var(--q-fill-3);
-  color: var(--q-label-3);
+  position: relative;
+  box-sizing: border-box;
+  border: 1.5px dashed color-mix(in srgb, var(--t) 55%, transparent);
+  background: color-mix(in srgb, var(--t) 8%, transparent);
+  color: color-mix(in srgb, var(--t) 70%, var(--q-label-3));
   box-shadow: none;
 }
+/* The ＋ badge on its corner: this one waits to be filled in. */
+.ot-fav.ghost .q-tile::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(#fff, #fff) center / 10px 2px no-repeat, linear-gradient(#fff, #fff) center / 2px 10px no-repeat, var(--q-accent);
+  box-shadow: 0 0 0 2.5px var(--q-sheet);
+}
 .ot-fav.ghost b {
-  color: var(--q-label-2);
+  color: var(--q-label);
+}
+.ot-fav.ghost small {
+  color: var(--q-accent);
+  font-weight: 600;
 }
 .ot-fav-plus {
   display: grid;
@@ -1169,17 +1187,30 @@ body.tab-map {
   overflow-wrap: anywhere;
 }
 .ot-rec .ot-rec-x {
+  position: relative;
   flex: none;
   width: 44px;
   height: 44px;
   margin-right: 2px;
   background: none;
   box-shadow: none;
-  color: var(--q-label-3);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--q-label-2);
+}
+/* A 30px chip in a 44px target: seen at a glance, still the quiet one. */
+.ot-rec .ot-rec-x::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--q-fill-3);
 }
 .ot-rec .ot-rec-x .ot-i {
-  width: 16px;
-  height: 16px;
+  position: relative;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
 }
 .ot-rec.q-ritem + .q-ritem::before,
 .ot-rec + .ot-rec::before {
@@ -1777,12 +1808,17 @@ body.tab-map {
 }
 /* In a row: a plain bell inside the card's edge, not a glass button cut by it. */
 .ot-strip > .ot-bell {
-  width: 40px;
-  margin-right: 8px;
+  width: 36px;
+  height: 36px;
+  margin: 0 12px 0 0;
   background: none;
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+/* (No swell on a press: it would grow out over the row's edge.) */
+.ot-strip > .ot-bell:is(:active, [data-q-press]) {
+  transform: scale(0.94);
 }
 .ot-bell.on {
   color: var(--ot-bike);
