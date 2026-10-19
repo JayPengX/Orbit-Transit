@@ -22,7 +22,7 @@ import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
-import { COLOR, dateLine, pageHead, tile, tag, section, rowCard, countHtml, tick, hero } from './look.mjs';
+import { COLOR, tile, tag, section, rowCard, countHtml, tick, hero } from './look.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -659,7 +659,6 @@ function render() {
   const keep = box.scrollTop;
   const railX = box.querySelector('.ot-places')?.scrollLeft || 0;
   box.innerHTML = `<div class="ot-page">
-    ${pageHead(W('交通', 'Transit'), `Orbit Transit · ${dateLine()}`)}
     ${lead.html}
     ${placesRail()}
     ${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}

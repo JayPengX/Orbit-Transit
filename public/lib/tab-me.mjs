@@ -13,7 +13,7 @@ import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters } from './util.mjs';
-import { COLOR, pageHead, tile, tag, section, rowCard, hero } from './look.mjs';
+import { COLOR, tile, tag, section, rowCard, hero } from './look.mjs';
 
 import { W, en } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -75,7 +75,6 @@ function render() {
     .map(p => `<div class="q-ritem">${tile(p.from.sys === 'hsr' ? 'hsr' : 'tra', p.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra)}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(p.from))} → ${e(stationLabel(p.to))}</span><small>${p.kind === 'trainNo' ? `${e(trainKind(p.type || ''))} ${e(p.no)}${p.dep ? ` · ${e(p.dep)}` : ''}` : W('每一班', 'Every train')}</small></span><button class="q-icon-btn" type="button" data-pin-del="${e(p.id)}" aria-label="${W('刪除', 'Delete')}">${icon('trash')}</button></div>`)
     .join('');
   $('me-main').innerHTML = `<div class="ot-page">
-    ${pageHead(W('我的', 'Me'))}
     ${passCard}
     ${section(W('地點', 'Places'), rowCard(places + addRow('add-place', W('釘選地點', 'Pin a place'))))}
     ${section(W('行程', 'Trips'), rowCard(trips + addRow('add-trip', W('新增行程', 'Add a trip'))))}
