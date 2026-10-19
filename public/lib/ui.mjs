@@ -1,6 +1,7 @@
 // Shared UI: sheets, the transport icons, a plan's legs as chips.
 
 import { e, minsText, hm, rides } from './util.mjs';
+import * as kitUI from '#kit/ui.mjs';
 
 import { W, en } from './lang.mjs';
 
@@ -10,22 +11,18 @@ export const stationLabel = s => (!s ? '' : s.sys === 'hsr' ? W(`高鐵${s.name}
 // behind, sliding down as every app's sheets do (the kit's closeSheet);
 // `d.shut()` closes it the same way.
 export function sheet(html, cls = '') {
-  const d = document.createElement('dialog');
-  d.className = `q-sheet ot-sheet ${cls}`;
-  d.innerHTML = html;
-  d.shut = () => (globalThis.quadraCloseSheet || (x => x.close()))(d);
-  d.addEventListener('click', ev => {
-    if (ev.target.closest('[data-act="close"]')) return d.shut();
-    if (ev.target !== d) return;
-    const r = d.getBoundingClientRect();
-    if (ev.clientY < r.top || ev.clientY > r.bottom || ev.clientX < r.left || ev.clientX > r.right) d.shut();
-  });
-  d.addEventListener('close', () => {
-    d.onclosed?.();
-    d.remove();
-  });
-  document.body.append(d);
-  d.showModal();
+  const box = document.createElement('template');
+  box.innerHTML = html;
+  const first = box.content.firstElementChild;
+  const simple = first?.classList.contains('q-sheet-head') && !first.querySelector('.ot-sheet-sub') && first.children.length === 2 ? first.querySelector('h2') : null;
+  const title = simple && !simple.children.length ? simple.textContent : '';
+  if (title) first.remove();
+  // The kit's sheet: ✕, Esc, a tap outside and a drag down close it. A plain title becomes its head; a head with a tile or a sub-line stays as written.
+  const k = kitUI.sheet({ title, body: [...box.content.childNodes], cls: `ot-sheet ${cls}`, closeLabel: W('關閉', 'Close'), onClose: () => d.onclosed?.() });
+  const d = k.el;
+  if (!title) k.head.remove();
+  d.shut = () => k.close();
+  d.addEventListener('click', ev => ev.target.closest('[data-act="close"]') && d.shut());
   return d;
 }
 // A sheet's head: its title (html), a small line under it, a colour tile before it (`lead`, html).
