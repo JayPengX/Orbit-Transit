@@ -1465,8 +1465,8 @@ async function plan(from, to, opts = {}) {
       // (The card's first: a saved trip's kept list has gone departures ahead of it.)
       const best = opts.plans ? c.plans.find(p => p.top && p.lead !== false && !p.gone) || c.plans[0] : c.plans[0];
       drawPlan(best, { fit: false });
-      // (Its buses along their stops, not straight across town.)
-      roadLegs(best, { roads: false });
+      // (Its buses along their stops and its rides along the streets, not straight across town.)
+      roadLegs(best, { roads: 'bike' });
     }
     if (opts.nav && c.plans[opts.index || 0]) navigate(c.plans[opts.index || 0]);
     if ((c.then.length || c.have) && c.plans.length) planRest(c);
@@ -1486,7 +1486,7 @@ async function plan(from, to, opts = {}) {
     dropGone(c);
     if (c.sel < 0 && c.plans.length) {
       drawPlan(c.plans[0], { fit: false });
-      roadLegs(c.plans[0], { roads: false });
+      roadLegs(c.plans[0], { roads: 'bike' });
     }
   });
 }
@@ -1746,9 +1746,10 @@ function selectPlan(i) {
 }
 // The streets a plan's walks and YouBike rides go along (planners give
 // walks a line; our own legs are straight until this), then drawn again.
-// (`roads: false`: only the buses' stops, from the packs; the walks' and rides' roads are an outside router's, asked for a plan opened.)
+// (`roads: 'bike'`: the buses' stops and the rides' streets (OpenStreetMap's free bike router), for the
+// plan drawn before any is opened; the walks' streets (Google's, billed) wait for a plan opened.)
 async function roadLegs(p, { lit = -1, roads = true } = {}) {
-  const todo = !roads ? [] : p.legs.filter(l => (l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
+  const todo = !roads ? [] : p.legs.filter(l => (l.mode === 'bike' || (roads !== 'bike' && l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
   // A ride the planner gave no shape: along its line (shapes.mjs: a bus its
   // route's road, a train or the metro its track), else a bus through its
   // stops; never a straight line across town.
