@@ -1,0 +1,102 @@
+// 建議: what the map's sheet puts first, worked out from what the app knows
+// already (the saved trips and their times, the pinned buses and trains, the
+// YouBike stations around you, your places). Pure: the caller reads the
+// pieces (tab-go's tripNow, the pinned buses' times…) and hands them in, this
+// ranks them, so what comes first is one rule that a test can hold.
+//
+// Every candidate gets a score (about 0–120) from how soon it matters:
+//   trip   a saved trip that fits now (its leave time, today if it recurs)
+//   bus    a pinned bus on its way (live), nearer you counts more
+//   train  a pinned train or connection leaving soon
+//   bike   the nearest YouBike with a bike, when you're close to it
+//   home   「回家」 when you're far from 家 in the evening
+// The best three, at most one of a kind (two saved trips may both fit).
+
+import { meters, tw } from './util.mjs';
+
+export const MAX_SUGGESTIONS = 3;
+// A trip is news from this long before it's due to this long after.
+export const TRIP_AHEAD_MIN = 180;
+export const TRIP_LATE_MIN = 10;
+export const BUS_WITHIN_MIN = 30;
+export const TRAIN_WITHIN_MIN = 90;
+// A bike is worth a card when the station is this close, and a card of its own while a bike is there.
+export const BIKE_NEAR_M = 450;
+// 家 is "far" past this, and the evening is from 17:00 until 23:30.
+export const FAR_HOME_M = 1500;
+export const EVENING = [17 * 60, 23 * 60 + 30];
+// A trip's end this near 家 is the way home already (no second card for it).
+const SAME_PLACE_M = 300;
+
+const minutesTo = (at, now) => (at - now) / 60_000;
+
+// A saved trip: soonest first, a recurring one on its day ahead of the rest.
+export function tripScore(m, { recurring = false, today = false } = {}) {
+  if (m == null || !Number.isFinite(m)) return 0;
+  if (m < -TRIP_LATE_MIN || m > TRIP_AHEAD_MIN) return 0;
+  const urgency = m <= 0 ? 100 : 100 - m * 0.35;
+  return urgency + (recurring && today ? 12 : 0);
+}
+// A pinned bus on its way: due in the next half hour; one at a stop you're near, or far from, moves.
+export function busScore(m, d = null) {
+  if (m == null || !Number.isFinite(m) || m < -0.5 || m > BUS_WITHIN_MIN) return 0;
+  let s = 80 - m * 1.5;
+  if (d != null) s += d <= 600 ? 15 : d > 2500 ? -35 : 0;
+  return Math.max(0, s);
+}
+export function trainScore(m) {
+  if (m == null || !Number.isFinite(m) || m < -1 || m > TRAIN_WITHIN_MIN) return 0;
+  return 72 - m * 0.55;
+}
+// The nearest station with a bike, close by: nearer is higher; many bikes a little.
+export function bikeScore(b) {
+  if (!b || b.ok === false || (b.bikes || 0) + (b.ebike || 0) <= 0 || b.d == null || b.d > BIKE_NEAR_M) return 0;
+  return 66 - b.d / 25 + Math.min(b.bikes + (b.ebike || 0), 10) * 0.4;
+}
+// 回家: in the evening, far from 家.
+export function homeScore(d, min) {
+  if (d == null || d <= FAR_HOME_M || min < EVENING[0] || min >= EVENING[1]) return 0;
+  return 88;
+}
+
+// → [{ kind, key, score, ...the candidate }], best first.
+export function suggest({ now = Date.now(), here = null, places = [], trips = [], buses = [], trains = [], bikes = [] } = {}) {
+  const out = [];
+  for (const t of trips) {
+    const m = t.leaveAt == null ? null : minutesTo(t.leaveAt, now);
+    const score = tripScore(m, t);
+    if (score > 0) out.push({ ...t, kind: 'trip', key: `trip:${t.id}`, score, minutes: m });
+  }
+  for (const b of buses) {
+    const m = b.at == null || b.live === false ? null : minutesTo(b.at, now);
+    const score = busScore(m, b.d ?? null);
+    if (score > 0) out.push({ ...b, kind: 'bus', key: `bus:${b.id}`, score, minutes: m });
+  }
+  for (const t of trains) {
+    const m = t.dep == null ? null : minutesTo(t.dep, now);
+    const score = trainScore(m);
+    if (score > 0) out.push({ ...t, kind: 'train', key: `train:${t.id}`, score, minutes: m });
+  }
+  const bike = bikes.map(b => ({ b, s: bikeScore(b) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s)[0];
+  if (bike) out.push({ ...bike.b, kind: 'bike', key: `bike:${bike.b.uid}`, score: bike.s });
+  const home = places.find(p => p.icon === 'home');
+  if (home && here) {
+    const d = meters(here.lat, here.lon, home.lat, home.lon);
+    const score = homeScore(d, tw(now).min);
+    // (A saved trip that ends at 家 is the way home already.)
+    const covered = out.some(x => x.kind === 'trip' && x.to?.lat != null && meters(x.to.lat, x.to.lon, home.lat, home.lon) < SAME_PLACE_M);
+    if (score > 0 && !covered) out.push({ kind: 'home', key: `home:${home.id}`, score, place: home, d });
+  }
+  out.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
+  // One of each kind but trips (the morning's and the evening's may both be due).
+  const seen = new Map();
+  const picked = [];
+  for (const x of out) {
+    const n = seen.get(x.kind) || 0;
+    if (n >= (x.kind === 'trip' ? 2 : 1)) continue;
+    seen.set(x.kind, n + 1);
+    picked.push(x);
+    if (picked.length >= MAX_SUGGESTIONS) break;
+  }
+  return picked;
+}
