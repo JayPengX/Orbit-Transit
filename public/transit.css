@@ -632,6 +632,24 @@ button.ot-hero {
   font-size: 10px;
 }
 
+/* Over the map the glass is nearly solid: the map's pins, busy and bright,
+   would otherwise show through the search, the ＋ and the buttons as if on
+   top of them (they're under: the map is its own layer at z-index 0). */
+body.tab-map {
+  --q-glass: rgba(250, 250, 252, 0.9);
+  --q-glass-strong: rgba(250, 250, 252, 0.95);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) body.tab-map {
+    --q-glass: rgba(34, 34, 37, 0.9);
+    --q-glass-strong: rgba(40, 40, 43, 0.94);
+  }
+}
+:root[data-theme='dark'] body.tab-map {
+  --q-glass: rgba(34, 34, 37, 0.9);
+  --q-glass-strong: rgba(40, 40, 43, 0.94);
+}
+
 /* The bar over the map: the kit's buttons and a glass search, the map
    showing under it (the phone's status strip stays the kit's solid one). */
 .ot-search {
