@@ -127,6 +127,7 @@ export function tripNow(t, here, now = Date.now()) {
   // A weekdays-only trip (school, work) isn't on a national holiday: the next day it is.
   const offOn = date => weekdaysOnly(t.days) && holidayOn(date);
   let at = null;
+  let late = null;
   let by = 'depart';
   for (let n = 0; n < 15; n++) {
     const dow = (day.dow + n) % 7;
@@ -137,15 +138,15 @@ export function tripNow(t, here, now = Date.now()) {
       break;
     }
     const when = twAt(addDays(day.date, n), time);
-    // Just gone (under 20 minutes): now.
+    // Just gone (under 20 minutes): now (`late` says when it was, for the map's 建議).
     if (when < now - 20 * 60_000) continue;
     if (when > now) {
       at = when;
       by = way.rev ? 'depart' : t.by;
-    }
+    } else late = when;
     break;
   }
-  return { id: `${t.id}:${way.rev ? 'b' : 'f'}`, from, to: way.to, at, by, label: way.label, recurring: t.days.length > 0, today: t.days.includes(day.dow) && !offOn(day.date) };
+  return { id: `${t.id}:${way.rev ? 'b' : 'f'}`, from, to: way.to, at, late, by, label: way.label, recurring: t.days.length > 0, today: t.days.includes(day.dow) && !offOn(day.date) };
 }
 
 // What the phone has of a saved trip's ways, asked of nobody (the map's 建議

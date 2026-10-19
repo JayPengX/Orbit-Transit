@@ -105,3 +105,25 @@ test('suggest: ranked best first, the same input the same order', () => {
   assert.equal(a.length, MAX_SUGGESTIONS);
   assert.equal(a[0].kind, 'home', '回家 at 18:30 leads the bus and the train');
 });
+
+test('suggest: a saved trip at 18:40 is news from about 18:20 to a few minutes after it', async () => {
+  const { tripNow } = await import('../public/lib/tab-go.mjs');
+  const { cleanSaved } = await import('../public/lib/store.mjs');
+  const stop = { name: '新竹車站', lat: 24.8015, lon: 120.9717 };
+  // (Away from both ends, as the sheet reads it: the trip as home.mjs hands it over.)
+  const t = cleanSaved({ id: 's1', name: '回家', from: stop, to: { name: '家', lat: HOME.lat, lon: HOME.lon }, time: '18:40', days: [1, 2, 3, 4, 5] });
+  const here = { lat: 24.83, lon: 121.0 };
+  const at = hm => {
+    const now = T(hm);
+    const w = tripNow(t, here, now);
+    if (!w || !(w.at || w.late)) return [];
+    return suggest({ now, here, trips: [{ id: w.id, label: w.label, to: w.to, leaveAt: w.at || w.late, recurring: w.recurring, today: w.today }] });
+  };
+  assert.equal(at('15:30').length, 0, 'over 3 hours ahead');
+  assert.equal(at('18:20')[0]?.kind, 'trip');
+  assert.equal(Math.round(at('18:20')[0].minutes), 20);
+  assert.equal(at('18:40')[0]?.kind, 'trip', 'at the time itself');
+  assert.equal(at('18:45')[0]?.kind, 'trip', 'just gone: still a card');
+  assert.equal(at('18:55').length, 0, 'gone more than 10 minutes');
+  assert.equal(tripNow(t, here, T('18:45')).late, T('18:40'));
+});
