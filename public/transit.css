@@ -797,7 +797,7 @@ body.tab-map {
   display: flex;
   flex-direction: column;
   max-width: var(--ot-max);
-  height: 172px;
+  height: 236px;
   margin: 0 auto;
   overflow: hidden;
   border-radius: 28px 28px 0 0;
@@ -1672,8 +1672,6 @@ body.tab-map {
 }
 .ot-card-head {
   min-height: 52px;
-}
-.ot-card-head {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1910,6 +1908,18 @@ body.tab-map {
 }
 .ot-card-head:has(> .ot-od) > :nth-child(5) {
   grid-area: 1 / 5;
+}
+/* At 320 the four round buttons leave the start field too little for 「目前位置」: they are a size down. */
+@media (max-width: 350px) {
+  .ot-card-head:has(> .ot-od) {
+    column-gap: 6px;
+  }
+  .ot-card-head:has(> .ot-od) > :not(.ot-od) {
+    width: 38px;
+    min-width: 0;
+    height: 38px;
+    padding: 0;
+  }
 }
 .ot-od button {
   display: flex;

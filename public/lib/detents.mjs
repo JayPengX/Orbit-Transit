@@ -3,8 +3,8 @@
 // scrolls what's in it. (sheet.mjs does the touching; this is what a test holds.)
 
 export const DETENTS = ['peek', 'medium', 'large'];
-// The search field and the top of the first shelf.
-export const PEEK = 172;
+// The search field and the first shelf's row of tiles, whole (a tile cut through its circle looks unfinished).
+export const PEEK = 236;
 // How far a finger goes before it means something, and how long a lift's speed carries it on.
 export const SLOP = 6;
 export const COAST_MS = 200;

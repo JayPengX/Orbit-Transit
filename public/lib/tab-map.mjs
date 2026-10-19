@@ -903,6 +903,7 @@ function aboveDy() {
   return bottom - top > 80 ? Math.round(room / 2 - (top + bottom) / 2) : 0;
 }
 let liftedFor = false;
+let backToPeek = false;
 function buildSheet() {
   msheet = persistentSheet($('msheet'), {
     head: $('ms-head'),
@@ -929,8 +930,9 @@ function buildSheet() {
     $('ms-body').scrollTop = 0;
     // A card from the lowest stop lifts it to half, and puts it back when the card goes.
     if (mode === 'card') {
-      liftedFor = msheet.detent === 'peek';
-      if (liftedFor) msheet.set('medium');
+      liftedFor = msheet.detent === 'peek' || backToPeek;
+      backToPeek = false;
+      if (msheet.detent === 'peek') msheet.set('medium');
     } else if (was === 'card') {
       if (liftedFor && msheet.detent === 'medium' && mode === 'home') msheet.set('peek');
       liftedFor = false;
@@ -1184,7 +1186,13 @@ async function localMatches(t) {
 }
 
 async function chooseResult(r) {
+  // (The card of a place picked from the list sits at half, the map above it showing the place; closed, the sheet goes back to the stop it was searched from.)
+  const from = searchFrom;
   closeResults({ keep: true });
+  if (msheet.detent === 'large') {
+    msheet.set('medium');
+    backToPeek = from === 'peek';
+  }
   const known = p => {
     ctx.data.trips = remember(ctx.data.trips, { name: p.name, lat: p.lat, lon: p.lon, t: Date.now(), ...(p.gid ? { gid: p.gid } : {}) }, tripKey, 10);
     ctx.save();
