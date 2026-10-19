@@ -2133,10 +2133,10 @@ test('a pinned place is on the map: its icon and name, a tap opening its card (t
   assert.equal(m.id, 'place:h');
   assert.equal(m.kind, 'place');
   assert.deepEqual([m.lat, m.lon], [24.8, 120.97]);
-  assert.match(m.html, /🏠/);
+  assert.match(m.html, /<svg/);
   assert.match(m.html, /家&lt;b&gt;/);
   assert.deepEqual(m.data, { name: '家<b>', sub: '東區', lat: 24.8, lon: 120.97, pin: 'h', gid: 'g1' });
-  assert.match(placeMarker({ id: 'x', name: 'x', icon: 'nope', lat: 24, lon: 121 }).html, /📍/);
+  assert.match(placeMarker({ id: 'x', name: 'x', icon: 'nope', lat: 24, lon: 121 }).html, /<svg/);
 });
 
 test('a YouBike ride shows where it goes back on the map (a swap: once, where the next bike is taken)', async () => {
@@ -2160,7 +2160,7 @@ test("a trip's YouBike stations: where you take one its bikes, where it goes bac
   assert.deepEqual(roles(planBikes([ride(A, B), ride(B, C)])), ['A:借', 'B:借還', 'C:還']);
   assert.deepEqual(planBikes([{ mode: 'bike', from: A, to: C }]), []);
   const [a, b, c] = planBikes([ride(A, B), ride(B, C)]).map(x => planBikeMarker(x));
-  assert.match(a.html, /ot-i.*<b>5<\/b><i>⚡2/);
+  assert.match(a.html, /ot-i.*<b>5<\/b><i><svg[^>]*>.*<\/svg>2<\/i>/);
   assert.doesNotMatch(a.html, /<rect/);
   assert.match(b.html, /<rect.*<b>19<\/b><s><\/s>.*<b>5<\/b>/);
   assert.match(c.html, /<rect[^]*<\/svg><b>0<\/b>$/);

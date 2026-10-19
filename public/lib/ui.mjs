@@ -61,6 +61,9 @@ const I = {
   down: '<path d="M6 10l6 6 6-6"/>',
   trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  home: '<path d="M4 11l8-7 8 7M6 9.5V20h12V9.5M10 20v-5.5h4V20"/>',
+  work: '<rect x="3.5" y="7.5" width="17" height="12" rx="3"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3.5 13h17"/>',
+  school: '<path d="M2.5 9.5L12 5l9.5 4.5L12 14z"/><path d="M6.5 11.8V16c0 1.4 2.5 2.7 5.5 2.7s5.5-1.3 5.5-2.7v-4.2M21.5 9.5V15"/>',
   bolt: '<path d="M13 2.5L5.5 13.5H11l-1 8 7.5-11H12z"/>',
   chevron: '<path d="M9 5l7 7-7 7"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
@@ -116,7 +119,15 @@ export function depChips(plans, idx, on, attrs) {
   const via = p => (rides(p).length > 1 ? W(`${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}轉`, `via ${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}`) : W('直達', 'direct'));
   const changing = new Set(idx.map(i => rides(plans[i]).length)).size > 1;
   const tag = p => [mixed ? kind(p) : '', changing ? via(p) : ''].filter(Boolean).join('・');
-  return `<div class="ot-plan-deps" role="group" aria-label="${W('選班次', 'Departures')}">${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${tag(plans[i]) ? `<small>${e(tag(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;
+  // One chip for a time shown twice (two ways boarding the same bus): the picked one's, else the first.
+  const seen = new Map();
+  for (const i of idx) {
+    const key = `${hm(ride(plans[i])?.dep ?? plans[i].dep)}|${tag(plans[i])}`;
+    if (!seen.has(key) || i === on) seen.set(key, i);
+  }
+  idx = idx.filter(i => [...seen.values()].includes(i));
+  if (idx.length < 2) return '';
+  return `<div class="ot-plan-deps" role="group" aria-label="${W('選班次', 'Departures')}"><span class="ot-dep-l">${W('下一班', 'Next')}</span>${idx.map(i => `<span class="ot-dep${i === on ? ' on' : ''}" role="button" tabindex="0" ${attrs(i)} aria-pressed="${i === on}">${e(hm(ride(plans[i])?.dep ?? plans[i].dep))}${tag(plans[i]) ? `<small>${e(tag(plans[i]))}</small>` : ''}</span>`).join('')}</div>`;
 }
 
 export function legChips(legs) {

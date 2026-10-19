@@ -365,7 +365,7 @@ function bikesText(bk, plan, i, pos) {
   if (bk.moved) out.push(`<span class="note warn">${icon('bike')}${e(bk.moved)}</span>`);
   if (bk.none) out.push(`<span class="note bad">${icon('bike')}${e(bk.none)}${W('，按「換一條路」重新規劃', '. Tap Another way to replan')}</span>`);
   const taking = !kept && (park || bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150);
-  if (bk.rent && taking) out.push(`<span>${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・⚡${bk.rent.ebike}` : ''}</span>`);
+  if (bk.rent && taking) out.push(`<span>${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・${icon('bolt')}${bk.rent.ebike}` : ''}</span>`);
   if (bk.ret) out.push(`<span>${W('還車空位', 'Docks')} ${bk.ret.ret}</span>`);
   const btn = (end, text) => `<button class="ot-nav-gm" type="button" data-nav-bike="${end}">${icon('route')}${text}</button>`;
   out.push(taking ? btn('rent', W('這站沒車，換附近的站', 'No bikes: nearby dock')) : btn('return', W('還車站沒位，換附近的站', 'Full: nearby dock')));

@@ -8,6 +8,7 @@ import { icon } from './ui.mjs';
 import { W, en } from './lang.mjs';
 
 // One colour per way of moving, the same on the map, in a plan's legs and here.
+export const PLACE_COLOR = { home: '#ff9500', work: '#6155f5', school: '#0a84ff', pin: '#ff383c', star: '#f5b301' };
 export const COLOR = { bus: '#22c55e', tra: '#0ea5e9', hsr: '#f97316', metro: '#3b82f6', bike: '#f5b301', walk: '#8e8e93', route: '#6155f5', place: '#ff383c' };
 
 // A colour tile holding one of the app's glyphs (ui.mjs icon names), or a word (`word`).

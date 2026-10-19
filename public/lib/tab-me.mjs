@@ -13,7 +13,7 @@ import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters } from './util.mjs';
-import { COLOR, tile, tag, section, rowCard, hero } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, hero } from './look.mjs';
 
 import { W, en } from './lang.mjs';
 const $ = id => document.getElementById(id);
@@ -42,7 +42,7 @@ export function show() {
 
 const DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const daysText = d => (!d.length ? '' : d.length === 5 && [1, 2, 3, 4, 5].every(x => d.includes(x)) ? W('平日', 'Weekdays') : d.length === 7 ? W('每天', 'Daily') : d.length === 2 && d.includes(0) && d.includes(6) ? W('週末', 'Weekends') : W(`每週${d.map(x => DAYS[x]).join('、')}`, d.map(x => DAYS_EN[x]).join(', ')));
-const placeTile = p => tile(PLACE_ICONS[p.icon] || '📍', COLOR.place, '', true);
+const placeTile = p => tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place);
 const addRow = (act, text) => `<button class="q-ritem ot-add" type="button" data-act="${act}"><span class="q-tile soft" aria-hidden="true">${icon('plus')}</span><span class="q-ritem-text"><span class="q-ritem-title">${text}</span></span></button>`;
 // Which ways of moving the planner uses, in a word or a few.
 const modesText = m => (Object.values(m).every(Boolean) ? W('全部', 'All') : Object.entries(MODES).filter(([k]) => m[k]).map(([, n]) => n).join('・'));
@@ -66,8 +66,11 @@ function render() {
     .join('');
   const trips = D.saved
     .map(t => {
-      const tags = [t.time ? tag(`${t.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${t.time}`, 'blue') : '', t.days.length ? tag(daysText(t.days), 'green') : '', t.back ? tag(`${W('回程', 'Back')} ${t.back}`, 'indigo') : '', ...(t.alt || []).map(a => tag(`${en ? a.days.map(x => DAYS_EN[x]).join(', ') : `週${a.days.map(x => DAYS[x]).join('')}`} ${[a.time, a.back && `${W('回', 'back')} ${a.back}`].filter(Boolean).join(' ')}`))].join('');
-      return `<button class="q-ritem chevron" type="button" data-trip="${e(t.id)}">${tile(t.days.length ? 'clock' : 'route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title">${e(t.name || t.to.name)}</span><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}</small>${tags ? `<span class="q-tags">${tags}</span>` : ''}</span></button>`;
+      // Times read whole, as plain tokens that wrap one by one (never cut inside a time).
+      const sched = [t.time ? `${t.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${t.time}` : '', t.days.length ? daysText(t.days) : '', t.back ? `${W('回程', 'Back')} ${t.back}` : ''].filter(Boolean);
+      const alts = (t.alt || []).map(a => `${en ? a.days.map(x => DAYS_EN[x]).join(', ') : `週${a.days.map(x => DAYS[x]).join('')}`} ${[a.time, a.back && `${W('回程', 'back')} ${a.back}`].filter(Boolean).join(' · ')}`);
+      const lines = `${sched.length ? `<span class="ot-sched">${sched.map(x => `<span>${e(x)}</span>`).join('')}</span>` : ''}${alts.map(x => `<span class="ot-sched alt"><span>${e(x)}</span></span>`).join('')}`;
+      return `<button class="q-ritem chevron" type="button" data-trip="${e(t.id)}">${tile(t.days.length ? 'clock' : 'route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title">${e(t.name || t.to.name)}</span><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}</small>${lines}</span></button>`;
     })
     .join('');
   const stops = D.groups.reduce((n, g) => n + g.items.length, 0);
@@ -152,9 +155,9 @@ function placeSheet(id) {
   if (!p) return;
   const at = ctx.data.places.indexOf(p);
   let ic = p.icon;
-  const d = sheet(`${sheetHead(W('編輯地點', 'Edit place'), p.address ? e(p.address) : '', tile(PLACE_ICONS[p.icon] || '📍', COLOR.place, '', true))}
+  const d = sheet(`${sheetHead(W('編輯地點', 'Edit place'), p.address ? e(p.address) : '', placeTile(p))}
     <label class="ot-field"><span>${W('名稱', 'Name')}</span><input id="pl-name" maxlength="30" value="${e(p.name)}" placeholder="${W('家、公司、學校', 'Home, Work, School')}"></label>
-    <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === ic}">${v}</button>`).join('')}</div></div>
+    <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === ic}" aria-label="${k}">${icon(v)}</button>`).join('')}</div></div>
     <div class="ot-sheet-acts"><button class="q-btn" type="button" data-del="1">${icon('trash')} ${W('刪除', 'Delete')}</button>${at ? `<button class="q-btn" type="button" data-up="1">${icon('up')} ${W('上移', 'Move up')}</button>` : ''}<button class="q-btn primary" type="button" data-save="1">${W('儲存', 'Save')}</button></div>`);
   d.addEventListener('click', ev => {
     const b = ev.target.closest('[data-icon]');
