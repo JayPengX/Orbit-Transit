@@ -148,6 +148,29 @@ export function tripNow(t, here, now = Date.now()) {
   return { id: `${t.id}:${way.rev ? 'b' : 'f'}`, from, to: way.to, at, by, label: way.label, recurring: t.days.length > 0, today: t.days.includes(day.dow) && !offOn(day.date) };
 }
 
+// What the phone has of a saved trip's ways, asked of nobody (the map's 建議
+// uses it): the way to take first, rolled on to now, or null when the ways
+// kept are none or too old to trust. This session's plans (交通 read them)
+// come before the phone's copy.
+export function keptLead(w, { prefs = {}, here = null, picks = [], now = Date.now() } = {}) {
+  const st = S.trips.get(w.id);
+  let plans = st?.sig === tripSig(w) && st.plans?.length ? st.plans : null;
+  if (!plans) {
+    const kept = readTrips()[JSON.stringify([w.id, tripSig(w), prefs || {}])];
+    if (!kept || replanWhy(kept, { w, here, picks, now })) return null;
+    plans = w.by === 'arrive' ? kept.plans : rollPlans(kept.plans, now);
+  }
+  return tripPlans(plans, picks, now).first[0] || null;
+}
+// The pinned trains' next ones for the map's 建議 (their times read again, the
+// day's trains as 交通 reads them): [{ p, rows }]. None pinned: nothing asked.
+export async function pinnedTrainsNext(c) {
+  ctx ||= c;
+  if (!c.data.pins.length) return [];
+  await trainPins();
+  return c.data.pins.map(p => ({ p, rows: trainNext(p) }));
+}
+
 // Saved trips in the order they matter: recurring ones today first, then the rest.
 function trips(now = Date.now()) {
   return ctx.data.saved
