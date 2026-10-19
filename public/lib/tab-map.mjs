@@ -29,6 +29,8 @@ import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, t
 import { COLOR, tile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
+import { persistentSheet } from './sheet.mjs';
+import { createHome } from './home.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
 import * as kit from '#kit/quadra.mjs';
 
@@ -40,6 +42,9 @@ const MAP_SPOT = W('地圖上的位置', 'Spot on the map');
 const VIEW_KEY = 'orbit-transit.view';
 let ctx = null;
 let map = null;
+// The one sheet over the map (sheet.mjs) and the shelves in it (home.mjs).
+let msheet = null;
+let home = null;
 let card = null; // what the card shows: { kind, ... }
 let stopWatch = () => {};
 let following = false;
@@ -87,6 +92,7 @@ export async function init(c) {
   ctx = c;
   $('fab-locate').innerHTML = icon('locate');
   $('fab-layers').innerHTML = icon('layers');
+  buildSheet();
   const view = readJson(VIEW_KEY);
   // (Never opened here before, nowhere known: where you are, briefly, not 台北車站's tiles first.)
   if (!ctx.here && !view) await Promise.race([ctx.locate(), wait(1500)]);
@@ -113,9 +119,9 @@ export async function init(c) {
     if (!centered) {
       // (And keeps you in the middle as you move, as 我的位置 does, until a finger moves the map.)
       centered = true;
-      map.setView(here.lat, here.lon, 16);
+      map.setView(here.lat, here.lon, 16, aboveDy());
       follow();
-    } else if (following) map.setView(here.lat, here.lon);
+    } else if (following) map.setView(here.lat, here.lon, undefined, aboveDy());
   };
   ctx.moved.push(arrived);
   reopened = () => {
@@ -126,6 +132,7 @@ export async function init(c) {
   else ctx.locate();
   wireSearch();
   drawChips();
+  $('map-chips').addEventListener('click', ev => ev.target.closest('[data-chip="rental"]') && rentalSheet());
   $('fab-locate').addEventListener('click', locateMe);
   $('fab-layers').addEventListener('click', layersSheet);
   $('card').addEventListener('click', cardClick);
@@ -143,11 +150,6 @@ export async function init(c) {
     if (card?.kind === 'bike') renderCard();
   });
   rentalTick();
-  $('near-bikes').addEventListener('click', ev => {
-    const b = ev.target.closest('[data-nb]');
-    const s = shownBikes.find(x => x.uid === b?.dataset.nb);
-    if (s) arrive({ kind: 'bike', item: s, lat: s.lat, lon: s.lon });
-  });
   idle();
   // A ride being followed when the app was swiped away: on with it.
   const was = savedNav();
@@ -210,6 +212,8 @@ function takePending() {
 }
 export function show({ back = false } = {}) {
   map?.resize();
+  msheet?.relayout();
+  home?.start();
   // Back after a while with nothing open: an opening again, the map on where you are now.
   if (back && map && Date.now() - leftAt > REOPEN_MS && !card && !navFull() && !pendingTrip && !ctx.mapFocus) reopened();
   // (Following you, back from away: the watch started again, as iOS's can stay silent.)
@@ -246,7 +250,8 @@ function bikesAgain() {
 }
 export function hide() {
   // (An open search list doesn't follow you to another tab, or into navigation.)
-  closeResults();
+  closeResults({ keep: true });
+  home?.stop();
   stopWatch();
   following = false;
   pause();
@@ -261,18 +266,17 @@ function pause() {
 // ---- The YouBike stations nearest you, along the bottom of the map --------------------------------
 
 let bikeTimer = 0;
-let shownBikes = [];
 let nearRun = 0;
 // (Settled once the strip is drawn, or a newer one is: the loading screen waits on it.)
 let nearDone = Promise.resolve();
 function nearBikes() {
-  nearDone = nearBikesNow();
+  // (The sheet's shelves are read with them: the loading screen lifts onto both.)
+  nearDone = Promise.all([nearBikesNow(), home?.refresh()]);
   return nearDone;
 }
 async function nearBikesNow() {
-  const box = $('near-bikes');
   const h = ctx.here;
-  if (!box || !h || !ctx.data.layers.bike) return box && (box.hidden = true);
+  if (!h || !ctx.data.layers.bike) return void home?.setBikes([]);
   // (Not shown navigating or looking at a trip: not asked then; show() asks again after.)
   if (navigating() || document.body.classList.contains('ot-planning')) return;
   const run = ++nearRun;
@@ -291,16 +295,8 @@ async function nearBikesNow() {
   const ws = await Promise.race([asked, new Promise(r => setTimeout(() => r(near.map(x => walkKnown(h, x.s))), 1500))]);
   if (run !== nearRun) return nearDone;
   const rows = near.map((x, k) => ({ ...x, walk: ws[k] || walkGuess(x.d) })).sort((a, b) => a.walk.dist - b.walk.dist);
-  shownBikes = rows.map(x => x.s);
-  box.hidden = !rows.length;
-  // A small card each: its name, the bikes there now big (⚡ the 電輔車), the walk.
-  box.innerHTML = rows
-    .map(({ s, walk }) => {
-      const lv = bikeLevel(s);
-      const mins = Math.max(1, Math.round(walk.sec / 60));
-      return `<button class="ot-nb ${lv}" type="button" data-nb="${e(s.uid)}"><small>${e(s.name)}</small><span class="ot-nb-n">${s.ok === false ? `<b>—</b><em>${W('暫停', 'Closed')}</em>` : `<b>${s.bikes}</b>${s.ebike ? `<em>${icon('bolt')}${s.ebike}</em>` : ''}<i>${icon('dock')}${s.ret}</i>`}</span><span class="ot-nb-walk">${icon('walk')}${mins} ${W('分', 'min')}</span></button>`;
-    })
-    .join('');
+  // The shelf under 附近: the bikes there now big (the 電輔車 beside), the docks, the walk.
+  home?.setBikes(rows.map(({ s, d, walk }) => ({ ...s, d, walk })));
 }
 // Navigating with its card on the map (not shrunk to the bar to do something else).
 const navFull = () => navigating() && !navNow()?.min;
@@ -313,7 +309,7 @@ function drawMe(h) {
 async function locateMe() {
   const h = await ctx.locate({ force: true });
   if (!h) return ctx.status(W('無法取得位置：請在設定允許定位', 'Can’t get your location: allow it in Settings'));
-  map.setView(h.lat, h.lon, Math.max(map.zoom(), 16));
+  map.setView(h.lat, h.lon, Math.max(map.zoom(), 16), aboveDy());
   follow();
 }
 function follow() {
@@ -322,7 +318,7 @@ function follow() {
   stopWatch = watchPosition(p => {
     ctx.here = { ...p, at: Date.now() };
     drawMe(ctx.here);
-    if (following) map.setView(p.lat, p.lon);
+    if (following) map.setView(p.lat, p.lon, undefined, aboveDy());
   });
 }
 
@@ -421,16 +417,12 @@ function pick(it) {
   focusAbove(it);
 }
 // The tapped stop or station brought to the middle of the map left above
-// its card (the card came up over it), once the card has its height.
+// the sheet (the sheet came up over it), once the sheet has its height.
 function focusAbove(p) {
   requestAnimationFrame(() => {
-    const el = $('card');
-    if (!card || el.hidden) return;
-    const box = $('map').getBoundingClientRect();
-    const top = Math.max(box.top, ($('map-search')?.getBoundingClientRect().bottom || box.top) + 8);
-    const bottom = Math.min(box.bottom, el.getBoundingClientRect().top);
-    // The map's middle down to the middle of what's left in view.
-    if (bottom - top > 80) map.focus?.(p.lat, p.lon, (box.top + box.bottom) / 2 - (top + bottom) / 2);
+    if (!card || !msheet) return;
+    const dy = aboveDy();
+    if (dy > 4) map.focus?.(p.lat, p.lon, dy);
   });
 }
 // An empty spot: closes the card, or marks the spot (to plan a trip there).
@@ -439,7 +431,10 @@ async function tap(pt) {
   following = false;
   if (!$('results').hidden) return closeResults();
   if (card) return closeCard();
+  // (The sheet half up: a tap on the map under it lowers it, as Maps does; from its lowest a tap marks the spot.)
+  if (msheet.detent !== 'peek') return msheet.set('peek');
   openCard({ kind: 'point', item: { name: MAP_SPOT, lat: pt.lat, lon: pt.lon }, lat: pt.lat, lon: pt.lon });
+  focusAbove(pt);
   try {
     const w = await whereIs(pt);
     if (card?.kind === 'point' && card.lat === pt.lat && w?.town) {
@@ -631,7 +626,7 @@ function head(title, sub, kind) {
   // (Walking, by the streets once known: what 走過去 and the strip say.)
   const d = ctx.here && card ? distText(walkKnown(ctx.here, card)?.dist ?? meters(ctx.here.lat, ctx.here.lon, card.lat, card.lon)) : '';
   const [g, c] = KIND_TILE[kind] || KIND_TILE.place;
-  return `<div class="ot-card-grip" data-card="grow"></div><div class="ot-card-head">${tile(g, c)}<div class="ot-card-title"><h2>${e(title)}</h2><p>${[sub, d].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
+  return `<div class="ot-card-head">${tile(g, c)}<div class="ot-card-title"><h2>${e(title)}</h2><p>${[sub, d].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
 }
 
 function renderCard() {
@@ -697,9 +692,8 @@ function renderCard() {
   // A long station name shrinks to its row (never a second row, never cut).
   fitNumbers([...box.querySelectorAll('.ot-bike-name')]);
   fitStrips(box);
-  // The plans keep most of the map in view; the grip grows the card.
+  // The plans keep most of the map in view: the sheet stays at its half.
   box.classList.toggle('plans', c.kind === 'plans');
-  box.classList.toggle('tall', box.classList.contains('grown'));
 }
 
 // A metro station's board: live trains (臺北捷運 sends only those about to
@@ -759,10 +753,6 @@ async function cardClick(ev) {
   if (pickWhen) return setWhen(pickWhen.dataset.when);
   if (!act || !card) return;
   if (act === 'close') return closeCard();
-  if (act === 'grow') {
-    $('card').classList.toggle('grown');
-    return $('card').classList.toggle('tall', $('card').classList.contains('grown'));
-  }
   // From where you are; the start can be changed on the plan.
   // A new trip: from now (a time picked is for the trip it was picked for, not the next one: 2026-10-12).
   if (act === 'go') {
@@ -893,16 +883,128 @@ function pickOnMap(text, near) {
   });
 }
 
+// ---- The sheet over the map ---------------------------------------------------------------------------
+
+// Its room is the panel above the tab bar (above the shrunk ride's bar while
+// one is followed); the large stop leaves the account buttons showing above it.
+const NAV_BAR = 74;
+const sheetRoom = () => $('panel-map').clientHeight - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
+const sheetTop = () => {
+  const b = $('top-actions')?.getBoundingClientRect();
+  return b?.height ? Math.round(b.bottom + 10) : 64;
+};
+// How far under the middle of the map the middle of what the sheet leaves in view is, px: a point put
+// that high above the middle sits in the middle of the map you can see.
+function aboveDy() {
+  if (!msheet || !$('panel-map').clientHeight) return 0;
+  const room = $('panel-map').clientHeight;
+  const top = Math.max(0, ($('top-actions')?.getBoundingClientRect().bottom || 0) + 8);
+  const bottom = room - msheet.heights()[msheet.detent] - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
+  return bottom - top > 80 ? Math.round(room / 2 - (top + bottom) / 2) : 0;
+}
+let liftedFor = false;
+function buildSheet() {
+  msheet = persistentSheet($('msheet'), {
+    head: $('ms-head'),
+    body: $('ms-body'),
+    grab: $('ms-grab'),
+    room: sheetRoom,
+    top: sheetTop,
+    onChange: d => {
+      // (Down from large, the keyboard goes: the field is no longer the thing.)
+      if (d !== 'large' && document.activeElement === $('q')) $('q').blur();
+      // You, followed: kept in the middle of the map you can see as the sheet moves.
+      if (following && ctx.here && d !== 'large') map?.setView(ctx.here.lat, ctx.here.lon, undefined, aboveDy());
+    }
+  });
+  home = createHome($('home'), ctx, homeActs());
+  // One thing in the sheet at a time: the shelves, the search's results or a card. What shows follows the
+  // two lists' own `hidden` (set where they have always been), so every opening and closing of either is seen.
+  const sync = () => {
+    const sh = $('msheet');
+    const mode = !$('card').hidden ? 'card' : !$('results').hidden ? 'results' : 'home';
+    const was = sh.dataset.mode;
+    if (mode === was) return;
+    sh.dataset.mode = mode;
+    $('ms-body').scrollTop = 0;
+    // A card from the lowest stop lifts it to half, and puts it back when the card goes.
+    if (mode === 'card') {
+      liftedFor = msheet.detent === 'peek';
+      if (liftedFor) msheet.set('medium');
+    } else if (was === 'card') {
+      if (liftedFor && msheet.detent === 'medium' && mode === 'home') msheet.set('peek');
+      liftedFor = false;
+    }
+  };
+  const mo = new MutationObserver(sync);
+  for (const el of [$('card'), $('results')]) mo.observe(el, { attributes: true, attributeFilter: ['hidden'] });
+  sync();
+  // The keyboard takes the foot of the screen: what scrolls in the sheet stops above it.
+  const vv = globalThis.visualViewport;
+  vv?.addEventListener('resize', () => $('msheet').style.setProperty('--ot-kb', `${Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop))}px`));
+  home.start();
+  home.draw();
+}
+// What the shelves' taps do: each opens what already opens it.
+function homeActs() {
+  const placeEnd = p => ({ name: p.name, lat: p.lat, lon: p.lon, ...(p.gid ? { gid: p.gid } : {}) });
+  return {
+    // 常用: a trip there from here.
+    place(p) {
+      if (!p) return;
+      when = { by: 'now', at: null };
+      plan(null, placeEnd(p));
+    },
+    // ＋ (or 家 / 公司 not set yet): the pin sheet, at where you are.
+    add(kind) {
+      const c = ctx.here || map.center();
+      pinSheet({ name: { home: W('家', 'Home'), work: W('公司', 'Work') }[kind] || '', icon: kind || 'pin', lat: c.lat, lon: c.lon });
+    },
+    // 建議: the saved trip's plan (or all its ways), the pinned bus's route, the pinned train's times.
+    trip(x) {
+      const { w, plan: p } = x;
+      if (!p) return ctx.openTrip(w.from, w.to, { at: w.at, by: w.by });
+      const l0 = p.legs[0]?.from;
+      showPlan(p, w.from || { name: HERE, lat: l0?.lat, lon: l0?.lon }, w.to);
+    },
+    bus: x => openRoute(ctx, { uid: x.it.routeUID, name: x.it.route, city: x.it.city }, { stopUID: x.r.stopUID, dir: x.r.dir }),
+    train(x) {
+      ctx.trainQuery = { from: x.p.from, to: x.p.to };
+      ctx.goTab('times');
+    },
+    bike: s => s && arrive({ kind: 'bike', item: s, lat: s.lat, lon: s.lon }),
+    route: x => openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir }),
+    // 最近: looked at again, or forgotten (one, or all).
+    recent: r => r && chooseResult({ kind: 'trip', name: r.name || MAP_SPOT, lat: r.lat, lon: r.lon, ...(r.gid ? { gid: r.gid } : {}) }),
+    delRecent(key) {
+      ctx.data.trips = ctx.data.trips.filter(x => tripKey(x) !== key);
+      ctx.save();
+      home.draw();
+    },
+    clearRecents() {
+      ctx.data.trips = [];
+      ctx.save();
+      home.draw();
+    }
+  };
+}
+
 // ---- Search ------------------------------------------------------------------------------------------
 
 let searchSession = '';
+// The sheet's stop before the search lifted it, to go back to when it ends.
+let searchFrom = null;
 function wireSearch() {
   const input = $('q');
   const clear = $('q-clear');
   let timer = 0;
   let ask = 0;
+  // Focusing the field lifts the sheet to large (Maps'); its results fill it.
   input.addEventListener('focus', () => {
     searchSession ||= uid() + uid();
+    if (searchFrom == null && msheet.detent !== 'large') searchFrom = msheet.detent;
+    msheet.set('large');
+    $('q-cancel').hidden = false;
     showResults(input.value);
   });
   input.addEventListener('input', () => {
@@ -913,6 +1015,12 @@ function wireSearch() {
   clear.addEventListener('click', () => {
     input.value = '';
     clear.hidden = true;
+    $('results').hidden = true;
+    input.focus();
+  });
+  $('q-cancel').addEventListener('click', () => {
+    input.value = '';
+    clear.hidden = true;
     closeResults();
   });
   $('map-search').addEventListener('submit', ev => {
@@ -920,35 +1028,15 @@ function wireSearch() {
     $('results').querySelector('[data-res]')?.click();
   });
   $('results').addEventListener('click', ev => {
-    // 最近: one forgotten, or all of them.
-    const del = ev.target.closest('[data-del-recent]');
-    if (del || ev.target.closest('[data-clear-recent]')) {
-      ev.preventDefault();
-      ctx.data.trips = del ? ctx.data.trips.filter(x => tripKey(x) !== del.dataset.delRecent) : [];
-      ctx.save();
-      return showResults(input.value);
-    }
     const b = ev.target.closest('[data-res]');
     if (b) chooseResult(JSON.parse(b.dataset.res));
   });
   const showResults = async (text, n = ask) => {
     const t = text.trim();
     const box = $('results');
+    // Nothing typed: the shelves (your places, what you looked up lately) stay in the sheet.
+    if (!t) return void (box.hidden = true);
     box.hidden = false;
-    // Nothing typed: your places, then what you looked up lately (each one forgettable).
-    if (!t) {
-      const places = ctx.data.places;
-      const recent = ctx.data.trips.slice(0, 8);
-      box.innerHTML =
-        (places.length ? `<div class="ot-res-places">${places.map(p => `<button class="ot-res-place" type="button" data-res="${e(JSON.stringify({ kind: 'place', icon: p.icon, name: p.name, sub: p.address || W('我的地點', 'My place'), lat: p.lat, lon: p.lon, gid: p.gid }))}"><i>${icon(PLACE_ICONS[p.icon] || 'pin')}</i><span>${e(p.name)}</span></button>`).join('')}</div>` : '') +
-        (recent.length
-          ? `<h4 class="ot-res-h">${W('最近', 'Recent')}<button class="ot-res-clear" type="button" data-clear-recent="1">${W('全部清除', 'Clear all')}</button></h4>${recent
-              .map(x => `<div class="ot-res-w">${resultRow({ kind: 'trip', name: x.name || MAP_SPOT, sub: ctx.here ? distText(meters(ctx.here.lat, ctx.here.lon, x.lat, x.lon)) : '', lat: x.lat, lon: x.lon, gid: x.gid })}<button class="q-icon-btn ot-res-del" type="button" data-del-recent="${e(tripKey(x))}" aria-label="${W('刪除這筆', 'Delete')}">${icon('x')}</button></div>`)
-              .join('')}`
-          : '');
-      box.hidden = !box.innerHTML;
-      return;
-    }
     const local = await localMatches(t);
     const draw = remote =>
       (box.innerHTML = uniqueResults([...local, ...(remote || [])]).map(r => resultRow(r)).join('') || (remote ? `<p class="ot-note">${W('找不到符合的地點', 'No matching place')}</p>` : `<p class="ot-note">${W('搜尋中…', 'Searching…')}</p>`));
@@ -964,9 +1052,14 @@ function wireSearch() {
     }
   };
 }
-function closeResults() {
+// The search ends: its list goes, the sheet back to where it was (not when a
+// card is about to take it: `keep`).
+function closeResults({ keep = false } = {}) {
   $('results').hidden = true;
+  $('q-cancel').hidden = true;
   $('q').blur();
+  if (!keep && searchFrom != null && msheet?.detent === 'large' && $('card').hidden) msheet.set(searchFrom);
+  searchFrom = null;
 }
 // One row a place: the same name (台/臺, spaces and brackets aside) once when
 // it's the same spot (within 300 m, the same address, or one without a
@@ -1091,7 +1184,7 @@ async function localMatches(t) {
 }
 
 async function chooseResult(r) {
-  closeResults();
+  closeResults({ keep: true });
   const known = p => {
     ctx.data.trips = remember(ctx.data.trips, { name: p.name, lat: p.lat, lon: p.lon, t: Date.now(), ...(p.gid ? { gid: p.gid } : {}) }, tripKey, 10);
     ctx.save();
@@ -1124,6 +1217,7 @@ function arrive(c) {
   centered = true;
   map.setView(c.lat, c.lon, Math.max(map.zoom(), 16));
   openCard(c);
+  focusAbove(c);
 }
 
 // ---- Pinned places ---------------------------------------------------------------------------------
@@ -1233,37 +1327,16 @@ async function rentalSheet() {
   if (d.open) paint();
 }
 
+// The map's top left: the rental timer's chip when a YouBike is out. Your places are the sheet's 常用.
 function drawChips() {
   drawPlaces();
-  $('map-chips').innerHTML =
-    rentalChip() +
-    ctx.data.places.map(p => `<button class="q-chip" type="button" data-place="${e(p.id)}">${icon(PLACE_ICONS[p.icon] || 'pin')} ${e(p.name)}</button>`).join('') +
-    `<button class="q-chip ot-chip-add" type="button" data-chip="pin" aria-label="${W('釘選地點', 'Pin a place')}">${icon('plus')}</button>`;
-  $('map-chips').onclick = ev => {
-    if (ev.target.closest('[data-chip="rental"]')) return rentalSheet();
-    const pl = ev.target.closest('[data-place]');
-    if (pl) {
-      const p = ctx.data.places.find(x => x.id === pl.dataset.place);
-      if (p) arrive({ ...placeCard(p), marker: placeMarker(p) });
-      return;
-    }
-    const layer = ev.target.closest('[data-layer]')?.dataset.layer;
-    if (layer) {
-      ctx.data.layers[layer] = !ctx.data.layers[layer];
-      drawChips();
-      drawLayers();
-      return ctx.save();
-    }
-    if (ev.target.closest('[data-chip="pin"]')) {
-      const c = ctx.here || map.center();
-      pinSheet({ name: '', lat: c.lat, lon: c.lon });
-    }
-  };
+  $('map-chips').innerHTML = rentalChip();
+  home?.draw();
 }
 
 function pinSheet(p) {
   if (ctx.data.places.length >= MAX_PLACES) return ctx.status(W(`最多 ${MAX_PLACES} 個釘選地點`, `Up to ${MAX_PLACES} pinned places`));
-  let iconKey = 'pin';
+  let iconKey = p.icon in PLACE_ICONS ? p.icon : 'pin';
   const d = sheet(`${sheetHead(W('釘選地點', 'Pin a place'), '', tile('star', COLOR.place))}
     <label class="ot-field"><span>${W('名稱', 'Name')}</span><input id="pin-name" maxlength="20" value="${e(p.name)}" placeholder="${W('家、公司、學校', 'Home, Work, School')}"></label>
     <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === iconKey}" aria-label="${k}">${icon(v)}</button>`).join('')}</div></div>
@@ -1340,7 +1413,7 @@ async function plan(from, to, opts = {}) {
     card.error = W('需要你的位置（請在設定允許定位），或點上面的出發地選一個地點。', 'Needs your location (allow it in Settings), or tap the start above to pick one.');
     return renderCard();
   }
-  map.fit([fromPt, dest], { top: 110, bottom: Math.round(innerHeight * 0.48), left: 40, right: 40 });
+  map.fit([fromPt, dest], { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.48)) + 24, left: 40, right: 40 });
   ctx.data.trips = remember(ctx.data.trips, { name: dest.name, lat: dest.lat, lon: dest.lon, t: Date.now(), ...(dest.gid ? { gid: dest.gid } : {}) }, tripKey, 10);
   ctx.save();
   const c = card;
@@ -1502,8 +1575,7 @@ const MODE_CHIP = { bus: W('公車', 'Bus'), tra: W('台鐵', 'TRA'), hsr: W('�
 function plansHtml(c) {
   const whenText = when.by === 'now' ? W('現在出發', 'Leave now') : `${when.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${hm(when.at)}`;
   const saved = Boolean(tripOf(c));
-  const top = `<div class="ot-card-grip" data-card="grow"></div>
-    <div class="ot-card-head"><button class="q-icon-btn" type="button" data-card="back" aria-label="${W('返回', 'Back')}">${icon('back')}</button>
+  const top = `<div class="ot-card-head"><button class="q-icon-btn" type="button" data-card="back" aria-label="${W('返回', 'Back')}">${icon('back')}</button>
       <div class="ot-card-title ot-od"><button type="button" data-card="edit-from" aria-label="${W('改出發地', 'Change start')}"><i class="ot-dot from"></i><span>${e(c.from.name)}</span></button><button type="button" data-card="edit-to" aria-label="${c.then?.length ? W('改第一站', 'Change first stop') : W('改目的地', 'Change destination')}"><i class="ot-dot ${c.then?.length ? 'stop' : 'to'}"></i>${c.then?.length ? '<small class="ot-od-n">1</small>' : ''}<b>${e(c.to.name || W('目的地', 'Destination'))}</b></button>${(c.then || [])
         .map((x, k) => `<div class="ot-od-stop"><button type="button" data-card="stop-first" data-k="${k}" aria-label="${W('先去', 'Go first to')} ${e(x.name)}"><i class="ot-dot ${k === c.then.length - 1 ? 'to' : 'stop'}"></i><small class="ot-od-n">${k + 2}</small><b>${e(x.name || W('地點', 'Place'))}</b></button><button class="ot-od-x" type="button" data-card="stop-drop" data-k="${k}" aria-label="${W('移除這一站', 'Remove this stop')}">×</button></div>`)
         .join('')}${(c.then?.length || 0) < MAX_STOPS ? `<button class="ot-od-add" type="button" data-card="stop-add">${icon('plus')}<span>${W('加一站', 'Add stop')}</span></button>` : ''}</div>
@@ -1769,7 +1841,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
       .then(city => city && cityBikes(city))
       .then(list => list && run === planDraw && map.layer('plan').set(marks(new Map(list.map(x => [x.uid, x])))))
       .catch(() => {});
-  if (fit && pts.length) map.fit(pts, { top: 120, bottom: Math.round(innerHeight * 0.55), left: 30, right: 30 });
+  if (fit && pts.length) map.fit(pts, { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.5)) + 24, left: 30, right: 30 });
 }
 
 // A bus leg's live line, short enough for one row: the bus you'd catch
@@ -1854,13 +1926,14 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   replanTo = null;
   // (Swapped for the way that's on time: the trip goes on, whatever card is open.)
   const c = swap ? null : card;
-  closeResults();
+  closeResults({ keep: true });
   $('card').hidden = true;
   document.body.classList.add('ot-navigating');
   document.body.classList.toggle('ot-nav-min', Boolean(resume?.min));
   if (resume?.min) document.body.classList.remove('ot-planning');
   // (The map now fills the screen: its tiles for the new size.)
   map?.resize();
+  msheet?.relayout();
   following = !resume?.min;
   stopWatch();
   roadLegs(p);
@@ -1898,6 +1971,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       document.body.classList.remove('ot-navigating', 'ot-nav-min');
       $('nav-mini').innerHTML = '';
       map?.resize();
+      msheet?.relayout();
       drawLayers();
       // Arrived: the trip's over, its card and its way off the map; ended by hand, back to the plans it came from.
       if (next) {
@@ -1979,6 +2053,7 @@ function shrinkNav(on) {
   if (!navigating()) return;
   setNavMin(on);
   document.body.classList.toggle('ot-nav-min', on);
+  msheet?.relayout();
   if (on) {
     following = false;
     document.body.classList.remove('ot-planning');

@@ -631,8 +631,8 @@ button.ot-hero {
 }
 
 /* Over the map the glass is nearly solid: the map's pins, busy and bright,
-   would otherwise show through the search, the ＋ and the buttons as if on
-   top of them (they're under: the map is its own layer at z-index 0). */
+   would otherwise show through the buttons as if on top of them (they're
+   under: the map is its own layer at z-index 0). */
 body.tab-map {
   --q-glass: rgba(250, 250, 252, 0.9);
   --q-glass-strong: rgba(250, 250, 252, 0.95);
@@ -648,11 +648,9 @@ body.tab-map {
   --q-glass-strong: rgba(40, 40, 43, 0.94);
 }
 
-/* The bar over the map: the kit's buttons and a glass search, the map
-   showing under it (the phone's status strip stays the kit's solid one). */
-.ot-search {
-  display: none;
-}
+/* The bar over the map: only the kit's account buttons now (the search lives
+   in the sheet), the map showing under it and a touch passing through
+   everything but the buttons themselves. */
 .tab-map .q-appbar {
   position: fixed;
   top: 0;
@@ -661,60 +659,16 @@ body.tab-map {
   z-index: 40;
   background: none;
   box-shadow: none;
+  pointer-events: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+.tab-map .q-appbar .q-actions,
+.tab-map .q-appbar #tabs {
+  pointer-events: auto;
+}
 .tab-map .q-brand {
   display: none;
-}
-.tab-map .ot-search {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  height: 48px;
-  margin: 2px 0;
-  padding: 0 8px 0 14px;
-  border-radius: 24px;
-  background: var(--q-glass-strong);
-  color: var(--q-accent);
-  -webkit-backdrop-filter: var(--q-glass-blur);
-  backdrop-filter: var(--q-glass-blur);
-  box-shadow: var(--q-glass-rim), var(--q-glass-drop);
-}
-.tab-map .ot-search .ot-i {
-  width: 22px;
-  height: 22px;
-  stroke-width: 2.2;
-}
-.ot-search input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  background: none;
-  color: var(--q-label);
-  font: 500 17px/22px var(--q-font);
-  text-overflow: ellipsis;
-}
-.ot-search input::placeholder {
-  color: var(--q-label-2);
-  text-overflow: ellipsis;
-}
-.ot-search input::-webkit-search-cancel-button {
-  display: none;
-}
-.ot-x {
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--q-fill-3);
-  color: var(--q-label-2);
-  font-size: 18px;
-  line-height: 1;
 }
 /* What the app says, on the map: a glass toast over the foot of the map. */
 .tab-map #status:empty {
@@ -738,36 +692,30 @@ body.tab-map {
   box-shadow: var(--q-glass-rim), var(--q-glass-drop);
 }
 
-/* Your places, a row of glass chips under the search (＋ pins one more). */
+/* A YouBike rental timed: its chip at the map's top left, level with the account buttons (amber the last 5 free minutes, red past them). */
 .ot-map-chips {
   position: absolute;
-  top: calc(var(--q-top, 0px) + 66px);
-  left: 0;
-  right: 0;
+  top: calc(var(--q-top, 0px) + 4px);
+  left: var(--q-margin);
+  right: 124px;
   z-index: 30;
-  padding: 0 16px 8px;
-  scroll-padding-inline: 16px;
+  display: flex;
+  pointer-events: none;
+}
+.ot-map-chips:empty {
+  display: none;
 }
 .ot-map-chips .q-chip {
-  min-height: 36px;
+  min-height: 44px;
+  padding: 0 14px;
+  gap: 6px;
   background: var(--q-glass-strong);
   font-weight: 600;
+  pointer-events: auto;
   -webkit-backdrop-filter: var(--q-glass-blur);
   backdrop-filter: var(--q-glass-blur);
-  box-shadow: var(--q-glass-rim), 0 6px 18px -10px rgb(0 0 0 / 0.5);
+  box-shadow: var(--q-glass-rim), var(--q-glass-drop);
 }
-.ot-map-chips .ot-chip-add {
-  width: 36px;
-  padding: 0;
-  justify-content: center;
-  color: var(--q-accent);
-}
-.ot-map-chips .ot-chip-add .ot-i {
-  width: 18px;
-  height: 18px;
-  stroke-width: 2.4;
-}
-/* A YouBike rental timed: its chip first (amber the last 5 free minutes, red past them). */
 .ot-rent-chip b {
   font-variant-numeric: tabular-nums;
 }
@@ -776,23 +724,25 @@ body.tab-map {
   font-size: 12px;
 }
 .ot-map-chips .ot-rent-chip {
-  box-shadow: inset 0 0 0 1.5px var(--q-accent), 0 6px 18px -10px rgb(0 0 0 / 0.5);
+  box-shadow: inset 0 0 0 1.5px var(--q-accent), var(--q-glass-drop);
 }
 .ot-map-chips .ot-rent-chip.warn {
-  box-shadow: inset 0 0 0 1.5px var(--q-orange), 0 6px 18px -10px rgb(0 0 0 / 0.5);
+  box-shadow: inset 0 0 0 1.5px var(--q-orange), var(--q-glass-drop);
 }
 .ot-map-chips .ot-rent-chip.over {
-  box-shadow: inset 0 0 0 1.5px var(--q-red), 0 6px 18px -10px rgb(0 0 0 / 0.5);
+  box-shadow: inset 0 0 0 1.5px var(--q-red), var(--q-glass-drop);
 }
 
-/* The round buttons at the map's right: layers, where I am. */
+/* The round buttons: layers, where I am. At the map's top right under the
+   account buttons, as Maps keeps them; the large sheet covers them. */
 .ot-fabs {
   position: absolute;
+  top: calc(var(--q-top, 0px) + 62px);
   right: 14px;
-  bottom: 22px;
   z-index: 30;
   display: grid;
   gap: 10px;
+  transition: opacity 0.2s;
 }
 .ot-fab {
   display: grid;
@@ -810,136 +760,18 @@ body.tab-map {
 .ot-fab:active {
   transform: scale(0.94);
 }
-.ot-map-panel:has(.ot-nearbikes:not([hidden])) .ot-fabs {
-  bottom: 132px;
-}
-
-/* The YouBike stations nearest you: small glass cards along the map's foot. */
-.ot-nearbikes {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 12px;
-  z-index: 29;
-  display: flex;
-  gap: 10px;
-  padding: 4px 16px 6px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 16px;
-  scrollbar-width: none;
-  /* The edge fades out, so the card peeking there reads as more to scroll, not a cut. */
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-}
-.ot-nearbikes::-webkit-scrollbar {
-  display: none;
-}
-/* (A flex scroller loses its end padding on some phones: a spacer keeps it.) */
-.ot-nearbikes::after {
-  content: '';
-  flex: none;
-  width: 6px;
-}
-.ot-nb {
-  flex: none;
-  display: grid;
-  gap: 4px;
-  align-content: start;
-  width: max(136px, calc((100% - 20px) / 2.3));
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 20px;
-  background: var(--q-glass-strong);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  scroll-snap-align: start;
-  -webkit-backdrop-filter: var(--q-glass-blur);
-  backdrop-filter: var(--q-glass-blur);
-  box-shadow: var(--q-glass-rim), 0 12px 28px -14px rgb(0 0 0 / 0.6);
-}
-.ot-nb > small {
-  color: var(--q-label-2);
-  font: 600 13px/17px var(--q-font);
-  overflow-wrap: anywhere;
-}
-.ot-nb-n {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-.ot-nb-n b {
-  color: var(--ot-ink-amber);
-  font: 700 28px/30px var(--q-font-rounded);
-  font-variant-numeric: tabular-nums;
-}
-.ot-nb-n em {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  color: var(--ot-ink-amber);
-  font: 700 14px/1 var(--q-font-rounded);
-  font-style: normal;
-}
-.ot-nb-n em .ot-i {
-  width: 13px;
-  height: 13px;
-  fill: currentColor;
-  stroke: none;
-}
-.ot-nb-n i {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  color: var(--q-blue);
-  font: 600 13px/1 var(--q-font-rounded);
-  font-style: normal;
-}
-.ot-nb-n i .ot-i {
-  width: 14px;
-  height: 14px;
-}
-.ot-nb.few .ot-nb-n b {
-  color: var(--q-orange);
-}
-.ot-nb.none .ot-nb-n b,
-.ot-nb.off .ot-nb-n b {
-  color: var(--q-red);
-}
-.ot-nb-walk {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--q-label-2);
-  font: 500 13px/16px var(--q-font);
-}
-.ot-nb-walk .ot-i {
-  width: 13px;
-  height: 13px;
-}
-
 /* What's on the map hides while a trip, navigation or a pick has it. */
-.ot-nearbikes[hidden],
-.ot-map-panel:has(.ot-card:not([hidden])) .ot-nearbikes,
-.ot-map-panel:has(.ot-card:not([hidden])) .ot-fabs,
-.ot-planning .ot-nearbikes,
-.ot-navigating .ot-nearbikes,
-.ot-picking .ot-nearbikes,
-.ot-planning .ot-map-chips,
+.ot-map-panel[data-sheet='large'] .ot-fabs,
 .ot-navigating:not(.ot-nav-min) .ot-map-chips,
-.ot-picking .ot-map-chips,
 .ot-navigating:not(.ot-nav-min) .ot-fabs,
-.ot-picking .ot-fabs,
-.ot-map-panel:has(.ot-results:not([hidden])) .ot-map-chips {
-  display: none;
+.ot-picking .ot-map-chips,
+.ot-picking .ot-fabs {
+  opacity: 0;
+  pointer-events: none;
 }
-.tab-map.ot-navigating:not(.ot-nav-min) .ot-search,
 .tab-map.ot-navigating:not(.ot-nav-min) .q-actions,
-.tab-map.ot-navigating:not(.ot-nav-min) .ot-results,
-.tab-map.ot-picking .ot-search {
+.tab-map.ot-navigating:not(.ot-nav-min) .ot-msheet,
+.tab-map.ot-picking .ot-msheet {
   display: none;
 }
 /* Navigating: the bar over the map goes, all but the tab bar it holds. */
@@ -953,36 +785,199 @@ body.tab-map {
   display: none;
 }
 
-/* Search: a glass card under the search, your places then 最近. */
-.ot-results {
+/* ---- The sheet over the map (Maps' model): one, persistent, three stops ---- */
+.ot-msheet {
+  --q-surface: var(--q-sheet-cell, var(--q-grouped-2));
   position: absolute;
-  top: calc(var(--q-top, 0px) + 64px);
-  left: 12px;
-  right: 12px;
-  z-index: 41;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 36;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   max-width: var(--ot-max);
-  max-height: min(60vh, 460px);
+  height: 172px;
   margin: 0 auto;
-  padding: 6px;
-  overflow-y: auto;
+  overflow: hidden;
+  border-radius: 28px 28px 0 0;
+  background: var(--q-sheet);
+  box-shadow: var(--q-glass-rim), 0 -14px 44px -18px rgb(0 0 0 / 0.5);
+  transition: height var(--q-dur-snappy, 0.34s) var(--q-spring-smooth, ease-out);
+}
+.ot-msheet.dragging {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ot-msheet {
+    transition: none;
+  }
+}
+.ot-ms-head {
+  flex: none;
+  padding: 0 var(--q-margin) 10px;
+  touch-action: none;
+}
+/* The grabber: a 5px pill in a 44px-high target. */
+.ot-ms-grab {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.ot-ms-grab::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0 -12px;
+}
+.ot-ms-grab i {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 38px;
+  height: 5px;
+  margin-left: -19px;
+  border-radius: 3px;
+  background: var(--q-fill-1);
+}
+.ot-ms-grab:focus-visible i {
+  background: var(--q-accent);
+}
+.ot-ms-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ot-ms-act {
+  flex: none;
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--q-accent);
+  font: 500 17px/22px var(--q-font);
+}
+.ot-ms-act[hidden] {
+  display: none;
+}
+/* Search Maps: a grey capsule in the sheet. */
+.ot-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 44px;
+  padding: 0 8px 0 12px;
   border-radius: 22px;
-  background: var(--q-glass-strong);
-  -webkit-backdrop-filter: var(--q-glass-blur);
-  backdrop-filter: var(--q-glass-blur);
-  box-shadow: var(--q-glass-rim), var(--ot-shadow);
+  background: var(--q-fill-3);
+  color: var(--q-label-2);
+}
+.ot-search .ot-i {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
+}
+.ot-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--q-label);
+  font: 400 17px/22px var(--q-font);
+  text-overflow: ellipsis;
+}
+.ot-search input::placeholder {
+  color: var(--q-label-2);
+  text-overflow: ellipsis;
+}
+.ot-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.ot-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--q-fill-1);
+  color: var(--q-sheet);
+  font-size: 17px;
+  line-height: 1;
+}
+.ot-x[hidden] {
+  display: none;
+}
+.ot-ms-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--q-margin) calc(24px + var(--ot-kb, 0px));
+  -webkit-overflow-scrolling: touch;
+}
+.ot-msheet[data-detent='peek'] .ot-ms-body {
+  overflow: hidden;
+}
+/* One thing in it at a time: the shelves, the search's results, a card. */
+.ot-msheet[data-mode='results'] .ot-home,
+.ot-msheet[data-mode='card'] .ot-home,
+.ot-msheet[data-mode='card'] .ot-results {
+  display: none;
+}
+.ot-msheet[data-mode='card'] .ot-ms-row {
+  display: none;
+}
+.ot-msheet[data-mode='card'] .ot-ms-head {
+  padding-bottom: 0;
+}
+
+/* Search: the results are rows of one card in the sheet. */
+.ot-msheet .ot-results {
+  margin: 4px 0 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--q-surface);
+}
+.ot-results[hidden] {
+  display: none;
+}
+.ot-msheet .ot-results > .ot-note {
+  margin: 14px 16px;
 }
 .ot-res {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 8px;
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 8px 14px 8px 12px;
   border: 0;
-  border-radius: 14px;
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
+}
+.ot-res + .ot-res::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 64px;
+  border-top: var(--q-hairline, 0.5px) solid var(--q-sep);
 }
 .ot-res:active {
   background: var(--q-fill-4);
@@ -991,16 +986,16 @@ body.tab-map {
   display: grid;
   place-items: center;
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   background: var(--q-fill-3);
   color: var(--q-label-2);
-  font-size: 18px;
+  font-size: 19px;
 }
 .ot-res-i .ot-i {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
 }
 .ot-res-t {
   display: grid;
@@ -1019,6 +1014,257 @@ body.tab-map {
   color: var(--q-label-2);
   font-size: 12.5px;
 }
+
+/* ---- The shelves (home.mjs): 常用, 建議, 最近, 附近 ---- */
+.ot-home {
+  display: grid;
+  gap: 28px;
+  padding-top: 4px;
+}
+.ot-shelf {
+  min-width: 0;
+}
+.ot-shelf > .q-section-head {
+  margin-bottom: 0;
+}
+.ot-shelf > * + .q-rowcard,
+.ot-shelf > * + .q-rail,
+.ot-shelf > * + .ot-hero {
+  margin-top: 0;
+}
+.ot-shelf > .q-rowcard + .q-rail,
+.ot-sugs > .ot-hero + .q-rowcard {
+  margin-top: 12px;
+}
+
+/* 常用: round tiles in a row to scroll, each its colour, its name and how far. */
+.ot-favs {
+  --q-rail-w: 76px;
+  gap: 6px;
+  padding-top: 4px;
+}
+.ot-fav {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--q-label);
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.ot-fav .q-tile {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+}
+.ot-fav .q-tile svg {
+  width: 28px;
+  height: 28px;
+}
+.ot-fav:active .q-tile,
+.ot-fav:active .ot-fav-plus {
+  transform: scale(0.94);
+}
+.ot-fav b {
+  max-width: 100%;
+  font: 600 13px/17px var(--q-font);
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.ot-fav small {
+  color: var(--q-label-2);
+  font: 500 11.5px/14px var(--q-font);
+  white-space: nowrap;
+}
+.ot-fav.ghost .q-tile {
+  background: var(--q-fill-3);
+  color: var(--q-label-3);
+  box-shadow: none;
+}
+.ot-fav.ghost b {
+  color: var(--q-label-2);
+}
+.ot-fav-plus {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--q-accent) 14%, transparent);
+  color: var(--q-accent);
+}
+.ot-fav-plus .ot-i {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.2;
+}
+.ot-fav.add b {
+  color: var(--q-accent);
+}
+
+/* 建議: the best one a big card, the rest rows with their numbers. */
+.ot-sugs > .q-section-head {
+  margin-bottom: 0;
+}
+.ot-sg {
+  width: 100%;
+  min-height: 64px;
+}
+.ot-sg .q-ritem-title {
+  font-weight: 600;
+}
+.ot-eta-n.sm {
+  font-size: 17px;
+  line-height: 22px;
+}
+.q-hero-card .q-hc-big small {
+  margin-left: 4px;
+  font-size: 0.4em;
+  font-weight: 600;
+}
+
+/* 最近: rows, each with its ✕. */
+.ot-rec {
+  padding: 0;
+}
+.ot-rec-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 0 8px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.ot-rec-main:active {
+  background: var(--q-fill-4);
+}
+.ot-rec-i {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--q-fill-3);
+  color: var(--q-label-2);
+}
+.ot-rec-i .ot-i {
+  width: 18px;
+  height: 18px;
+}
+.ot-rec .q-ritem-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ot-rec .ot-rec-x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin-right: 2px;
+  background: none;
+  box-shadow: none;
+  color: var(--q-label-3);
+}
+.ot-rec .ot-rec-x .ot-i {
+  width: 16px;
+  height: 16px;
+}
+.ot-rec.q-ritem + .q-ritem::before,
+.ot-rec + .ot-rec::before {
+  left: 60px;
+}
+
+/* 附近: the next buses, then YouBike's stations as cards with the bikes big. */
+.ot-bikes {
+  --q-rail-w: 168px;
+  gap: 10px;
+}
+.ot-bk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 14px 12px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--q-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.ot-bk:active {
+  transform: scale(0.98);
+}
+.ot-bk-name {
+  color: var(--q-label-2);
+  font: 600 13px/17px var(--q-font);
+  overflow-wrap: anywhere;
+}
+.ot-bk-n {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: auto;
+}
+.ot-bk-n b {
+  color: var(--ot-ink-amber);
+  font: 700 34px/36px var(--q-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.ot-bk-n em {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--ot-ink-amber);
+  font: 700 15px/1 var(--q-font-rounded);
+  font-style: normal;
+}
+.ot-bk-n em .ot-i {
+  width: 14px;
+  height: 14px;
+}
+.ot-bk.few .ot-bk-n b {
+  color: var(--q-orange);
+}
+.ot-bk.none .ot-bk-n b,
+.ot-bk.off .ot-bk-n b {
+  color: var(--q-red);
+}
+.ot-bk-f {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--q-label-2);
+  font: 600 13px/16px var(--q-font-rounded);
+}
+.ot-bk-f i {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-style: normal;
+}
+.ot-bk-f i:first-child {
+  color: var(--q-blue);
+}
+.ot-bk-f .ot-i {
+  width: 14px;
+  height: 14px;
+}
+
+/* A small heading in a sheet (the rental sheet's docks). */
 .ot-res-h {
   display: flex;
   align-items: center;
@@ -1026,60 +1272,6 @@ body.tab-map {
   margin: 8px 8px 2px;
   color: var(--q-label-2);
   font: 600 13px/18px var(--q-font);
-}
-.ot-res-clear {
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--q-accent);
-  font: inherit;
-}
-.ot-res-places {
-  display: flex;
-  gap: 8px;
-  padding: 4px 4px 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ot-res-place {
-  flex: none;
-  display: grid;
-  justify-items: center;
-  gap: 4px;
-  min-width: 68px;
-  padding: 10px 8px 8px;
-  border: 0;
-  border-radius: 16px;
-  background: var(--q-fill-4);
-  color: inherit;
-  font: 500 12.5px/16px var(--q-font);
-}
-.ot-res-place i {
-  font-size: 22px;
-  font-style: normal;
-  line-height: 1;
-}
-.ot-res-place span {
-  max-width: 80px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.ot-res-w {
-  display: flex;
-  align-items: center;
-}
-.ot-res-w .ot-res {
-  flex: 1;
-  min-width: 0;
-}
-.ot-res-del {
-  flex: none;
-  color: var(--q-label-3);
-}
-.ot-res-del .ot-i {
-  width: 16px;
-  height: 16px;
 }
 
 /* ---- Markers ---- */
@@ -1262,6 +1454,13 @@ body.tab-map {
 .ot-mk.is-sel {
   scale: 1.3;
   filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 4px 8px rgb(0 0 0 / 0.5));
+}
+/* (Leaflet places a marker by its own transform, which a scale on it would multiply: the size goes on what is inside.) */
+.leaflet-marker-icon.ot-mk.is-sel {
+  scale: none;
+}
+.leaflet-marker-icon.ot-mk.is-sel > * {
+  scale: 1.3;
 }
 /* A spot's pin, as in Maps: a round red head on a thin stem, its tip on the spot. */
 .ot-mk.sel,
@@ -1463,48 +1662,16 @@ body.tab-map {
 
 /* ==== 4. 地圖's card: what you tapped, a trip's plans ============================================ */
 
-/* The card rises from the foot of the map: the sheets' look (grouped page,
-   white cards on it), lit at its rim. */
+/* The card is the sheet's content: what you tapped (a stop, a station, a
+   place) or a trip's plans, in the place of the shelves, with its ✕ to go back to them. */
 .ot-card {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 35;
-  box-sizing: border-box;
-  max-width: var(--ot-max);
-  max-height: 50%;
-  margin: 0 auto;
-  padding: 4px var(--q-margin) 16px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: 28px 28px 0 0;
-  background: var(--q-sheet);
-  box-shadow: var(--q-glass-rim), 0 -18px 50px -20px rgb(0 0 0 / 0.5);
-  animation: ot-rise 0.24s var(--q-spring-smooth, ease-out);
+  padding: 2px 0 8px;
 }
-.ot-card.tall {
-  max-height: 76%;
+.ot-card[hidden] {
+  display: none;
 }
-.ot-card.plans {
-  max-height: 46%;
-}
-.ot-card.plans.tall {
-  max-height: 84%;
-}
-@keyframes ot-rise {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-}
-.ot-card-grip {
-  width: 40px;
-  height: 5px;
-  margin: 6px auto 10px;
-  border-radius: 3px;
-  background: var(--q-fill-2);
-  cursor: pointer;
+.ot-card-head {
+  min-height: 52px;
 }
 .ot-card-head {
   display: flex;
@@ -2921,11 +3088,9 @@ body.ot-navigating.ot-nav-min .ot-nav-mini {
   color: var(--q-label-2);
   font: 600 11px/13px var(--q-font);
 }
-body.tab-map.ot-navigating.ot-nav-min .ot-card {
+/* The sheet stands above that bar. */
+body.tab-map.ot-navigating.ot-nav-min .ot-msheet {
   bottom: 74px;
-}
-body.tab-map.ot-navigating.ot-nav-min .ot-fabs {
-  bottom: 88px;
 }
 body.ot-navigating:not(.tab-map) .ot-scroll::after {
   content: '';
