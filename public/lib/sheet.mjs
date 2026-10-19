@@ -75,13 +75,13 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
       }
       const m = g.head ? 'sheet' : bodyGesture({ detent: cur, scrollTop: body.scrollTop, dy });
       if (m === 'scroll') return void (g.mode = 'scroll');
-      // (Scrolled up to the top and still pulling: the sheet takes the finger from here.)
+      // (Scrolled up to the top and still pulling: the sheet takes the finger from here. Otherwise it
+      // follows from where the finger went down, so the first move, however far, is not lost.)
+      if (g.mode === 'scroll') {
+        g.y0 = y;
+        g.h0 = shown;
+      }
       g.mode = 'sheet';
-      g.y0 = y;
-      g.h0 = shown;
-      dragging = true;
-      if (ev.cancelable) ev.preventDefault();
-      return;
     }
     if (ev.cancelable) ev.preventDefault();
     dragging = true;
