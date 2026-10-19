@@ -100,8 +100,9 @@ export const ctx = {
       return null;
     }
   },
+  // What the app says (pinned, can't locate, replanning…): the kit's toast, a moment over the tab bar.
   status(text) {
-    $('status').textContent = text || '';
+    if (text) kitUI.toast(text, { batch: 'status', ms: 3200 });
   },
   goTab: id => select(id),
   // The metro maps (查時刻's third view), from a station's card or an old address.
