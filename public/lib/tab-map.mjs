@@ -752,7 +752,8 @@ async function cardClick(ev) {
   const planBtn = ev.target.closest('[data-plan]');
   if (planBtn) return selectPlan(Number(planBtn.dataset.plan));
   // A way of moving on or off for this search (never all of them), and plan again.
-  const mode = ev.target.closest('[data-mode]');
+  // (The mode toggles themselves: the sheet's own data-mode once matched here, so every tap on a trip's card planned it again and did nothing else.)
+  const mode = ev.target.closest('.ot-mtog[data-mode]');
   if (mode && card?.kind === 'plans') {
     const next = { ...modesNow(), [mode.dataset.mode]: modesNow()[mode.dataset.mode] === false };
     if (!Object.values(next).some(Boolean)) return;
@@ -943,9 +944,9 @@ function buildSheet() {
   const sync = () => {
     const sh = $('msheet');
     const mode = !$('card').hidden ? 'card' : !$('results').hidden ? 'results' : 'home';
-    const was = sh.dataset.mode;
+    const was = sh.dataset.shows;
     if (mode === was) return;
-    sh.dataset.mode = mode;
+    sh.dataset.shows = mode;
     $('ms-body').scrollTop = 0;
     // A card from the lowest stop lifts it to half, and puts it back when the card goes.
     if (mode === 'card') {
