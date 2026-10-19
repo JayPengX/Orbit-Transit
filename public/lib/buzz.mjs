@@ -9,6 +9,8 @@ let ctx = null;
 export function primeBuzz() {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) return;
   try {
+    // (Ambient: the chime mixes with music another app plays, Orbit Beats, never stopping it.)
+    if (!ctx && navigator.audioSession) navigator.audioSession.type = 'ambient';
     ctx ||= new (globalThis.AudioContext || globalThis.webkitAudioContext)();
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
   } catch {}
