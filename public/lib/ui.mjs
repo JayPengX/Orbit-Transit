@@ -3,33 +3,40 @@
 import { e, minsText, hm, rides } from './util.mjs';
 
 import { W, en } from './lang.mjs';
+import * as kitUI from '#kit/ui.mjs';
 
 // A railway station's name as shown: 高鐵 before an HSR station's.
 export const stationLabel = s => (!s ? '' : s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
-// A modal sheet (the kit's look): closed by its × or a tap on the page
-// behind, sliding down as every app's sheets do (the kit's closeSheet);
-// `d.shut()` closes it the same way.
+// A modal sheet (the kit's look): closed by its ✕, a tap on the page
+// behind or Escape, sliding down as every app's sheets do; `d.shut()`
+// closes it the same way and `d.onclosed` runs once after. The kit's
+// bindSheet does the closing where the kit has it (an older kit: as before).
 export function sheet(html, cls = '') {
   const d = document.createElement('dialog');
   d.className = `q-sheet ot-sheet ${cls}`;
   d.innerHTML = html;
-  d.shut = () => (globalThis.quadraCloseSheet || (x => x.close()))(d);
-  d.addEventListener('click', ev => {
-    if (ev.target.closest('[data-act="close"]')) return d.shut();
-    if (ev.target !== d) return;
-    const r = d.getBoundingClientRect();
-    if (ev.clientY < r.top || ev.clientY > r.bottom || ev.clientX < r.left || ev.clientX > r.right) d.shut();
-  });
-  d.addEventListener('close', () => {
-    d.onclosed?.();
-    d.remove();
-  });
+  const own = () => {
+    d.addEventListener('click', ev => {
+      if (ev.target.closest('[data-act="close"]')) return d.shut();
+      if (ev.target !== d) return;
+      const r = d.getBoundingClientRect();
+      if (ev.clientY < r.top || ev.clientY > r.bottom || ev.clientX < r.left || ev.clientX > r.right) d.shut();
+    });
+    d.addEventListener('close', () => {
+      d.onclosed?.();
+      d.remove();
+    });
+    return () => (globalThis.quadraCloseSheet || (x => x.close()))(d);
+  };
+  d.shut = kitUI.bindSheet?.(d, { onClose: () => d.onclosed?.() }) || own();
+  // (A head of the app's own with its × as data-act="close": the kit only knows data-q-close.)
+  if (kitUI.bindSheet) d.addEventListener('click', ev => ev.target.closest?.('[data-act="close"]:not([data-q-close])') && d.shut());
   document.body.append(d);
   d.showModal();
   return d;
 }
 // A sheet's head: its title (html), a small line under it, a colour tile before it (`lead`, html).
-export const sheetHead = (title, sub = '', lead = '') => `<div class="q-sheet-head${lead ? ' ot-sheet-tile' : ''}">${lead}<div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
+export const sheetHead = (title, sub = '', lead = '') => `<div class="q-sheet-head${lead ? ' ot-sheet-tile' : ''}">${lead}<div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" data-q-close aria-label="${W('關閉', 'Close')}">✕</button></div>`;
 
 // 24×24 stroked icons, one per way of moving.
 const I = {
