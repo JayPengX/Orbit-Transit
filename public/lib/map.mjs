@@ -242,10 +242,12 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
       const sw = b.getSouthWest();
       return { n: ne.lat(), e: ne.lng(), s: sw.lat(), w: sw.lng() };
     },
-    setView(lat, lon, z) {
+    // `dy`: the point `dy` px above the middle (the middle of what a sheet over the map leaves in view).
+    setView(lat, lon, z, dy = 0) {
       byApp = Date.now();
       map.panTo({ lat, lng: lon });
       if (z) map.setZoom(z);
+      if (Math.round(dy)) map.panBy(0, Math.round(dy));
     },
     // A point `dy` px above the map's middle (the middle of what the
     // search bar and a card over the map leave in view).
@@ -349,9 +351,10 @@ function leafletMap(el, { center, zoom, onPick, onTap, onIdle, onDrag }) {
       const b = map.getBounds();
       return { n: b.getNorth(), e: b.getEast(), s: b.getSouth(), w: b.getWest() };
     },
-    setView(lat, lon, z) {
+    setView(lat, lon, z, dy = 0) {
       byApp = Date.now();
-      map.setView([lat, lon], z || map.getZoom());
+      const zoom = z || map.getZoom();
+      map.setView(dy ? map.unproject(map.project([lat, lon], zoom).add([0, Math.round(dy)]), zoom) : [lat, lon], zoom);
     },
     focus(lat, lon, dy = 0) {
       byApp = Date.now();
