@@ -5,13 +5,14 @@
 // where to change and how long you wait, the fare, and today's delays.
 
 import { railStations, railNetwork, railSpan, traDelays, legFare } from './raildata.mjs';
-import { journeys, tags, SYSTEMS } from './rail.mjs';
+import { journeys, tags } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { CITIES, cityShort } from './city.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind, stationLabel } from './ui.mjs';
+import { COLOR, tile, tag, section, rowCard } from './look.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
 import { W } from './lang.mjs';
@@ -64,54 +65,53 @@ async function nearestStart() {
   } catch {}
 }
 
-const sysTag = s => (s ? `<span class="ot-sys ${s.sys}">${SYSTEMS[s.sys]}</span>` : '');
-
+// The search is the page's card: the two stations, turned round with ⇄,
+// the day and time, and 查詢.
+const stPick = (which, st) => `<button class="ot-tq-st" type="button" data-pick="${which}"><small>${which === 'from' ? W('出發', 'From') : W('抵達', 'To')}</small>${st ? `<b>${e(stationLabel(st))}</b>` : `<b class="muted">${W('選車站', 'Pick')}</b>`}</button>`;
 function render() {
   const today = tw().date;
   const date = state.date || today;
-  const recent = ctx.data.trains.filter(x => trainKey(x) !== (state.from && state.to ? trainKey({ from: state.from, to: state.to }) : '')).slice(0, 5);
+  const recent = ctx.data.trains.filter(x => trainKey(x) !== (state.from && state.to ? trainKey({ from: state.from, to: state.to }) : '')).slice(0, 4);
   $('panel-train').innerHTML = `
-    <div class="ot-wrap">
-      <section class="q-hero-card ot-od-card">
-        <span class="q-hc-eyebrow">${icon('tra')}<span>${W('台鐵・高鐵', 'TRA・HSR')}</span></span>
-        <div class="ot-od-pair"><button class="ot-st-pick" type="button" data-pick="from"><small>${W('出發', 'From')}</small>${state.from ? `<b>${e(stationLabel(state.from))}</b>${sysTag(state.from)}` : `<b class="muted">${W('選擇車站', 'Pick a station')}</b>`}</button>
-        <button class="ot-swap" type="button" data-act="swap" aria-label="${W('對調', 'Swap')}">${icon('swap')}</button>
-        <button class="ot-st-pick" type="button" data-pick="to"><small>${W('抵達', 'To')}</small>${state.to ? `<b>${e(stationLabel(state.to))}</b>${sysTag(state.to)}` : `<b class="muted">${W('選擇車站', 'Pick a station')}</b>`}</button></div>
-        <div class="q-hc-row"><button class="q-hc-btn ot-go-btn" type="button" data-act="go" ${state.from && state.to ? '' : 'disabled'}>${icon('search')} ${W('查詢', 'Search')}</button></div>
-      </section>
-      <div class="q-chips ot-mode">
-        ${[['all', W('智慧轉乘（台鐵＋高鐵）', 'TRA + HSR')], ['tra', W('只搭台鐵', 'TRA only')], ['hsr', W('只搭高鐵', 'HSR only')]].map(([k, n]) => `<button class="q-chip" type="button" data-mode="${k}" aria-pressed="${state.mode === k}">${n}</button>`).join('')}
-      </div>
-      <div class="ot-when-row">
-        <label class="ot-field inline"><span>${W('日期', 'Date')}</span><input id="t-date" type="date" value="${date}" min="${today}" max="${addDays(today, 30)}"></label>
-        <label class="ot-field inline"><span>${W('出發時間', 'Leave at')}</span><input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}"></label>
-      </div>
-      ${recent.length ? `<section class="q-section ot-sec"><div class="q-section-head"><h2>${W('最近查詢', 'Recent')}</h2></div><div class="q-rowcard">${recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}"><span class="q-tile sm" style="--t:${x.from.sys === 'hsr' ? '#f97316' : '#0ea5e9'}">${icon(x.from.sys === 'hsr' ? 'hsr' : 'tra')}</span><span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join('')}</div></section>` : ''}
-      <div id="t-results">${resultsHtml()}</div>
-    </div>`;
+    <section class="q-hero-card ot-tq" style="--q-hc-b:#0ea5e9;--q-hc-a:color-mix(in srgb, #0ea5e9 55%, #0b1020)">
+      <span class="q-hc-eyebrow">${icon('tra')}<span>${W('台鐵・高鐵', 'TRA・HSR')}</span></span>
+      <div class="ot-tq-pair">${stPick('from', state.from)}<button class="ot-tq-swap" type="button" data-act="swap" aria-label="${W('對調', 'Swap')}">${icon('swap')}</button>${stPick('to', state.to)}</div>
+      <div class="ot-tq-when"><label class="ot-tq-pill">${icon('clock')}<input id="t-date" type="date" value="${date}" min="${today}" max="${addDays(today, 30)}" aria-label="${W('日期', 'Date')}"></label><label class="ot-tq-pill"><input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}" aria-label="${W('出發時間', 'Leave at')}"></label></div>
+      <button class="q-hc-btn ot-tq-go" type="button" data-act="go" ${state.from && state.to ? '' : 'disabled'}>${icon('search')} ${W('查詢', 'Search')}</button>
+    </section>
+    <div class="q-chips ot-chip-rail" role="group" aria-label="${W('搭什麼', 'Trains')}">
+      ${[['all', W('台鐵＋高鐵', 'TRA + HSR')], ['tra', W('台鐵', 'TRA')], ['hsr', W('高鐵', 'HSR')]].map(([k, n]) => `<button class="q-chip" type="button" data-mode="${k}" aria-pressed="${state.mode === k}">${n}</button>`).join('')}
+    </div>
+    <div id="t-results">${resultsHtml()}</div>
+    ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
 }
 
 function resultsHtml() {
   if (state.error) return `<p class="ot-note bad">${e(state.error)}</p>`;
-  if (state.results === 'loading') return `<p class="ot-note">${W('載入今天的台鐵與高鐵時刻，找最好的轉乘…', 'Loading today’s TRA and HSR times…')}</p>`;
-  if (!state.results) return `<div class="q-rowcard ot-feat"><div class="q-ritem"><span class="q-tile" style="--t:#0ea5e9">${icon('tra')}</span><span class="q-ritem-text"><span class="q-ritem-title">${W('支線換幹線', 'Branch to trunk')}</span><small>${W('換車要走多久都算好了', 'Changes and walks timed')}</small></span></div><div class="q-ritem"><span class="q-tile" style="--t:#f97316">${icon('hsr')}</span><span class="q-ritem-text"><span class="q-ritem-title">${W('台鐵換高鐵', 'TRA to HSR')}</span><small>${W('自動找出最快的走法', 'The fastest way, found for you')}</small></span></div></div>`;
-  if (!state.results.length) return `<p class="ot-note">${W('這個時間之後找不到班次，換個時間或日期試試。', 'No trains after this time. Try another time or date.')}</p>`;
+  if (state.results === 'loading') return `<p class="ot-note">${W('找班次…', 'Finding trains…')}</p>`;
+  if (!state.results) return '';
+  const pin = `<button type="button" data-act="pin-conn" aria-pressed="${pinnedConn()}">${pinnedConn() ? W('已釘選', 'Pinned') : W('釘選', 'Pin')}</button>`;
+  if (!state.results.length) return section(W('班次', 'Trains'), `<p class="ot-note">${W('這個時間之後沒有班次', 'No trains after this time')}</p>`, pin);
   const labels = tags(state.results);
-  const passNote = state.passOnly ? `<p class="ot-note">${W(`在你的 TPASS（${e(pass().name)}）範圍內：只列月票能搭的車（不含高鐵、太魯閣、普悠瑪、EMU3000）。`, `Inside your TPASS (${e(pass().name)}): only trains the pass covers (no HSR, Taroko, Puyuma or EMU3000).`)}</p>` : '';
-  const pinBar = `<div class="ot-pin-bar"><button class="q-btn${pinnedConn() ? ' on' : ''}" type="button" data-act="pin-conn">${icon('star')} ${pinnedConn() ? W('已釘選（再按一次取消）', 'Pinned (tap to unpin)') : `${W('釘選', 'Pin')} ${e(stationLabel(state.from))} → ${e(stationLabel(state.to))}`}</button></div>`;
-  return pinBar + passNote + state.results
-    .map((j, i) => {
-      const rides = j.legs.filter(l => !l.walk);
-      const delay = rides.reduce((a, l) => a + (l.trip.sys === 'tra' ? state.delays.get(l.trip.no) || 0 : 0), 0);
-      const first = rides[0];
-      return `<button class="ot-jny${i === state.open ? ' on' : ''}" type="button" data-j="${i}">
-        <div class="ot-jny-top"><span class="ot-jny-time"><b>${e(hm(j.dep))}</b> → <b>${e(hm(j.arr))}</b></span><span class="ot-jny-dur">${e(minsText((j.arr - j.dep) / 1000))}</span></div>
-        <div class="ot-jny-legs">${rides.map(l => `<span class="ot-train-chip ${l.trip.sys} ${l.trip.code === '6' || l.trip.code === '10' ? 'local' : ''}">${e(l.trip.type)} ${e(l.trip.no)}</span>`).join('<span class="ot-leg-sep">›</span>')}</div>
-        <div class="ot-jny-sub">${[j.transfers ? W(`轉乘 ${j.transfers} 次`, `${j.transfers} change${j.transfers > 1 ? 's' : ''}`) : tagText('直達'), first && state.delays.get(first.trip.no) ? W(`首班晚 ${state.delays.get(first.trip.no)} 分`, `First ${state.delays.get(first.trip.no)} min late`) : '', fareText(rides), ...(labels.get(j) || []).map(tagText)].filter(Boolean).map(t => `<span>${e(t)}</span>`).join('')}${delay && !state.delays.get(first?.trip.no) ? `<span class="warn">${W(`途中誤點 ${delay} 分`, `${delay} min late`)}</span>` : ''}</div>
+  const passTag = state.passOnly ? `<span class="q-tags ot-pass">${tag(W(`${pass().name} 範圍內`, `Inside ${pass().name}`), 'green')}</span>` : '';
+  return section(
+    W('班次', 'Trains'),
+    passTag +
+      state.results
+        .map((j, i) => {
+          const rides = j.legs.filter(l => !l.walk);
+          const delay = rides.reduce((a, l) => a + (l.trip.sys === 'tra' ? state.delays.get(l.trip.no) || 0 : 0), 0);
+          const t = [j.transfers ? tag(W(`轉乘 ${j.transfers}`, `${j.transfers} change${j.transfers > 1 ? 's' : ''}`)) : tag(tagText('直達'), 'green'), delay ? tag(W(`晚 ${delay} 分`, `${delay} min late`), 'red') : '', fareText(rides) ? tag(fareText(rides)) : '', ...(labels.get(j) || []).slice(0, 1).map(x => tag(tagText(x), 'blue'))].join('');
+          return `<button class="ot-jny${i === state.open ? ' on' : ''}" type="button" data-j="${i}">
+        <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><i></i><b>${e(hm(j.arr))}</b><span class="ot-jny-dur">${e(minsText((j.arr - j.dep) / 1000))}</span></span>
+        <span class="ot-jny-legs">${rides.map(l => `<span class="ot-train-chip ${l.trip.sys}${l.trip.code === '6' || l.trip.code === '10' ? ' local' : ''}">${e(trainKind(l.trip.type))} ${e(l.trip.no)}</span>`).join('<span class="ot-leg-sep">›</span>')}</span>
+        <span class="q-tags">${t}</span>
         ${i === state.open ? detailHtml(j) : ''}
       </button>`;
-    })
-    .join('');
+        })
+        .join(''),
+    pin
+  );
 }
 
 const fareKey = l => `${l.from}>${l.to}:${l.trip.code}`;
@@ -131,29 +131,24 @@ const nameOf = key => {
   const s = net?.st.get(key);
   return s ? stationLabel(s) : key;
 };
+// A journey's steps, as a plan's on the map: the time, the train's colour, what to do.
 function detailHtml(j) {
   const out = [];
   j.legs.forEach((l, k) => {
     if (l.walk) {
-      out.push(`<li class="walk"><span class="ot-step-i">${icon('walk')}</span><span class="ot-step-what">${W('步行到', 'Walk to')} <b>${e(nameOf(l.to))}</b><small>${W(`約 ${l.min} 分（含進出站）`, `~${l.min} min, gates included`)}</small></span></li>`);
+      out.push(`<li style="--c:${COLOR.walk}"><span class="ot-step-time"></span><span class="ot-step-i">${icon('walk')}</span><span class="ot-step-what">${W('步行到', 'Walk to')} <b>${e(nameOf(l.to))}</b><small>${W(`約 ${l.min} 分`, `~${l.min} min`)}</small></span></li>`);
       return;
     }
     const prev = j.legs.slice(0, k).reverse().find(x => !x.walk);
-    if (prev) {
-      const wait = Math.round((l.dep - prev.arr) / 60_000);
-      const same = prev.to === l.from;
-      out.push(`<li class="change"><span class="ot-step-i">${icon('swap')}</span><span class="ot-step-what">${same ? W(`在 <b>${e(nameOf(l.from))}</b> 換車`, `Change at <b>${e(nameOf(l.from))}</b>`) : W('換車', 'Change')}<small>${W(`${wait} 分鐘可以換車`, `${wait} min to change`)}</small></span></li>`);
-    }
+    if (prev && prev.to === l.from) out.push(`<li class="change" style="--c:${COLOR.walk}"><span class="ot-step-time"></span><span class="ot-step-i">${icon('swap')}</span><span class="ot-step-what">${W(`在 <b>${e(nameOf(l.from))}</b> 換車`, `Change at <b>${e(nameOf(l.from))}</b>`)}<small>${W(`${Math.round((l.dep - prev.arr) / 60_000)} 分`, `${Math.round((l.dep - prev.arr) / 60_000)} min`)}</small></span></li>`);
     const t = l.trip;
     const d = t.sys === 'tra' ? state.delays.get(t.no) : 0;
     const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no && p.sys === t.sys);
-    out.push(`<li class="ride ${t.sys}"><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what">
-      <b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}${W(' 次', '')}</b> ${W('往', 'to')} ${e(t.headsign)}${d ? ` <span class="warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : ''}
-      <span class="ot-train-acts"><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')} ${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin this train')}</span></span>
-      <span class="ot-leg-times"><span><b>${e(hm(l.dep))}</b> ${e(nameOf(l.from))}</span><span><b>${e(hm(l.arr))}</b> ${e(nameOf(l.to))}</span></span>
-      <small>${W(`${l.stops} 站`, `${l.stops} stops`)} · ${e(minsText((l.arr - l.dep) / 1000))}${onPass(l) ? ' · TPASS' : state.fares.get(fareKey(l)) ? ` · NT$${state.fares.get(fareKey(l))}` : ''}${t.bike ? W(' · 可攜自行車', ' · bikes OK') : ''}</small></span></li>`);
+    const facts = [W(`${l.stops} 站`, `${l.stops} stops`), minsText((l.arr - l.dep) / 1000), onPass(l) ? 'TPASS' : state.fares.get(fareKey(l)) ? `NT$${state.fares.get(fareKey(l))}` : '', t.bike ? W('可攜車', 'bikes OK') : ''].filter(Boolean).join(' · ');
+    out.push(`<li style="--c:${t.sys === 'hsr' ? COLOR.hsr : COLOR.tra}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(t.headsign)}${d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : ''}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span></span></li>`);
   });
-  return `<ol class="ot-steps rail">${out.join('')}</ol>`;
+  out.push(`<li class="end" style="--c:${COLOR.walk}"><span class="ot-step-time">${e(hm(j.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e(nameOf(j.legs.at(-1).to))}</b></span></li>`);
+  return `<ol class="ot-steps">${out.join('')}</ol>`;
 }
 
 async function search() {
@@ -279,10 +274,10 @@ async function pickStation(which) {
   let city = ctx.city || 'Taipei';
   let list = [];
   const d = sheet(`${sheetHead(which === 'from' ? W('出發車站', 'From station') : W('抵達車站', 'To station'))}
-    <div class="q-chips ot-sys-tabs"><button class="q-chip" type="button" data-sys="tra">${W('台鐵', 'TRA')}</button><button class="q-chip" type="button" data-sys="hsr">${W('高鐵', 'HSR')}</button></div>
+    <div class="q-seg ot-sys" role="group"><button type="button" data-sys="tra">${W('台鐵', 'TRA')}</button><button type="button" data-sys="hsr">${W('高鐵', 'HSR')}</button></div>
     <label class="q-search ot-search-in"><input id="s-q" type="search" placeholder="${W('站名，例如 竹中、新竹', 'Station, e.g. 新竹')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
     <div id="s-near"></div>
-    <div class="q-chips ot-city-chips" id="s-city"></div>
+    <div class="q-chips ot-chip-rail" id="s-city"></div>
     <div id="s-list" class="ot-st-grid"></div>`, 'ot-tall-sheet');
   const choose = s => {
     state[which] = { sys: s.sys, id: s.id, name: s.name };
@@ -302,7 +297,7 @@ async function pickStation(which) {
     d.querySelector('#s-list').innerHTML = shown.map(s => `<button class="ot-st-btn" type="button" data-st="${e(s.key)}">${e(s.name)}${s.cls === '0' || s.cls === '1' ? '<i></i>' : ''}</button>`).join('') || `<p class="ot-note">${W('沒有符合的車站', 'No matching station')}</p>`;
     const h = ctx.here;
     const near = h ? mine.map(s => [meters(h.lat, h.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0]).slice(0, 3) : [];
-    d.querySelector('#s-near').innerHTML = !t && near.length ? `<h3 class="q-sheet-h">${W('離你最近', 'Nearest')}</h3><div class="ot-list">${near.map(([m, s]) => `<button class="ot-row-btn" type="button" data-st="${e(s.key)}">${icon(s.sys)}<span><b>${e(stationLabel(s))}</b><small>${e(distText(m))}</small></span></button>`).join('')}</div><h3 class="q-sheet-h">${W('依縣市', 'By city')}</h3>` : '';
+    d.querySelector('#s-near').innerHTML = !t && near.length ? `<h3 class="q-sheet-h">${W('最近', 'Nearest')}</h3>${rowCard(near.map(([m, s]) => `<button class="q-ritem" type="button" data-st="${e(s.key)}">${tile(s.sys, s.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(s))}</span></span><span class="q-ritem-value">${e(distText(m))}</span></button>`).join(''))}<h3 class="q-sheet-h">${W('依縣市', 'By city')}</h3>` : '';
   };
   d.querySelector('#s-list').innerHTML = `<p class="ot-note">${W('載入車站中…', 'Loading stations…')}</p>`;
   d.querySelector('#s-q').addEventListener('input', draw);

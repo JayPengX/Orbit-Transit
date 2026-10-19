@@ -7,10 +7,10 @@
 //           stations; search, plans from here to anywhere (ranked by what's
 //           practical, the buses' real times in them), navigation
 //   交通    what's coming that you'd take: your trips' next ways to go,
-//           what you pinned, your places
-//   查時刻  a timetable on purpose: 台鐵 / 高鐵 station to station, a bus route
-//   我的    places, trips, pinned transit, preferences (ways of moving,
-//           TPASS), the metro maps
+//           what you pinned, what's near, your places
+//   查時刻  a timetable on purpose: 台鐵 / 高鐵 station to station, a bus
+//           route, the metro maps
+//   我的    TPASS, places, trips, pinned transit, settings
 
 import { quadraSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate, keepOffline, onlineOnly } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition, dropOldPacks } from './lib/api.mjs';
@@ -37,7 +37,7 @@ document.documentElement.lang = en ? 'en' : 'zh-Hant';
 // The page's own words, in English.
 if (en) {
   const set = (sel, attr, v) => document.querySelector(sel)?.setAttribute(attr, v);
-  set('#q', 'placeholder', 'Search places');
+  set('#q', 'placeholder', 'Search Orbit Transit');
   set('#q', 'aria-label', 'Search');
   set('#q-clear', 'aria-label', 'Clear');
   set('#tabs', 'aria-label', 'Tabs');
@@ -46,8 +46,9 @@ if (en) {
   set('#fab-locate', 'aria-label', 'My location');
   set('#times-seg', 'aria-label', 'Times');
   const seg = (v, t) => { const b = document.querySelector(`#times-seg [data-view="${v}"]`); if (b) b.textContent = t; };
-  seg('train', 'Train・HSR');
+  seg('train', 'Train');
   seg('bus', 'Bus');
+  seg('metro', 'Metro');
 }
 const q = quadraSession('transit', { lang });
 useSession(q);
@@ -99,6 +100,11 @@ export const ctx = {
     $('status').textContent = text || '';
   },
   goTab: id => select(id),
+  // The metro maps (查時刻's third view), from a station's card or an old address.
+  openMetro() {
+    ctx.timesView = 'metro';
+    select('times');
+  },
   // Something kept changed (a pin, a trip, a preference): every tab that shows it redraws.
   onRefresh: [],
   refreshTabs: () => ctx.onRefresh.forEach(f => f())
@@ -146,7 +152,7 @@ const TABS = [
   { id: 'me', label: W('我的', 'Me'), icon: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/>', mod: meTab }
 ];
 // Old addresses (#bus, #train, #metro) open their new homes.
-const OLD = { bus: 'go', train: 'times', metro: 'me' };
+const OLD = { bus: 'go', train: 'times', metro: 'times' };
 const started = new Set();
 let bar = null;
 function select(id, { again = false } = {}) {
@@ -214,13 +220,13 @@ async function boot() {
   // The first tab drawn behind the loading screen, which lifts onto it
   // finished: the map's tiles, what's in view, the strip (mapTab.ready), at
   // most 4 s (then as it stands).
+  if (want === 'metro') ctx.timesView = 'metro';
   select(OLD[want] || want);
   // (Shrunk, on another tab: the map started behind it, so the ride goes on and its bar shows.)
   if (was && (OLD[want] || want) !== 'map' && !started.has('map')) {
     started.add('map');
     mapTab.init(ctx);
   }
-  if (want === 'metro') ctx.openMetro?.();
   if ((OLD[want] || want) === 'map') await Promise.race([mapTab.ready, new Promise(r => setTimeout(r, 4000))]);
   else await Promise.race([TABS.find(t => t.id === (OLD[want] || want))?.mod.ready?.(), new Promise(r => setTimeout(r, 1500))]);
   $('loading').hidden = true;

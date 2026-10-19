@@ -28,7 +28,8 @@ export function sheet(html, cls = '') {
   d.showModal();
   return d;
 }
-export const sheetHead = (title, sub = '') => `<div class="q-sheet-head"><div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
+// A sheet's head: its title (html), a small line under it, a colour tile before it (`lead`, html).
+export const sheetHead = (title, sub = '', lead = '') => `<div class="q-sheet-head${lead ? ' ot-sheet-tile' : ''}">${lead}<div><h2>${title}</h2>${sub ? `<p class="ot-sheet-sub">${sub}</p>` : ''}</div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
 
 // 24×24 stroked icons, one per way of moving.
 const I = {
