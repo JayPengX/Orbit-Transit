@@ -658,6 +658,18 @@ test('a saved trip’s way now: out from home, back from its far end, the time t
   assert.equal(tripNow(t, home, T('09:00')).at, twAt('2026-10-06', '07:30'), 'past today: tomorrow’s');
 });
 
+test('交通’s card and 所有方案 rank alike: a way rolled on to its next departure keeps its rank', async () => {
+  const { rollPlans, tripPlans } = await import('../public/lib/tab-go.mjs');
+  const bus = (k, dep, extra = {}) => ({ legs: [{ mode: 'bus', short: k, dep: T(dep), arr: T(dep) + 3_600_000 }], dep: T(dep), arr: T(dep) + 3_600_000, ...extra });
+  // 0 and 2 區間 1798 (best, 18:20 then 18:45), 1 the 9003 bus at 18:42 (second).
+  const plans = [bus('1798', '18:20', { lead: true, top: true, score: 70, tags: ['推薦'], times: [0, 2] }), bus('9003', '18:42', { lead: true, top: true, score: 79, times: [1] }), bus('1798', '18:45', { lead: false, score: 72, times: [0, 2] })];
+  const out = rollPlans(plans, T('18:30'));
+  const { first } = tripPlans(out, [], T('18:30'));
+  assert.equal(first[0].legs[0].short, '1798', 'the best way, now its 18:45, still first');
+  assert.equal(first[0].dep, T('18:45'));
+  assert.equal(first[1].legs[0].short, '9003');
+});
+
 test('a pinned trip planned once: each way’s next departure takes its card; planned again only when its ways could differ', async () => {
   const { rollPlans, replanWhy } = await import('../public/lib/tab-go.mjs');
   const { pickSig } = await import('../public/lib/plan.mjs');

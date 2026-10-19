@@ -470,7 +470,10 @@ export function tripPlans(plans, picks = [], now = Date.now()) {
   // A pinned way: its next departure (the others are its times to pick).
   const pinned = [];
   for (const k of picks) pinned.push(...live.filter(p => pickSig(p) === k).sort((a, b) => a.dep - b.dep).slice(0, 1));
-  const first = [...pinned, ...live.filter(p => p.top && !pinned.includes(p))].slice(0, Math.max(4, pinned.length));
+  // (The recommendations best first, as the map lists them: a way rolled on to
+  // its next departure keeps its place in the list, not its rank.)
+  const tops = live.filter(p => p.top && !pinned.includes(p)).sort((a, b) => (a.score ?? 0) - (b.score ?? 0) || a.arr - b.arr);
+  const first = [...pinned, ...tops].slice(0, Math.max(4, pinned.length));
   return { first, rest: live.filter(p => !first.includes(p) && p.lead !== false && !p.weak && !picks.includes(pickSig(p))) };
 }
 
@@ -810,7 +813,8 @@ function onClick(ev) {
   const all = ev.target.closest('[data-all-trip]');
   if (all) {
     const w = trips().find(x => x.w.id === all.dataset.allTrip)?.w;
-    if (w) return ctx.openTrip(w.from, w.to, { at: w.at, by: w.by });
+    // (The ways this card ranked, so the map's first is the card's.)
+    if (w) return ctx.openTrip(w.from, w.to, { at: w.at, by: w.by, plans: tripOf(w)?.plans?.length ? tripOf(w).plans : null });
   }
   const lt = ev.target.closest('[data-load-trip]');
   if (lt) {

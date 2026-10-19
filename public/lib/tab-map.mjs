@@ -1428,7 +1428,8 @@ async function plan(from, to, opts = {}) {
   let out = null;
   try {
     const at = when.by === 'now' ? null : when.at;
-    out = await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes });
+    // (A saved trip's ways from 交通, as its card ranked them: not found again.)
+    out = opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes });
     c.plans = await walkHere(out.plans);
     c.choice = {};
     c.sources = out.sources;
@@ -1442,9 +1443,11 @@ async function plan(from, to, opts = {}) {
     dropGone(c);
     // The best plan drawn on the map at once; its steps open with a tap.
     if (c.plans.length) {
-      drawPlan(c.plans[0], { fit: false });
+      // (The card's first: a saved trip's kept list has gone departures ahead of it.)
+      const best = opts.plans ? c.plans.find(p => p.top && p.lead !== false && !p.gone) || c.plans[0] : c.plans[0];
+      drawPlan(best, { fit: false });
       // (Its buses along their stops, not straight across town.)
-      roadLegs(c.plans[0], { roads: false });
+      roadLegs(best, { roads: false });
     }
     if (opts.nav && c.plans[opts.index || 0]) navigate(c.plans[opts.index || 0]);
     if ((c.then.length || c.have) && c.plans.length) planRest(c);
@@ -1632,7 +1635,8 @@ function plansHtml(c) {
   const fine = c.plans.some(p => p.lead !== false && !p.gone);
   const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.weak || picked(c, p)) && (!p.gone || !fine || picked(c, p)));
   const card_ = ([p, i]) => row(c.plans[shownAt(i)], shownAt(i), i);
-  const tops = leads.filter(([p]) => p.top || picked(c, p));
+  // (Your pinned ways first, then the recommendations best first: as 交通's card has them.)
+  const tops = leads.filter(([p]) => p.top || picked(c, p)).sort(([a], [b]) => picked(c, b) - picked(c, a) || (a.score ?? 0) - (b.score ?? 0) || a.arr - b.arr);
   const rest = leads.filter(([p]) => !p.top && !picked(c, p));
   return `${top}<div class="ot-plans">${tops.map(card_).join('')}</div>
     ${rest.length ? `<button class="q-btn ot-wide ot-more" type="button" data-card="more">${c.more ? W('收起其他方案', 'Fewer routes') : W(`其他 ${rest.length} 個方案`, `${rest.length} more routes`)}</button>${c.more ? `<div class="ot-plans">${rest.map(card_).join('')}</div>` : ''}` : ''}`;
