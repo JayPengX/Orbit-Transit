@@ -1918,46 +1918,46 @@ body.tab-map {
 
 /* ---- Plans: from, to and the stops as one card of fields; when and
    what to take in a row; each way a card, its length big. ---- */
-.ot-card-head:has(> .ot-od) {
+.ot-plans-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-  align-items: start;
-  column-gap: 8px;
-  row-gap: 0;
+  grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
+  grid-template-areas: 'back title star close' 'od od od swap';
+  align-items: center;
+  gap: 8px;
 }
-.ot-card-head > .ot-od {
-  display: contents;
+.ot-plans-head > .q-icon-btn,
+.ot-plans-head > .q-close {
+  width: 36px;
+  min-width: 0;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
 }
-.ot-card-head > .ot-od > :first-child {
-  grid-row: 1;
-  grid-column: 2;
+.ot-ph-back {
+  grid-area: back;
 }
-.ot-card-head > .ot-od > :not(:first-child) {
-  grid-column: 2 / -1;
+.ot-ph-title {
+  grid-area: title;
+  margin: 0;
+  font: 600 17px/22px var(--q-font);
+  text-align: center;
 }
-.ot-card-head:has(> .ot-od) > :first-child {
-  grid-area: 1 / 1;
+.ot-ph-star {
+  grid-area: star;
 }
-.ot-card-head:has(> .ot-od) > :nth-child(3) {
-  grid-area: 1 / 3;
+.ot-ph-close {
+  grid-area: close;
 }
-.ot-card-head:has(> .ot-od) > :nth-child(4) {
-  grid-area: 1 / 4;
+.ot-plans-head > .ot-od {
+  grid-area: od;
+  display: grid;
+  min-width: 0;
 }
-.ot-card-head:has(> .ot-od) > :nth-child(5) {
-  grid-area: 1 / 5;
-}
-/* At 320 the four round buttons leave the start field too little for 「目前位置」: they are a size down. */
-@media (max-width: 350px) {
-  .ot-card-head:has(> .ot-od) {
-    column-gap: 6px;
-  }
-  .ot-card-head:has(> .ot-od) > :not(.ot-od) {
-    width: 38px;
-    min-width: 0;
-    height: 38px;
-    padding: 0;
-  }
+/* ⇅ beside the start and the end, halfway down the two (each 44px). */
+.ot-ph-swap {
+  grid-area: swap;
+  align-self: start;
+  margin-top: 26px;
 }
 .ot-od button {
   display: flex;

@@ -330,6 +330,26 @@ export function declutter(pane) {
   const taken = [];
   const hits = r => taken.some(t => r.left < t.right - 1 && r.right > t.left + 1 && r.top < t.bottom - 1 && r.bottom > t.top + 1);
   for (const m of els) {
+    // A trip's station badge (its bikes, its docks) under a pin or your dot
+    // moves to the nearest clear side instead (a badge can't hide: it's the plan).
+    if (m.classList.contains('plan')) {
+      m.style.translate = '';
+      const r = m.getBoundingClientRect();
+      const t = r.width ? taken.find(t => r.left < t.right - 1 && r.right > t.left + 1 && r.top < t.bottom - 1 && r.bottom > t.top + 1) : null;
+      if (t) {
+        const moves = [
+          [t.right + 4 - r.left, 0],
+          [t.left - 4 - r.right, 0],
+          [0, t.top - 4 - r.bottom],
+          [0, t.bottom + 4 - r.top]
+        ].sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+        const at = ([dx, dy]) => ({ left: r.left + dx, right: r.right + dx, top: r.top + dy, bottom: r.bottom + dy });
+        const [dx, dy] = moves.find(d => !hits(at(d))) || moves[0];
+        m.style.translate = `${Math.round(dx)}px ${Math.round(dy)}px`;
+        taken.push(at([dx, dy]));
+      } else if (r.width) taken.push(r);
+      continue;
+    }
     const label = m.querySelector(':scope > span');
     const icon = m.querySelector(':scope > svg, :scope > i');
     const ir = (icon || m).getBoundingClientRect();
