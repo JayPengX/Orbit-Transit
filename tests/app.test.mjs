@@ -2702,3 +2702,11 @@ test('back-to-back walks read as one (TDX walks to a metro exit, then to its pla
   assert.equal(out[2].poly, undefined);
   assert.equal(out[2].straight, true);
 });
+
+test('a long route name sits in its badge on two lines, its words over its number; a short or Latin one stays on one', async () => {
+  const { noHtml } = await import('../public/lib/bus-ui.mjs');
+  assert.match(noHtml('快捷8號支'), /<i>快捷<\/i><i>8號支<\/i>/);
+  assert.equal(noHtml('182'), '<span>182</span>');
+  assert.equal(noHtml('1813E'), '<span>1813E</span>');
+  assert.equal(noHtml('藍15'), '<span>藍15</span>');
+});

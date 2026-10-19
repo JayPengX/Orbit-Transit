@@ -14,12 +14,20 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   let cur = DETENTS.includes(detent) ? detent : 'peek';
   let hs = detentHeights(room(), { top: top() });
   let dragging = false;
+  // Its height now (what shows above the panel's foot).
+  let shown = hs[cur];
   const listeners = new Set([onChange]);
 
+  // The sheet is always as tall as the large stop and slides: a drag moves
+  // only its transform, so no frame lays out the sheet or the map (a height
+  // each frame was the lag on a phone). `--ms-h` is said once it lands.
+  const full = () => hs.large + 40;
   const apply = (h, animate) => {
+    shown = h;
     el.classList.toggle('dragging', !animate);
-    el.style.height = `${Math.round(h)}px`;
-    el.parentElement?.style.setProperty('--ms-h', `${Math.round(h)}px`);
+    el.style.height = `${full()}px`;
+    el.style.transform = `translate3d(0, ${Math.round(full() - h)}px, 0)`;
+    if (animate || !dragging) el.parentElement?.style.setProperty('--ms-h', `${Math.round(h)}px`);
   };
   const paint = (animate = true) => {
     el.dataset.detent = cur;
@@ -53,7 +61,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
     return b[0] > a[0] ? (a[1] - b[1]) / (b[0] - a[0]) : 0; // up is positive
   };
   const start = (y, x, inHead) => {
-    g = { y0: y, x0: x, h0: el.getBoundingClientRect().height, mode: null, head: inHead, trail: [[performance.now(), y]] };
+    g = { y0: y, x0: x, h0: shown, mode: null, head: inHead, trail: [[performance.now(), y]] };
   };
   const move = (y, x, ev) => {
     if (!g || g.mode === 'ignore') return;
@@ -70,20 +78,28 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
       // (Scrolled up to the top and still pulling: the sheet takes the finger from here.)
       g.mode = 'sheet';
       g.y0 = y;
-      g.h0 = el.getBoundingClientRect().height;
+      g.h0 = shown;
       dragging = true;
+      if (ev.cancelable) ev.preventDefault();
       return;
     }
     if (ev.cancelable) ev.preventDefault();
     dragging = true;
-    apply(follow(g.h0 - (y - g.y0), hs), false);
+    // (One move a frame: a phone sends more touches than it paints.)
+    g.y = y;
+    if (!g.raf) g.raf = requestAnimationFrame(() => {
+      if (!g || g.mode !== 'sheet') return;
+      g.raf = 0;
+      apply(follow(g.h0 - (g.y - g.y0), hs), false);
+    });
   };
   const end = () => {
     if (!g) return;
     const was = g;
     g = null;
     if (was.mode !== 'sheet') return;
-    const h = el.getBoundingClientRect().height;
+    if (was.raf) cancelAnimationFrame(was.raf);
+    const h = was.y != null ? follow(was.h0 - (was.y - was.y0), hs) : shown;
     dragging = false;
     const to = settle(h, speed(was.trail), hs);
     // (Back to the stop it was at: nothing changed, but it still slides home.)
@@ -139,7 +155,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
       return cur;
     },
     get height() {
-      return el.getBoundingClientRect().height;
+      return shown;
     },
     heights: () => hs,
     set,

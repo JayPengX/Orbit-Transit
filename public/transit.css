@@ -343,8 +343,10 @@ button.ot-hero {
 .ot-strip-no {
   display: grid;
   place-items: center;
+  box-sizing: border-box;
   width: 52px;
   height: 40px;
+  padding: 0 4px;
   border-radius: 12px;
   background: linear-gradient(160deg, color-mix(in srgb, var(--q-green) 80%, #fff), var(--q-green) 60%);
   color: #fff;
@@ -353,8 +355,22 @@ button.ot-hero {
   box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.18);
 }
 .ot-strip-no > span {
-  display: inline-block;
-  padding: 0 4px;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+}
+/* A long name: two lines, its words over its number, each shrunk to the tile. */
+.ot-no2 {
+  display: grid;
+  font-size: 13px;
+  line-height: 15px;
+}
+.ot-no2 > i {
+  display: block;
+  font-style: normal;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .ot-strip-mid {
   display: grid;
@@ -802,7 +818,14 @@ body.tab-map {
   border-radius: 28px 28px 0 0;
   background: var(--q-sheet);
   box-shadow: var(--q-glass-rim), 0 -14px 44px -18px rgb(0 0 0 / 0.5);
-  transition: height var(--q-dur-snappy, 0.34s) var(--q-spring-smooth, ease-out);
+  transition: transform var(--q-dur-snappy, 0.34s) var(--q-spring-smooth, ease-out);
+  will-change: transform;
+  /* A finger on the sheet is the sheet's: never the map's behind it (rails still go sideways). */
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+}
+.ot-msheet[data-detent='large'] {
+  touch-action: pan-x pan-y;
 }
 .ot-msheet.dragging {
   transition: none;
@@ -923,7 +946,8 @@ body.tab-map {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 var(--q-margin) calc(24px + var(--ot-kb, 0px));
+  /* (24px, and the 40px the sheet runs on below the panel's foot.) */
+  padding: 0 var(--q-margin) calc(64px + var(--ot-kb, 0px));
   -webkit-overflow-scrolling: touch;
 }
 .ot-msheet[data-detent='peek'] .ot-ms-body {
