@@ -4283,3 +4283,10 @@ span.ot-pass {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* A stop's board rows at phone width: the direction keeps one line (ellipsis)
+   and fewer next times show, rather than the name breaking a character a line. */
+.ot-board-row .ot-train { flex: 1 1 96px; }
+.ot-board-row .ot-train b,
+.ot-board-row .ot-train small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 400px) { .ot-board-row .ot-times b:nth-child(n+4) { display: none; } }
+@media (max-width: 350px) { .ot-board-row .ot-times b:nth-child(n+3) { display: none; } }
