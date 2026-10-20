@@ -171,7 +171,7 @@ function select(id, { again = false } = {}) {
 
 window.__fxStarted = true;
 const gated = installGate('transit', 'zh');
-watchUpdates({ current: VERSION, key: 'orbitTransit', cachePrefix: 'orbit-transit-', busy: () => Boolean(document.querySelector('dialog[open]')) });
+watchUpdates({ current: VERSION, key: 'orbitTransit', cachePrefix: 'orbit-transit-' });
 // Pull to refresh (the page's, on a phone): the 交通 tab's read again; the map pans, so it keeps its drags.
 topActions(q, { refresh: () => (bar?.current === 'go' ? goTab.pull?.() : undefined) });
 $('panel-map')?.setAttribute('data-no-ptr', '');
