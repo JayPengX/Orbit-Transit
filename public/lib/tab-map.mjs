@@ -48,6 +48,11 @@ let home = null;
 let card = null; // what the card shows: { kind, ... }
 let stopWatch = () => {};
 let following = false;
+// Following you shows on 我的位置 itself (filled, as iOS Maps'), so a tap with the map already on you still answers.
+const follows = on => {
+  following = Boolean(on);
+  $('fab-locate')?.setAttribute('aria-pressed', String(following));
+};
 // The map placed: where it was left, at you, or where you went (arrive): the device's first fix doesn't move it then.
 let centered = false;
 let reopened = () => {};
@@ -253,7 +258,7 @@ export function hide() {
   closeResults({ keep: true });
   home?.stop();
   stopWatch();
-  following = false;
+  follows(false);
   pause();
 }
 // Nothing on the map read again while it isn't seen (another tab, the app
@@ -313,7 +318,7 @@ async function locateMe() {
   follow();
 }
 function follow() {
-  following = true;
+  follows(true);
   stopWatch();
   stopWatch = watchPosition(p => {
     ctx.here = { ...p, at: Date.now() };
@@ -412,7 +417,7 @@ const metroMarker = ({ st, color }) => ({ id: st.key, lat: st.lat, lon: st.lon, 
 function pick(it) {
   // Navigating: the map is to look at; a tap opens nothing (it would take the trip's card and its way off the map).
   if (navFull()) return dragged();
-  following = false;
+  follows(false);
   openCard({ kind: it.kind, item: it.data, lat: it.lat, lon: it.lon, marker: it });
   focusAbove(it);
 }
@@ -429,7 +434,7 @@ function focusAbove(p) {
 // An empty spot: closes the card, or marks the spot (to plan a trip there).
 async function tap(pt, hit = null) {
   if (navFull()) return dragged();
-  following = false;
+  follows(false);
   // (A tap that landed beside a pin is that pin's: it opens its card, not lowers the sheet.)
   if (hit) return pick(hit);
   if (!$('results').hidden) return closeResults();
@@ -450,7 +455,7 @@ async function tap(pt, hit = null) {
 // One of Google's places: a station opens ours (with its live board).
 async function googlePlace(p) {
   if (navFull()) return dragged();
-  following = false;
+  follows(false);
   const rail = await railStations().catch(() => []);
   const metro = (await metroSystems(p).catch(() => [])).flatMap(s => s.stations);
   const st = [...rail, ...metro].map(s => [meters(p.lat, p.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0])[0];
@@ -1268,7 +1273,7 @@ async function chooseResult(r) {
 // stays there, not pulled back to you by the next fix (it was, after a
 // relaunch, the first fix coming late, or with 我的位置 still following).
 function arrive(c) {
-  following = false;
+  follows(false);
   centered = true;
   map.setView(c.lat, c.lon, Math.max(map.zoom(), 16));
   openCard(c);
@@ -1996,7 +2001,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   // (The map now fills the screen: its tiles for the new size.)
   map?.resize();
   msheet?.relayout();
-  following = !resume?.min;
+  follows(!resume?.min);
   stopWatch();
   roadLegs(p);
   // The stops after this one ride with the plan (kept with it on the phone: on after the app is reopened).
@@ -2027,7 +2032,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       const next = how.arrived && how.plan?.then?.length ? how.plan.then : null;
       if (how.arrived) ctx.status(next ? W(`已抵達 ${how.arrived}，接著去 ${next[0].name || '下一站'}`, `Arrived at ${how.arrived}; next, ${next[0].name || 'the next stop'}`) : W(`已抵達 ${how.arrived}，導航結束`, `Arrived at ${how.arrived}`));
       // (Navigation over: the map no longer follows you, until 我的位置 is tapped.)
-      following = false;
+      follows(false);
       clearTimeout(followBack);
       $('nav').hidden = true;
       document.body.classList.remove('ot-navigating', 'ot-nav-min');
@@ -2095,7 +2100,7 @@ let followBack = 0;
 function dragged() {
   // Not navigating (or shrunk): a finger on the map means you're looking somewhere else; it stays there (a late first fix included).
   if (!navFull()) {
-    following = false;
+    follows(false);
     centered = true;
     return;
   }
@@ -2117,7 +2122,7 @@ function shrinkNav(on) {
   document.body.classList.toggle('ot-nav-min', on);
   msheet?.relayout();
   if (on) {
-    following = false;
+    follows(false);
     document.body.classList.remove('ot-planning');
     drawLayers();
     return;
@@ -2125,7 +2130,7 @@ function shrinkNav(on) {
   ctx.goTab('map');
   closeResults();
   $('card').hidden = true;
-  following = true;
+  follows(true);
   const n = navNow();
   if (n) navDraw(n.plan, n.i);
   drawLayers();

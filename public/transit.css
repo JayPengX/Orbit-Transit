@@ -753,6 +753,10 @@ body.tab-map {
 .ot-fab:active {
   transform: scale(0.94);
 }
+/* 我的位置 while the map follows you: blue, as iOS Maps'. */
+.ot-fab[aria-pressed='true'] {
+  color: var(--q-blue);
+}
 /* What's on the map hides while a trip, navigation or a pick has it. */
 .ot-map-panel[data-sheet='large'] .ot-fabs,
 .ot-navigating:not(.ot-nav-min) .ot-map-chips,
