@@ -341,7 +341,6 @@ function readTrips() {
 }
 function keepTrip(key, kept) {
   try {
-    writeJson('ot.trips.v1', null);
     const read = readSaved(TRIP_CACHE, {});
     if (read === UNREAD) return; // (never saved over)
     const all = read || {};
@@ -701,7 +700,7 @@ function render() {
     ${pinnedHtml(lead.key)}
     ${nearHtml(lead.key)}
   </div>`;
-  kitUI.wireNavTitles?.(box, { scroller: box });
+  kitUI.wireNavTitles(box, { scroller: box });
   fitStrips(box);
   box.scrollTop = keep;
   const rail = box.querySelector('.ot-places');

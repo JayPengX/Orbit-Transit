@@ -9,8 +9,7 @@ import { W, en } from './lang.mjs';
 export const stationLabel = s => (!s ? '' : s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
 // A modal sheet (the kit's look): closed by its ✕, a tap on the page
 // behind or Escape, sliding down as every app's sheets do; `d.shut()`
-// closes it the same way and `d.onclosed` runs once after. The kit's
-// bindSheet does the closing where the kit has it (an older kit: as before).
+// closes it the same way and `d.onclosed` runs once after.
 export function sheet(html, cls = '') {
   const box = document.createElement('template');
   box.innerHTML = html;
@@ -62,9 +61,6 @@ const I = {
   down: '<path d="M6 10l6 6 6-6"/>',
   trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
-  home: '<path d="M4 11l8-7 8 7M6 9.5V20h12V9.5M10 20v-5.5h4V20"/>',
-  work: '<rect x="3.5" y="7.5" width="17" height="12" rx="3"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3.5 13h17"/>',
-  school: '<path d="M2.5 9.5L12 5l9.5 4.5L12 14z"/><path d="M6.5 11.8V16c0 1.4 2.5 2.7 5.5 2.7s5.5-1.3 5.5-2.7v-4.2M21.5 9.5V15"/>',
   bolt: '<path d="M13 2.5L5.5 13.5H11l-1 8 7.5-11H12z"/>',
   chevron: '<path d="M9 5l7 7-7 7"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
@@ -72,7 +68,6 @@ const I = {
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   history: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5M12 8v4l3 2"/>',
-  // Saved places (the kit's own glyphs, for an older kit's placeTile).
   home: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
   work: '<rect x="3.5" y="7.5" width="17" height="12" rx="2.5"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3.5 13h17M10.5 13v1.5h3V13"/>',
   school: '<path d="m12 4.5 9 4.5-9 4.5L3 9zM7 11.5v4.2c0 1.2 2.2 2.3 5 2.3s5-1.1 5-2.3v-4.2M21 9v5"/>',

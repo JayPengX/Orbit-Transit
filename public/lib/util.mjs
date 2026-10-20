@@ -1,7 +1,7 @@
 // Small shared pieces: escaping, Taiwan time, distances, the two polyline
 // encodings the planners use.
 
-import * as kit from '#kit/quadra.mjs';
+import { twHoliday } from '#kit/holidays.mjs';
 import { W } from './lang.mjs';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -152,17 +152,9 @@ export function decodeFlexible(str) {
 }
 export const decodeLine = (poly, fmt) => (!poly ? [] : fmt === 'f' ? decodeFlexible(poly) : decodeGoogle(poly));
 
-// Saved on this device as JSON, never throwing: the kit's (readJson, writeJson),
-// else the same here, as a phone may still run an older kit. `fallback` when
-// there's none or it can't be read; a value of null removes the key.
-export function readJson(key, fallback = null) {
-  if (kit.readJson) return kit.readJson(key, fallback);
-  try {
-    return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
+// Saved on this device as JSON, never throwing: the kit's (readJson, writeJson).
+// `fallback` when there's none or it can't be read; a value of null removes the key.
+export { readJson, writeJson } from '#kit/quadra.mjs';
 // The same, for a copy that's added to and saved back: UNREAD when the phone's
 // storage couldn't be read (the kit's readJson answers `fallback` then, as for
 // nothing there), so a failed read is never saved over what's kept. A copy
@@ -182,23 +174,14 @@ export function readSaved(key, fallback = null) {
     return fallback;
   }
 }
-export function writeJson(key, value, replacer) {
-  if (kit.writeJson) return kit.writeJson(key, value, replacer);
-  try {
-    if (value == null) localStorage.removeItem(key);
-    else localStorage.setItem(key, JSON.stringify(value, replacer));
-  } catch {}
-}
 
 export const zh = v => (v && typeof v === 'object' ? v.Zh_tw || v.En || '' : String(v ?? ''));
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
-// Taiwan's national holidays (the kit's holidays.mjs, set by the app once
-// loaded): a trip saved for weekdays only (家 → 學校) keeps the work
-// calendar and skips them. holidayOn('YYYY-MM-DD') → true on one.
-let holidayCheck = () => false;
-export const useHolidays = fn => (holidayCheck = typeof fn === 'function' ? fn : () => false);
-export const holidayOn = date => holidayCheck(date);
+// Taiwan's national holidays (the kit's holidays.mjs): a trip saved for
+// weekdays only (家 → 學校) keeps the work calendar and skips them.
+// holidayOn('YYYY-MM-DD') → true on one.
+export const holidayOn = date => Boolean(twHoliday(date));
 export const weekdaysOnly = days => days.length > 0 && !days.includes(0) && !days.includes(6);
 
 // Google's and TDX's names for one route differ (快捷8經興隆大橋, 快捷8號;

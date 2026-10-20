@@ -14,7 +14,7 @@
 
 import * as kitUI from '#kit/ui.mjs';
 import { quadraSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate, keepOffline, onlineOnly } from '#kit/quadra.mjs';
-import { useSession, config, townships, getPosition, dropOldPacks } from './lib/api.mjs';
+import { useSession, config, townships, getPosition } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
 import { warmRail } from './lib/raildata.mjs';
@@ -24,12 +24,8 @@ import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
-import { useHolidays, readSaved, UNREAD, writeJson } from './lib/util.mjs';
+import { readSaved, UNREAD, writeJson } from './lib/util.mjs';
 import { W, en, lang } from './lib/lang.mjs';
-// Taiwan's holidays (the kit's), before the first screen: a weekdays-only
-// trip (家 → 學校) isn't picked for a holiday (an older kit: none, at once).
-const holidays = await Promise.race([import('#kit/holidays.mjs').catch(() => null), new Promise(r => setTimeout(r, 1500, null))]);
-if (holidays?.twHoliday) useHolidays(date => Boolean(holidays.twHoliday(date)));
 
 const $ = id => document.getElementById(id);
 const VERSION = document.querySelector('meta[name="build-version"]')?.content || 'dev';
@@ -105,7 +101,7 @@ export const ctx = {
     if (text) kitUI.toast(text, { batch: 'status', ms: 3200 });
   },
   goTab: id => select(id),
-  // The metro maps (查時刻's third view), from a station's card or an old address.
+  // The metro maps (查時刻's third view), from a station's card.
   openMetro() {
     ctx.timesView = 'metro';
     select('times');
@@ -156,8 +152,6 @@ const TABS = [
   { id: 'times', label: W('查時刻', 'Times'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', mod: timesTab },
   { id: 'me', label: W('我的', 'Me'), icon: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/>', mod: meTab }
 ];
-// Old addresses (#bus, #train, #metro) open their new homes.
-const OLD = { bus: 'go', train: 'times', metro: 'times' };
 const started = new Set();
 let bar = null;
 function select(id, { again = false } = {}) {
@@ -184,8 +178,7 @@ $('panel-map')?.setAttribute('data-no-ptr', '');
 // A large title at the top of each tab but the first (the kit's navTitle, in the panel that scrolls).
 for (const [id, title, before] of [['times', W('查時刻', 'Times'), '.ot-page'], ['me', W('我的', 'Me'), '#me-main']]) {
   const panel = $(`panel-${id}`);
-  const h = kitUI.navTitle?.(title, { scroller: panel });
-  if (h && panel) panel.insertBefore(h, panel.querySelector(before));
+  if (panel) panel.insertBefore(kitUI.navTitle(title, { scroller: panel }), panel.querySelector(before));
 }
 
 async function boot() {
@@ -226,22 +219,21 @@ async function boot() {
   // A ride being navigated when the app was swiped away: on with it, on the
   // map (or, shrunk to its bar, on the tab you were on).
   const was = savedNav();
-  const asked = /^#(map|go|times|me|bus|train|metro)/.exec(location.hash)?.[1] || 'map';
+  const asked = /^#(map|go|times|me)/.exec(location.hash)?.[1] || 'map';
   const want = was && !was.min ? 'map' : asked;
   mapTab.register(ctx);
   meTab.register(ctx);
   // The first tab drawn behind the loading screen, which lifts onto it
   // finished: the map's tiles, what's in view, the strip (mapTab.ready), at
   // most 4 s (then as it stands).
-  if (want === 'metro') ctx.timesView = 'metro';
-  select(OLD[want] || want);
+  select(want);
   // (Shrunk, on another tab: the map started behind it, so the ride goes on and its bar shows.)
-  if (was && (OLD[want] || want) !== 'map' && !started.has('map')) {
+  if (was && want !== 'map' && !started.has('map')) {
     started.add('map');
     mapTab.init(ctx);
   }
-  if ((OLD[want] || want) === 'map') await Promise.race([mapTab.ready, new Promise(r => setTimeout(r, 4000))]);
-  else await Promise.race([TABS.find(t => t.id === (OLD[want] || want))?.mod.ready?.(), new Promise(r => setTimeout(r, 1500))]);
+  if (want === 'map') await Promise.race([mapTab.ready, new Promise(r => setTimeout(r, 4000))]);
+  else await Promise.race([TABS.find(t => t.id === want)?.mod.ready?.(), new Promise(r => setTimeout(r, 1500))]);
   $('loading').hidden = true;
   ctx.locate();
   startAlerts(t => ctx.status(t), {
@@ -258,7 +250,6 @@ async function boot() {
   // The day's trains loaded while nothing else is (a timetable search, a plan, 交通's pins use them).
   const P = ctx.data.prefs?.modes;
   if (!P || P.tra || P.hsr) setTimeout(() => (window.requestIdleCallback || (f => f()))(() => warmRail()), 2500);
-  setTimeout(dropOldPacks, 10_000);
 }
 q.on('active', live => live && ctx.data.t && q.write({ payload: encodeData(ctx.data) }).catch(() => {}));
 if (!gated) boot();
