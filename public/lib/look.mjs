@@ -4,7 +4,7 @@
 
 import { e, hm } from './util.mjs';
 import { icon } from './ui.mjs';
-import { W, en } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';
 
 // One colour per way of moving, the same on the map, in a plan's legs and here.

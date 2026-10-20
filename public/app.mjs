@@ -25,7 +25,7 @@ import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
 import { readSaved, UNREAD, writeJson } from './lib/util.mjs';
-import { W, en, lang } from './lib/lang.mjs';
+import { W, en, lang } from '#kit/lang.mjs';
 
 const $ = id => document.getElementById(id);
 const VERSION = document.querySelector('meta[name="build-version"]')?.content || 'dev';

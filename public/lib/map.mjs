@@ -6,7 +6,7 @@
 
 import { TAIWAN_BOX } from './util.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
 const NLSC = 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
 
@@ -324,7 +324,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
 
 // A marker's name (its `> span`) hidden where it would overlap a name or an
 // icon above it (by z-index; the selected one is never hidden).
-export function declutter(pane) {
+function declutter(pane) {
   if (!pane) return;
   const els = [...pane.querySelectorAll('.ot-mk')].sort((a, b) => (Number(b.style.zIndex) || 0) - (Number(a.style.zIndex) || 0));
   const taken = [];

@@ -10,7 +10,7 @@
 // 觀光8號 (觀霧線, crossing the county line, no commuters); its 觀光1號 and
 // 2號 are on it.
 import { EXPRESS } from './rail.mjs';
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 import { isRide } from './util.mjs';
 
 const TAO_HSIN_MIAO_SKIP = { HsinchuCounty: ['觀光8號'] };

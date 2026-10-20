@@ -10,7 +10,7 @@
 import { meters, readJson, writeJson } from './util.mjs';
 import { canRent, canReturn } from './bike.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const KEY = 'orbit-transit.rental';
 const TTL = 12 * 60 * 60_000;
 export const FREE_MS = 30 * 60_000;

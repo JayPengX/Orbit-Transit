@@ -34,7 +34,7 @@ import { createHome } from './home.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
 import * as kit from '#kit/quadra.mjs';
 
-import { W, en } from './lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
 const FALLBACK = { lat: 25.0478, lon: 121.517 }; // 台北車站
 const HERE = W('目前位置', 'Here');

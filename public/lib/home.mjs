@@ -23,7 +23,7 @@ import { e, hm, distText, meters } from './util.mjs';
 
 // Where you already are (within 100 m): 這裡, not 0 公尺.
 const near = m => (m < 100 ? W('這裡', 'Here') : distText(m));
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 
 const PLACE_WORD = { home: W('家', 'Home'), work: W('公司', 'Work'), school: W('學校', 'School') };
 const KINDS = ['home', 'work', 'school'];

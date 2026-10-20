@@ -16,15 +16,15 @@ import { meters, tw } from './util.mjs';
 
 export const MAX_SUGGESTIONS = 3;
 // A trip is news from this long before it's due to this long after.
-export const TRIP_AHEAD_MIN = 180;
-export const TRIP_LATE_MIN = 10;
-export const BUS_WITHIN_MIN = 30;
-export const TRAIN_WITHIN_MIN = 90;
+const TRIP_AHEAD_MIN = 180;
+const TRIP_LATE_MIN = 10;
+const BUS_WITHIN_MIN = 30;
+const TRAIN_WITHIN_MIN = 90;
 // A bike is worth a card when the station is this close, and a card of its own while a bike is there.
-export const BIKE_NEAR_M = 450;
+const BIKE_NEAR_M = 450;
 // 家 is "far" past this, and the evening is from 17:00 until 23:30.
 export const FAR_HOME_M = 1500;
-export const EVENING = [17 * 60, 23 * 60 + 30];
+const EVENING = [17 * 60, 23 * 60 + 30];
 // A trip's end this near 家 is the way home already (no second card for it).
 const SAME_PLACE_M = 300;
 

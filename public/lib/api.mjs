@@ -6,7 +6,7 @@
 import { dev } from '#kit/quadra.mjs';
 import { WALK_M_MIN, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
 const DATA_CACHE = 'orbit-transit-data';
 

@@ -7,7 +7,7 @@ export const DETENTS = ['peek', 'medium', 'large'];
 export const PEEK = 236;
 // How far a finger goes before it means something, and how long a lift's speed carries it on.
 export const SLOP = 6;
-export const COAST_MS = 200;
+const COAST_MS = 200;
 
 // The heights (px) of the three stops in a panel `room` high: peek, medium
 // (about half), large (all of it less `top`, so the account pill and the

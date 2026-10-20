@@ -2,10 +2,9 @@
 // encodings the planners use.
 
 import { twHoliday } from '#kit/holidays.mjs';
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 
-const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-export const e = escapeHtml;
+export { escHtml as e } from '#kit/ui.mjs';
 
 const TPE = 8 * 3_600_000;
 // Taiwan's wall clock for a moment: { date: 'YYYY-MM-DD', hm: 'HH:MM', min (of the day), dow (0 = Sunday) }.
