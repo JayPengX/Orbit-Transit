@@ -39,7 +39,11 @@ jobs:
       - run: ln -sfn .shared/kit .kit
       - name: Run tests
         run: npm test
-      - name: Cache-bust every script, module and stylesheet
+      - name: Minify, and address every file by its content
+        # Each script and stylesheet minified and stamped with its own content
+        # hash (the kit's kit/stamp-app.mjs): browsers fetch a changed file at
+        # once, never mix it with cached older ones, and keep every file the
+        # deploy didn't change.
         run: node scripts/stamp-version.mjs ${{ github.sha }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
