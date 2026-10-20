@@ -4635,6 +4635,11 @@ span.ot-pass {
   width: 1px;
 }
 
+/* 查時刻's and 我的's large titles sit straight in their panel: the page's margin is theirs to bring. */
+#panel-times > .q-nav-title,
+#panel-me > .q-nav-title {
+  padding-inline: 16px;
+}
 /* 交通's large title sits in the page's own margin (the kit's title brings one too: not twice). */
 .ot-page > .q-nav-title {
   padding-inline: 0;
