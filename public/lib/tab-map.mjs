@@ -974,9 +974,22 @@ function buildSheet() {
   const mo = new MutationObserver(sync);
   for (const el of [$('card'), $('results')]) mo.observe(el, { attributes: true, attributeFilter: ['hidden'] });
   sync();
-  // The keyboard takes the foot of the screen: what scrolls in the sheet stops above it.
+  // The keyboard takes the foot of the screen: what scrolls in the sheet stops above it. iPhone also slides
+  // the whole page up to show a field it thinks the keyboard hides, which on the map (nothing here scrolls)
+  // only pushes the sheet's search off the top: the page is put back each time it moves.
   const vv = globalThis.visualViewport;
-  vv?.addEventListener('resize', () => $('msheet').style.setProperty('--ot-kb', `${Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop))}px`));
+  const pinned = () => {
+    if (!document.body.classList.contains('tab-map')) return;
+    if (scrollY || document.documentElement.scrollTop || document.body.scrollTop || vv?.offsetTop) {
+      scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+    if (vv) $('msheet').style.setProperty('--ot-kb', `${Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop))}px`);
+  };
+  vv?.addEventListener('resize', pinned);
+  vv?.addEventListener('scroll', pinned);
+  addEventListener('scroll', pinned, { passive: true });
   home.start();
   home.draw();
 }
@@ -1034,11 +1047,12 @@ function wireSearch() {
   const clear = $('q-clear');
   let timer = 0;
   let ask = 0;
-  // Focusing the field lifts the sheet to large (Maps'); its results fill it.
+  // Focusing the field lifts the sheet to large (Maps'); its results fill it. At once, not slid: the
+  // keyboard comes up as it lands, and iPhone scrolls the page to a field it finds low on the screen.
   input.addEventListener('focus', () => {
     searchSession ||= uid() + uid();
     if (searchFrom == null && msheet.detent !== 'large') searchFrom = msheet.detent;
-    msheet.set('large');
+    msheet.set('large', { animate: false });
     $('q-cancel').hidden = false;
     showResults(input.value);
   });
