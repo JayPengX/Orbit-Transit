@@ -13,7 +13,7 @@ import { tile } from './look.mjs';
 import { metroBoardHtml } from './tab-map.mjs';
 import { e, meters } from './util.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
 const KEY = 'orbit-transit.metro';
 let ctx = null;

@@ -15,7 +15,7 @@ import { sheet, sheetHead, icon, tagText, trainKind, stationLabel } from './ui.m
 import { COLOR, tile, tag, section, rowCard, emptyNote } from './look.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 let shownNow = '';

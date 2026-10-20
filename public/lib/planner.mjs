@@ -21,7 +21,7 @@ import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
-import { meters, tw, hm, isRide } from './util.mjs';
+import { meters, hm, isRide } from './util.mjs';
 import { crossings } from './rivers.mjs';
 import { rec } from '#kit/quadra.mjs';
 

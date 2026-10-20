@@ -2141,7 +2141,7 @@ test('a pinned place is on the map: its icon and name, a tap opening its card (t
   assert.equal(m.kind, 'place');
   assert.deepEqual([m.lat, m.lon], [24.8, 120.97]);
   assert.match(m.html, /<svg/);
-  assert.match(m.html, /家&lt;b&gt;/);
+  assert.match(m.html, /家&#60;b&#62;/);
   assert.deepEqual(m.data, { name: '家<b>', sub: '東區', lat: 24.8, lon: 120.97, pin: 'h', gid: 'g1' });
   assert.match(placeMarker({ id: 'x', name: 'x', icon: 'nope', lat: 24, lon: 121 }).html, /<svg/);
 });

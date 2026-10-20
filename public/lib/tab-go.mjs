@@ -26,7 +26,7 @@ import { sheet, sheetHead, icon, legChips, depChips, tagText, trainKind, trainNa
 import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero, navTitle } from './look.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 let timer = 0;

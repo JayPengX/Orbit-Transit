@@ -4,7 +4,7 @@
 // follows, then lands on a stop; a tap on the grabber steps it. The map
 // keeps the room above. The numbers are detents.mjs; this is the touching.
 
-import { DETENTS, detentHeights, follow, settle, axis, bodyGesture, stepped, SLOP } from './detents.mjs';
+import { DETENTS, detentHeights, follow, settle, axis, bodyGesture, stepped } from './detents.mjs';
 
 const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 

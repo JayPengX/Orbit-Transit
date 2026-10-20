@@ -16,7 +16,7 @@ import { icon } from './ui.mjs';
 import { COLOR, tile, section, rowCard, hero, emptyNote } from './look.mjs';
 import { e, meters, distText, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
 const KEY = 'orbit-transit.times';
 const VIEWS = ['train', 'bus', 'metro'];

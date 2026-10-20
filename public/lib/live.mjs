@@ -15,7 +15,7 @@ import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish, walkLeg } from './plan.mjs';
 import { meters, walkSec, zh, tw, twAt, addDays, etaAge, routeNorm, sameRoute, isRide, RAIL } from './util.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const MIN = 60_000;
 const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,DataTime';
 

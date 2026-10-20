@@ -17,7 +17,7 @@ import { trainKind } from './ui.mjs';
 import { stationPoint } from './raildata.mjs';
 import { canRent } from './bike.mjs';
 
-import { W } from './lang.mjs';
+import { W } from '#kit/lang.mjs';
 const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
 export const DOCK_SEC = 60; // taking or returning a bike
 const BIKE_MAX_M = 12_000; // further than this, nobody wants to ride

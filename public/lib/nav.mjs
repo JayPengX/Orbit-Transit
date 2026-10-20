@@ -24,7 +24,7 @@ import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, cou
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
 import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 let nav = null;
 
 // The ride being followed, kept on the phone: swiped away and opened again,

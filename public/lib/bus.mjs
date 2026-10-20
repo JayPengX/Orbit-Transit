@@ -6,7 +6,7 @@ import { tdx, rows } from './api.mjs';
 import { zh, hm, etaAge, meters, TDX_DAYS } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 
-import { W, en } from './lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 // 'InterCity' is 公路客運 and 國道客運 (they belong to no city).
 export const INTERCITY = 'InterCity';
 const scope = city => (city === INTERCITY ? 'InterCity' : `City/${city}`);

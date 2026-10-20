@@ -3,7 +3,7 @@
 Taiwan's public transport in one app: buses, 台鐵, 高鐵, the metros and
 YouBike; trips planned the way a person really travels; navigation that
 follows the trip. Signs in with the Quadra Pass, which keeps places, trips
-and pins. Light or dark follows the phone; the look is `lib/look.mjs` (was `premium.mjs`) on the kit.
+and pins. Light or dark follows the phone; the look is `lib/look.mjs` on the kit.
 
 Live: https://jaypengx.github.io/Orbit-Transit/
 
@@ -39,7 +39,7 @@ Live: https://jaypengx.github.io/Orbit-Transit/
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
   chime on iPhone) before yours. Missed bus → the next. Late for an
   arrival time → an on-time alternative offered. It resumes after the app
-  is swiped away and tells the lock screen (`transit:nav`).
+  is swiped away and tells the lock screen.
 - **YouBike rental timer** (`rental.mjs`): starts by itself while
   navigating. With TPASS's free half hour, it warns at 25 minutes and
   offers nearby docks to swap.
@@ -143,4 +143,4 @@ A push to `main` tests, stamps versions and deploys to Pages.
 | The score or ranking | The verdicts, `live.mjs --against`, `replay.mjs` |
 | A TDX path | Shared-Proxy's `TDX_RULES` and cache times, the `bus` push check |
 | Pack formats | Shared-Proxy's `builders/buses.js` |
-| Navigation steps | `ot.nav.v1` resuming, `transit:nav` notices |
+| Navigation steps | `ot.nav.v1` resuming, lock-screen notices (`kind: nav`) |

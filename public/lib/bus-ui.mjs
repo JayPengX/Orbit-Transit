@@ -14,7 +14,7 @@ import { sheet, sheetHead, icon, ago } from './ui.mjs';
 import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel } from './util.mjs';
 import { nextRun, liveTrusted } from './live.mjs';
 
-import { W, en } from './lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 const WEEK = '日一二三四五六';
 const WEEK_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const wk = i => (en ? WEEK_EN[i] : `週${WEEK[i]}`);

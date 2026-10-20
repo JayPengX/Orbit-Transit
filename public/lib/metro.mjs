@@ -5,7 +5,7 @@
 import { tdx, rows } from './api.mjs';
 import { zh, meters, tw, twAt, TDX_DAYS } from './util.mjs';
 
-import { W, en } from './lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 // The maps, by city; each draws one or more TDX rail systems.
 export const MAPS = [
   // box: [south, west, north, east], a little past the farthest station.

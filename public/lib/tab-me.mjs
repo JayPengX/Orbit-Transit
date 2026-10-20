@@ -15,7 +15,7 @@ import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters } from './util.mjs';
 import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, hero } from './look.mjs';
 
-import { W, en } from './lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 
