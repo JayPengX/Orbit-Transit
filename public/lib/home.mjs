@@ -25,7 +25,6 @@ import { e, hm, distText, meters } from './util.mjs';
 const near = m => (m < 100 ? W('這裡', 'Here') : distText(m));
 import { W } from './lang.mjs';
 
-const PLACE_COLOR = { home: '#ff9500', work: '#6155f5', school: '#0a84ff', pin: '#ff383c', star: '#f5b301' };
 const PLACE_WORD = { home: W('家', 'Home'), work: W('公司', 'Work'), school: W('學校', 'School') };
 const KINDS = ['home', 'work', 'school'];
 const HERO_COLOR = { tra: COLOR.tra, hsr: COLOR.hsr, home: '#ef7d00' };
@@ -34,15 +33,10 @@ const NEAR_BUSES = 4;
 // A read of the pinned buses and the stops around you is this old before it is asked again.
 const FRESH_MS = 20_000;
 
-// A shelf's head (the kit's, an older kit's plain one when it has none).
-const head = (title, { more = '', moreTap = '' } = {}) =>
-  kitUI.sectionHeadHtml?.(title, { more, moreTap }) ??
-  `<div class="q-section-head"><h2>${e(title)}</h2>${more ? `<button type="button" data-more="${e(moreTap)}">${e(more)}</button>` : ''}</div>`;
-// A saved place's tile, in its own colour (an older kit: the app's own glyph).
-const placeTile = kind => {
-  const k = kind in PLACE_COLOR ? kind : 'pin';
-  return kitUI.placeTileHtml?.(k) ?? tile(k === 'star' ? 'star' : k, PLACE_COLOR[k]);
-};
+// A shelf's head (the kit's).
+const head = (title, { more = '', moreTap = '' } = {}) => kitUI.sectionHeadHtml(title, { more, moreTap });
+// A saved place's tile, in its own colour (the kit's).
+const placeTile = kind => kitUI.placeTileHtml(kind);
 
 export function createHome(box, ctx, act) {
   const S = { stops: null, bikes: null, pinned: new Map(), pinnedAt: 0, trains: [], read: 0, sug: [] };
@@ -212,7 +206,7 @@ export function createHome(box, ctx, act) {
     const rails = [...box.querySelectorAll('.q-rail')].map(r => r.scrollLeft);
     box.innerHTML = html;
     box.querySelectorAll('.q-rail').forEach((r, i) => (r.scrollLeft = rails[i] || 0));
-    kitUI.wireLogos?.(box);
+    kitUI.wireLogos(box);
     fitStrips(box);
   }
 

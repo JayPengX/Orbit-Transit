@@ -1,7 +1,6 @@
 // Transit's pages in the family's look: the kit's classes (q-page-head,
 // q-hero-card, q-tile, q-rowcard, q-tag, q-rail), written as strings since
-// the tabs draw their pages whole. Class names only, so an older kit still
-// loads the app.
+// the tabs draw their pages whole.
 
 import { e, hm } from './util.mjs';
 import { icon } from './ui.mjs';
@@ -46,7 +45,7 @@ export function hero({ eyebrow = '', glyph = '', big = '', title = '', sub = '',
   return attrs ? `<button class="q-hero-card q-press ot-hero" type="button" ${attrs}${style}>${inner}</button>` : `<div class="q-hero-card ot-hero"${style}>${inner}</div>`;
 }
 
-// Nothing here: the kit's empty state (an older kit keeps the plain note).
-export const emptyNote = title => kitUI.emptyHtml?.({ title }) ?? `<p class="ot-note">${e(title)}</p>`;
-// A non-first tab's large title (the kit's navTitle; nothing on an older kit).
-export const navTitle = title => kitUI.navTitleHtml?.(title) ?? '';
+// Nothing here: the kit's empty state.
+export const emptyNote = title => kitUI.emptyHtml({ title });
+// A non-first tab's large title (the kit's navTitle).
+export const navTitle = title => kitUI.navTitleHtml(title);

@@ -862,12 +862,12 @@ test('a weekday trip on a Sunday is Monday’s; a day of its own keeps its own t
   const school = { name: '學校', lat: 24.733, lon: 121.088 };
   const t = cleanSaved({ id: 's1', name: '上學', from: home, to: school, time: '07:30', days: [1, 2, 3, 4, 5], back: '17:00', alt: [{ days: [3], time: '09:10', back: '' }, { days: [3, 5], time: '', back: '15:00' }] });
   assert.deepEqual(t.alt, [{ days: [3], time: '09:10', back: '' }, { days: [5], time: '', back: '15:00' }]);
-  const sun = twAt('2026-10-04', '20:00'); // a Sunday
-  assert.equal(tripNow(t, home, sun).at, twAt('2026-10-05', '07:30'));
-  assert.equal(tripNow(t, home, twAt('2026-10-06', '09:00')).at, twAt('2026-10-07', '09:10'), 'Tuesday after: Wednesday’s own time');
-  assert.equal(tripNow(t, school, twAt('2026-10-09', '12:00')).at, twAt('2026-10-09', '15:00'), 'Friday home earlier');
-  assert.equal(tripNow(t, school, twAt('2026-10-08', '12:00')).at, twAt('2026-10-08', '17:00'));
-  assert.equal(tripNow(t, home, twAt('2026-10-08', '20:00')).at, twAt('2026-10-09', '07:30'), 'Friday out: the usual time');
+  const sun = twAt('2026-10-18', '20:00'); // a Sunday
+  assert.equal(tripNow(t, home, sun).at, twAt('2026-10-19', '07:30'));
+  assert.equal(tripNow(t, home, twAt('2026-10-20', '09:00')).at, twAt('2026-10-21', '09:10'), 'Tuesday after: Wednesday’s own time');
+  assert.equal(tripNow(t, school, twAt('2026-10-23', '12:00')).at, twAt('2026-10-23', '15:00'), 'Friday home earlier');
+  assert.equal(tripNow(t, school, twAt('2026-10-22', '12:00')).at, twAt('2026-10-22', '17:00'));
+  assert.equal(tripNow(t, home, twAt('2026-10-22', '20:00')).at, twAt('2026-10-23', '07:30'), 'Friday out: the usual time');
 });
 
 test('a weekday trip seen from neither end on a Saturday, a Sunday or late on a Friday is Monday’s way out, not its way back', async () => {
@@ -1679,20 +1679,15 @@ test("the map's top stays sharp: the phone's own status bar (the page's colour, 
 
 test('a weekdays-only trip (上學) skips a national holiday: Friday 國慶日補假 → Monday; an every-day trip doesn’t', async () => {
   const { tripNow } = await import('../public/lib/tab-go.mjs');
-  const { useHolidays } = await import('../public/lib/util.mjs');
-  const { twHoliday } = await import('#kit/holidays.mjs');
   const home = { name: '家', lat: 24.821, lon: 121.018 };
   const school = { name: '學校', lat: 24.733, lon: 121.088 };
   const t = cleanSaved({ id: 's1', name: '上學', from: home, to: school, time: '07:30', days: [1, 2, 3, 4, 5], back: '17:00' });
   const gym = cleanSaved({ id: 's2', name: '運動', from: home, to: school, time: '07:30', days: [0, 1, 2, 3, 4, 5, 6] });
   const fri = Date.parse('2026-10-09T07:00:00+08:00');
-  useHolidays(date => Boolean(twHoliday(date)));
   const w = tripNow(t, home, fri);
   assert.equal(w.today, false);
   assert.equal(w.at, twAt('2026-10-12', '07:30'));
   assert.equal(tripNow(gym, home, fri).at, twAt('2026-10-09', '07:30'));
-  useHolidays(null);
-  assert.equal(tripNow(t, home, fri).at, twAt('2026-10-09', '07:30'));
 });
 
 test('a bus leg’s live line: a later bus chosen isn’t “趕不上” because an earlier one is coming; its timetable time instead', async () => {

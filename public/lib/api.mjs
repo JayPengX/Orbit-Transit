@@ -72,15 +72,6 @@ export async function kept(path) {
     return null;
   }
 }
-// The family's data packs (bus, shapes, where.json) are the kit's to keep now
-// (2026-10-18): this device's old copies of them go, once.
-export async function dropOldPacks() {
-  if (!hasCaches()) return;
-  try {
-    const cache = await caches.open(DATA_CACHE);
-    for (const req of await cache.keys()) if (/^https:\/\/data\.transit\/(pack\/|shape\/|where$)/.test(req.url)) await cache.delete(req);
-  } catch {}
-}
 export async function keep(path, data, at, max = Infinity) {
   if (!hasCaches()) return;
   try {
