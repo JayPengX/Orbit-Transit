@@ -1,6 +1,7 @@
-// The metros: each city's system from TDX's own stations and lines (drawn
-// on the real map by tab-metro.mjs), and a station's board: the next trains each way, live where the
-// operator sends it, else from the timetable.
+// The metros: each city's system from TDX's own stations, lines and changes
+// (drawn as a metro map by metromap.mjs), and a station's board: the next
+// trains each way, live where the operator sends it, else from the timetable,
+// else how often the line runs; its first and last trains and exits.
 
 import { tdx, rows } from './api.mjs';
 import { zh, meters, tw, twAt, TDX_DAYS } from './util.mjs';
@@ -21,6 +22,8 @@ export const OPERATORS = en
   : { TRTC: '臺北捷運', NTMC: '新北捷運', NTDLRT: '淡海輕軌', NTALRT: '安坑輕軌', TRTCMG: '貓空纜車', TYMC: '桃園捷運', TMRT: '臺中捷運', KRTC: '高雄捷運', KLRT: '高雄輕軌' };
 // Which systems TDX gives a live board for, and a station timetable for.
 const LIVE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT']);
+// Which list their changes between lines (the rest answer an error).
+const TRANSFERS = new Set(['TRTC', 'NTMC', 'KRTC']);
 const TIMETABLE = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT', 'NTDLRT', 'NTALRT', 'NTMC']);
 // Colours TDX leaves out (貓空纜車 has none, 高雄 often none): by system, or system:line.
 const FALLBACK_COLOR = { TRTCMG: '#77bc1f', 'KRTC:R': '#e2211c', 'KRTC:O': '#f8a51b', KLRT: '#7cc24d', TYMC: '#8246af', TMRT: '#8ec31f', NTDLRT: '#e3002c', NTALRT: '#c3b091' };
@@ -32,15 +35,22 @@ const DAY = 86_400_000;
 // paths: [[key…]…], branch }] }. `paths` are the operator's routes (each a
 // continuous run, a branch included: 南勢角–蘆洲 through 大橋頭), what the map draws.
 export async function loadSystem(sys) {
-  const [st, of, ln, ro] = await Promise.all([
+  const [st, of, ln, ro, tr] = await Promise.all([
     tdx(`basic/v2/Rail/Metro/Station/${sys}?$select=StationUID,StationID,StationName,StationPosition,LocationCity`, { fresh: 7 * DAY, persist: true }),
     tdx(`basic/v2/Rail/Metro/StationOfLine/${sys}`, { fresh: 7 * DAY, persist: true }),
     tdx(`basic/v2/Rail/Metro/Line/${sys}`, { fresh: 7 * DAY, persist: true }),
-    tdx(`basic/v2/Rail/Metro/StationOfRoute/${sys}?$select=LineID,RouteID,Direction,Stations`, { fresh: 7 * DAY, persist: true }).catch(() => [])
+    tdx(`basic/v2/Rail/Metro/StationOfRoute/${sys}?$select=LineID,RouteID,Direction,Stations`, { fresh: 7 * DAY, persist: true }).catch(() => []),
+    TRANSFERS.has(sys) ? tdx(`basic/v2/Rail/Metro/LineTransfer/${sys}`, { fresh: 7 * DAY, persist: true }).catch(() => []) : []
   ]);
-  return parseSystem(sys, st, of, ln, ro);
+  return parseSystem(sys, st, of, ln, ro, tr);
 }
-export function parseSystem(sys, st, of, ln, ro = []) {
+// Changes TDX leaves out, between systems: 凱旋 and the 輕軌's 前鎮之星, 動物園 and 貓空纜車's.
+const MORE_TRANSFERS = [
+  ['metro:KRTC:R6', 'metro:KLRT:C3'],
+  ['metro:TRTC:BR01', 'metro:TRTCMG:MK01']
+];
+// `transfers`: [[key, key]…], the operator's own changes (新埔 and 新埔民生 are one).
+export function parseSystem(sys, st, of, ln, ro = [], tr = []) {
   const stations = new Map();
   for (const s of rows(st)) {
     const lat = Number(s.StationPosition?.PositionLat);
@@ -67,8 +77,16 @@ export function parseSystem(sys, st, of, ln, ro = []) {
     seen.add(sig);
     line.paths.push(path);
   }
-  return { sys, stations: [...stations.values()], lines };
+  const transfers = [
+    ...rows(tr)
+      .filter(t => t.FromStationID !== t.ToStationID)
+      .map(t => [`metro:${sys}:${t.FromStationID}`, `metro:${stations.has(t.ToStationID) ? sys : LINE_OP[t.ToLineID] || sys}:${t.ToStationID}`]),
+    ...MORE_TRANSFERS.filter(p => p.some(k => k.startsWith(`metro:${sys}:`)))
+  ];
+  return { sys, stations: [...stations.values()], lines, transfers };
 }
+// Which system a station in another's list is on, by its line (臺北捷運's 頂埔 changes to 新北's 三鶯線, LB).
+const LINE_OP = { LB: 'NTMC', Y: 'NTMC', K: 'NTALRT', V: 'NTDLRT', BL: 'TRTC', BR: 'TRTC', G: 'TRTC', O: 'TRTC', R: 'TRTC' };
 const normColor = c => (!c ? '' : c.startsWith('#') ? c : /^[0-9a-f]{6}$/i.test(c) ? `#${c}` : c);
 
 // A line's stations in order, split where it jumps (a branch listed after
@@ -116,12 +134,20 @@ function jump(a, b) {
 
 // Stations at the same place on different lines (or systems) are one
 // interchange: within 250 m and the same name, or within 80 m.
-export function interchanges(stations) {
+// So are the operators' own changes (`transfers`: [[key, key]…]: 新埔 and 新埔民生).
+export function interchanges(stations, transfers = []) {
+  const bare = n => String(n).replace(/站$/, '');
+  const linked = new Set(transfers.flatMap(([a, b]) => [`${a}|${b}`, `${b}|${a}`]));
   const groups = [];
   for (const s of stations) {
-    const g = groups.find(g => g.some(x => (x.name === s.name && meters(x.lat, x.lon, s.lat, s.lon) < 250) || meters(x.lat, x.lon, s.lat, s.lon) < 80));
-    if (g) g.push(s);
-    else groups.push([s]);
+    const hits = groups.filter(g => g.some(x => linked.has(`${x.key}|${s.key}`) || (bare(x.name) === bare(s.name) && meters(x.lat, x.lon, s.lat, s.lon) < 250) || meters(x.lat, x.lon, s.lat, s.lon) < 80));
+    // (One group, even when a station joins two that were apart.)
+    const g = hits.shift() || (groups.push([]), groups.at(-1));
+    for (const h of hits) {
+      g.push(...h);
+      groups.splice(groups.indexOf(h), 1);
+    }
+    g.push(s);
   }
   return groups;
 }
@@ -136,11 +162,114 @@ export async function liveBoard(st) {
   return rows(j).map(r => ({ dest: zh(r.DestinationStationName) || r.TripHeadSign || '', min: r.EstimateTime == null ? null : Number(r.EstimateTime), status: Number(r.ServiceStatus) || 0, line: r.LineID || r.LineNO || '' }));
 }
 
+// A station's timetable rows (TDX's), or null where the operator has none.
+async function timetable(st) {
+  if (!TIMETABLE.has(st.op)) return null;
+  return rows(await tdx(`basic/v2/Rail/Metro/StationTimeTable/${st.op}?$filter=StationID eq '${st.id}'`, { fresh: DAY, persist: true }));
+}
 // From the timetable: the next departures each way, [{ dest, times: [ms…], line }].
 export async function nextTrains(st, now = Date.now(), n = 4) {
-  if (!TIMETABLE.has(st.op)) return null;
-  const j = await tdx(`basic/v2/Rail/Metro/StationTimeTable/${st.op}?$filter=StationID eq '${st.id}'`, { fresh: DAY, persist: true });
-  return upcoming(rows(j), now, n);
+  const list = await timetable(st);
+  return list && upcoming(list, now, n);
+}
+
+// The first and last train each way on the service day running now (04:00
+// to 04:00): [{ line, dest, first, last }] (ms), a row a line and way, named by
+// where most of its trains go (板南線's to 頂埔, not the few to 亞東醫院).
+export function firstLast(list, now = Date.now()) {
+  const t = serviceDay(now);
+  const out = new Map();
+  for (const r of list) {
+    if (r.ServiceDay && r.ServiceDay[TDX_DAYS[t.dow]] === false) continue;
+    const times = (r.Timetables || []).map(x => x.DepartureTime || x.ArrivalTime).filter(Boolean).map(hhmm => at(t, hhmm));
+    if (!times.length) continue;
+    const k = `${r.LineID || ''}:${r.Direction}`;
+    const o = out.get(k) || { line: r.LineID || '', dest: '', first: Infinity, last: -Infinity, most: 0 };
+    o.first = Math.min(o.first, ...times);
+    o.last = Math.max(o.last, ...times);
+    if (times.length > o.most) [o.most, o.dest] = [times.length, zh(r.DestinationStationName)];
+    out.set(k, o);
+  }
+  return [...out.values()].map(({ most, ...o }) => o);
+}
+const serviceDay = now => (tw(now).min < 240 ? tw(now - DAY) : tw(now));
+const at = (t, hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return twAt(t.date, `${h < 4 ? h + 24 : h}:${m}`);
+};
+
+// A line with no timetable (文湖線, 台中捷運): how often it runs now, and its
+// hours, from the operator's frequencies: { min, max, first, last } or null.
+export function frequency(list, line, now = Date.now()) {
+  const t = serviceDay(now);
+  const r = list.find(x => x.LineID === line && !(x.ServiceDay && x.ServiceDay[TDX_DAYS[t.dow]] === false)) || list.find(x => x.LineID === line);
+  if (!r) return null;
+  const nowMin = tw(now).min < 240 ? tw(now).min + 1440 : tw(now).min;
+  const mins = hhmm => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return (h < 4 ? h + 24 : h) * 60 + m;
+  };
+  const h = (r.Headways || []).find(x => mins(x.StartTime) <= nowMin && nowMin < (mins(x.EndTime) || 1440) + (mins(x.EndTime) <= mins(x.StartTime) ? 1440 : 0));
+  const op = r.OperationTime || {};
+  return { min: h ? Number(h.MinHeadwayMins) : null, max: h ? Number(h.MaxHeadwayMins) : null, first: op.StartTime ? at(t, op.StartTime) : null, last: op.EndTime ? at(t, op.EndTime === '24:00' ? '00:00' : op.EndTime) : null };
+}
+const frequencies = op => tdx(`basic/v2/Rail/Metro/Frequency/${op}`, { fresh: DAY, persist: true }).then(rows);
+
+// A station's board, live and timetable together: for each line and way,
+// the next trains (live minutes first where the operator sends them),
+// [{ line, dest, times: [ms…], live, note, every }], and the day's first and
+// last trains. A line with neither: how often it runs (`every`: '4–10').
+export async function stationBoard(st, now = Date.now()) {
+  const [board, list] = await Promise.all([liveBoard(st).catch(() => null), timetable(st).catch(() => null)]);
+  const next = list ? upcoming(list, now, 3) : [];
+  const rowsOut = next.map(r => ({ line: r.line, dest: r.dest, times: r.times, live: false, note: '' }));
+  for (const b of board || []) {
+    if (!b.dest) continue;
+    let r = rowsOut.find(x => x.dest === b.dest && (!b.line || !x.line || x.line === b.line));
+    if (!r) rowsOut.push((r = { line: b.line, dest: b.dest, times: [], live: false, note: '' }));
+    if (b.status === 3) r.note = W('末班車已過', 'Last train gone');
+    else if (b.status === 4) r.note = W('今日未營運', 'Not running today');
+    if (b.min == null || b.status >= 3) continue;
+    const t = now + b.min * 60_000;
+    r.times = [t, ...r.times.filter(x => x > t + 60_000)].slice(0, 3);
+    r.live = true;
+  }
+  const fl = list ? firstLast(list, now) : [];
+  // Its lines with no trains listed: their frequency, toward both ends.
+  const bare = (st.lines || []).filter(l => !rowsOut.some(r => r.line === l));
+  if (bare.length) {
+    const [freq, sys] = await Promise.all([frequencies(st.op).catch(() => []), loadSystem(st.op).catch(() => null)]);
+    for (const l of bare) {
+      const f = frequency(freq, l, now);
+      if (!f) continue;
+      const seq = sys?.lines.find(x => x.id === l)?.seq || [];
+      const name = k => sys?.stations.find(x => x.key === k)?.name || '';
+      const ends = [name(seq[0]), name(seq.at(-1))].filter(n => n && n !== st.name);
+      const running = f.first != null && f.last != null && now >= f.first && now <= f.last && f.min != null;
+      rowsOut.push({ line: l, dest: ends.join('・'), times: [], live: false, note: running ? '' : W('現在沒有營運', 'Not running now'), every: running ? (f.max && f.max !== f.min ? `${f.min}–${f.max}` : String(f.min)) : '' });
+      if (f.first != null && !fl.some(x => x.line === l)) fl.push({ line: l, dest: ends.join('・'), first: f.first, last: f.last });
+    }
+  }
+  rowsOut.sort((a, b) => a.line.localeCompare(b.line) || (a.times[0] ?? Infinity) - (b.times[0] ?? Infinity));
+  return { op: st.op, id: st.id, rows: rowsOut, firstLast: fl, none: !rowsOut.length };
+}
+
+// A station's exits: [{ id, desc, lift, escalator, lat, lon }].
+export async function stationExits(st) {
+  const j = await tdx(`basic/v2/Rail/Metro/StationExit/${st.op}`, { fresh: 7 * DAY, persist: true });
+  return rows(j)
+    .filter(x => x.StationID === st.id)
+    .map(x => ({ id: String(x.ExitID || '').replace(/^.*出口/, ''), desc: String(x.LocationDescription || '').trim(), lift: x.Elevator === true, escalator: Number(x.Escalator) > 0, lat: Number(x.ExitPosition?.PositionLat), lon: Number(x.ExitPosition?.PositionLon) }))
+    .sort((a, b) => a.id.localeCompare(b.id, 'zh-Hant', { numeric: true }));
+}
+
+// The live trains across a system now: [{ line, at: station key, dest: station key, min }].
+export async function liveTrains(sys) {
+  if (!LIVE.has(sys)) return [];
+  const j = await tdx(`basic/v2/Rail/Metro/LiveBoard/${sys}`, { fresh: 'live' });
+  return rows(j)
+    .filter(r => r.EstimateTime != null && Number(r.EstimateTime) <= 1 && (Number(r.ServiceStatus) || 0) < 3 && r.DestinationStationID)
+    .map(r => ({ line: r.LineID || r.LineNO || '', at: `metro:${sys}:${r.StationID}`, dest: `metro:${sys}:${r.DestinationStationID}`, min: Number(r.EstimateTime) }));
 }
 export function upcoming(list, now = Date.now(), n = 4) {
   // After midnight belongs to the day before (00:30 is tonight's last train):

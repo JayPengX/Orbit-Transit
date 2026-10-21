@@ -13,7 +13,8 @@ import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo,
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
-import { liveBoard, nextTrains, OPERATORS, stationTitle } from './metro.mjs';
+import { OPERATORS, stationTitle } from './metro.mjs';
+import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta } from './near.mjs';
@@ -562,7 +563,11 @@ function refreshCard() {
       }
       else if (c.kind === 'tra') c.live = await traBoard(c.item.id);
       else if (c.kind === 'hsr') c.live = await hsrBoard(c.item.id);
-      else if (c.kind === 'metro') c.live = { board: await liveBoard(c.item).catch(() => null), next: await nextTrains(c.item).catch(() => null), op: c.item.op };
+      else if (c.kind === 'metro') {
+        // The station's whole group (台北車站's BL12 and R10), each line's trains.
+        c.group ||= await stationGroup(c.item);
+        c.live = { boards: await loadBoards(c.group.list), lines: c.group.lines };
+      }
       else return;
       c.error = '';
     } catch (err) {
@@ -711,7 +716,7 @@ function renderCard() {
       ${actions(c, { more: `<button class="q-btn" type="button" data-card="train">${icon('clock')} ${W('時刻', 'Times')}</button>` })}`;
   } else if (c.kind === 'metro') {
     const s = c.item;
-    html = `${head(stationTitle(s.name), OPERATORS[s.op] || W('捷運', 'Metro'), 'metro')}${err}${metroBoardHtml(c.live)}
+    html = `${head(stationTitle(s.name), OPERATORS[s.op] || W('捷運', 'Metro'), 'metro')}${err}${c.group ? `<div class="mm-codes">${codesHtml(c.group.list, c.group.lines)}</div>` : ''}${boardHtml(c.live?.boards || null, c.live?.lines || [])}
       ${actions(c, { more: `<button class="q-btn" type="button" data-card="metro">${icon('metro')} ${W('路網圖', 'Map')}</button>` })}`;
   } else if (c.kind === 'place' || c.kind === 'point') {
     const s = c.item;
@@ -723,25 +728,6 @@ function renderCard() {
   fitStrips(box);
   // The plans keep most of the map in view: the sheet stays at its half.
   box.classList.toggle('plans', c.kind === 'plans');
-}
-
-// A metro station's board: live trains (臺北捷運 sends only those about to
-// arrive, so most of the time there are none) and the timetable's next ones
-// beside them, each way.
-export function metroBoardHtml(live) {
-  if (!live) return `<p class="ot-note">${W('載入中…', 'Loading…')}</p>`;
-  const board = (live.board || []).filter(r => r.dest);
-  const next = live.next || [];
-  const liveHtml = board
-    .map(r => `<div class="ot-board-row"><span class="ot-train"><b>${W('往', 'to')} ${e(r.dest)}</b><small>${r.status === 3 ? W('末班車已過', 'Last one gone') : r.status === 4 ? W('今日未營運', 'Not today') : W('即時', 'Live')}</small></span><span class="ot-delay ${r.min != null && r.min <= 1 ? 'ok' : ''}">${r.min == null ? '—' : r.min <= 0 ? W('進站中', 'Arriving') : W(`${r.min} 分`, `${r.min} min`)}</span></div>`)
-    .join('');
-  const tableHtml = next
-    .filter(r => !board.some(b => b.dest === r.dest))
-    .map(r => `<div class="ot-board-row"><span class="ot-train"><b>${W('往', 'to')} ${e(r.dest)}</b><small>${W('時刻表', 'Timetable')}</small></span><span class="ot-times">${r.times.map(t => `<b>${e(hm(t))}</b>`).join('')}</span></div>`)
-    .join('');
-  if (liveHtml || tableHtml) return `<div class="ot-board">${liveHtml}${tableHtml}</div>`;
-  if (live.op === 'TMRT') return `<p class="ot-note">${W('台中捷運沒有提供即時或時刻資料。', 'Taichung Metro shares no live or timetable data.')}</p>`;
-  return emptyNote(W('現在沒有列車資料', 'No trains right now'));
 }
 
 async function cardClick(ev) {

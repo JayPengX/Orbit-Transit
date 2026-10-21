@@ -3671,18 +3671,162 @@ span.ot-pass {
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-/* 捷運: the city's map in a rounded card, its legend under it. */
+/* 捷運: the city's metro map in a rounded card (our own drawing, or 實景 the real map), its lines' chips along the bottom. */
 .ot-metro-view {
+  --mm-bg: var(--q-surface);
   position: relative;
   margin-top: 12px;
   overflow: hidden;
-  height: max(360px, calc(100svh - var(--q-nav, 0px) - var(--q-top, 0px) - 250px));
+  height: max(380px, calc(100svh - var(--q-nav, 0px) - var(--q-top, 0px) - 250px));
   border-radius: var(--q-r-card, 20px);
-  background: var(--q-surface);
+  background: var(--mm-bg);
 }
-.ot-metro-view .ot-map {
+.ot-metro-view .ot-map,
+.mm-box {
   position: absolute;
   inset: 0;
+}
+.mm-box {
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.mm-box[hidden],
+.ot-metro-view .ot-map[hidden] {
+  display: none;
+}
+.mm-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.mm-line {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 0.2s;
+}
+.mm-st {
+  fill: var(--mm-bg);
+  stroke: var(--c);
+  stroke-width: 3;
+}
+.mm-x {
+  fill: var(--mm-bg);
+  stroke: var(--q-label);
+  stroke-width: 3.2;
+}
+.mm-name {
+  fill: var(--q-label);
+  font: 500 12px var(--q-font);
+  dominant-baseline: central;
+  paint-order: stroke;
+  stroke: var(--mm-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  transition: opacity 0.2s;
+}
+.mm-name.big {
+  font-weight: 700;
+}
+/* Far out: the interchanges' and the ends' names only. */
+.mm-far .mm-name:not(.big, .end) {
+  display: none;
+}
+/* One line forward. */
+.mm-focus .mm-line:not(.on) {
+  opacity: 0.16;
+}
+.mm-focus :is(.mm-st, .mm-x, .mm-name):not(.on) {
+  opacity: 0.3;
+}
+.mm-train rect {
+  fill: var(--c);
+  stroke: var(--mm-bg);
+  stroke-width: 2;
+}
+.mm-train path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mm-you {
+  fill: var(--q-blue);
+  stroke: var(--mm-bg);
+  stroke-width: 2.5;
+}
+.mm-you-ring {
+  fill: color-mix(in srgb, var(--q-blue) 18%, transparent);
+}
+/* 路線圖 or 實景, and the nearest station, over the map's top. */
+.mm-tools {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.mm-tools > * {
+  pointer-events: auto;
+}
+.ot-metro-legend > * {
+  background: var(--q-surface);
+  box-shadow: 0 0 0 0.5px var(--q-glass-edge), var(--q-glass-drop);
+}
+.mm-mode,
+.mm-fab {
+  background: var(--q-glass-strong);
+  -webkit-backdrop-filter: var(--q-glass-blur);
+  backdrop-filter: var(--q-glass-blur);
+  box-shadow: var(--q-glass-drop);
+}
+.mm-mode {
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+}
+.mm-mode button {
+  min-width: 64px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--q-label-2);
+  font: 600 13px/1 var(--q-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mm-mode button[aria-pressed='true'] {
+  background: var(--q-label);
+  color: var(--mm-bg);
+}
+.mm-fab {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--q-blue);
+  cursor: pointer;
+}
+.mm-fab svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
 }
 .ot-metro-legend {
   position: absolute;
@@ -3691,7 +3835,7 @@ span.ot-pass {
   bottom: 10px;
   z-index: 500;
   display: flex;
-  gap: 4px;
+  gap: 6px;
   padding: 0 10px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -3705,25 +3849,33 @@ span.ot-pass {
 .ot-metro-legend > * {
   display: inline-flex;
   flex: none;
-  white-space: nowrap;
   align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border: 0;
   border-radius: 999px;
-  background: var(--q-glass-strong);
-  -webkit-backdrop-filter: var(--q-glass-blur);
-  backdrop-filter: var(--q-glass-blur);
-  font: 600 12px/16px var(--q-font);
+  color: var(--q-label);
+  font: 600 13px/1 var(--q-font);
+  white-space: nowrap;
+  cursor: pointer;
 }
 .ot-metro-legend i {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--c, var(--q-blue));
 }
+.ot-metro-legend > [aria-pressed='true'] {
+  background: var(--c);
+  color: #fff;
+}
+.ot-metro-legend > [aria-pressed='true'] i {
+  background: #fff;
+}
 .ot-metro-msg {
   position: absolute;
-  top: 10px;
+  top: 58px;
   left: 50%;
   z-index: 500;
   max-width: calc(100% - 20px);
@@ -3739,6 +3891,131 @@ span.ot-pass {
 }
 .ot-metro-msg:empty {
   display: none;
+}
+
+/* A metro station: its line codes as its signs show them, the next trains counting down, first and last, exits. */
+.mm-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+.mm-code {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  font: 600 13px/1 var(--q-font);
+  white-space: nowrap;
+}
+.mm-code b {
+  padding: 6px 7px;
+  background: var(--c);
+  color: #fff;
+  font: 800 13px/1 var(--q-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.mm-code span {
+  padding: 0 9px 0 7px;
+  color: var(--q-label);
+}
+.mb-board .q-ritem,
+.mm-sheet .mb-row {
+  --q-ritem-sep: 28px;
+}
+.mb-bar {
+  flex: none;
+  align-self: stretch;
+  width: 5px;
+  margin: 4px 0;
+  border-radius: 3px;
+  background: var(--c);
+}
+.mb-count {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 52px;
+  justify-content: flex-end;
+  color: var(--q-label);
+  font: 700 24px/1 var(--q-font-rounded);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mb-count small {
+  color: var(--q-label-2);
+  font: 600 13px/1 var(--q-font);
+}
+.mb-now {
+  color: var(--q-green);
+  font-size: 20px;
+}
+.mb-every {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font: 700 20px/1 var(--q-font-rounded);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mb-every small {
+  color: var(--q-label-2);
+  font: 600 13px/1 var(--q-font);
+}
+.mb-none {
+  color: var(--q-label-3);
+  font: 600 20px/1 var(--q-font-rounded);
+}
+.mb-live {
+  flex: none;
+  display: grid;
+  color: var(--q-green);
+}
+.mb-live svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.mb-fl {
+  flex: none;
+  display: flex;
+  gap: 14px;
+}
+.mb-fl > span {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+.mb-fl small {
+  color: var(--q-label-2);
+  font: 500 11px/1 var(--q-font);
+}
+.mb-fl b {
+  font: 700 16px/1 var(--q-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.mb-exit {
+  --q-ritem-sep: 54px;
+}
+.mb-exit-no {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--q-fill-3);
+  font: 800 14px/1 var(--q-font-rounded);
+  white-space: nowrap;
+}
+.mm-sheet #mex:not(:empty) {
+  margin-top: 16px;
 }
 
 /* ==== 8. 我的 ==================================================================================== */
