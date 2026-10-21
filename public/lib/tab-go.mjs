@@ -14,7 +14,7 @@
 import * as kitUI from '#kit/ui.mjs';
 import { errorText, liveMs } from './api.mjs';
 import { stopsEta, etaRank } from './bus.mjs';
-import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
+import { nearStops, keptNear, keepNear, nearMoved, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
 import { railNetwork, railSpan, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
@@ -65,6 +65,8 @@ export function init(c) {
   useBusCtx(c);
   $('panel-go').addEventListener('click', onClick);
   (ctx.onRefresh ||= []).push(() => shown && render());
+  // The phone's fix somewhere else than 附近 was read for (the last place kept, at an opening): read again.
+  (ctx.moved ||= []).push(h => shown && nearMoved(S.near, h) && loadNear({ force: true }));
 }
 // The first look, filled in (where you are, the kept plans timed, the
 // buses and trains): what the opening waits for, so the loading screen
@@ -74,6 +76,7 @@ export const ready = () => firstLook || Promise.resolve();
 
 export function show() {
   shown = true;
+  S.near ||= keptNearAll(ctx.here);
   render();
   const run = refresh(true);
   firstLook ||= run.catch(() => {});
@@ -422,19 +425,27 @@ async function loadTrip(w, { force = false } = {}) {
 
 // The stops and YouBike stations around you: the first thing to catch when
 // nothing is pinned, and what's near beside what is.
-async function loadNear() {
+async function loadNear({ force = false } = {}) {
   const h = ctx.here;
   if (!h) return;
+  S.near ||= keptNearAll(h);
   const old = S.near;
-  if (old && Date.now() - old.at < 20_000) return;
+  if (!force && old && !old.kept && Date.now() - old.at < 20_000 && !nearMoved(old, h)) return;
   try {
     const [stops, bikes] = await Promise.all([nearStops(h, { n: 3, r: 350 }), bikesAround(h.lat, h.lon).catch(() => [])]);
-    S.near = { at: Date.now(), stops, bikes: bikes.map(s => ({ ...s, d: meters(h.lat, h.lon, s.lat, s.lon) })).filter(s => s.d <= 700).sort((a, b) => a.d - b.d).slice(0, 3) };
+    // (A newer read, for where you are now, already in: it stays.)
+    if (S.near !== old && ctx.here !== h) return;
+    S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: keepNear(h, stops), bikes: bikes.map(s => ({ ...s, d: meters(h.lat, h.lon, s.lat, s.lon) })).filter(s => s.d <= 700).sort((a, b) => a.d - b.d).slice(0, 3) };
   } catch {
-    S.near = { at: old?.at ?? Date.now(), stops: old?.stops || [], bikes: old?.bikes || [] };
+    if (!old || nearMoved(old, h)) S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: [], bikes: [] };
   }
   render();
 }
+// The stops kept from the last read (bus-ui keptNear), shown at once; the bikes come with the read.
+const keptNearAll = h => {
+  const k = keptNear(h);
+  return k ? { ...k, kept: true, bikes: [] } : null;
+};
 
 async function loadPlace(id) {
   const p = ctx.data.places.find(x => x.id === id);
@@ -586,7 +597,7 @@ const bikeCard = b => {
 // What's around you now: the buses at the nearest stops (not the one the card leads with), the YouBike stations.
 function nearHtml(skip) {
   const n = S.near;
-  if (!n) return ctx.here ? section(W('附近', 'Nearby'), rowCard(['', ''].map(() => `<div class="ot-strip">${strip({ no: '··', wait: true })}</div>`).join(''))) : '';
+  if (!n) return ctx.here ? section(W('附近', 'Nearby'), rowCard(['', ''].map(() => `<div class="ot-strip">${strip({ no: '', wait: true })}</div>`).join(''))) : '';
   const seen = new Set();
   const rows = n.stops
     .flatMap(st => st.rows.slice(0, 3).map(r => ({ ...r, dist: st.dist })))
