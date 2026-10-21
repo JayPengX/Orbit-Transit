@@ -15,7 +15,7 @@ import * as kitUI from '#kit/ui.mjs';
 import { suggest } from './suggest.mjs';
 import { tripNow, keptLead, pinnedTrainsNext, rideNow } from './tab-go.mjs';
 import { stopsEta, etaRank } from './bus.mjs';
-import { nearStops, strip, fitStrips, busWhen } from './bus-ui.mjs';
+import { nearStops, keptNear, keepNear, nearMoved, strip, fitStrips, busWhen } from './bus-ui.mjs';
 import { stationLabel, icon, legChips } from './ui.mjs';
 import { COLOR, tile, tag, countHtml, tick, hero } from './look.mjs';
 import { tripKey } from './store.mjs';
@@ -39,7 +39,9 @@ const head = (title, { more = '', moreTap = '' } = {}) => kitUI.sectionHeadHtml(
 const placeTile = kind => kitUI.placeTileHtml(kind);
 
 export function createHome(box, ctx, act) {
-  const S = { stops: null, bikes: null, pinned: new Map(), pinnedAt: 0, trains: [], read: 0, sug: [] };
+  // (The stops around you kept from the last read, shown at once; `near`: where they were read.)
+  const kept = keptNear(ctx.here);
+  const S = { stops: kept?.stops ?? null, near: kept, bikes: null, pinned: new Map(), pinnedAt: 0, trains: [], read: 0, sug: [] };
   let last = '';
   let ticker = 0;
   let running = false;
@@ -190,7 +192,7 @@ export function createHome(box, ctx, act) {
       .filter(x => !seen.has(x.uid) && seen.add(x.uid))
       .slice(0, NEAR_BUSES);
     const rows = wait
-      ? ['', ''].map(() => `<div class="ot-strip">${strip({ no: '··', wait: true })}</div>`).join('')
+      ? ['', ''].map(() => `<div class="ot-strip">${strip({ no: '', wait: true })}</div>`).join('')
       : buses.map(x => `<div class="ot-strip">${strip({ no: x.route, note: Number.isFinite(x.dist) ? e(distText(x.dist)) : '', main: e(x.stop || ''), eta: busWhen(x.v, null), attrs: `data-route="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"` })}</div>`).join('');
     const bikes = (S.bikes || []).length ? `<div class="q-rail ot-bikes">${S.bikes.map(bikeCard).join('')}</div>` : '';
     if (!rows && !bikes) return '';
@@ -216,8 +218,12 @@ export function createHome(box, ctx, act) {
     const h = ctx.here;
     if (!h) return;
     try {
-      S.stops = await nearStops(h, { n: 3, r: 350 });
+      const stops = await nearStops(h, { n: 3, r: 350 });
+      if (ctx.here !== h && S.near?.at > 0 && !nearMoved(S.near, ctx.here)) return;
+      S.stops = keepNear(h, stops);
+      S.near = { at: Date.now(), lat: h.lat, lon: h.lon };
     } catch {
+      if (nearMoved(S.near, h)) S.stops = [];
       S.stops ||= [];
     }
   }
@@ -242,6 +248,8 @@ export function createHome(box, ctx, act) {
     // (Nothing around you to read before the phone says where you are: asked again when it does.)
     if (!ctx.here) return draw();
     if (inflight && !force) return inflight;
+    // (Somewhere else than the stops were read for: the phone's fix after the last place kept. Read now.)
+    if (nearMoved(S.near, ctx.here)) force = true;
     if (!force && Date.now() - S.read < FRESH_MS) return draw();
     S.read = Date.now();
     inflight = Promise.allSettled([readStops(), readPinned()]).finally(() => (inflight = null));

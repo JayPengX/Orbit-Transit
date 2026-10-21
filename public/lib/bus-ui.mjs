@@ -11,7 +11,7 @@ import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
-import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel } from './util.mjs';
+import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson } from './util.mjs';
 import { nextRun, liveTrusted } from './live.mjs';
 
 import { W, en } from '#kit/lang.mjs';
@@ -55,6 +55,32 @@ export async function nearStops(h, { r = 350, n = 6 } = {}) {
     .slice(0, n);
 }
 
+// The stops around you as last read, kept on the phone: an opening shows them
+// at once (the owner, 2026-10-21: 附近 was grey bars every time, and then the
+// stops of where the app was last opened), read again behind them, and again
+// once the phone's fix is somewhere else. 交通 and the map's sheet share them.
+const NEAR_KEY = 'orbit-transit.near';
+const NEAR_KEEP_MS = 10 * 60_000;
+// Moved this far from where they were read: read again.
+const NEAR_MOVED_M = 150;
+// A stop further than this isn't 附近.
+const NEAR_STOP_M = 450;
+export const nearMoved = (at, h) => Boolean(h) && (!at || at.lat == null || meters(h.lat, h.lon, at.lat, at.lon) > NEAR_MOVED_M);
+// → { at, lat, lon, stops } or null (none kept, too old, or kept for somewhere else); the buses' times counted down since.
+export function keptNear(h, now = Date.now()) {
+  const k = readJson(NEAR_KEY);
+  if (!Array.isArray(k?.stops) || now - k.at > NEAR_KEEP_MS || nearMoved(k, h)) return null;
+  const age = Math.round((now - k.at) / 1000);
+  const v = x => (x && x.sec != null ? { ...x, sec: Math.max(0, x.sec - age), more: (x.more || []).map(m => m - age).filter(m => m > 0), t: now } : x);
+  return { ...k, stops: k.stops.map(st => ({ ...st, dist: st.dist ?? Infinity, rows: st.rows.map(r => ({ ...r, v: v(r.v) })) })) };
+}
+// The stops read at h, the far ones left out (unless none could be placed), kept.
+export function keepNear(h, stops) {
+  const near = stops.some(st => Number.isFinite(st.dist)) ? stops.filter(st => st.dist <= NEAR_STOP_M) : stops;
+  writeJson(NEAR_KEY, { at: Date.now(), lat: h.lat, lon: h.lon, stops: near });
+  return near;
+}
+
 // ---- Finding a route --------------------------------------------------------------------------------
 
 
@@ -91,7 +117,7 @@ export function strip({ no, note = '', main = '', eta = null, attrs = '', wait =
       ? `<span class="ot-strip-eta ${eta.tone}${/\d/.test(eta.main) ? '' : ' words'}${/分|進站|min|Arriving|Due/.test(eta.main) ? ' live' : ''}"><b data-q-live="${e(`eta:${no}:${attrs}`)}">${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>`
       : '';
   const sub = wait ? `<small>${skel('84px')}</small>` : note ? `<small>${note}</small>` : '';
-  return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no">${noHtml(no)}</span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
+  return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no${wait && !no ? ' wait' : ''}">${wait && !no ? '' : noHtml(no)}</span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
 }
 // (The number too: its badge one width, so every strip's words start in one column.)
 // A note still too wide at the smallest size drops its less useful part
