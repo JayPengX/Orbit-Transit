@@ -13,7 +13,8 @@ Live: https://jaypengx.github.io/Orbit-Transit/
   - **地圖:** YouBike stations (the five nearest along the bottom), every
     bus stop with live times, train and metro stations, search, pins, and
     a trip planned from anywhere. A stop's signs a few metres apart are one
-    stop (`stopGroups`).
+    stop (`stopGroups`). On an iPad on its side the sheet is a column down the
+    map's left, its whole height (`sheet.mjs` `side`).
   - **交通:** saved trips' next departures with real bus times, pinned
     rides, and the places rail (家, 學校 and your pins).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster), bus
