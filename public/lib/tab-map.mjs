@@ -966,11 +966,12 @@ function buildSheet() {
     if (mode === was) return;
     sh.dataset.shows = mode;
     $('ms-body').scrollTop = 0;
-    // A card from the lowest stop lifts it to half, and puts it back when the card goes.
+    // A card sits at half, the map above it showing what was tapped: from the lowest stop it lifts the sheet,
+    // from the top (the shelves scrolled up, a nearby YouBike tapped) it lowers it. Closed, it goes to the lowest.
     if (mode === 'card') {
-      liftedFor = msheet.detent === 'peek' || backToPeek;
+      liftedFor = msheet.detent !== 'medium' || backToPeek;
       backToPeek = false;
-      if (msheet.detent === 'peek') msheet.set('medium');
+      if (msheet.detent !== 'medium') msheet.set('medium');
     } else if (was === 'card') {
       if (liftedFor && msheet.detent === 'medium' && mode === 'home') msheet.set('peek');
       liftedFor = false;
