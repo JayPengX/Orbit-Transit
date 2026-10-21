@@ -904,15 +904,33 @@ function pickOnMap(text, near) {
 // Its room is the panel above the tab bar (above the shrunk ride's bar while
 // one is followed); the large stop leaves the account buttons showing above it.
 const NAV_BAR = 74;
+// An iPad on its side: the sheet is a column down the map's left, its whole height (transit.css, the same query).
+const SIDE = globalThis.matchMedia?.('(min-width: 1000px) and (orientation: landscape)');
+const sheetSide = () => !!SIDE?.matches;
+// The room the side column takes at the map's left, px (0 as a bottom sheet).
+const sideGutter = () => {
+  if (!sheetSide()) return 0;
+  const b = $('msheet')?.getBoundingClientRect();
+  const p = $('panel-map')?.getBoundingClientRect();
+  return b?.width && p ? Math.max(0, Math.round(b.right - p.left)) : 0;
+};
 const sheetRoom = () => $('panel-map').clientHeight - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
 const sheetTop = () => {
+  if (sheetSide()) return 12;
   const b = $('top-actions')?.getBoundingClientRect();
   return b?.height ? Math.round(b.bottom + 10) : 64;
 };
+// Room kept clear when a trip is fitted: above the sheet, or right of its column.
+const fitPad = (m, share) => ({
+  top: 100,
+  bottom: sheetSide() ? m : (msheet?.heights().medium || Math.round(innerHeight * share)) + 24,
+  left: sideGutter() + m,
+  right: Math.max(m, fabGutter())
+});
 // How far under the middle of the map the middle of what the sheet leaves in view is, px: a point put
 // that high above the middle sits in the middle of the map you can see.
 function aboveDy() {
-  if (!msheet || !$('panel-map').clientHeight) return 0;
+  if (!msheet || !$('panel-map').clientHeight || sheetSide()) return 0;
   const room = $('panel-map').clientHeight;
   const top = Math.max(0, ($('top-actions')?.getBoundingClientRect().bottom || 0) + 8);
   const bottom = room - msheet.heights()[msheet.detent] - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
@@ -925,7 +943,7 @@ const fabGutter = () => {
   const p = $('panel-map')?.getBoundingClientRect();
   return b?.width && p?.width ? Math.max(0, Math.round(p.right - b.left + 10)) : 0;
 };
-const aboveDx = () => Math.round(fabGutter() / 2);
+const aboveDx = () => Math.round((fabGutter() - sideGutter()) / 2);
 let liftedFor = false;
 let backToPeek = false;
 function buildSheet() {
@@ -935,6 +953,7 @@ function buildSheet() {
     grab: $('ms-grab'),
     room: sheetRoom,
     top: sheetTop,
+    side: sheetSide,
     onChange: d => {
       // (Down from large, the keyboard goes: the field is no longer the thing.)
       if (d !== 'large' && document.activeElement === $('q')) $('q').blur();
@@ -1460,7 +1479,7 @@ async function plan(from, to, opts = {}) {
     card.error = W('需要你的位置（請在設定允許定位），或點上面的出發地選一個地點。', 'Needs your location (allow it in Settings), or tap the start above to pick one.');
     return renderCard();
   }
-  map.fit([fromPt, dest], { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.48)) + 24, left: 40, right: Math.max(40, fabGutter()) });
+  map.fit([fromPt, dest], fitPad(40, 0.48));
   ctx.data.trips = remember(ctx.data.trips, { name: dest.name, lat: dest.lat, lon: dest.lon, t: Date.now(), ...(dest.gid ? { gid: dest.gid } : {}) }, tripKey, 10);
   ctx.save();
   const c = card;
@@ -1911,7 +1930,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
       .then(city => city && cityBikes(city))
       .then(list => list && run === planDraw && map.layer('plan').set(marks(new Map(list.map(x => [x.uid, x])))))
       .catch(() => {});
-  if (fit && pts.length) map.fit(pts, { top: 100, bottom: (msheet?.heights().medium || Math.round(innerHeight * 0.5)) + 24, left: 30, right: Math.max(30, fabGutter()) });
+  if (fit && pts.length) map.fit(pts, fitPad(30, 0.5));
 }
 
 // A bus leg's live line, short enough for one row: the bus you'd catch

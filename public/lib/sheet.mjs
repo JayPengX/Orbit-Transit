@@ -9,10 +9,17 @@ import { DETENTS, detentHeights, follow, settle, axis, bodyGesture, stepped } fr
 const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // el: the sheet; parts: { head (its top: grabber and search), body (what scrolls), grab (the grabber button) };
-// room() the panel's height, top() the space kept above the large sheet.
-export function persistentSheet(el, { head, body, grab, room, top = () => 64, detent = 'peek', onChange = () => {} }) {
+// room() the panel's height, top() the space kept above the large sheet;
+// side() true while it is a column beside the map (an iPad on its side): then
+// it is always the panel's height, every stop the same, and nothing drags it.
+export function persistentSheet(el, { head, body, grab, room, top = () => 64, side = () => false, detent = 'peek', onChange = () => {} }) {
   let cur = DETENTS.includes(detent) ? detent : 'peek';
-  let hs = detentHeights(room(), { top: top() });
+  const heights = () => {
+    if (!side()) return detentHeights(room(), { top: top() });
+    const h = Math.max(room() - top(), 260);
+    return { peek: h, medium: h, large: h };
+  };
+  let hs = heights();
   let dragging = false;
   // Its height now (what shows above the panel's foot).
   let shown = hs[cur];
@@ -45,7 +52,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
     return cur;
   };
   const relayout = () => {
-    hs = detentHeights(room(), { top: top() });
+    hs = heights();
     if (!dragging) paint(false);
   };
 
@@ -111,7 +118,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   };
 
   el.addEventListener('touchstart', ev => {
-    if (ev.touches.length !== 1) return void (g = null);
+    if (ev.touches.length !== 1 || side()) return void (g = null);
     const t = ev.touches[0];
     start(t.clientY, t.clientX, head.contains(ev.target));
   }, { passive: true });
@@ -124,7 +131,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
 
   // ---- a mouse on the grabber and the top (not the field, whose text it selects) ----
   el.addEventListener('pointerdown', ev => {
-    if (ev.pointerType !== 'mouse' || ev.button !== 0 || !head.contains(ev.target) || ev.target.closest('input,textarea,.ot-ms-act')) return;
+    if (side() || ev.pointerType !== 'mouse' || ev.button !== 0 || !head.contains(ev.target) || ev.target.closest('input,textarea,.ot-ms-act')) return;
     start(ev.clientY, ev.clientX, true);
     el.setPointerCapture?.(ev.pointerId);
   });
@@ -134,7 +141,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   el.addEventListener('pointercancel', up);
   // A click after a drag on the grabber steps nothing.
   grab?.addEventListener('click', () => {
-    if (el.dataset.dragged) return;
+    if (el.dataset.dragged || side()) return;
     set(stepped(cur));
   });
   grab?.addEventListener('keydown', ev => {
