@@ -6,7 +6,7 @@
 import { loadSystem, stationBoard, stationExits, stationTitle, interchanges, OPERATORS } from './metro.mjs';
 import { metroSystems } from './raildata.mjs';
 import { countHtml, rowCard, emptyNote } from './look.mjs';
-import { icon } from './ui.mjs';
+import { icon, inkOn } from './ui.mjs';
 import { e, hm, meters } from './util.mjs';
 import { W } from '#kit/lang.mjs';
 
@@ -33,7 +33,7 @@ export function codesHtml(list, lines) {
       return (own.length ? own : [lineFor(lines, st.op, '')]).map(l => ({ code: st.id, color: l.color, name: l.name }));
     })
     .filter(c => !seen.has(`${c.code}|${c.name}`) && seen.add(`${c.code}|${c.name}`))
-    .map(c => `<span class="mm-code" style="--c:${e(c.color)}"><b>${e(c.code)}</b><span>${e(c.name)}</span></span>`)
+    .map(c => `<span class="mm-code" style="--c:${e(c.color)};--ink:${inkOn(c.color)}"><b>${e(c.code)}</b><span>${e(c.name)}</span></span>`)
     .join('');
 }
 

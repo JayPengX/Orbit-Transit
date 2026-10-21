@@ -11,7 +11,7 @@ import DRAWINGS from './metro-drawings.mjs';
 import { codesHtml, linesOf, loadBoards, boardHtml, firstLastHtml, exitsHtml } from './metro-ui.mjs';
 import { createMap } from './map.mjs';
 import { errorText, liveMs, keptLocal, keepLocal } from './api.mjs';
-import { sheet, sheetHead, icon } from './ui.mjs';
+import { sheet, sheetHead, icon, inkOn } from './ui.mjs';
 import { tile, tick } from './look.mjs';
 import { e, meters } from './util.mjs';
 
@@ -173,7 +173,7 @@ function legend() {
   const seen = new Set();
   $('m-legend').innerHTML = schem.lines
     .filter(l => !seen.has(l.name) && seen.add(l.name))
-    .map(l => `<button type="button" data-line="${e(l.key)}" style="--c:${e(l.color)}" aria-pressed="false"><i></i>${e(l.name)}</button>`)
+    .map(l => `<button type="button" data-line="${e(l.key)}" style="--c:${e(l.color)};--ink:${inkOn(l.color)}" aria-pressed="false"><i></i>${e(l.name)}</button>`)
     .join('');
 }
 function focusLine(key) {

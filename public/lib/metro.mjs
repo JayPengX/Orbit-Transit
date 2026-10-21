@@ -30,6 +30,23 @@ const FALLBACK_COLOR = { TRTCMG: '#77bc1f', 'KRTC:R': '#e2211c', 'KRTC:O': '#f8a
 
 const DAY = 86_400_000;
 
+// A metro line's colour by its name, for a planner's ride that came without
+// one (Google's and TDX's plans often do): the lines loaded so far, else the
+// operators' own colours. Longest name first (環狀輕軌 before 環狀).
+const LINE_COLORS = new Map([
+  ['板南', '#0a59ae'], ['文湖', '#b57a25'], ['松山新店', '#107547'], ['新店', '#107547'], ['中和新蘆', '#f5a818'], ['淡水信義', '#d90023'],
+  ['環狀輕軌', '#7cc24d'], ['環狀', '#fedb00'], ['三鶯', '#47c1e1'], ['淡海', '#ff2a00'], ['安坑', '#c3b091'], ['貓空', '#77bc1f'],
+  ['機場', '#8246af'], ['烏日文心北屯', '#84bd00'], ['高雄捷運紅', '#e2211c'], ['高雄捷運橘', '#f8a51b'], ['紅線', '#e2211c'], ['橘線', '#f8a51b'],
+  ['Bannan', '#0a59ae'], ['Wenhu', '#b57a25'], ['Songshan', '#107547'], ['Zhonghe', '#f5a818'], ['Tamsui', '#d90023'], ['Circular', '#fedb00'], ['Airport', '#8246af']
+]);
+export function metroColor(name) {
+  const n = String(name || '');
+  if (!n) return '';
+  let best = '';
+  for (const [k, c] of LINE_COLORS) if (n.includes(k) && k.length > best.length) best = k;
+  return best ? LINE_COLORS.get(best) : '';
+}
+
 // One system's stations and lines: { sys, stations: [{ key, sys, id, name,
 // lat, lon, lines: [lineId] }], lines: [{ id, sys, name, color, seq: [key…],
 // paths: [[key…]…], branch }] }. `paths` are the operator's routes (each a
@@ -66,6 +83,9 @@ export function parseSystem(sys, st, of, ln, ro = [], tr = []) {
     const seq = (l.Stations || []).slice().sort((a, b) => a.Sequence - b.Sequence).map(s => stations.get(s.StationID)).filter(Boolean);
     for (const s of seq) if (!s.lines.includes(id)) s.lines.push(id);
     lines.push({ id, sys, name: zh(m.LineName) || id, color: normColor(m.LineColor) || FALLBACK_COLOR[`${sys}:${id}`] || FALLBACK_COLOR[sys] || '#94a3b8', branch: m.IsBranch === true, seq: seq.map(s => s.key), paths: [] });
+    // (Its name kept for a plan's ride: 高雄's 紅線 is its own, not 淡水信義線's red.)
+    const bare = (zh(m.LineName) || '').replace(/線$/, '');
+    if (bare.length > 1 && normColor(m.LineColor)) LINE_COLORS.set(sys === 'KRTC' ? `高雄捷運${bare}` : bare, normColor(m.LineColor));
   }
   // The routes, one way each (the other way is the same stations backwards).
   const seen = new Set();

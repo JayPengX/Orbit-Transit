@@ -476,7 +476,7 @@ button.ot-hero {
   padding: 0 8px;
   border-radius: 8px;
   background: var(--c, var(--q-gray));
-  color: #fff;
+  color: var(--ink, #fff);
   font: 600 12.5px/1 var(--q-font);
   white-space: nowrap;
 }
@@ -3868,10 +3868,10 @@ span.ot-pass {
 }
 .ot-metro-legend > [aria-pressed='true'] {
   background: var(--c);
-  color: #fff;
+  color: var(--ink, #fff);
 }
 .ot-metro-legend > [aria-pressed='true'] i {
-  background: #fff;
+  background: var(--ink, #fff);
 }
 .ot-metro-msg {
   position: absolute;
@@ -3912,7 +3912,7 @@ span.ot-pass {
 .mm-code b {
   padding: 6px 7px;
   background: var(--c);
-  color: #fff;
+  color: var(--ink, #fff);
   font: 800 13px/1 var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
 }
