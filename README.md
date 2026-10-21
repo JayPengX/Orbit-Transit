@@ -17,7 +17,14 @@ Live: https://jaypengx.github.io/Orbit-Transit/
   - **交通:** saved trips' next departures with real bus times, pinned
     rides, and the places rail (家, 學校 and your pins).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster), bus
-    routes by number or stop, stop timetables, and 捷運 (maps and boards).
+    routes by number or stop, stop timetables, and 捷運: each city's metro
+    as a metro map (`metromap.mjs`: the lines straightened to the eight
+    directions from TDX's real stations, worked out ahead by
+    `scripts/metro-maps.mjs`, a phone redraws only when the network
+    changes), pinch and drag, the trains arriving now on it, 實景 for the
+    real map. A station: its line codes, the next trains each way counting
+    down (live where the operator sends them, else the timetable, else how
+    often the line runs), first and last trains, exits (`metro-ui.mjs`).
   - **我的:** places, trips, pinned stops, 交通偏好 (ways of moving, TPASS,
     the maps app).
 - **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by

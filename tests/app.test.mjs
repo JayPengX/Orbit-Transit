@@ -15,7 +15,8 @@ import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boa
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays, readSaved, UNREAD } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
-import { parseSystem, lineRuns, upcoming, interchanges } from '../public/lib/metro.mjs';
+import { parseSystem, lineRuns, upcoming, interchanges, firstLast, frequency } from '../public/lib/metro.mjs';
+import { schematic, faults } from '../public/lib/metromap.mjs';
 
 const T = hm => twAt('2026-10-05', hm);
 
@@ -491,6 +492,56 @@ test('metro timetable: the next trains each way, after midnight counted as tonig
   );
   assert.equal(list.length, 1, 'Sunday’s timetable isn’t Monday’s');
   assert.deepEqual(list[0].times.map(t => new Date(t + 8 * 3_600_000).toISOString().slice(11, 16)), ['23:56', '00:08']);
+});
+
+test('metro map: the operators’ changes join stations of other names (新埔 and 新埔民生), not just the same name', () => {
+  const st = [
+    { key: 'metro:TRTC:BL08', name: '新埔', lat: 25.0230, lon: 121.4682 },
+    { key: 'metro:NTMC:Y17', name: '新埔民生', lat: 25.0262, lon: 121.4720 },
+    { key: 'metro:TRTC:BL07', name: '板橋', lat: 25.0141, lon: 121.4622 }
+  ];
+  const groups = interchanges(st, [['metro:TRTC:BL08', 'metro:NTMC:Y17']]);
+  assert.equal(groups.length, 2);
+  assert.equal(groups.find(g => g.length === 2)?.map(s => s.name).join(), '新埔,新埔民生');
+});
+
+test('metro map: straight runs at the eight directions, an express’s jumps left out, the same drawing again from what was kept', () => {
+  // A line of 5 stations bending a little, and an express route straight from the first to the last.
+  const pts = [[25.0, 121.50], [25.004, 121.505], [25.009, 121.508], [25.013, 121.514], [25.017, 121.518]];
+  const sys = parseSystem(
+    'TYMC',
+    pts.map(([lat, lon], i) => ({ StationID: `A${i + 1}`, StationName: { Zh_tw: `站${i + 1}` }, StationPosition: { PositionLat: lat, PositionLon: lon } })),
+    [{ LineID: 'A', Stations: pts.map((_, i) => ({ StationID: `A${i + 1}`, Sequence: i + 1 })) }],
+    [{ LineID: 'A', LineName: { Zh_tw: '機場線' }, LineColor: '#8246AF' }],
+    [
+      { LineID: 'A', RouteID: 'A-1', Direction: 0, Stations: pts.map((_, i) => ({ StationID: `A${i + 1}`, Sequence: i + 1 })) },
+      { LineID: 'A', RouteID: 'A-2', Direction: 0, Stations: [{ StationID: 'A1', Sequence: 1 }, { StationID: 'A5', Sequence: 2 }] }
+    ]
+  );
+  const map = schematic([sys]);
+  assert.equal(map.edges.length, 4, 'the express’s A1–A5 isn’t track of its own');
+  const f = faults(map);
+  assert.equal(f.cross + f.fold, 0);
+  assert.ok(f.ang < 0.2, `near the eight directions (${f.ang})`);
+  const again = schematic([sys], { preset: { sig: map.sig, pos: map.pos } });
+  assert.deepEqual(again.pos, map.pos);
+});
+
+test('metro station: first and last train each way, named by where most go; a line run by frequency', () => {
+  const now = Date.parse('2026-10-05T12:00:00+08:00');
+  const fl = firstLast(
+    [
+      { LineID: 'BL', Direction: 1, DestinationStationName: { Zh_tw: '頂埔' }, Timetables: [{ DepartureTime: '06:03' }, { DepartureTime: '12:00' }, { DepartureTime: '00:44' }] },
+      { LineID: 'BL', Direction: 1, DestinationStationName: { Zh_tw: '亞東醫院' }, Timetables: [{ DepartureTime: '07:11' }] },
+      { LineID: 'BL', Direction: 0, DestinationStationName: { Zh_tw: '南港展覽館' }, Timetables: [{ DepartureTime: '06:00' }, { DepartureTime: '00:54' }] }
+    ],
+    now
+  );
+  const hm = t => new Date(t + 8 * 3_600_000).toISOString().slice(11, 16);
+  assert.deepEqual(fl.map(r => [r.dest, hm(r.first), hm(r.last)]), [['頂埔', '06:03', '00:44'], ['南港展覽館', '06:00', '00:54']]);
+  const f = frequency([{ LineID: 'BR', OperationTime: { StartTime: '06:00', EndTime: '24:00' }, Headways: [{ StartTime: '09:00', EndTime: '17:00', MinHeadwayMins: 4, MaxHeadwayMins: 10 }, { StartTime: '23:00', EndTime: '00:00', MinHeadwayMins: 12, MaxHeadwayMins: 12 }] }], 'BR', now);
+  assert.deepEqual([f.min, f.max, hm(f.first), hm(f.last)], [4, 10, '06:00', '00:00']);
+  assert.equal(frequency([{ LineID: 'BR', Headways: [{ StartTime: '23:00', EndTime: '00:00', MinHeadwayMins: 12, MaxHeadwayMins: 12 }] }], 'BR', Date.parse('2026-10-05T23:30:00+08:00')).min, 12);
 });
 
 // ---- What this round added ---------------------------------------------------------------------------
