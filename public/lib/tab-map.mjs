@@ -1685,17 +1685,29 @@ function plansHtml(c) {
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
   };
-  // The routes' cards: every way there, however late (the owner, 2026-10-21: see them all, then pick a time),
-  // the recommendations in full, the rest a row each under them, best first.
+  // The routes' cards: the recommendations in full, then the other good ways a row each under them, best
+  // first (the owner, 2026-10-21: all the good ways, never the bad ones; a way set aside shows only when pinned).
   // (A way whose first bus is gone before you're at its stop isn't listed, unless that's every way.)
   const fine = c.plans.some(p => p.lead !== false && !p.gone);
-  const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.gone || !fine || picked(c, p)));
+  const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.weak || picked(c, p)) && (!p.gone || !fine || picked(c, p)));
   const card_ = ([p, i], compact = false) => row(c.plans[shownAt(i)], shownAt(i), i, compact);
   // (Your pinned ways first, then the recommendations best first: as 交通's card has them.)
   const tops = leads.filter(([p]) => p.top || picked(c, p)).sort(([a], [b]) => picked(c, b) - picked(c, a) || (a.score ?? 0) - (b.score ?? 0) || a.arr - b.arr);
-  const rest = leads.filter(([p]) => !p.top && !picked(c, p)).sort(([a], [b]) => (a.weak ? 1 : 0) - (b.weak ? 1 : 0) || (a.score ?? 0) - (b.score ?? 0) || a.arr - b.arr);
+  const rest = goodRest(tops.map(([p]) => p), leads.filter(([p]) => !p.top && !picked(c, p))).sort(([a], [b]) => (a.score ?? 0) - (b.score ?? 0) || a.arr - b.arr);
   return `${top}<div class="ot-plans">${tops.map(x => card_(x)).join('')}</div>
     ${rest.length ? `<h3 class="ot-plans-more">${W(`其他 ${rest.length} 種走法`, `${rest.length} other ways`)}</h3><div class="ot-plans ot-plans-rest">${rest.map(x => card_(x, true)).join('')}</div>` : ''}`;
+}
+// The ways under the recommendations worth a row: none another way beats (leaves no sooner, there no
+// later, no more changes), none half as long again as the quickest of the recommendations (and 20
+// minutes more), none setting out another day while a way goes today.
+function goodRest(tops, rest) {
+  const all = [...tops, ...rest.map(([p]) => p)];
+  const dur = p => p.arr - p.dep;
+  const quick = Math.min(...(tops.length ? tops : all).map(dur));
+  const day = p => tw(p.dep).date;
+  const today = tw(Math.min(...all.map(p => p.dep))).date;
+  const beaten = p => all.some(q => q !== p && q.dep >= p.dep && q.arr <= p.arr && (q.transfers || 0) <= (p.transfers || 0) && (q.dep > p.dep || q.arr < p.arr || (q.transfers || 0) < (p.transfers || 0)));
+  return rest.filter(([p]) => !beaten(p) && dur(p) <= Math.max(quick * 1.5, quick + 20 * 60_000) && (day(p) === today || !all.some(q => day(q) === today)));
 }
 // A stretch of a trip with stops, short: its rides (YouBike too), or a walk of all its minutes.
 function stretchChips(q) {

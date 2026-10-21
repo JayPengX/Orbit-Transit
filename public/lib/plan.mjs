@@ -14,6 +14,7 @@ import { meters, walkSec, tw, hm, addDays, routeNorm, sameRoute, stationKey, isR
 import { journeys, directs, earliest } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
 import { trainKind } from './ui.mjs';
+import { trainFor } from './navlive.mjs';
 import { stationPoint } from './raildata.mjs';
 import { canRent } from './bike.mjs';
 
@@ -452,6 +453,20 @@ export function moreBuses(plan, now = Date.now(), { n = 3 } = {}) {
     .filter(Boolean);
 }
 
+// A planner's train named by its line only (TDX's 六家-新竹): its number and
+// kind from our day's timetable, as our own trains have them (區間 1817), so
+// every card and step says which train, however the plan was found.
+export function nameTrains(plan, net) {
+  if (!net || !plan.legs.some(l => (l.mode === 'tra' || l.mode === 'hsr') && !l.train?.no && l.dep && l.from?.lat != null && l.to?.lat != null)) return plan;
+  net.stations ||= [...net.st.entries()].map(([key, s]) => ({ ...s, key }));
+  const legs = plan.legs.map(l => {
+    if ((l.mode !== 'tra' && l.mode !== 'hsr') || l.train?.no || !l.dep || l.from?.lat == null || l.to?.lat == null) return l;
+    const t = trainFor(net.trips, net.stations, l);
+    if (!t) return l;
+    return { ...l, train: { ...(l.train || {}), sys: l.mode, ...t }, short: l.mode === 'hsr' ? W(`${t.no} 次`, `HSR ${t.no}`) : `${trainKind(t.type)} ${t.no}`, name: l.mode === 'hsr' ? '高鐵' : t.type || l.name };
+  });
+  return { ...plan, legs };
+}
 // A way by train (one, or several with changes between them, the rides
 // before and after it a walk or a bike) on the rest of the day's trains from
 // the same station to the same one: each the soonest there for leaving after
@@ -519,11 +534,14 @@ export function dayTimes(list, net, now = Date.now(), { use = () => true } = {})
     const mine = p.times.map(i => out[i]).filter(Boolean);
     const has = q => mine.some(m => Math.abs((ride(m)?.dep ?? m.dep) - (ride(q)?.dep ?? q.dep)) < 60_000 && rides(m).length === rides(q).length);
     const more = [...moreBuses(p, now, { n: 100 }), ...dayTrains(p, net, now, { use })].filter(q => !has(q));
-    if (!more.length) continue;
     const at = out.length;
     out.push(...more.map(q => ({ ...q, lead: false, top: false, tags: [], times: null })));
-    const times = [...p.times, ...more.map((_, k) => at + k)].sort((i, j) => (ride(out[i])?.dep ?? out[i].dep) - (ride(out[j])?.dep ?? out[j].dep));
-    for (const i of times) out[i] = { ...out[i], times };
+    // (A time a later one beats, there no sooner for leaving later, isn't one to pick: 22:02 from 六家 and
+    // 46 minutes at 竹中 for the train the 22:35 meets too. The card's own time always stays.)
+    const all = [...p.times, ...more.map((_, k) => at + k)];
+    const beaten = i => out[i] !== p && all.some(j => j !== i && out[j].dep > out[i].dep && out[j].arr <= out[i].arr);
+    const times = all.filter(i => !beaten(i)).sort((i, j) => (ride(out[i])?.dep ?? out[i].dep) - (ride(out[j])?.dep ?? out[j].dep));
+    for (const i of all) out[i] = { ...out[i], times };
   }
   return out;
 }
