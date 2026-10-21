@@ -1,6 +1,7 @@
 // Shared UI: sheets, the transport icons, a plan's legs as chips.
 
 import { e, minsText, hm, rides } from './util.mjs';
+import { metroColor } from './metro.mjs';
 import * as kitUI from '#kit/ui.mjs';
 
 import { W, en } from '#kit/lang.mjs';
@@ -93,7 +94,15 @@ export const trainKind = s => {
 // non-breaking one) nor between kind and number (a no-break space).
 export const trainName = t => (t.sys === 'hsr' ? W(`高鐵 ${t.no}`, `HSR ${t.no}`) : `${trainKind(t.type)} ${t.no}`);
 const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', car: '#eab308', plane: '#a78bfa', rail: '#0ea5e9' };
-export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : MODE_COLOR[l.mode] || '#94a3b8');
+// The text on a colour: white, or near-black on a light one (環狀線's yellow).
+export function inkOn(hex) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+  if (!m) return '#fff';
+  const [r, g, b] = m.slice(1).map(x => parseInt(x, 16) / 255);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 0.72 ? '#1c1c1e' : '#fff';
+}
+// (A metro ride the planner sent without a colour: its line's own, 板南線 blue, 淡水信義線 red.)
+export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : ((l.mode === 'metro' || l.mode === 'lightrail') && metroColor(`${l.short || ''} ${l.name || ''}`)) || MODE_COLOR[l.mode] || '#94a3b8');
 
 // What a leg is called on its chip: 「區間車」「板南線」「182」「YouBike」.
 export function legLabel(l) {
@@ -142,7 +151,7 @@ export function legChips(legs) {
       const mins = `${Math.max(1, Math.round((l.dur || 0) / 60))}′`;
       if (l.mode === 'walk') return `<span class="ot-leg walk" aria-label="${W('步行', 'Walk')} ${mins}">${icon('walk')}${mins}</span>`;
       if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${mins}">${icon(l.ebike ? 'bolt' : 'bike')}<b>${mins}</b></span>`;
-      return `<span class="ot-leg" style="--c:${e(c)}">${icon(l.mode)}<b>${e(legLabel(l))}</b></span>`;
+      return `<span class="ot-leg" style="--c:${e(c)};--ink:${inkOn(c)}">${icon(l.mode)}<b>${e(legLabel(l))}</b></span>`;
     })
     .join('<span class="ot-leg-sep">›</span>');
 }
