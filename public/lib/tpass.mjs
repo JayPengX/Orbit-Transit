@@ -71,6 +71,15 @@ export const tpassOf = id => TPASSES.find(p => p.id === id) || null;
 // owner, 2026-10-12: riding 成功九街 → 竹東高中 is two bikes for TPASS users).
 export const bikeSwap = prefs => prefs?.bike30 === true || !!tpassOf(prefs?.tpass)?.bike;
 
+// What a pass takes, said: its own `modes` (else bus, 台鐵 and metro), the metro only where a city has one
+// (竹竹 has none: the owner, 2026-10-21), YouBike where it counts.
+const METRO_CITIES = new Set(['Taipei', 'NewTaipei', 'Taoyuan', 'Taichung', 'Kaohsiung']);
+const MODE_WORD = { bus: W('公車', 'Bus'), tra: W('台鐵', 'TRA'), metro: W('捷運', 'Metro') };
+export function passModes(p) {
+  if (!p) return [];
+  const m = (p.modes || ['bus', 'tra', 'metro']).filter(k => k !== 'metro' || p.cities.some(c => METRO_CITIES.has(c)));
+  return [...m.map(k => MODE_WORD[k]).filter(Boolean), ...(p.bike ? ['YouBike'] : [])];
+}
 const PAID = new Set(['bus', 'tra', 'metro', 'lightrail']);
 
 // 台鐵 trains no TPASS takes: 太魯閣, 普悠瑪 and the EMU3000 自強 (type
