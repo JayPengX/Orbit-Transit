@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -253,6 +253,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const finishOff = async (list, stage) => {
     // Each route's next departures (the times its card offers): the trains
     // after it from our timetable, the buses after it.
+    // (Every train by its number: a planner's named by its line only gets ours.)
+    list = list.map(p => nameTrains(p, net));
     if (by !== 'arrive') {
       const more = [];
       for (const p of list) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
