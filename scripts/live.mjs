@@ -6,6 +6,7 @@
 //   --against <ref>   the same trips on the code of <ref> (e.g. HEAD, main~1),
 //                     at the same moment, and what changed between them
 //   --all             every plan's card, not only the recommendations
+//   --times           each card's departures to pick (its 下一班 row)
 //   --at <ms>         leaving then (default: in 5 minutes)
 //   --by arrive       getting there by --at (a trip's 抵達 time; with --at HH:MM, today's)
 // Only public places here: a trip from home stays in captures/ (git-ignored).
@@ -39,6 +40,7 @@ const by = opt('--by') || 'depart';
 const atOpt = opt('--at');
 const at = /^\d\d?:\d\d$/.test(atOpt || '') ? (() => { const d = new Date(Date.now() + 8 * 3600_000); const [h, m] = atOpt.split(':').map(Number); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h - 8, m); })() : Number(atOpt) || Date.now() + 5 * 60_000;
 const all = args.includes('--all');
+const showTimes = args.includes('--times');
 const named = args.filter((a, i) => !a.startsWith('--') && !['--against', '--at', '--by'].includes(args[i - 1]));
 const point = s => {
   const ll = PLACES[s] || s.split(',').map(Number);
@@ -93,7 +95,10 @@ for (const [a, b] of trips) {
   const res = (await r.later) || r;
   const shown = res.plans.filter(p => (all ? p.lead : p.top));
   console.log(`${a} → ${b}`);
-  for (const p of shown) console.log(`${p.top ? '★' : p.weak ? '·' : ' '} ${String(p.score).padStart(4)} ${hm(p.dep)}→${hm(p.arr)} ${p.legs.map(leg).join(' · ')}`);
+  for (const p of shown) {
+    console.log(`${p.top ? '★' : p.weak ? '·' : ' '} ${String(p.score).padStart(4)} ${hm(p.dep)}→${hm(p.arr)} ${p.legs.map(leg).join(' · ')}`);
+    if (showTimes && p.times?.length > 1) console.log(`       ${p.times.map(i => res.plans[i]).map(q => `${hm(q.legs.find(l => l.mode !== 'walk' && l.mode !== 'bike')?.dep ?? q.dep)}${q.transfers ? `(${q.transfers})` : ''}`).join(' ')}`);
+  }
   if (!shown.length) console.log(`  nothing${res.error ? ` (${res.error.code || res.error.message})` : ''}`);
   console.log('');
 }

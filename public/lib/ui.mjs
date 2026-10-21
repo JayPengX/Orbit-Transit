@@ -61,6 +61,7 @@ const I = {
   down: '<path d="M6 10l6 6 6-6"/>',
   trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
   bolt: '<path d="M13 2.5L5.5 13.5H11l-1 8 7.5-11H12z"/>',
   chevron: '<path d="M9 5l7 7-7 7"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
@@ -113,7 +114,8 @@ export function depChips(plans, idx, on, attrs) {
   // The ride the times differ by (a bus to the station, then a choice of trains: the trains').
   const k = Math.max(0, rides(plans[idx[0]]).findIndex((l, j) => idx.some(i => rides(plans[i])[j]?.dep !== l.dep)));
   const ride = p => rides(p)[k] || rides(p)[0];
-  const kind = p => (ride(p)?.train ? trainKind(String(ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '')) : '');
+  // (A planner's train named by its line, 內灣-新竹, is still a 區間 by its type.)
+  const kind = p => (ride(p)?.train ? trainKind(String((/-/.test(ride(p).name || '') && ride(p).train.type) || ride(p).name || '').replace(/[（(].*$/, '').replace(/號.*$/, '').replace(/車$/, '')) : '');
   const mixed = new Set(idx.map(i => kind(plans[i]))).size > 1;
   // Some straight through, some changing trains (竹東 → 新竹, or via 竹中): which is which.
   const via = p => (rides(p).length > 1 ? W(`${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}轉`, `via ${String(rides(p)[0].to?.name || '').replace(/(火車站|車站|站)$/, '')}`) : W('直達', 'direct'));

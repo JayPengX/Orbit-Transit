@@ -6,7 +6,7 @@
 // planner may use. The newer copy (by `t`) wins; this device keeps one too,
 // so it opens at once.
 
-import { uid, pinSig, TAIWAN_BOX } from './util.mjs';
+import { uid, pinSig, TAIWAN_BOX, tw } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 export const MAX_GROUPS = 12;
@@ -83,7 +83,8 @@ export function cleanEnd(p) {
 const hhmm = v => (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : '');
 // A saved trip: { id, name, from (null: 目前位置), to, time ('HH:MM' or ''),
 // by ('depart' | 'arrive'), days ([0–6], empty: not recurring), back (the
-// time home, for a recurring trip; '' none) }.
+// time home, for a recurring trip; '' none), date ('YYYY-MM-DD': a one-time
+// trip on that day only, gone once the day is over; '' none) }.
 export function cleanSaved(x) {
   const to = cleanEnd(x?.to);
   if (!to) return null;
@@ -95,6 +96,8 @@ export function cleanSaved(x) {
     time: hhmm(x.time),
     by: x.by === 'arrive' ? 'arrive' : 'depart',
     days: [...new Set((Array.isArray(x.days) ? x.days : []).map(Number).filter(d => d >= 0 && d <= 6))].sort(),
+    // (Recurring or on one day, never both.)
+    date: typeof x.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && !(Array.isArray(x.days) && x.days.length) ? x.date : '',
     back: hhmm(x.back),
     // Days whose times differ (星期五 earlier home): [{ days, time, back }], each a day only once.
     alt: cleanAlt(x.alt),
@@ -114,6 +117,8 @@ function cleanAlt(list) {
   }
   return out;
 }
+// A one-time trip whose day is over: let go.
+export const tripOver = (t, now = Date.now()) => Boolean(t?.date) && t.date < tw(now).date;
 // A saved trip's times on a day of the week: that day's own, else the usual.
 export function slotOf(t, dow) {
   const a = t.alt?.find(x => x.days.includes(dow));
@@ -162,7 +167,7 @@ export function cleanData(d) {
       .filter(Boolean)
       .slice(0, 8),
     layers: Object.fromEntries(Object.keys(LAYERS).map(k => [k, d.layers?.[k] !== false])),
-    saved: (Array.isArray(d.saved) ? d.saved : []).map(cleanSaved).filter(Boolean).slice(0, MAX_SAVED),
+    saved: (Array.isArray(d.saved) ? d.saved : []).map(cleanSaved).filter(Boolean).filter(t => !tripOver(t)).slice(0, MAX_SAVED),
     pins: (Array.isArray(d.pins) ? d.pins : []).map(cleanPin).filter(Boolean).slice(0, MAX_PINS),
     prefs: cleanPrefs(d.prefs),
     t: Number(d.t) || 0

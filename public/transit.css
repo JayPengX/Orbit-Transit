@@ -530,9 +530,26 @@ button.ot-hero {
 /* A route's other departures: times to pick, the one shown filled. */
 .ot-plan-deps {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  position: relative;
+  /* The whole day's times in one row, swiped sideways (the owner, 2026-10-21). */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ot-plan-deps::-webkit-scrollbar {
+  display: none;
+}
+.ot-dep-l {
+  flex: none;
+}
+/* The ways under the recommendations: a row each, best first. */
+.ot-plans-more {
+  margin: 14px 4px 6px;
+  color: var(--q-label-2);
+  font: 600 13px/18px var(--q-font);
 }
 /* (Its label, once: 下一班, then the times.) */
 .ot-dep-l {

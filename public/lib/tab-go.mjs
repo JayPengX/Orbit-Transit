@@ -19,6 +19,7 @@ import { bikesAround } from './near.mjs';
 import { railNetwork, railSpan, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
+import { setTripPush } from './alerts.mjs';
 import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
@@ -97,6 +98,8 @@ const NEAR_END_M = 800;
 // way back already; the owner, 2026-10-13).
 export function tripNow(t, here, now = Date.now()) {
   const day = tw(now);
+  // A one-time trip: only on its day, nothing once that's over.
+  if (t.date && t.date < day.date) return null;
   const today = slotOf(t, day.dow);
   const span = t.from && t.to ? meters(t.from.lat, t.from.lon, t.to.lat, t.to.lon) : 0;
   const d = p => meters(here.lat, here.lon, p.lat, p.lon);
@@ -109,7 +112,7 @@ export function tripNow(t, here, now = Date.now()) {
   const fwd = { from: t.from, to: t.to, label: t.name || t.to.name, key: 'time', rev: false };
   let way = fwd;
   if (near(t.to) && t.from) way = back;
-  else if (!near(t.from) && t.from && today.back && t.days.includes(day.dow) && !(weekdaysOnly(t.days) && holidayOn(day.date))) {
+  else if (!near(t.from) && t.from && today.back && (t.days.includes(day.dow) || t.date === day.date) && !(weekdaysOnly(t.days) && holidayOn(day.date))) {
     // Neither end, on one of its days: by the clock (after the time out,
     // nearer the time back, and that not 30 minutes gone). Any other day,
     // or later that evening, it's the next time out.
@@ -129,8 +132,11 @@ export function tripNow(t, here, now = Date.now()) {
   let at = null;
   let late = null;
   let by = 'depart';
-  for (let n = 0; n < 15; n++) {
+  // (A one-time trip's day may be weeks off: that day only.)
+  const ahead = t.date ? Math.round((twAt(t.date, '12:00') - twAt(day.date, '12:00')) / 86_400_000) : 0;
+  for (let n = ahead; n < ahead + 15; n++) {
     const dow = (day.dow + n) % 7;
+    if (t.date && n !== ahead) break;
     if (t.days.length && (!t.days.includes(dow) || offOn(addDays(day.date, n)))) continue;
     const time = slotOf(t, dow)[way.key];
     if (!time) {
@@ -146,7 +152,7 @@ export function tripNow(t, here, now = Date.now()) {
     } else late = when;
     break;
   }
-  return { id: `${t.id}:${way.rev ? 'b' : 'f'}`, from, to: way.to, at, late, by, label: way.label, recurring: t.days.length > 0, today: t.days.includes(day.dow) && !offOn(day.date) };
+  return { id: `${t.id}:${way.rev ? 'b' : 'f'}`, from, to: way.to, at, late, by, label: way.label, recurring: t.days.length > 0, today: (t.days.includes(day.dow) || t.date === day.date) && !offOn(day.date), date: t.date || '' };
 }
 
 // What the phone has of a saved trip's ways, asked of nobody (the map's 建議
@@ -176,7 +182,8 @@ export async function pinnedTrainsNext(c) {
 function trips(now = Date.now()) {
   return ctx.data.saved
     .map(t => ({ t, w: tripNow(t, ctx.here, now) }))
-    .filter(x => x.w)
+    // (A one-time trip comes in as its day nears: from the day before; until then it waits in 我的.)
+    .filter(x => x.w && !(x.t.date && x.t.date > addDays(tw(now).date, 1)))
     .sort((a, b) => (b.w.recurring && b.w.today) - (a.w.recurring && a.w.today));
 }
 
@@ -682,7 +689,25 @@ function heroOf(ts) {
   };
 }
 
+// A one-time trip (a day picked, not every week): told 10 minutes before it's time to leave, the app
+// closed or not (the Worker sends it). When to leave: the way found for it once there is one, else its
+// time out (by an arrival time, an hour before it until a way is found).
+const LEAVE_SOON_MS = 10 * 60_000;
+function tripPush(now = Date.now()) {
+  const items = [];
+  for (const t of ctx.data.saved) {
+    if (!t.date) continue;
+    const w = tripNow(t, null, now);
+    if (!w?.at || w.id.endsWith(':b')) continue;
+    const lead = S.trips.get(w.id)?.plans?.find(p => p.top && p.lead !== false) || keptLead(w, { prefs: ctx.data.prefs, picks: t.picks, now });
+    const dep = lead?.dep ?? (w.by === 'arrive' ? w.at - 60 * 60_000 : w.at);
+    if (dep - LEAVE_SOON_MS < now - 60_000) continue;
+    items.push({ at: dep - LEAVE_SOON_MS, title: W(`${t.name || t.to.name}：10 分鐘後出發`, `${t.name || t.to.name}: leave in 10 min`), body: W(`${hm(dep)} 出發${lead ? `，${hm(lead.arr)} 到` : ''}`, `Leave ${hm(dep)}${lead ? `, there ${hm(lead.arr)}` : ''}`), tag: `trip:${t.id}:${t.date}`, kind: 'trip', hash: 'go' });
+  }
+  setTripPush(items);
+}
 function render() {
+  tripPush();
   if (!shown) return;
   const ts = trips();
   // (A trip just changed in its sheet: its new plans, now.)
