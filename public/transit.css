@@ -4652,3 +4652,17 @@ span.ot-pass {
 .ot-mk.ot-lb-hide > span {
   opacity: 0;
 }
+
+/* No white in dark mode (Jay 2026-10-21): the swap is glass on the card. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ot-tq-swap {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    box-shadow: none;
+  }
+}
+:root[data-theme='dark'] .ot-tq-swap {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  box-shadow: none;
+}
