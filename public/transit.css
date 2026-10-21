@@ -4608,24 +4608,61 @@ span.ot-pass {
 @media (max-width: 350px) { .ot-board-row .ot-times b:nth-child(n+3) { display: none; } }
 
 /* A saved trip's schedule: plain tokens (抵達 08:00, 平日, 回程 16:45) that wrap whole, never cut. */
-.ot-sched {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 14px;
-  margin-top: 2px;
-  color: var(--q-label-2);
-  font: 500 13px/18px var(--q-font);
+/* A saved trip's times (我的): 去 and 回 side by side, each a label, its time, the days that differ as chips. */
+.ot-tt {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 0 22px;
+  margin-top: 6px;
 }
-.ot-sched > span {
+.ot-tt-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.ot-tt-col > small {
+  color: var(--q-label-2);
+  font: 500 12px/16px var(--q-font);
+}
+.ot-tt-col > b {
+  color: var(--q-label);
+  font: 700 20px/26px var(--q-font);
+  font-variant-numeric: tabular-nums;
+}
+.ot-tt-alt {
+  margin-top: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--q-fill-3);
+  color: var(--q-label-2);
+  font: 600 12px/18px var(--q-font);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.ot-sched > span:first-child {
-  color: var(--q-label);
-  font-weight: 600;
-}
-.ot-sched.alt > span:first-child {
+.ot-pass-price {
+  margin-left: 4px;
   color: var(--q-label-2);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.ot-tt-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ot-tt-name > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ot-tt-name > .ot-trip-when {
+  flex: none;
+  width: auto;
+  margin: 0;
 }
 
 /* A place search's field takes typing and pasting inside a sheet (iOS's selection, never switched off). */
