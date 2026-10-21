@@ -11,7 +11,7 @@
 //     sooner.
 
 import { meters, walkSec, tw, hm, addDays, routeNorm, sameRoute, stationKey, isRide, rides, RAIL } from './util.mjs';
-import { journeys, directs } from './rail.mjs';
+import { journeys, directs, earliest } from './rail.mjs';
 import { crossings, crossed, bridgeExtra } from './rivers.mjs';
 import { trainKind } from './ui.mjs';
 import { stationPoint } from './raildata.mjs';
@@ -440,15 +440,92 @@ export function moreTrains(plan, net, now = Date.now(), { n = 4, use = () => tru
     .filter(Boolean);
 }
 // The next buses at the same stop: the times TDX gave for it (adjustPlan's `next`).
-export function moreBuses(plan, now = Date.now()) {
+export function moreBuses(plan, now = Date.now(), { n = 3 } = {}) {
   const k = onlyRide(plan);
   const l = plan.legs[k];
   if (k < 0 || l.mode !== 'bus' || !l.next?.length) return [];
   return l.next
     .filter(t => Math.abs(t - l.dep) > 2 * 60_000)
+    .slice(0, n)
     // (Without the stop's live times: each later bus is that bus, never caught again as the first one.)
     .map(t => retime(plan, k, { dep: t, arr: t + (l.arr - l.dep), live: { at: t }, seen: null }, now))
     .filter(Boolean);
+}
+
+// A way by train (one, or several with changes between them, the rides
+// before and after it a walk or a bike) on the rest of the day's trains from
+// the same station to the same one: each the soonest there for leaving after
+// the one before, changes and all worked out again, plus every train straight
+// through. The way to the first train and on from the last move with them.
+const DAY_TRAINS = 100;
+export function dayTrains(plan, net, now = Date.now(), { use = () => true, n = DAY_TRAINS } = {}) {
+  const at = plan.legs.map((l, i) => (isRide(l) ? i : -1)).filter(i => i >= 0);
+  if (!net || !at.length) return [];
+  const [k0, k1] = [at[0], at.at(-1)];
+  // (Only trains between the first and the last: a bus or the metro half way is not ours to time.)
+  if (!plan.legs.slice(k0, k1 + 1).every(l => l.mode === 'walk' || l.mode === 'tra' || l.mode === 'hsr')) return [];
+  const [L0, L1] = [plan.legs[k0], plan.legs[k1]];
+  if (!L0.from?.lat || !L1.to?.lat) return [];
+  const key = (pt, sys) => [...net.st.entries()].filter(([, s]) => !sys || s.sys === sys).map(([key, s]) => ({ key, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m).find(x => x.m < 400)?.key;
+  const [a, b] = [key(L0.from, L0.mode), key(L1.to, L1.mode)];
+  if (!a || !b || a === b) return [];
+  const day = tw(L0.dep).date;
+  const ownTrains = plan.legs.slice(k0, k1 + 1).filter(isRide).map(l => `${l.train?.no || String(l.short || '').match(/\d{2,}/)?.[0] || ''}@${Math.round(l.dep / 60_000)}`).join('|');
+  const found = new Map();
+  const add = j => {
+    const trains = j.legs.filter(l => !l.walk);
+    if (!trains.length || tw(trains[0].dep).date !== day) return;
+    const sig = trains.map(l => `${l.trip.no}@${Math.round(l.dep / 60_000)}`).join('|');
+    if (sig !== ownTrains && !found.has(sig)) found.set(sig, j);
+  };
+  let t = L0.dep + 60_000;
+  for (let guard = 0; guard < n * 2 && found.size < n; guard++) {
+    let j;
+    try {
+      j = earliest(net, [{ key: a, at: t }], [{ key: b, extra: 0 }], { use, maxHours: 24 });
+    } catch {
+      break;
+    }
+    const first = j?.legs?.find(l => !l.walk);
+    if (!first || tw(first.dep).date !== day) break;
+    add(j);
+    t = first.dep + 60_000;
+  }
+  for (const j of directs(net, a, b, L0.dep + 60_000, { use, n })) add(j);
+  const pt = k => stationPoint(net.st.get(k));
+  return [...found.values()]
+    .map(j => {
+      const trains = j.legs.filter(l => !l.walk);
+      const before = trains[0].dep - L0.dep;
+      const after = trains.at(-1).arr - L1.arr;
+      const mid = j.legs.map(l => (l.walk ? { ...walkLeg(pt(l.from), pt(l.to), l.dep), arr: l.arr } : trainLeg(net, l)));
+      const legs = [...shift(plan.legs.slice(0, k0), before), ...mid, ...shift(plan.legs.slice(k1 + 1), after)];
+      if (legs[0].dep < now - 60_000) return null;
+      return finish({ ...plan, legs, live: false });
+    })
+    .filter(Boolean)
+    .sort((x, y) => x.dep - y.dep)
+    .slice(0, n);
+}
+// The rest of the day's times on each route's card (rank keeps a few near
+// the first): its bus's every later bus at that stop, its trains' every
+// later train (changes worked out again), each a plan of the list, the
+// route's `times` all of them in order. Appended: the indexes already given stay.
+export function dayTimes(list, net, now = Date.now(), { use = () => true } = {}) {
+  const out = list.slice();
+  const ride = p => rides(p)[0];
+  for (const p of list) {
+    if (!p.lead || !p.times?.length) continue;
+    const mine = p.times.map(i => out[i]).filter(Boolean);
+    const has = q => mine.some(m => Math.abs((ride(m)?.dep ?? m.dep) - (ride(q)?.dep ?? q.dep)) < 60_000 && rides(m).length === rides(q).length);
+    const more = [...moreBuses(p, now, { n: 100 }), ...dayTrains(p, net, now, { use })].filter(q => !has(q));
+    if (!more.length) continue;
+    const at = out.length;
+    out.push(...more.map(q => ({ ...q, lead: false, top: false, tags: [], times: null })));
+    const times = [...p.times, ...more.map((_, k) => at + k)].sort((i, j) => (ride(out[i])?.dep ?? out[i].dep) - (ride(out[j])?.dep ?? out[j].dep));
+    for (const i of times) out[i] = { ...out[i], times };
+  }
+  return out;
 }
 
 const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: true, fix, name: 'YouBike', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dep, arr, dur: Math.round((arr - dep) / 1000), dist: Math.round(meters(from.lat, from.lon, to.lat, to.lon) * 1.25) });

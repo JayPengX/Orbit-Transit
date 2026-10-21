@@ -139,7 +139,9 @@ export function departuresAt(sched, w, i, after, n = 4) {
   const out = times.map(hm => twAt(d.date, hm.slice(0, 5)) + shift).filter(t => t >= after).sort((x, y) => x - y);
   const f = here.every.find(x => x.from <= d.hm && d.hm <= x.to);
   const gap = f ? ((f.min || f.max) + (f.max || f.min)) / 2 : 0;
-  while (gap && out.length < n) out.push((out.at(-1) ?? after) + gap * MIN);
+  // (Every so often: as many as asked, while it still runs that way.)
+  const end = f?.to ? twAt(d.date, String(f.to).slice(0, 5)) : Infinity;
+  while (gap && out.length < n && (out.at(-1) ?? after) + gap * MIN <= end) out.push((out.at(-1) ?? after) + gap * MIN);
   return out.slice(0, n);
 }
 
@@ -184,8 +186,8 @@ export function wayOf(ways, from, to) {
 
 // A bus ride's later buses (its card's times): TDX's estimates for that
 // way at that stop, then its timetable there. `list`: the estimates near the
-// stop (etaNear). Three at most.
-export async function laterBuses(list, l, after, { now = Date.now(), stops = routeStops, schedule = routeSchedule } = {}) {
+// stop (etaNear). Three, or `n`: the rest of that day's (a card's 下一班 offers them all).
+export async function laterBuses(list, l, after, { now = Date.now(), stops = routeStops, schedule = routeSchedule, n = 3 } = {}) {
   const name = l.short || l.name;
   // Its own route (by id, else by its exact name) before a name like it: 快捷8號支 never takes 快捷8號's buses.
   const r = (l.route?.uid && list.find(x => x.RouteUID === l.route.uid)) || list.find(x => x.RouteUID && routeNorm(zh(x.RouteName)) === routeNorm(name)) || list.find(x => sameRoute(zh(x.RouteName), name) && x.RouteUID);
@@ -197,16 +199,19 @@ export async function laterBuses(list, l, after, { now = Date.now(), stops = rou
     .times.map(t => t.at)
     .filter(t => t > after + MIN && (!way || liveTrusted(sched, way.w, way.i, t)));
   const out = [...live];
-  if (way) for (const t of departuresAt(sched, way.w, way.i, after + MIN, 4)) if (out.length < 3 && !out.some(x => Math.abs(x - t) < 3 * MIN)) out.push(t);
-  return out.sort((x, y) => x - y).slice(0, 3);
+  if (way) for (const t of departuresAt(sched, way.w, way.i, after + MIN, n + 1)) if (out.length < n && !out.some(x => Math.abs(x - t) < 3 * MIN)) out.push(t);
+  const day = tw(after).date;
+  return out.filter(t => n <= 3 || tw(t).date === day).sort((x, y) => x - y).slice(0, n);
 }
+// The most of a day's later buses kept for a card's times.
+const DAY_BUSES = 100;
 // A plan's first bus, its later buses, when TDX gave no estimate for it (a
 // trip later in the day; a planner's bus).
 export async function busTimes(plan, { near = etaAround, now = Date.now() } = {}) {
   const l = plan.legs.find(isRide);
   if (!l || l.mode !== 'bus' || !l.from?.lat) return [];
   const list = await near(l.from.lat, l.from.lon, 150).catch(() => []);
-  return laterBuses(list, l, l.dep, { now });
+  return laterBuses(list, l, l.dep, { now, n: DAY_BUSES });
 }
 
 // `start`: when you can set out (now, or the time asked): the bus you'd
@@ -259,7 +264,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     legs[i].live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
     // The buses after it, for the route's other times (moreBuses).
     // (Not waited for here: the planner waits for them all at once, beside the bikes.)
-    if (i === first) legs[i].nextP = laterBuses(list, l, bus.at, { now });
+    if (i === first) legs[i].nextP = laterBuses(list, l, bus.at, { now, n: DAY_BUSES });
     const delta = bus.at - l.dep;
     if (Math.abs(delta) < 60_000) continue;
     changed = true;

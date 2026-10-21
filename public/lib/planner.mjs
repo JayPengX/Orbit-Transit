@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -261,7 +261,13 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     const bikes = await bikesNow;
     await streetWalks(bikes, from, to);
     const t2 = performance.now();
-    const ranked = withBikes(list, from, to, bikes, t0, { modes, swap: bikeSwap(prefs), cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
+    let ranked = withBikes(list, from, to, bikes, t0, { modes, swap: bikeSwap(prefs), cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
+    // Each route's card offers the rest of the day's departures (its bus's every later bus, its trains' every later train).
+    if (by !== 'arrive') {
+      const t4 = performance.now();
+      ranked = dayTimes(ranked, net, t0, { use: useTrain });
+      lap(`days${stage}`, t4);
+    }
     // Each plan's fare line (TPASS counted); to be there by a time, the time
     // (navigation keeps to it: late, the way that still makes it).
     for (const p of ranked) {

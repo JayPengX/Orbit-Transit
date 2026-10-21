@@ -30,7 +30,7 @@ function load() {
 function keep() {
   if (!unread) writeJson(KEY, list);
   listeners.forEach(f => f());
-  push?.schedule([...list.map(pushItem), ...navItems, ...bikeItems]);
+  push?.schedule([...list.map(pushItem), ...navItems, ...bikeItems, ...tripItems]);
   if (list.length && !timer) timer = setInterval(check, 20_000);
   if (!list.length && timer) {
     clearInterval(timer);
@@ -64,6 +64,14 @@ export function setBikePush(items) {
   const next = items || [];
   if (JSON.stringify(next) === JSON.stringify(bikeItems)) return;
   bikeItems = next;
+  keep();
+}
+// A one-time trip's 「該出發了」 (tab-go.mjs tripPush), sent with them too.
+let tripItems = [];
+export function setTripPush(items) {
+  const next = items || [];
+  if (JSON.stringify(next) === JSON.stringify(tripItems)) return;
+  tripItems = next;
   keep();
 }
 // Told now: the status line, a buzz, a notification when they're allowed.

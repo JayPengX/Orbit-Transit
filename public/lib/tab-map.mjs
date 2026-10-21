@@ -1659,9 +1659,9 @@ function plansHtml(c) {
   // the time, the lines, one line of facts. The departures to pick and the
   // steps only on the plan opened; while one is open, the rest are a row each.
   const open = c.sel >= 0;
-  const row = (p, i, lead = i) => {
+  const row = (p, i, lead = i, compact = false) => {
     const on = i === c.sel;
-    const mini = open && !on;
+    const mini = (open || compact) && !on;
     // With stops: the whole trip, each stretch after its stop's number (the time and the facts all of it).
     const later = restOf(c, p);
     const all = [p, ...(later || [])];
@@ -1685,16 +1685,17 @@ function plansHtml(c) {
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
   };
-  // The routes' cards (a way set aside shows only when it's pinned).
+  // The routes' cards: every way there, however late (the owner, 2026-10-21: see them all, then pick a time),
+  // the recommendations in full, the rest a row each under them, best first.
   // (A way whose first bus is gone before you're at its stop isn't listed, unless that's every way.)
   const fine = c.plans.some(p => p.lead !== false && !p.gone);
-  const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.weak || picked(c, p)) && (!p.gone || !fine || picked(c, p)));
-  const card_ = ([p, i]) => row(c.plans[shownAt(i)], shownAt(i), i);
+  const leads = c.plans.map((p, i) => [p, i]).filter(([p]) => p.lead !== false && (!p.gone || !fine || picked(c, p)));
+  const card_ = ([p, i], compact = false) => row(c.plans[shownAt(i)], shownAt(i), i, compact);
   // (Your pinned ways first, then the recommendations best first: as 交通's card has them.)
   const tops = leads.filter(([p]) => p.top || picked(c, p)).sort(([a], [b]) => picked(c, b) - picked(c, a) || (a.score ?? 0) - (b.score ?? 0) || a.arr - b.arr);
-  const rest = leads.filter(([p]) => !p.top && !picked(c, p));
-  return `${top}<div class="ot-plans">${tops.map(card_).join('')}</div>
-    ${rest.length ? `<button class="q-btn ot-wide ot-more" type="button" data-card="more">${c.more ? W('收起其他方案', 'Fewer routes') : W(`其他 ${rest.length} 個方案`, `${rest.length} more routes`)}</button>${c.more ? `<div class="ot-plans">${rest.map(card_).join('')}</div>` : ''}` : ''}`;
+  const rest = leads.filter(([p]) => !p.top && !picked(c, p)).sort(([a], [b]) => (a.weak ? 1 : 0) - (b.weak ? 1 : 0) || (a.score ?? 0) - (b.score ?? 0) || a.arr - b.arr);
+  return `${top}<div class="ot-plans">${tops.map(x => card_(x)).join('')}</div>
+    ${rest.length ? `<h3 class="ot-plans-more">${W(`其他 ${rest.length} 種走法`, `${rest.length} other ways`)}</h3><div class="ot-plans ot-plans-rest">${rest.map(x => card_(x, true)).join('')}</div>` : ''}`;
 }
 // A stretch of a trip with stops, short: its rides (YouBike too), or a walk of all its minutes.
 function stretchChips(q) {
@@ -1773,6 +1774,9 @@ function selectPlan(i) {
   if (!card?.plans?.[i]) return;
   card.sel = card.sel === i ? -1 : i;
   renderCard();
+  // (The time picked in view in its row of the day's times.)
+  const pill = $('card').querySelector('.ot-plan.on .ot-dep.on');
+  if (pill) pill.parentElement.scrollLeft = Math.max(0, pill.offsetLeft - 60);
   drawPlan(card.plans[card.sel >= 0 ? card.sel : 0], { fit: card.sel >= 0 });
   // The buses' next times, and the roads its walks and rides take, for the plan opened.
   if (card.sel >= 0) {
@@ -2390,7 +2394,10 @@ function saveTripSheet(c, { edit = null } = {}) {
   // ("wherever I am") only when picked so.
   let from = edit ? edit.from : c.from?.lat != null ? { name: c.fromHere ? endName(c.from, W('出發地', 'Start')) : c.from.name, lat: c.from.lat, lon: c.from.lon } : null;
   let to = edit ? edit.to : { name: c.to.name, lat: c.to.lat, lon: c.to.lon };
-  const x = edit || { name: to.name, time: '', by: 'depart', days: [], back: '', alt: [] };
+  // Planned for another day (出發時間 picked on the plans): that day only, at that time, already filled in.
+  const later = !edit && when.by !== 'now' && when.at && tw(when.at).date !== tw().date ? when : null;
+  const x = edit || { name: to.name, time: later ? tw(later.at).hm : '', by: later?.by === 'arrive' ? 'arrive' : 'depart', days: [], back: '', alt: [], date: later ? tw(later.at).date : '' };
+  let date = x.date || '';
   if (!edit && ctx.data.saved.length >= MAX_SAVED) return ctx.status(W(`最多 ${MAX_SAVED} 個行程`, `Up to ${MAX_SAVED} trips`));
   const days = new Set(x.days);
   // Days whose times differ: one row each (平日 07:30, but 週三 09:10).
@@ -2401,6 +2408,7 @@ function saveTripSheet(c, { edit = null } = {}) {
     <label class="ot-field"><span>${W('名稱', 'Name')}</span><input id="st-name" maxlength="24" value="${e(x.name)}" placeholder="${W('上學、回家', 'School, Home')}"></label>
     <div class="ot-field"><span>${W('每週這幾天（可不選）', 'Days each week (optional)')}</span><div class="q-chips ot-weekdays" id="st-days"></div>
       <div class="q-chips ot-quick"><button class="q-chip" type="button" data-quick="12345">${W('平日', 'Weekdays')}</button><button class="q-chip" type="button" data-quick="0123456">${W('每天', 'Daily')}</button><button class="q-chip" type="button" data-quick="06">${W('週末', 'Weekends')}</button><button class="q-chip" type="button" data-quick="">${W('不固定', 'Any')}</button></div></div>
+    <label class="ot-field"><span>${W('或只在這一天（之後自動移除）', 'Or one day only (removed after)')}</span><input id="st-date" type="date" min="${tw().date}" value="${e(date)}"></label>
     <div class="ot-field"><span>${W('時間（可不填）', 'Time (optional)')}</span><div class="ot-times"><select id="st-by"><option value="depart" ${x.by === 'depart' ? 'selected' : ''}>${W('出發', 'Leave')}</option><option value="arrive" ${x.by === 'arrive' ? 'selected' : ''}>${W('抵達', 'Arrive')}</option></select><input id="st-time" type="time" value="${e(x.time)}"></div>
       <div class="ot-times"><span class="ot-times-l wide">${W('回程出發', 'Return at')}</span><input id="st-back" type="time" value="${e(x.back)}" aria-label="${W('回程時間', 'Return time')}"></div></div>
     <div id="st-alt" class="ot-field"></div>
@@ -2427,6 +2435,16 @@ function saveTripSheet(c, { edit = null } = {}) {
   drawAlt();
   d.addEventListener('input', ev => {
     const t = ev.target;
+    // One day picked: not every week (and the other way round, below).
+    if (t.id === 'st-date') {
+      date = t.value;
+      if (date) {
+        days.clear();
+        alt.length = 0;
+        drawDays();
+        drawAlt();
+      }
+    }
     if (t.dataset.altTime) alt[Number(t.dataset.altTime)].time = t.value;
     if (t.dataset.altBack) alt[Number(t.dataset.altBack)].back = t.value;
   });
@@ -2450,6 +2468,10 @@ function saveTripSheet(c, { edit = null } = {}) {
         days.has(k) ? days.delete(k) : days.add(k);
       }
       for (const a of alt) for (const k of [...a.days]) if (!days.has(k)) a.days.delete(k);
+      if (days.size) {
+        date = '';
+        d.querySelector('#st-date').value = '';
+      }
       drawDays();
       return drawAlt();
     }
@@ -2490,6 +2512,7 @@ function saveTripSheet(c, { edit = null } = {}) {
       time: d.querySelector('#st-time').value,
       by: d.querySelector('#st-by').value,
       days: [...days],
+      date: days.size ? '' : date,
       back: d.querySelector('#st-back').value,
       alt: alt.map(a => ({ days: [...a.days], time: a.time, back: a.back }))
     });
@@ -2497,7 +2520,7 @@ function saveTripSheet(c, { edit = null } = {}) {
     ctx.data.saved = edit ? ctx.data.saved.map(y => (y.id === edit.id ? clean : y)) : [...ctx.data.saved, clean];
     ctx.save();
     d.shut();
-    ctx.status(edit ? W('已更新行程', 'Trip updated') : W('已釘選到「交通」', 'Pinned to Transit'));
+    ctx.status(edit ? W('已更新行程', 'Trip updated') : clean.date && clean.date > addDays(tw().date, 1) ? W(`已儲存 ${clean.date.slice(5).replace('-', '/')} 的行程：前一天起出現在「交通」`, `Saved for ${clean.date.slice(5).replace('-', '/')}: in Transit from the day before`) : W('已釘選到「交通」', 'Pinned to Transit'));
     if (card) renderCard();
     ctx.refreshTabs?.();
   });

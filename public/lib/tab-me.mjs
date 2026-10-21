@@ -12,7 +12,7 @@ import { manageSheet, useBusCtx } from './bus-ui.mjs';
 import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
-import { e, distText, meters } from './util.mjs';
+import { e, distText, meters, dayLabel } from './util.mjs';
 import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, hero } from './look.mjs';
 
 import { W, en } from '#kit/lang.mjs';
@@ -66,10 +66,10 @@ function render() {
   const trips = D.saved
     .map(t => {
       // Times read whole, as plain tokens that wrap one by one (never cut inside a time).
-      const sched = [t.time ? `${t.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${t.time}` : '', t.days.length ? daysText(t.days) : '', t.back ? `${W('回程', 'Back')} ${t.back}` : ''].filter(Boolean);
+      const sched = [t.date ? dayLabel(t.date) : '', t.time ? `${t.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${t.time}` : '', t.days.length ? daysText(t.days) : '', t.back ? `${W('回程', 'Back')} ${t.back}` : ''].filter(Boolean);
       const alts = (t.alt || []).map(a => `${en ? a.days.map(x => DAYS_EN[x]).join(', ') : `週${a.days.map(x => DAYS[x]).join('')}`} ${[a.time, a.back && `${W('回程', 'back')} ${a.back}`].filter(Boolean).join(' · ')}`);
       const lines = `${sched.length ? `<span class="ot-sched">${sched.map(x => `<span>${e(x)}</span>`).join('')}</span>` : ''}${alts.map(x => `<span class="ot-sched alt"><span>${e(x)}</span></span>`).join('')}`;
-      return `<button class="q-ritem chevron" type="button" data-trip="${e(t.id)}">${tile(t.days.length ? 'clock' : 'route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title">${e(t.name || t.to.name)}</span><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}</small>${lines}</span></button>`;
+      return `<button class="q-ritem chevron" type="button" data-trip="${e(t.id)}">${tile(t.date ? 'calendar' : t.days.length ? 'clock' : 'route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title">${e(t.name || t.to.name)}</span><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}</small>${lines}</span></button>`;
     })
     .join('');
   const stops = D.groups.reduce((n, g) => n + g.items.length, 0);
