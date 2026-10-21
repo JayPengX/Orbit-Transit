@@ -155,13 +155,18 @@ async function open(id) {
   focused = null;
   view?.destroy();
   view = mountMap($('m-schem'), schem, { onTap: n => stationSheet(n.st) });
-  // You at your station when you're near one; else the city's busiest interchange.
+  // You at your station when you're near one; the whole city when it fits (a small one, an iPad); else its busiest interchange.
   const mine = hereNode();
   const live = schem.nodes.filter(n => n.lines.length);
-  const hub = live.slice().sort((a, b) => b.lines.length - a.lines.length || b.st.length - a.st.length)[0];
+  // (The busiest: the most track out of it, then the one nearest the middle of the city's interchanges: 台北車站, 美麗島.)
+  const out = n => schem.edges.filter(([a, b]) => a === n.i || b === n.i).length;
+  const hubs = live.filter(n => n.lines.length > 1);
+  const mid = hubs.length ? [hubs.reduce((a, n) => a + n.x, 0) / hubs.length, hubs.reduce((a, n) => a + n.y, 0) / hubs.length] : [0, 0];
+  const off = n => Math.hypot(n.x - mid[0], n.y - mid[1]);
+  const hub = live.slice().sort((a, b) => b.lines.length - a.lines.length || out(b) - out(a) || off(a) - off(b))[0];
   view.here(mine);
   if (mine) view.view(mine, 1, { now: true });
-  else if (live.length < 30) view.fit(null, { now: true });
+  else if (live.length < 30 || view.fitZoom() >= 0.62) view.fit(null, { now: true });
   else view.view(hub, 0.75, { now: true });
   legend();
   if (mode === 'geo') drawGeo();

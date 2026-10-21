@@ -200,6 +200,16 @@ function relax(nodes, edges, rounds, hold) {
     (deg.get(a) || deg.set(a, []).get(a)).push(b);
     (deg.get(b) || deg.set(b, []).get(b)).push(a);
   }
+  // Each line's own neighbours at an interchange (美麗島: 紅線 one way, 橘線 the other).
+  const through = [];
+  const by = new Map();
+  for (const [a, b, key] of edges)
+    for (const [n, m] of [[a, b], [b, a]]) {
+      if (nodes[n].lines.length < 2) continue;
+      const id = `${n}|${key}`;
+      (by.get(id) || by.set(id, []).get(id)).push(m);
+    }
+  for (const [id, nb] of by) if (nb.length === 2) through.push([+id.split('|')[0], ...nb]);
   const pair = new Set();
   const uniq = edges.filter(([a, b]) => {
     const id = `${a},${b}`;
@@ -250,6 +260,26 @@ function relax(nodes, edges, rounds, hold) {
       const w = cos > -0.1 ? 0.5 : t < 0.75 ? 0.12 : 0;
       fx[n.i] += ((p.x + q.x) / 2 - n.x) * w;
       fy[n.i] += ((p.y + q.y) / 2 - n.y) * w;
+    }
+    // A line through an interchange goes on through it, bending a little at most:
+    // the station drawn toward the line's straight way, its neighbours out to it.
+    for (const [c, a, b] of through) {
+      const [n, p, q] = [nodes[c], nodes[a], nodes[b]];
+      const ax = p.x - n.x;
+      const ay = p.y - n.y;
+      const bx = q.x - n.x;
+      const by2 = q.y - n.y;
+      const cos = (ax * bx + ay * by2) / ((Math.hypot(ax, ay) || 1e-6) * (Math.hypot(bx, by2) || 1e-6));
+      if (cos < -0.75) continue;
+      const w = 0.12;
+      const mx = ((p.x + q.x) / 2 - n.x) * w;
+      const my = ((p.y + q.y) / 2 - n.y) * w;
+      fx[c] += mx;
+      fy[c] += my;
+      fx[a] -= mx / 2;
+      fy[a] -= my / 2;
+      fx[b] -= mx / 2;
+      fy[b] -= my / 2;
     }
     // Apart: never closer than a gap.
     for (let i = 0; i < live.length; i++)
@@ -569,6 +599,14 @@ export function mountMap(box, map, { onTap = () => {}, onMove = () => {} } = {})
   };
 
   const layer = name => svg.querySelector(`.mm-${name}`);
+  const fitting = lineKey => {
+    const pts = lineKey ? map.edges.filter(ed => ed[2] === lineKey).flatMap(ed => [drawn.at.get(ed[0]), drawn.at.get(ed[1])]) : [...drawn.at.values()];
+    if (!pts.length) return null;
+    const xs = pts.map(p => p[0]);
+    const ys = pts.map(p => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    return [x0, x1, y0, y1, Math.min(MAXK, Math.max(minK(), Math.min((cw - 60) / Math.max(1, x1 - x0), (ch - 90) / Math.max(1, y1 - y0))))];
+  };
   const api = {
     // Centre on a station at zoom k (or where it is).
     view(node, nk = k, { now = false } = {}) {
@@ -583,12 +621,9 @@ export function mountMap(box, map, { onTap = () => {}, onMove = () => {} } = {})
     },
     // The whole drawing, or a line's stations.
     fit(lineKey = null, { now = false } = {}) {
-      const pts = lineKey ? map.edges.filter(ed => ed[2] === lineKey).flatMap(ed => [drawn.at.get(ed[0]), drawn.at.get(ed[1])]) : [...drawn.at.values()];
-      if (!pts.length) return;
-      const xs = pts.map(p => p[0]);
-      const ys = pts.map(p => p[1]);
-      const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-      const nk = Math.min(MAXK, Math.max(minK(), Math.min((cw - 60) / Math.max(1, x1 - x0), (ch - 90) / Math.max(1, y1 - y0))));
+      const f = fitting(lineKey);
+      if (!f) return;
+      const [x0, x1, y0, y1, nk] = f;
       if (now) {
         k = nk;
         x = (x0 + x1) / 2 - cw / k / 2;
@@ -632,6 +667,8 @@ export function mountMap(box, map, { onTap = () => {}, onMove = () => {} } = {})
       paint();
     },
     zoom: () => k,
+    // The zoom the whole drawing fits the box at (an iPad's: names and all).
+    fitZoom: () => fitting(null)?.[4] || 0,
     destroy() {
       cancelAnimationFrame(anim);
       box.innerHTML = '';
@@ -663,7 +700,7 @@ export function trainFrom(map, node, destNode, lineKey) {
 
 // What's wrong with a drawing, to choose between tries: lines crossing
 // where there's no station, gaps off the eight directions (radians, summed),
-// stations too close, runs folded back. → { cross, ang, close, fold, cost }.
+// stations too close, runs folded back, lines bent hard at an interchange. → { cross, ang, close, fold, bend, cost }.
 export function faults(map) {
   const { nodes, edges } = map;
   let cross = 0;
@@ -697,5 +734,20 @@ export function faults(map) {
     const [ax, ay, bx, by] = [P.x - N.x, P.y - N.y, Q.x - N.x, Q.y - N.y];
     if ((ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1) > -0.1) fold++;
   }
-  return { cross, ang: Math.round(ang * 100) / 100, close, fold, cost: cross * 10 + close * 5 + fold * 10 + ang };
+  // A line turning hard at an interchange (more than 45°) where it could go on through.
+  let bend = 0;
+  const per = new Map();
+  for (const [a, b, key] of edges)
+    for (const [n, m] of [[a, b], [b, a]]) {
+      if (nodes[n].lines.length < 2) continue;
+      const id = `${n}|${key}`;
+      (per.get(id) || per.set(id, []).get(id)).push(m);
+    }
+  for (const [id, nb] of per) {
+    if (nb.length !== 2) continue;
+    const [N, P, Q] = [nodes[+id.split('|')[0]], nodes[nb[0]], nodes[nb[1]]];
+    const [ax, ay, bx, by] = [P.x - N.x, P.y - N.y, Q.x - N.x, Q.y - N.y];
+    if ((ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1) > -0.6) bend++;
+  }
+  return { cross, ang: Math.round(ang * 100) / 100, close, fold, bend, cost: cross * 10 + close * 5 + fold * 10 + bend * 3 + ang };
 }
