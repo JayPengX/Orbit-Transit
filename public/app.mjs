@@ -13,7 +13,7 @@
 //   我的    TPASS, places, trips, pinned transit, settings
 
 import * as kitUI from '#kit/ui.mjs';
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, mayLocate, keepOffline, onlineOnly } from '#kit/quadra.mjs';
+import { quadraSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, keepOffline, onlineOnly } from '#kit/quadra.mjs';
 import { useSession, config, townships, getPosition } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
@@ -73,12 +73,8 @@ export const ctx = {
     saveLocal();
     if (q.active) await q.write({ payload: local.data }).catch(() => {});
   },
-  // Where the device is now (asked again after a minute). Unprompted only
-  // when the phone lets it be read without asking (allowed in iOS's
-  // settings), or the very first time (the kit's mayLocate): a phone that
-  // would ask isn't asked at every launch and update (2026-10-16, the owner:
-  // it asked at every launch). A quick Wi-Fi or cell fix first, GPS behind
-  // it (each one moves the map's dot).
+  // Where the device is now (asked again after a minute), from the session's
+  // one watch on it (api.mjs): one ask a launch, never skipped.
   locate({ force = false } = {}) {
     if (!force && ctx.here && Date.now() - ctx.here.at < 60_000) return Promise.resolve(ctx.here);
     // (One ask at a time: the map and the opening both ask at launch.)
@@ -112,33 +108,19 @@ export const ctx = {
 };
 let locating = null;
 async function locateNow(force) {
-  if ((await mayLocate('orbit-transit.geo.asked', { force })) !== 'yes') return ctx.here;
-  let got = null;
-  const fixed = pos => {
-    got = ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: Date.now() };
-    local.here = ctx.here;
-    saveLocal();
-    for (const fn of ctx.moved) fn(ctx.here);
-    towns.then(t => {
-      const c = t && cityAt(t, pos.lat, pos.lon);
-      if (c?.city) ctx.city = local.city = c.city;
-      saveLocal();
-    });
-  };
+  // (Always asked, never skipped by a note that it was asked before: the session's one watch, api.mjs, answers it.)
   const towns = townships().catch(() => null);
-  const gps = getPosition({ high: true, timeout: 10_000, maximumAge: 10_000 }).then(pos => {
-    if (!pos.error && !(got && got.acc < pos.acc)) fixed(pos);
-    return pos;
+  const pos = await getPosition({ timeout: 10_000, maximumAge: force ? 10_000 : 60_000 });
+  if (pos.error) return ctx.here;
+  ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: Date.now() };
+  local.here = ctx.here;
+  saveLocal();
+  for (const fn of ctx.moved) fn(ctx.here);
+  towns.then(t => {
+    const c = t && cityAt(t, pos.lat, pos.lon);
+    if (c?.city) ctx.city = local.city = c.city;
+    saveLocal();
   });
-  const quick = await Promise.race([getPosition({ high: false, timeout: 3000, maximumAge: 60_000 }), gps]);
-  if (!quick.error) {
-    if (!got) fixed(quick);
-    return ctx.here;
-  }
-  if ((await gps).error) {
-    const late = await getPosition({ high: false, timeout: 5000, maximumAge: 10 * 60_000 });
-    if (!late.error) fixed(late);
-  }
   return ctx.here;
 }
 // (A walk or a ride handed to Google's or Apple's Maps, as 我的 says.)

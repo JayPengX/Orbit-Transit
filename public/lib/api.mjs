@@ -189,21 +189,67 @@ async function readTownships() {
 
 // ---- Where the device is ---------------------------------------------------------------------
 
-export function getPosition({ timeout = 8000, maximumAge = 60_000, high = true } = {}, nav = globalThis.navigator) {
+// One watch on the device for the whole session, every ask answered from it
+// (the map, the opening, 交通, navigation). On an iPhone's home screen each
+// separate ask (a getCurrentPosition, a second watch, a watch started again on
+// coming back) could put up 「允許取用位置？」 again: one watch asks once a
+// launch, and is never skipped (an ask suppressed once had left the app with
+// no location at all; the owner, 2026-10-21). Refused, it stops; the next
+// ask (a tap on 我的位置) starts it again.
+const geo = { id: null, last: null, fns: new Set(), waiting: new Set() };
+const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading });
+function watchDevice(nav) {
+  if (geo.id != null || !nav?.geolocation?.watchPosition) return;
+  geo.id = nav.geolocation.watchPosition(
+    p => {
+      const fix = fixOf(p);
+      geo.last = { fix, t: Date.now() };
+      for (const f of [...geo.fns]) f(fix);
+      for (const w of [...geo.waiting]) w(fix);
+    },
+    err => {
+      const error = err?.code === 1 ? 'denied' : err?.code === 3 ? 'timeout' : 'unavailable';
+      if (err?.code === 1) {
+        nav.geolocation.clearWatch?.(geo.id);
+        geo.id = null;
+      }
+      for (const w of [...geo.waiting]) w({ error });
+    },
+    { enableHighAccuracy: true, maximumAge: 10_000 }
+  );
+}
+// Back in the app and the watch silent (an iPhone can leave one stopped after the background): started again.
+globalThis.document?.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || geo.id == null) return;
+  const back = Date.now();
+  setTimeout(() => {
+    if (geo.id == null || (geo.last && geo.last.t >= back) || document.visibilityState !== 'visible') return;
+    globalThis.navigator?.geolocation?.clearWatch?.(geo.id);
+    geo.id = null;
+    watchDevice(globalThis.navigator);
+  }, 15_000);
+});
+// Where the device is: a fix no older than `maximumAge`, else the watch's next (within `timeout`).
+export function getPosition({ timeout = 8000, maximumAge = 60_000 } = {}, nav = globalThis.navigator) {
+  if (!nav?.geolocation) return Promise.resolve({ error: 'unsupported' });
+  if (geo.last && Date.now() - geo.last.t <= maximumAge) return Promise.resolve({ ...geo.last.fix });
+  watchDevice(nav);
   return new Promise(resolve => {
-    if (!nav?.geolocation) return resolve({ error: 'unsupported' });
-    nav.geolocation.getCurrentPosition(
-      p => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading }),
-      err => resolve({ error: err?.code === 1 ? 'denied' : err?.code === 3 ? 'timeout' : 'unavailable' }),
-      { enableHighAccuracy: high, timeout, maximumAge }
-    );
+    const done = x => {
+      geo.waiting.delete(done);
+      clearTimeout(timer);
+      resolve(x);
+    };
+    const timer = setTimeout(() => done({ error: 'timeout' }), timeout);
+    geo.waiting.add(done);
   });
 }
-// Follows the device while the map is open: fn({ lat, lon, acc, heading }).
+// Follows the device: fn({ lat, lon, acc, heading }) at each fix, until the function returned is called.
 export function watchPosition(fn, nav = globalThis.navigator) {
   if (!nav?.geolocation?.watchPosition) return () => {};
-  const id = nav.geolocation.watchPosition(p => fn({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading }), () => {}, { enableHighAccuracy: true, maximumAge: 10_000 });
-  return () => nav.geolocation.clearWatch(id);
+  watchDevice(nav);
+  geo.fns.add(fn);
+  return () => geo.fns.delete(fn);
 }
 
 // What went wrong, said plainly: the network here, the data source there, or busy.
