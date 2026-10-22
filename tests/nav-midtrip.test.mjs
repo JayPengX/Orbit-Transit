@@ -177,3 +177,25 @@ test('started on a moving train (內灣線 near 榮華 at 17:18, the plan timed 
   assert.equal(p.legs[0].dep < now, true, 'the steps behind you are today’s too');
   useRail({});
 });
+
+test('a block past the stop on a bus that has come (快捷8號 at 竹中, 2026-10-22): on board, not still 進站了・招手上車', () => {
+  const { plan, st } = busTrip();
+  clock.set(plan.legs[1].dep - 30e3);
+  const { st: s } = start(plan, { resume: { i: 1, phase: 'before', reached: 1 } });
+  for (const x of [0, 10, 40, 75, 110]) {
+    clock.add(8e3);
+    pos(off(st[1], 0, x));
+  }
+  assert.deepEqual(show(s), { i: 1, phase: 'on', reached: 1 });
+});
+
+test('waiting at the stop, the bus not due for 10 minutes: pacing 60 m up its road is still waiting', () => {
+  const { plan, st } = busTrip();
+  clock.set(plan.legs[1].dep - 10 * 60e3);
+  const { st: s } = start(plan, { resume: { i: 1, phase: 'before', reached: 1 } });
+  for (const x of [0, 30, 70, 100]) {
+    clock.add(8e3);
+    pos(off(st[1], 0, x));
+  }
+  assert.equal(s.phase, 'before');
+});
