@@ -187,11 +187,6 @@ async function timetable(st) {
   if (!TIMETABLE.has(st.op)) return null;
   return rows(await tdx(`basic/v2/Rail/Metro/StationTimeTable/${st.op}?$filter=StationID eq '${st.id}'`, { fresh: DAY, persist: true }));
 }
-// From the timetable: the next departures each way, [{ dest, times: [ms…], line }].
-export async function nextTrains(st, now = Date.now(), n = 4) {
-  const list = await timetable(st);
-  return list && upcoming(list, now, n);
-}
 
 // The first and last train each way on the service day running now (04:00
 // to 04:00): [{ line, dest, first, last }] (ms), a row a line and way, named by
