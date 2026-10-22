@@ -111,29 +111,12 @@ async function rideStops(l, info) {
   return null;
 }
 
-// Which stop to be told to get ready at, by stops (the owner, 2026-10-22:
-// told 3 stops and 10+ minutes early on 快捷8號, "do use stop as
-// determination"): passing the last stop at least `lead` before yours (by
-// when the ride is at each, `timeOf(k)`): on an express with stops minutes
-// apart the one before yours; on a city route with stops a minute apart,
-// two or three before. Times unknown: the one before yours. → its index.
-// (Jay, 2026-10-22: 2 minutes may be too thin: about 4, never over 6.)
-export const OFF_LEAD = 4 * 60_000;
-const OFF_LEAD_MAX = 6 * 60_000;
-export function offAlertStop(rs, timeOf, lead = OFF_LEAD) {
-  const end = timeOf(rs.j);
-  let k = rs.j - 1;
-  if (end == null) return Math.max(rs.i, k);
-  while (k > rs.i) {
-    const t = timeOf(k);
-    if (t == null || end - t >= lead) break;
-    k--;
-  }
-  // (A long gap before it: the stop after, not 10 minutes early.)
-  const t = timeOf(k);
-  if (k < rs.j - 1 && t != null && end - t > OFF_LEAD_MAX) k++;
-  return Math.max(rs.i, k);
-}
+// Getting off: one alert, when the ride reaches the stop before yours,
+// that's when you ring (Jay, 2026-10-22; it was a "get ready" a few minutes
+// early, then a second at the stop before, two rounds piled up). By stops:
+// `next` (nextStop) is yours once you're at the stop before it or past it.
+// No stops known: under 600 m from yours.
+export const ringNow = (rs, next) => next != null && next >= rs.j;
 // A ride's stop times as far as they're known: the timetable's, else in
 // proportion along its planned time.
 const plannedAt = (l, rs) => {
@@ -142,11 +125,16 @@ const plannedAt = (l, rs) => {
   return k => rs.stops[k]?.at ?? (span > 0 ? l.dep + ((rs.cum[k] - rs.cum[rs.i]) / span) * (l.arr - l.dep) : null);
 };
 
-// What the lock screen says while navigating (the Worker sends them with the
-// app closed; push.js): when to set out, the bus to catch nearly there (its
-// live times, checked every 2 minutes), when to get ready to get off, a train
-// about to leave. `info`: busInfo by leg.
-// `offAt`: by ride, when it passes the stop to get ready at (offAlertStop).
+// Every navigation alert, in one place (Jay, 2026-10-22: keep it simple).
+// On the lock screen (the Worker sends them, the app closed too; push.js):
+//   nav:leave    2 min before the trip leaves: 該出發了
+//   nav:bus:k    the bus nearly at your stop, by its live times (checked every 2 min)
+//   nav:train:k  5 min before a train leaves, with its platform
+//   nav:off:k    the ride at the stop before yours: 下一站 X 下車 (a bus: 按下車鈴)
+// In the app (a buzz, each once, nav.mjs below): the bus pulling in / the train
+// at the platform, the stop before yours (ringNow), off the ride's road 30 s
+// (got off?), missed it (the next one taken), stayed on past yours, there.
+// `offAt`: by ride, when it's at the stop before yours (its stops' times now).
 export function navNotices(plan, i, info = new Map(), now = Date.now(), offAt = new Map()) {
   const out = [];
   if (i === 0 && plan.dep - 2 * 60_000 > now) out.push({ at: plan.dep - 2 * 60_000, title: W('該出發了', 'Time to go'), body: W(`${hm(plan.dep)} 出發・${hm(plan.arr)} 抵達`, `Leave ${hm(plan.dep)}・arrive ${hm(plan.arr)}`), tag: 'nav:leave', kind: 'nav', hash: 'nav' });
@@ -158,10 +146,8 @@ export function navNotices(plan, i, info = new Map(), now = Date.now(), offAt = 
       if (st && x.leg.route?.uid && l.dep > now - 5 * 60_000) out.push({ at: Math.max(now, l.dep - 25 * 60_000), until: l.dep + 30 * 60_000, title: W(`${rideName(x.leg)} 快到了`, `${rideName(x.leg)} is almost here`), body: W(`{result}（${st.name}）`, `{result} (${st.name})`), tag: `nav:bus:${k}`, kind: 'nav', hash: 'nav', check: { bus: { path: stationEtaAsk(st), route: x.leg.route.uid, dir: Number(x.leg.route.dir), min: 5 } } });
     }
     if ((l.mode === 'tra' || l.mode === 'hsr') && l.dep - 5 * 60_000 > now) out.push({ at: l.dep - 5 * 60_000, title: W(`${rideName(l)} ${hm(l.dep)} 開`, `${rideName(l)} leaves ${hm(l.dep)}`), body: `${W('在', 'At')} ${l.from?.name || ''}${l.train?.platform ? W(` ${l.train.platform} 月台`, `, platform ${l.train.platform}`) : ''}${wayText(l) ? `・${wayText(l)}` : ''}`, tag: `nav:train:${k}`, kind: 'nav', hash: 'nav' });
-    const ready = offAt.get(k)?.at ?? offAt.get(k) ?? l.arr - 3 * 60_000;
-    const last = offAt.get(k)?.next;
-    if (isRide(l) && last != null && last > now && last - ready >= 60_000) out.push({ at: last, title: W(`下一站 ${l.to?.name || ''} 下車`, `Get off next: ${l.to?.name || ''}`), body: l.mode === 'bus' ? W('按下車鈴', 'Press the bell') : W('準備下車', 'Get ready'), tag: `nav:offnext:${k}`, kind: 'nav', hash: 'nav' });
-    if (isRide(l) && ready > now) out.push({ at: ready, title: W(`快到 ${l.to?.name || ''} 了`, `Almost at ${l.to?.name || ''}`), body: W(`準備下車${plan.legs[k + 1] ? `，接著${stepText(plan, k + 1, 'before').title}` : ''}`, `Get ready to get off${plan.legs[k + 1] ? `, then ${stepText(plan, k + 1, 'before').title}` : ''}`), tag: `nav:off:${k}`, kind: 'nav', hash: 'nav' });
+    const ring = offAt.get(k) ?? l.arr - 2 * 60_000;
+    if (isRide(l) && ring > now) out.push({ at: ring, title: W(`下一站 ${l.to?.name || ''} 下車`, `Get off next: ${l.to?.name || ''}`), body: l.mode === 'bus' ? W('按下車鈴', 'Press the bell') : W(`準備下車${plan.legs[k + 1] ? `，接著${stepText(plan, k + 1, 'before').title}` : ''}`, `Get ready${plan.legs[k + 1] ? `, then ${stepText(plan, k + 1, 'before').title}` : ''}`), tag: `nav:off:${k}`, kind: 'nav', hash: 'nav' });
   });
   return out;
 }
@@ -665,27 +651,27 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min), swap30, gen: 0, settled: false, reachedPhase: 'before', lookAt: 0 };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
-  // (Get ready to get off: when each ride passes its stop to be told at, by its stops' times now.)
+  // (Getting off: when each ride is at the stop before yours, by its stops' times now.)
   const offTimes = () => {
     const out = new Map();
     for (const [k, rs] of state.ride) {
       if (k < state.i || !rs?.stops || !isRide(plan.legs[k])) continue;
       const timeOf = k === state.i && state.phase === 'on' ? navStopAt : plannedAt(plan.legs[k], rs);
-      const at = timeOf(offAlertStop(rs, timeOf));
-      if (at != null) out.set(k, { at, next: timeOf(rs.j - 1) });
+      const at = timeOf(Math.max(rs.i, rs.j - 1));
+      if (at != null) out.set(k, at);
     }
     return out;
   };
   const notices = () => {
     if (nav !== state || !push) return;
     const off = offTimes();
-    state.offSent = off.get(state.i)?.at ?? null;
+    state.offSent = off.get(state.i) ?? null;
     push(navNotices(plan, state.i, state.info, Date.now(), off));
   };
   // (On board, the times moved a minute or more since: the notice again.)
   const noticesIfMoved = () => {
     if (state.phase !== 'on') return;
-    const at = offTimes().get(state.i)?.at;
+    const at = offTimes().get(state.i);
     if (at != null && (state.offSent == null || Math.abs(at - state.offSent) >= 60_000)) notices();
   };
   Promise.all(infos).then(notices);
@@ -714,13 +700,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const rent = l.mode === 'bike' && !state.done && state.i <= state.reached ? rental() : null;
     const rms = rent ? now - rent.at : 0;
     const rentLine = rent ? `<div class="ot-nav-rent${state.swap30 ? (rms >= FREE_MS ? ' over' : rms >= FREE_MS - 5 * 60_000 ? ' warn' : '') : ''}">${icon('bike')}<span>${W(`已騎 ${Math.floor(rms / 60_000)} 分`, `Ridden ${Math.floor(rms / 60_000)} min`)}${state.swap30 ? (rms < FREE_MS ? W(`・免費剩 ${Math.ceil((FREE_MS - rms) / 60_000)} 分`, `・${Math.ceil((FREE_MS - rms) / 60_000)} min free left`) : W('・已超過免費 30 分', '・past the free 30 min')) : ''}</span></div>` : '';
-    // Yours the next stop (no stops known: under 600 m): the card turned round to say so.
-    // Past the stop to get ready at (offAlertStop), yours not next yet: how many stops, get ready.
-    const offNext = on && !state.done && (rs && state.next != null ? state.next > offAlertStop(rs, navStopAt) : left != null && left < NEXT_STOP_M);
-    if (offNext && rs && state.next != null && state.next < rs.j) {
-      title = W(`再 ${rs.j - state.next + 1} 站到 ${l.to.name} 下車`, `${rs.j - state.next + 1} stops to ${l.to.name}`);
-      sub = W('準備下車', 'Get ready');
-    } else if (offNext) {
+    // Yours the next stop (ringNow): the card turned round to say so.
+    const offNext = on && !state.done && (rs && state.next != null ? ringNow(rs, state.next) : left != null && left < NEXT_STOP_M);
+    if (offNext) {
       title = W(`下一站 ${l.to.name} 下車`, `Get off next: ${l.to.name}`);
       sub = l.mode === 'bus' ? W('按下車鈴，準備下車', 'Press the bell') : W('準備下車', 'Get ready');
     }
@@ -1058,7 +1040,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       const k = state.reached;
       const l0 = plan.legs[k];
       const rs = state.ride.get(k);
-      if (rs ? nextStop(rs.stops, rs.i, rs.j, p) > offAlertStop(rs, navStopAt) : l0.to?.lat != null && meters(p.lat, p.lon, l0.to.lat, l0.to.lon) < NEXT_STOP_M) {
+      if (rs ? ringNow(rs, nextStop(rs.stops, rs.i, rs.j, p)) : l0.to?.lat != null && meters(p.lat, p.lon, l0.to.lat, l0.to.lon) < NEXT_STOP_M) {
         state.look = null;
         go(k, 'on');
       } else return render();
@@ -1196,14 +1178,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         }
         // The stop you're coming to known for the first time: the times at the stops ahead now, not at the next 20 s.
         if (rs && !knew) refreshLive();
-        // Yours next: a buzz, once.
-        if (state.phase === 'on' && state.alerted !== state.i && (rs ? state.next > offAlertStop(rs, navStopAt) : left < NEXT_STOP_M)) {
+        // Yours next (at the stop before it): a buzz, once.
+        if (state.phase === 'on' && state.alerted !== state.i && (rs ? ringNow(rs, state.next) : left < NEXT_STOP_M)) {
           state.alerted = state.i;
-          buzz();
-        }
-        // And yours the next stop (told earlier, stops before): buzzed again, once.
-        if (state.phase === 'on' && rs && state.next >= rs.j && state.alerted === state.i && state.alertedNext !== state.i && offAlertStop(rs, navStopAt) < rs.j - 1) {
-          state.alertedNext = state.i;
           buzz();
         }
         if (state.phase === 'on' && state.i < plan.legs.length - 1 && (rs ? offEnd(p, state.i, false) : left < (OFF_M[l.mode] || 120))) return reach(state.i + 1, 'before', true);

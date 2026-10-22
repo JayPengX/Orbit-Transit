@@ -1304,7 +1304,7 @@ test('a plan whose bus leaves before the walk to it is over is never shown', () 
   assert.equal(inOrder({ legs: p.legs.map((l, i) => (i === 2 ? { ...l, dep: T('10:05'), arr: T('10:14') } : l)) }), true);
 });
 
-test('navigation tells the lock screen: set out, the bus by its live times, a train about to leave, the stop coming up', () => {
+test('navigation tells the lock screen: set out, the bus by its live times, a train about to leave, the stop before yours', () => {
   const now = T('07:00');
   const plan = finish({ legs: [
     { mode: 'walk', from: { name: '家', lat: 24.82, lon: 121.017 }, to: { name: '縣體育場', lat: 24.821, lon: 121.018 }, dep: T('07:20'), arr: T('07:25'), dur: 300 },
@@ -1318,7 +1318,12 @@ test('navigation tells the lock screen: set out, the bus by its live times, a tr
   assert.deepEqual(tag('nav:bus:1').check.bus.route, 'HSQ5615');
   assert.ok(tag('nav:bus:1').body.includes('{result}'));
   assert.equal(tag('nav:train:2').at, T('07:55'));
-  assert.equal(tag('nav:off:2').at, T('08:27'));
+  // (Stops' times unknown here: 2 minutes before it's due.)
+  assert.equal(tag('nav:off:2').at, T('08:28'));
+  assert.ok(tag('nav:off:2').title.includes('下一站 竹東 下車'));
+  // At the stop before yours by its times: that one, said once.
+  const at = navNotices(plan, 2, info, T('08:05'), new Map([[2, T('08:26')]]));
+  assert.deepEqual(at.map(x => [x.tag, x.at]), [['nav:off:2', T('08:26')]]);
   // On the train already: only what's left.
   assert.deepEqual(navNotices(plan, 2, info, T('08:05')).map(x => x.tag), ['nav:off:2']);
 });
