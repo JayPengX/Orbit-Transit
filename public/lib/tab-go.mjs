@@ -28,6 +28,7 @@ import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero,
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
+import { onDayOff } from '#kit/dayoff.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 let timer = 0;
@@ -65,6 +66,8 @@ export function init(c) {
   useBusCtx(c);
   $('panel-go').addEventListener('click', onClick);
   (ctx.onRefresh ||= []).push(() => shown && render());
+  // (A typhoon day off announced where a trip goes: its next time moves on.)
+  onDayOff(() => render());
   // The phone's fix somewhere else than 附近 was read for (the last place kept, at an opening): read again.
   (ctx.moved ||= []).push(h => shown && nearMoved(S.near, h) && loadNear({ force: true }));
 }
@@ -115,7 +118,7 @@ export function tripNow(t, here, now = Date.now()) {
   const fwd = { from: t.from, to: t.to, label: t.name || t.to.name, key: 'time', rev: false };
   let way = fwd;
   if (near(t.to) && t.from) way = back;
-  else if (!near(t.from) && t.from && today.back && (t.days.includes(day.dow) || t.date === day.date) && !(weekdaysOnly(t.days) && holidayOn(day.date))) {
+  else if (!near(t.from) && t.from && today.back && (t.days.includes(day.dow) || t.date === day.date) && !(weekdaysOnly(t.days) && holidayOn(day.date, t))) {
     // Neither end, on one of its days: by the clock (after the time out,
     // nearer the time back, and that not 30 minutes gone). Any other day,
     // or later that evening, it's the next time out.
@@ -131,7 +134,7 @@ export function tripNow(t, here, now = Date.now()) {
   // The next time it's on: a recurring trip on its next day (a Sunday's is
   // Monday's), at that day's own time; else today's, or tomorrow's once past.
   // A weekdays-only trip (school, work) isn't on a national holiday: the next day it is.
-  const offOn = date => weekdaysOnly(t.days) && holidayOn(date);
+  const offOn = date => weekdaysOnly(t.days) && holidayOn(date, t);
   let at = null;
   let late = null;
   let by = 'depart';
