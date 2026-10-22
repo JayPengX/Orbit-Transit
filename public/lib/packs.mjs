@@ -5,7 +5,7 @@
 // here, in TDX's own shape, so nothing else changes; a route not in its pack
 // (or no pack to be had) is asked of TDX as before.
 
-import * as kit from '#kit/quadra.mjs';
+import * as kit from '#kit/orbit.mjs';
 import { TDX_DAYS } from './util.mjs';
 
 const SQUARE = 0.25;

@@ -1,4 +1,4 @@
-// What Orbit Transit keeps on the Quadra Pass (`t1:` + JSON, at most
+// What Orbit Transit keeps on the Orbit Pass (`t1:` + JSON, at most
 // 200,000 characters, the Worker's eco.js cap): the bus groups (pinned stops and lines), the pinned
 // places, saved trips (a place to a place, maybe at a time, maybe every
 // weekday: 常用行程), pinned trains (a connection, or one train), recent

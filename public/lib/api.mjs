@@ -1,9 +1,9 @@
 // Everything from the proxy (Shared-Proxy/transit.js), signed in with the
-// Quadra Pass session: TDX's data, Google's map, places and routes. Answers
+// Orbit Pass session: TDX's data, Google's map, places and routes. Answers
 // are kept here too: in memory, and what lasts (stations, routes, a day's
 // timetable) in this device's cache, so a second look costs nothing.
 
-import { dev } from '#kit/quadra.mjs';
+import { dev } from '#kit/orbit.mjs';
 import { WALK_M_MIN, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -294,7 +294,7 @@ export const errorText = err =>
       : err?.code === 'TDX_NO_KEY'
         ? W('交通資料尚未開通。', 'Transit data isn’t set up yet.')
         : err?.code === 'SIGNED_OUT'
-          ? W('請先登入 Quadra Pass。', 'Sign in to Quadra Pass first.')
+          ? W('請先登入 Orbit Pass。', 'Sign in to Orbit Pass first.')
           : err?.code === 'TIMEOUT'
             ? W('回應太慢，稍後自動再試。', 'Slow to answer. Retrying shortly.')
             : err?.code === 'TDX_FAILED' || err?.status >= 500

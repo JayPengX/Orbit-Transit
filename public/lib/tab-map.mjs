@@ -8,7 +8,7 @@
 // starts navigation.
 
 import { createMap } from './map.mjs';
-import { fitNumbers, netState } from '#kit/quadra.mjs';
+import { fitNumbers, netState } from '#kit/orbit.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
@@ -33,7 +33,7 @@ import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
 import { createHome } from './home.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
-import * as kit from '#kit/quadra.mjs';
+import * as kit from '#kit/orbit.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';

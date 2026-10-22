@@ -2,7 +2,7 @@
 
 Taiwan's public transport in one app: buses, 台鐵, 高鐵, the metros and
 YouBike; trips planned the way a person really travels; navigation that
-follows the trip. Signs in with the Quadra Pass, which keeps places, trips
+follows the trip. Signs in with the Orbit Pass, which keeps places, trips
 and pins. Light or dark follows the phone; the look is `lib/look.mjs` on the kit.
 
 Live: https://jaypengx.github.io/Orbit-Transit/

@@ -1,5 +1,5 @@
 // Orbit Transit: Taiwan's public transport in one app. An Orbit app (the
-// everyday tools, like Orbit Weather): the Quadra Pass signs in and keeps the
+// everyday tools, like Orbit Weather): the Orbit Pass signs in and keeps the
 // bus groups and places; the kit draws the loading screen, the tab bar and
 // the account, and keeps the app current.
 //
@@ -13,7 +13,7 @@
 //   我的    TPASS, places, trips, pinned transit, settings
 
 import * as kitUI from '#kit/ui.mjs';
-import { quadraSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, keepOffline, onlineOnly } from '#kit/quadra.mjs';
+import { orbitSession, topActions, installGate, watchUpdates, tabBar, schedulePush, notifyOn, notifyPrefs, setNotifyOn, storedAccount, keepOffline, onlineOnly } from '#kit/orbit.mjs';
 import { useSession, config, townships, getPosition } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
@@ -50,7 +50,7 @@ if (en) {
   seg('bus', 'Bus');
   seg('metro', 'Metro');
 }
-const q = quadraSession('transit', { lang });
+const q = orbitSession('transit', { lang });
 useSession(q);
 
 // Where the device was last (opens the map there at once), this device's

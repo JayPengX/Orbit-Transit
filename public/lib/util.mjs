@@ -155,7 +155,7 @@ export const decodeLine = (poly, fmt) => (!poly ? [] : fmt === 'f' ? decodeFlexi
 
 // Saved on this device as JSON, never throwing: the kit's (readJson, writeJson).
 // `fallback` when there's none or it can't be read; a value of null removes the key.
-export { readJson, writeJson } from '#kit/quadra.mjs';
+export { readJson, writeJson } from '#kit/orbit.mjs';
 // The same, for a copy that's added to and saved back: UNREAD when the phone's
 // storage couldn't be read (the kit's readJson answers `fallback` then, as for
 // nothing there), so a failed read is never saved over what's kept. A copy

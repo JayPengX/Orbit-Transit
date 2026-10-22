@@ -23,7 +23,7 @@ import { cityAt } from './city.mjs';
 import { modeList } from './store.mjs';
 import { meters, hm, isRide } from './util.mjs';
 import { crossings } from './rivers.mjs';
-import { rec } from '#kit/quadra.mjs';
+import { rec } from '#kit/orbit.mjs';
 
 // 台鐵 and 高鐵 (our own router's trains; not the metro).
 const TRAINS = new Set(['tra', 'hsr']);
