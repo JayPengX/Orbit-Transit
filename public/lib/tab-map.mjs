@@ -1924,7 +1924,9 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const nv = lit >= 0 ? navNow() : null;
   const riding = Boolean(nv?.aboard);
   const nextRide = p.legs.findIndex((l, k) => k > lit && isRide(l));
-  const ahead = !riding ? p.legs : nv.offSoon ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : [];
+  // (Or the map moved by a finger, to look: your own YouBike stations with
+  // their bikes now, never the others round them: the owner, 2026-10-22.)
+  const ahead = !riding ? p.legs : nv.offSoon || !navFollow ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : [];
   const bikes = planBikes(ahead);
   const marks = live => [
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
@@ -2151,13 +2153,17 @@ function dragged() {
     centered = true;
     return;
   }
+  const was = navFollow;
   navFollow = false;
+  // (Looking round: the trip's own YouBike stations shown.)
+  const n0 = navNow();
+  if (was && n0) drawPlan(n0.plan, { fit: false, lit: n0.i });
   clearTimeout(followBack);
   followBack = setTimeout(() => {
     if (!navFull()) return;
     navFollow = true;
     const n = navNow();
-    if (n) navView(n.plan, n.i);
+    if (n) navDraw(n.plan, n.i);
   }, 10_000);
 }
 

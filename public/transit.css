@@ -3006,7 +3006,7 @@ body.tab-map {
 /* The foot: when you'll be there, then every step (a tap shows one). */
 .ot-nav-bottom {
   bottom: 10px;
-  padding: 6px 12px 12px;
+  padding: 12px;
   border-radius: 24px;
 }
 .ot-nav-eta {

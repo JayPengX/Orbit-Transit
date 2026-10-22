@@ -809,8 +809,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // Drawn in place: the card's parts each time, the steps only when they change.
     if (!box.querySelector(':scope > .ot-nav-bottom')) box.innerHTML = `<div class="ot-nav-topw"></div><div class="ot-nav-bottom"><div class="ot-nav-gripw"></div><div class="ot-nav-etaw"></div><div class="ot-nav-chips" role="group" aria-label="${W('步驟', 'Steps')}"></div></div>`;
     const bottom = box.querySelector(':scope > .ot-nav-bottom');
-    bottom.classList.toggle('folded', fold.bottom);
-    bottom.querySelector('.ot-nav-gripw').innerHTML = grip('bottom', fold.bottom);
+    bottom.classList.remove('folded');
+    bottom.querySelector('.ot-nav-gripw').innerHTML = '';
     box.querySelector('.ot-nav-topw').innerHTML = topHtml;
     box.querySelector('.ot-nav-etaw').innerHTML = etaHtml;
     const row = box.querySelector('.ot-nav-chips');
@@ -1497,7 +1497,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // A swipe on a card: the top up to fold, down to open; the bottom the other way.
   let swipe = null;
   box.ontouchstart = ev => {
-    const card = ev.target.closest('.ot-nav-top, .ot-nav-bottom');
+    // (The top card only: the bottom one stays as it is, its swipe down had only hidden the steps: the owner, 2026-10-22.)
+    const card = ev.target.closest('.ot-nav-top');
     swipe = card && ev.touches.length === 1 ? { y: ev.touches[0].clientY, top: card.classList.contains('ot-nav-top') } : null;
   };
   box.ontouchend = ev => {
