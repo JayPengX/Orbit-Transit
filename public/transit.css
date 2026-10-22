@@ -2628,6 +2628,9 @@ body.tab-map {
 }
 .ot-nav-pt > span {
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ot-nav-dot {
   flex: none;

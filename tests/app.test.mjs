@@ -2125,7 +2125,7 @@ test('navigating, the map shows the stage you are at: a bike ride close up (neve
   assert.ok(!bike.some(p => p.lat < 24.8), 'not on to 竹東');
   const walk = stageView(plan, 2, 'before', P('', 24.8129, 121.0233), path);
   assert.ok(walk.some(p => p.lat === st.lat && p.lon === st.lon), 'a walk: on to the stop');
-  assert.ok(span(walk) >= 250, 'never closer than a street or two');
+  assert.ok(span(walk) >= 120, 'never closer than a street (street level: Jay, 2026-10-22)');
   // The last 120 m home: close up, not framed like a ride (the owner, 2026-10-14).
   const home = { legs: [{ mode: 'bike', from: park, to: P('成功國中', 24.8172, 121.0181) }, { mode: 'walk', from: P('成功國中', 24.8172, 121.0181), to: P('家', 24.8163, 121.0179) }] };
   const last = stageView(home, 1, 'before', P('', 24.8172, 121.0181), path);

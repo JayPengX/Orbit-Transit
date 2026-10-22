@@ -302,10 +302,13 @@ const titleHtml = (title, plan) => {
   return html.replace(new RegExp(names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g'), n => `<span class="ot-nw">${n}</span>`);
 };
 // What to do on a leg, before (or while) doing it: one short line, and what's said under it.
+// A place's name without its bracket (陽明交通大學(六家校區) → 陽明交通大學): the
+// card's lines stay one line each at any width (Jay, 2026-10-22).
+export const shortPlace = n => String(n || '').replace(/\s*[（(][^）)]*[）)]\s*/g, '').trim() || String(n || '');
 function stepText(plan, i, phase) {
   const l = plan.legs[i];
   const next = plan.legs[i + 1];
-  const where = l.to?.name || (next?.from?.name ?? '') || W('目的地', 'destination');
+  const where = shortPlace(l.to?.name || (next?.from?.name ?? '')) || W('目的地', 'destination');
   if (l.mode === 'walk') {
     const last = i === plan.legs.length - 1;
     return { title: `${W('走到', 'Walk to')} ${last && !l.to?.name ? W('目的地', 'destination') : where}`, sub: next?.mode === 'bike' ? `${W('在這裡借', 'Rent a')} ${next.ebike ? W('電輔車', 'e-bike') : 'YouBike'}${W('', ' here')}` : isRide(next) ? `${W('搭', 'Take')} ${rideName(next)}` : '' };
@@ -737,7 +740,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const own = !state.done && !isRide(l) && l.to?.lat != null;
     // (From where you are on the step you're at; one looked ahead to, from its own start.)
     const gm = own ? mapsLink(legEnd(plan, state.i), l.mode === 'bike' ? 'bicycling' : 'walking', state.i > state.reached ? l.from : null) : '';
-    const paceText = pace.text || (own ? W(`約 ${hm(times.end[state.i])} 到${l.to?.name ? ` ${l.to.name}` : ''}`, `${l.to?.name ? `${l.to.name} ` : ''}~${hm(times.end[state.i])}`) : '');
+    // (The title already names where: here only when, one line beside the maps button.)
+    const paceText = pace.text || (own ? W(`約 ${hm(times.end[state.i])} 抵達`, `there ~${hm(times.end[state.i])}`) : '');
     // Late for the bus or train: a new plan from here, one tap.
     const late = !state.done && pace.tone === 'bad';
     // On board but well off its way twice running: got off somewhere else?
@@ -1644,13 +1648,12 @@ export function stageView(plan, i, phase, me, path, ride = null) {
   if (l.mode === 'walk' && next?.from?.lat != null) pts.push({ lat: next.from.lat, lon: next.from.lon });
   if (me?.lat != null) pts.push({ lat: me.lat, lon: me.lon });
   if (!pts.length) return pts;
-  // (At least ~200 m across on foot, a street or two round you: a walk's
-  // last 120 m home had been framed like a ride, a kilometre on screen once
-  // the map snapped to a whole zoom; on a bike or a ride ~400 m; waiting ~100 m.)
+  // (At least ~100 m across on foot or waiting, street level: Jay, 2026-10-22,
+  // a 130 m walk was framed too far out; on a bike or a ride ~400 m.)
   const lat = pts.map(p => p.lat);
   const lon = pts.map(p => p.lon);
   const c = { lat: (Math.min(...lat) + Math.max(...lat)) / 2, lon: (Math.min(...lon) + Math.max(...lon)) / 2 };
-  const dLat = waiting ? 0.00045 : l.mode === 'walk' ? 0.0009 : 0.0018;
+  const dLat = waiting || l.mode === 'walk' ? 0.00045 : 0.0018;
   const dLon = dLat / Math.cos((c.lat * Math.PI) / 180);
   pts.push({ lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat + dLat, lon: c.lon + dLon });
   return pts;
