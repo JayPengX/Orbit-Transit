@@ -129,3 +129,51 @@ test('trainNow: the train you are on is today’s run nearest you on the line (i
   // Nowhere near any train running: none.
   assert.equal(trainNow(trips, line, leg, off(line[1], 5000, 0), new Map(), T(17, 16)), null);
 });
+
+// The owner's own case (2026-10-22, 17:18): a trip planned for 16:00
+// (walk, YouBike to 竹東, 區間 1825 16:12 to 竹中, 區間 1754 16:43 on to
+// 新竹, walk, YouBike, walk), timed for tomorrow, started on board a later
+// train between 榮華 and 上員.
+test('started on a moving train (內灣線 near 榮華 at 17:18, the plan timed for tomorrow): on today’s 1831 it’s on, the change at 竹中 moved to the next train, there today', async () => {
+  const { useRail } = await import('../public/lib/nav.mjs');
+  const A = { lat: 24.7382, lon: 121.0947 };
+  const sts = ['竹東', '榮華', '上員', '竹中', '新竹'].map((name, n) => ({ key: `tra:${n}`, sys: 'tra', name, ...off(A, n * 1400, -n * 1400) }));
+  const S = n => ({ name: sts[n].name, lat: sts[n].lat, lon: sts[n].lon });
+  // A train calling at stations a..b, 4 minutes apart, leaving the first at t0.
+  const run = (no, a, b, t0) => ({ sys: 'tra', no, type: '區間', stops: sts.slice(a, b + 1).map((s, n) => ({ st: s.key, arr: t0 + n * 4 * 60e3 - 30e3, dep: t0 + n * 4 * 60e3 })) });
+  const at = (h, m) => T(h, m) + 3 * DAY;
+  const trips = [run('1825', 0, 3, at(16, 12)), run('1831', 0, 3, at(17, 12)), run('1754', 3, 4, at(16, 43)), run('1760', 3, 4, at(17, 43))];
+  useRail({ dayTrips: async () => trips, railStations: async () => sts, traLive: async () => new Map([['1831', { delay: 1, st: 'tra:1', status: 2 }]]) });
+  const home = { name: 'Home', ...off(A, -800, 300) };
+  const bk = { name: 'YouBike 竹東高中', ...off(A, -700, 250) };
+  const dest = { name: '巨城', ...off(sts[4], 900, 600) };
+  const bk2 = { name: 'YouBike 新竹站', ...off(sts[4], 50, 30) };
+  const bk3 = { name: 'YouBike 巨城', ...off(dest, -150, 0) };
+  const t = (h, m) => at(h, m) + DAY; // tomorrow
+  const path = (a, b) => sts.slice(a, b + 1).map(s => [s.lat, s.lon]);
+  const legs = [
+    { mode: 'walk', from: home, to: bk, dep: t(15, 57), arr: t(15, 58), dur: 60 },
+    { mode: 'bike', from: bk, to: { name: 'YouBike 竹東站', ...off(A, -40, 0) }, dep: t(15, 58), arr: t(16, 4), dur: 360 },
+    { mode: 'walk', from: { name: 'YouBike 竹東站', ...off(A, -40, 0) }, to: S(0), dep: t(16, 4), arr: t(16, 5), dur: 60 },
+    { mode: 'tra', name: '區間', short: '區間 1825', train: { no: '1825', type: '區間' }, from: S(0), to: S(3), dep: t(16, 12), arr: t(16, 24) - 30e3, dur: 690, path: path(0, 3) },
+    { mode: 'tra', name: '區間', short: '區間 1754', train: { no: '1754', type: '區間' }, from: S(3), to: S(4), dep: t(16, 43), arr: t(16, 47) - 30e3, dur: 210, path: path(3, 4) },
+    { mode: 'walk', from: S(4), to: bk2, dep: t(16, 47), arr: t(16, 48), dur: 60 },
+    { mode: 'bike', from: bk2, to: bk3, dep: t(16, 48), arr: t(17, 3), dur: 900 },
+    { mode: 'walk', from: bk3, to: dest, dep: t(17, 3), arr: t(17, 7), dur: 240 }
+  ];
+  const plan = { legs, dep: legs[0].dep, arr: legs.at(-1).arr, tags: [], dest };
+  // 17:18: 1831 (a minute late) left 榮華 at 17:17, a third of the way on to 上員.
+  const now = at(17, 18);
+  clock.set(now);
+  const here = { lat: sts[1].lat + (sts[2].lat - sts[1].lat) / 3, lon: sts[1].lon + (sts[2].lon - sts[1].lon) / 3, at: now };
+  const { st: s } = start(plan, { here });
+  await settle();
+  assert.deepEqual(show(s), { i: 3, phase: 'on', reached: 3 }, 'on the train, the walk and the bike to it done');
+  const p = s.plan;
+  assert.equal(String(p.legs[3].train.no), '1831', 'the train you’re really on');
+  assert.equal(p.legs[3].dep, at(17, 12));
+  assert.equal(String(p.legs[4].train.no), '1760', 'the change at 竹中: the next train you can catch');
+  assert.ok(p.legs.at(-1).arr > now && p.legs.at(-1).arr - now < 60 * 60_000, 'there within the hour, today, not 23 hours on');
+  assert.equal(p.legs[0].dep < now, true, 'the steps behind you are today’s too');
+  useRail({});
+});
