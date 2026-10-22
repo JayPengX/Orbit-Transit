@@ -200,13 +200,3 @@ test('waiting at the stop, the bus not due for 10 minutes: pacing 60 m up its ro
   assert.equal(s.phase, 'before');
 });
 
-test('on board with the stops known, the map is you and the next three stops (not the whole ride shrunk)', async () => {
-  const { stageView } = await import('../public/lib/nav.mjs');
-  const { plan, st } = busTrip({ stops: 12, offAt: 11 });
-  const me = off(st[2], 0, 150);
-  const pts = stageView(plan, 1, 'on', me, l => l.path, { stops: st, i: 1, j: 11, next: 3 });
-  const lons = pts.map(p => p.lon);
-  const span = (Math.max(...lons) - Math.min(...lons)) * 111_320 * Math.cos((me.lat * Math.PI) / 180);
-  assert.ok(span < 2000, `${Math.round(span)} m across`);
-  assert.ok(!pts.some(p => p.lat === st[11].lat && p.lon === st[11].lon), 'your stop 8 stops on: not yet');
-});

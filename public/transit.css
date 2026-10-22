@@ -1615,30 +1615,48 @@ body.tab-map {
   stroke-width: 2.4;
 }
 /* A ride's stops on its line, navigating: small dots, where you get off a ring. */
-/* A ride's stops on its line: small ticks in its colour; the next one and
-   yours (ringed) stand out, the rest stay out of the way. */
+/* A ride's stops on its line: a white dot ringed in its colour; behind you
+   dimmed, the next one bigger, yours biggest with its name beside it. */
 .ot-mk.stopdot i {
   display: block;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--c) 45%, #fff);
-  box-shadow: 0 0 0 1.5px var(--c);
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--c);
+}
+.ot-mk.stopdot.past i {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: color-mix(in srgb, var(--c) 35%, #4b5263);
+  box-shadow: 0 0 0 1.5px #4b5263;
 }
 .ot-mk.stopdot.next i {
-  width: 11px;
-  height: 11px;
-  margin: -5.5px 0 0 -5.5px;
-  background: #fff;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
   box-shadow: 0 0 0 3px var(--c);
 }
 .ot-mk.stopdot.off i {
   width: 15px;
   height: 15px;
   margin: -7.5px 0 0 -7.5px;
-  background: #fff;
   box-shadow: 0 0 0 4px var(--c);
+}
+.ot-mk.stopdot b {
+  position: absolute;
+  left: 12px;
+  top: -11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--c);
+  color: #fff;
+  font: 600 12px/18px var(--q-font);
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 /* A metro map's stations: a dot in the line's colour (a ring at an interchange), names zoomed in. */
 .ot-mk.mstop {
@@ -3044,11 +3062,31 @@ body.tab-map {
 .ot-nav-bottom.folded .ot-nav-chips {
   display: none;
 }
+/* The steps: one row, scrolled sideways (kept on the step you're at); the
+   steps behind you shrink to their icon. */
 .ot-nav-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
-  margin-top: 10px;
+  margin: 10px -12px 0;
+  padding: 0 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+}
+.ot-nav-chips::-webkit-scrollbar {
+  display: none;
+}
+.ot-nav-chip {
+  flex: none;
+}
+.ot-nav-chip.done {
+  padding: 0 9px;
+}
+.ot-nav-chip.done span {
+  display: none;
 }
 .ot-nav-chip {
   display: inline-flex;

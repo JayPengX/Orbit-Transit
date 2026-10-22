@@ -756,6 +756,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       row.innerHTML = chips;
       row._html = chips;
     }
+    // One row of steps, scrolled to keep the one you're at in view, a step before it showing (the owner, 2026-10-22: two rows weren't good).
+    if (row._on !== state.i) {
+      row._on = state.i;
+      const on = row.querySelector?.('.ot-nav-chip.on');
+      if (on && row.scrollTo) row.scrollTo({ left: Math.max(0, on.offsetLeft - row.offsetLeft - 44), behavior: row._seen ? 'smooth' : 'auto' });
+      row._seen = true;
+    }
     // The cards' heights changed (stops came in, a fold): the map fits the room left.
     const hs = `${box.querySelector('.ot-nav-top')?.offsetHeight}|${bottom.offsetHeight}`;
     if (hs !== state.cardHs) {
@@ -871,7 +878,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         const noShape = rs && !l.poly && !l.path;
         if (noShape) l.path = rs.stops.slice(rs.i, rs.j + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]);
         if ((!had && l.train?.no) || noShape) saveNav(state);
-        if (noShape && nav === state) draw(plan, state.i);
+        // (Its stops on the map now: not left to the next step.)
+        if (nav === state) draw(plan, state.i);
       }
       const rs = l ? state.ride.get(ri) : null;
       // On it already (opened again on board): the next stop from where you were last seen, not only on the next move.
@@ -1025,6 +1033,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         if (state.i === state.reached) state.reachedPhase = 'on';
         state.where = null;
         saveNav(state);
+        draw(plan, state.i);
         refreshLive();
         boarded();
       } else return reach(on.i, on.phase, isRide(plan.legs[on.i - 1]) && state.i === on.i - 1);
@@ -1083,6 +1092,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           if (state.i === state.reached) state.reachedPhase = 'on';
           state.where = null;
           saveNav(state);
+          draw(plan, state.i);
           refreshLive();
           boarded();
         }
@@ -1497,9 +1507,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   return state;
 }
 // Each ride's stops from where it boards to where it gets off, for the map: [{ k, stops }].
-// On board, only the ride you're on, from the stop you're coming to: the
-// stops behind you and the rides after it aren't drawn (the owner,
-// 2026-10-22: every stop a big dot, the map a mess). `cur`: that one.
+// On board, only the ride you're on (the rides after it aren't drawn: the
+// owner, 2026-10-22, a mess of dots); `cur`: that one, `next` the stop
+// you're coming to among its stops.
 export function navStops() {
   if (!nav) return [];
   const on = isRide(nav.plan.legs[nav.i]) && nav.phase === 'on';
@@ -1507,7 +1517,9 @@ export function navStops() {
     .filter(([k, rs]) => rs?.stops && k >= nav.i && (!on || k === nav.i))
     .map(([k, rs]) => {
       const cur = on && k === nav.i && nav.next != null;
-      return { k, cur, stops: rs.stops.slice(cur ? Math.max(rs.i, nav.next) : rs.i, rs.j + 1).filter(s => s.lat != null) };
+      // (`next`: where the stop you're coming to is among them; those before it are behind you.)
+      const stops = rs.stops.slice(rs.i, rs.j + 1).filter(s => s.lat != null);
+      return { k, cur, stops, next: cur ? Math.max(0, nav.next - rs.i) : -1 };
     });
 }
 // On board with your stop two or fewer stops on: the YouBike you take after it is shown (its bikes now).
@@ -1544,24 +1556,12 @@ export function arrival(near, p, to, along = null, now = Date.now()) {
   return { near, done: now - near.t > 60_000 };
 }
 
-// On board with its stops known (`ride`: { stops, j, next }): you and the
-// next three stops (your own among them once it's that near), at least ~600 m
-// across: where you are and what's next readable, not the whole ride shrunk
-// (the owner, 2026-10-22).
-export function stageView(plan, i, phase, me, path, ride = null) {
+// On board: you and the rest of the ride to your stop, the whole of it (you
+// sit on it the whole way; close up is for walking and riding a bike: the
+// owner, 2026-10-22, after a try at the next three stops).
+export function stageView(plan, i, phase, me, path) {
   const l = plan.legs[i];
   if (!l) return [];
-  if (phase === 'on' && isRide(l) && ride?.stops && ride.next != null && me?.lat != null) {
-    const ks = [];
-    for (let k = ride.next; k <= Math.min(ride.j, ride.next + 2); k++) ks.push(k);
-    const pts = [{ lat: me.lat, lon: me.lon }, ...ks.map(k => ride.stops[k]).filter(s => s?.lat != null).map(s => ({ lat: s.lat, lon: s.lon }))];
-    const lat = pts.map(p => p.lat);
-    const lon = pts.map(p => p.lon);
-    const c = { lat: (Math.min(...lat) + Math.max(...lat)) / 2, lon: (Math.min(...lon) + Math.max(...lon)) / 2 };
-    const dLat = 0.0027;
-    const dLon = dLat / Math.cos((c.lat * Math.PI) / 180);
-    return [...pts, { lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat + dLat, lon: c.lon + dLon }];
-  }
   // (Waiting: only the stop.)
   const waiting = isRide(l) && phase !== 'on';
   let pts = waiting ? (l.from?.lat != null ? [{ lat: l.from.lat, lon: l.from.lon }] : []) : path(l).map(([lat, lon]) => ({ lat, lon }));
