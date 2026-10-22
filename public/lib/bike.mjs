@@ -60,6 +60,12 @@ export async function bikesNear(lat, lon) {
   return mergeBikes(st, live);
 }
 
+// YouBike never holds anything up (a trip's plans, navigation, 交通's
+// cards): what's in by `ms`, else `none`, the read going on behind for the
+// next look. (TDX slow behind the proxy held a trip's plans 30 s and more,
+// 2026-10-22: now the trip is planned without bikes.)
+export const bikesBy = (ask, ms = 2500, none = []) => Promise.race([Promise.resolve(ask).catch(() => none), new Promise(r => setTimeout(r, ms, none))]);
+
 // A bike to take at a station now (a 電輔車, with `ebike`), and a free dock to return one.
 export const canRent = (s, ebike = false) => s.ok !== false && (ebike ? s.ebike || 0 : s.bikes + (s.ebike || 0)) > 0;
 export const canReturn = s => s.ok !== false && s.ret > 0;

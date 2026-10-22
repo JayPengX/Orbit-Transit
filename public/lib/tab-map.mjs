@@ -10,7 +10,7 @@
 import { createMap } from './map.mjs';
 import { fitNumbers, netState } from '#kit/quadra.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
-import { cityBikes, bikeLevel } from './bike.mjs';
+import { cityBikes, bikeLevel, bikesBy } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { OPERATORS, stationTitle } from './metro.mjs';
@@ -1565,7 +1565,7 @@ async function planRest(c) {
   try {
     const pts = [c.from, c.to, ...c.then];
     const cities = [...new Set(await Promise.all(pts.map(x => ctx.cityOf(x.lat, x.lon))))].filter(Boolean);
-    const bikes = (await Promise.all(cities.map(x => cityBikes(x).catch(() => [])))).flat();
+    const bikes = (await bikesBy(Promise.all(cities.map(x => cityBikes(x).catch(() => []))), 3000)).flat();
     const first = c.plans.find(p => p.tags?.includes('推薦')) || c.plans[0];
     const k = card === c && keepBike(c.from, [c.to, ...c.then], bikes, c.have ? Date.now() : first.dep, { have: c.have, swap: bikeSwap(ctx.data.prefs), since: c.since ?? Date.now() });
     if (k) {
