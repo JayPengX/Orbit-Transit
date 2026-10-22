@@ -4534,38 +4534,6 @@ span.ot-pass {
   background: color-mix(in srgb, var(--q-green) 14%, transparent);
 }
 /* A route's timetable: the week as a strip of days, the hours as rows. */
-.ot-tt-days {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-  margin: 12px 0;
-}
-.ot-tt-days button {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  padding: 6px 0;
-  border: 0;
-  border-radius: 12px;
-  background: var(--q-fill-3);
-  color: var(--q-label);
-  font: inherit;
-}
-.ot-tt-days small {
-  color: var(--q-label-2);
-  font: 500 11px/13px var(--q-font);
-}
-.ot-tt-days b {
-  font: 600 15px/19px var(--q-font-rounded);
-}
-.ot-tt-days button[aria-pressed='true'] {
-  background: var(--q-green);
-  color: #fff;
-}
-.ot-tt-days button[aria-pressed='true'] small {
-  color: inherit;
-  opacity: 0.8;
-}
 .ot-tt-head {
   display: flex;
   align-items: baseline;
@@ -4688,38 +4656,6 @@ span.ot-pass {
   display: grid;
   gap: 8px;
   padding: 8px 0;
-}
-.ot-days {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px;
-  padding: 2px;
-  border-radius: 18px;
-  background: var(--q-fill-3);
-}
-.ot-days button {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  min-width: 0;
-  min-height: 52px;
-  padding: 0 4px;
-  border: 0;
-  border-radius: 16px;
-  background: none;
-  color: var(--q-label);
-  font: 600 15px/18px var(--q-font);
-  align-content: center;
-  white-space: nowrap;
-}
-.ot-days button small {
-  color: var(--q-label-2);
-  font: 500 12px/14px var(--q-font);
-  font-variant-numeric: tabular-nums;
-}
-.ot-days button[aria-pressed='true'] {
-  background: var(--q-elevated);
-  box-shadow: 0 3px 8px rgb(0 0 0 / 0.12);
 }
 .ot-field.ot-when-time input[type='time'] {
   min-height: 60px;
