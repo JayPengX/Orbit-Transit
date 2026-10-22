@@ -28,21 +28,36 @@ const passing = err => !err.status || err.status === 429 || err.status >= 500;
 async function ask(path, { signal, wait = 15_000, meta = null, renew = false } = {}) {
   const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(await token(renew))}`;
   const timer = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const stop = setTimeout(() => timer?.abort(), wait);
+  // (The answer's body is waited for too, not only its headers: a body that
+  // stalled on a weak link, a city's YouBike list, half a megabyte, never
+  // came and its ask never ended, so every later ask for it waited on it and
+  // the map's bikes stayed empty until the app was restarted; 2026-10-22.)
+  const stop = setTimeout(() => timer?.abort(), wait + 10_000);
+  const head = setTimeout(() => timer?.abort(), wait);
   signal?.addEventListener?.('abort', () => timer?.abort());
-  let res;
-  try {
-    res = await fetch(url, { signal: timer?.signal || signal });
-  } catch (err) {
+  const failed = err => {
     const offline = globalThis.navigator?.onLine === false;
-    throw Object.assign(new Error('network'), { code: offline ? 'OFFLINE' : signal?.aborted ? 'ABORTED' : timer?.signal.aborted ? 'TIMEOUT' : 'NETWORK', status: 0, cause: err });
+    return Object.assign(new Error('network'), { code: offline ? 'OFFLINE' : signal?.aborted ? 'ABORTED' : timer?.signal.aborted ? 'TIMEOUT' : 'NETWORK', status: 0, cause: err });
+  };
+  let res;
+  let body = null;
+  try {
+    try {
+      res = await fetch(url, { signal: timer?.signal || signal });
+    } catch (err) {
+      throw failed(err);
+    } finally {
+      clearTimeout(head);
+    }
+    try {
+      body = await res.json();
+    } catch (err) {
+      // (A good answer whose body didn't come whole is a failed ask, never an empty answer.)
+      if (res.ok) throw failed(err);
+    }
   } finally {
     clearTimeout(stop);
   }
-  let body = null;
-  try {
-    body = await res.json();
-  } catch {}
   if (!res.ok) throw Object.assign(new Error(body?.code || `${res.status}`), { code: body?.code || 'HTTP', status: res.status });
   // How old the proxy's copy is (s): TDX slow, it answers with the copy it has.
   if (meta) meta.age = Number(res.headers?.get?.('X-Transit-Age')) || 0;
@@ -64,14 +79,15 @@ async function get(path, opts = {}) {
 
 const memory = new Map();
 const hasCaches = () => typeof caches !== 'undefined';
+// (1.5 s at most: the phone's cache storage, which now and then
+// doesn't answer, never holds up the ask.)
 export async function kept(path) {
   if (!hasCaches()) return null;
-  try {
+  const read = (async () => {
     const hit = await (await caches.open(DATA_CACHE)).match(`https://data.transit/${path}`);
     return hit ? { at: Number(hit.headers.get('x-at')) || 0, data: await hit.json() } : null;
-  } catch {
-    return null;
-  }
+  })().catch(() => null);
+  return Promise.race([read, new Promise(r => setTimeout(r, 1500, null))]);
 }
 export async function keep(path, data, at, max = Infinity) {
   if (!hasCaches()) return;
@@ -99,9 +115,22 @@ export const bikeMs = () => dev('transitBike') * 1000;
 // most answers at once, the fresh one asked behind it; `onFresh` tells who
 // drew from it (YouBike's counts: the map opens on the last ones, swapped
 // for the new a second later, not a strip waiting on the network).
+// `late` (ms): the network slower than that, the last copy here or on the
+// device (up to LATE_MAX old) answers instead, the ask going on behind for
+// the next look (YouBike: a trip's bikes never wait on a slow TDX, and never
+// go missing; Jay 2026-10-22). `max`: the biggest answer kept on the device.
+const LATE_MAX = 30 * 60_000;
 const freshers = new Set();
 export const onFresh = f => freshers.add(f);
-export async function tdx(path, { fresh = 30_000, persist = false, store = true, swr = 0 } = {}) {
+export async function tdx(path, opts = {}) {
+  const ask = tdxAsk(path, opts);
+  if (!opts.late) return ask;
+  const last = memory.get(path) || (await kept(path));
+  if (!last || Date.now() - last.at > LATE_MAX) return ask;
+  ask.catch(() => {});
+  return Promise.race([ask, sleep(opts.late).then(() => (stale.set(path, last.at), last.data))]);
+}
+async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr = 0, max = 200_000 } = {}) {
   if (fresh === 'live') fresh = liveMs() - 1000;
   else if (fresh === 'bike') fresh = bikeMs() - 1000;
   const now = Date.now();
@@ -118,11 +147,13 @@ export async function tdx(path, { fresh = 30_000, persist = false, store = true,
     const k = await kept(path);
     if (k && now - k.at < swr && !memory.has(path)) {
       memory.set(path, k);
-      tdx(path, { fresh, persist, store }).then(() => freshers.forEach(f => f(path)), () => {});
+      tdxAsk(path, { fresh, persist, store, max }).then(() => freshers.forEach(f => f(path)), () => {});
       return k.data;
     }
   }
-  if (inflight.has(path)) return inflight.get(path);
+  // (An ask that somehow never ended is not waited on for ever: after a minute, asked anew.)
+  const going = inflight.get(path);
+  if (going && Date.now() - going.at < 60_000) return going;
   const p = (async () => {
     try {
       const meta = {};
@@ -131,7 +162,7 @@ export async function tdx(path, { fresh = 30_000, persist = false, store = true,
       memory.set(path, { at: Date.now() - meta.age * 1000, data });
       stale.delete(path);
       // Live answers are kept too (a minute's copy beats an error after a relaunch).
-      if (store) keep(path, data, Date.now(), persist ? Infinity : 200_000);
+      if (store) keep(path, data, Date.now(), persist ? Infinity : max);
       return data;
     } catch (err) {
       // The last copy, here or kept on the device, however old: better than nothing.
@@ -142,9 +173,10 @@ export async function tdx(path, { fresh = 30_000, persist = false, store = true,
       }
       throw err;
     } finally {
-      inflight.delete(path);
+      if (inflight.get(path) === p) inflight.delete(path);
     }
   })();
+  p.at = Date.now();
   inflight.set(path, p);
   return p;
 }
