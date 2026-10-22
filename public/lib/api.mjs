@@ -13,7 +13,8 @@ const DATA_CACHE = 'orbit-transit-data';
 let session = null;
 export const useSession = s => (session = s);
 const token = async (renew = false) => {
-  const t = await session?.ensureToken({ renew });
+  // (A read: the token kept, up to 6 hours old, goes at once; a new one only when it's turned away.)
+  const t = await session?.ensureToken({ renew, read: !renew });
   if (!t) throw Object.assign(new Error('signed out'), { code: 'SIGNED_OUT', status: 401 });
   return t;
 };
