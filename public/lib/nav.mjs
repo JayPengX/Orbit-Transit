@@ -26,6 +26,9 @@ import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSa
 
 import { W, en } from '#kit/lang.mjs';
 let nav = null;
+// Where today's trains come from (the timetable, the live board): a test's own day instead.
+let rail = { dayTrips, railStations, traLive };
+export const useRail = x => (rail = { dayTrips, railStations, traLive, ...x });
 
 // The ride being followed, kept on the phone: swiped away and opened again,
 // it goes on where it was (savedNav, for tab-map), until it's over or ended.
@@ -476,12 +479,12 @@ async function rideOptions(l, info, now = Date.now()) {
     return out.sort((a, b) => a.dep - b.dep).slice(0, 6);
   }
   if (l.mode !== 'tra' && l.mode !== 'hsr') return [];
-  const sts = await railStations();
+  const sts = await rail.railStations();
   const near = (pt, max = 800) => new Set(sts.filter(s => s.sys === l.mode && meters(pt.lat, pt.lon, s.lat, s.lon) < max).map(s => s.key));
   const [a, b] = [near(l.from), near(l.to)];
-  const lv = l.mode === 'tra' ? await traLive().catch(() => new Map()) : new Map();
+  const lv = l.mode === 'tra' ? await rail.traLive().catch(() => new Map()) : new Map();
   const out = [];
-  for (const t of await dayTrips(tw(now).date)) {
+  for (const t of await rail.dayTrips(tw(now).date)) {
     if (t.sys !== l.mode) continue;
     const i = t.stops.findIndex(s => a.has(s.st));
     const j = i >= 0 ? t.stops.findIndex((s, k) => k > i && b.has(s.st)) : -1;
@@ -1222,7 +1225,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (l.mode === 'tra' || l.mode === 'hsr') {
       let t;
       try {
-        const [trips, sts, lv] = await Promise.all([dayTrips(tw(now).date), railStations(), l.mode === 'tra' ? traLive().catch(() => new Map()) : new Map()]);
+        const [trips, sts, lv] = await Promise.all([rail.dayTrips(tw(now).date), rail.railStations(), l.mode === 'tra' ? rail.traLive().catch(() => new Map()) : new Map()]);
         t = trainNow(trips, sts, l, p, lv, now);
       } catch {
         // (No timetable to go by: where you are says it.)
