@@ -15,7 +15,7 @@ import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt } from './live.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
-import { canRent, canReturn, bikesBy } from './bike.mjs';
+import { canRent, canReturn } from './bike.mjs';
 import { rideSec, DOCK_SEC, walkLeg, rideLeg } from './plan.mjs';
 import { rental, startRental, endRental, rentalStep, FREE_MS } from './rental.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
@@ -840,9 +840,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (bi >= 0) {
       try {
         const bl = plan.legs[bi];
-        // (Late, the stations as they were: the step's countdowns don't wait on YouBike.)
-        const [a, b] = await bikesBy(Promise.all([bikesAround(bl.from.lat, bl.from.lon), bikesAround(bl.to.lat, bl.to.lon)]), 3000, [null, null]);
-        if (!a || !b) throw new Error('bikes late');
+        const [a, b] = await Promise.all([bikesAround(bl.from.lat, bl.from.lon), bikesAround(bl.to.lat, bl.to.lon)]);
         const at = (list, pt) => list.find(s => meters(pt.lat, pt.lon, s.lat, s.lon) < 60) || null;
         state.bikes = { ...(state.bikes?.k === bi ? state.bikes : {}), k: bi, rent: at(a, bl.from), ret: at(b, bl.to) };
       } catch {}
