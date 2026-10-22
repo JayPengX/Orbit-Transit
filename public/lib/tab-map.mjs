@@ -1918,15 +1918,15 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const end = p.dest?.lat != null ? p.dest : p.legs.at(-1)?.to;
   // The place's own dropped pin already marks where it ends: one mark there, not two on top of each other.
   const marked = selDrop && end?.lat != null && meters(selDrop.lat, selDrop.lon, end.lat, end.lon) < 60;
-  // On a bus or train: only that ride's stops ahead and where the trip ends;
-  // the YouBike after it once your stop is two or fewer on (the owner,
-  // 2026-10-22: the bike badges piled on the pin while riding).
+  // On a bus or train: only that ride's stops and where the trip ends (the
+  // owner, 2026-10-22: the bike badges piled on the pin while riding).
   const nv = lit >= 0 ? navNow() : null;
   const riding = Boolean(nv?.aboard);
   const nextRide = p.legs.findIndex((l, k) => k > lit && isRide(l));
-  // (Or the map moved by a finger, to look: your own YouBike stations with
-  // their bikes now, never the others round them: the owner, 2026-10-22.)
-  const ahead = !riding ? p.legs : nv.offSoon || !navFollow ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : [];
+  // On the ride, none in the map's own view, near your stop too; moved by a
+  // finger, to look: your own YouBike stations with their bikes now, never
+  // the others round them (the owner, 2026-10-22); off it, as any step.
+  const ahead = !riding ? p.legs : !navFollow ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : [];
   const bikes = planBikes(ahead);
   const marks = live => [
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
