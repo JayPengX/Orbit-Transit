@@ -3,6 +3,7 @@
 
 import { twHoliday } from '#kit/holidays.mjs';
 import { W } from '#kit/lang.mjs';
+import { addDays } from '#kit/format.mjs';
 
 export { escHtml as e } from '#kit/ui.mjs';
 
@@ -26,7 +27,7 @@ export function twAt(date, hm) {
   return day + ((h * 60 + m) * 60 + s) * 1000;
 }
 export const hm = t => (t == null ? '' : tw(t).hm);
-export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00+08:00`) + n * 86_400_000 + TPE).toISOString().slice(0, 10);
+export { addDays };
 // TDX's ServiceDay keys, Sunday first (by a date's dow).
 export const TDX_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WEEK = '日一二三四五六';

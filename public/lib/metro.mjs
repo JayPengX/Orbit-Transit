@@ -43,7 +43,7 @@ export function metroColor(name) {
   const n = String(name || '');
   if (!n) return '';
   let best = '';
-  for (const [k, c] of LINE_COLORS) if (n.includes(k) && k.length > best.length) best = k;
+  for (const [k] of LINE_COLORS) if (n.includes(k) && k.length > best.length) best = k;
   return best ? LINE_COLORS.get(best) : '';
 }
 
