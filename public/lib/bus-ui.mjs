@@ -15,6 +15,7 @@ import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJso
 import { nextRun, liveTrusted } from './live.mjs';
 
 import { W, en } from '#kit/lang.mjs';
+import * as kitUI from '#kit/ui.mjs';
 const WEEK = '日一二三四五六';
 const WEEK_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const wk = i => (en ? WEEK_EN[i] : `週${WEEK[i]}`);
@@ -252,8 +253,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const { times, every } = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, date, dow);
     const next = day ? null : times.find(t => t >= now);
     const named = day === 0 ? W('今天', 'Today') : day === 1 ? W('明天', 'Tomorrow') : wk(dow);
-    // The coming week, a day a column: 今天, 明天, then by weekday.
-    const days = `<div class="ot-tt-days" role="group" aria-label="${W('哪一天', 'Day')}">${[0, 1, 2, 3, 4, 5, 6].map(i => `<button type="button" data-day="${i}" aria-pressed="${i === day}"><small>${i === 0 ? W('今天', 'Today') : i === 1 ? W('明天', 'Tmrw') : W('週', '')}</small><b>${en ? WEEK_EN[(t0.dow + i) % 7] : WEEK[(t0.dow + i) % 7]}</b></button>`).join('')}</div>`;
+    // The coming week: the family's strip of days (drawn in after, ttDays).
+    const days = '<div class="ot-tt-strip"></div>';
     // The stop: a native picker (an iPhone's wheel), its name the label.
     const stopPick = `<label class="ot-tt-stop"><b>${e(s.name)}</b>${icon('down')}<select data-pickstop aria-label="${W('換站牌', 'Change stop')}">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(x.name)}</option>`).join('')}</select></label>`;
     const body = times.length
@@ -317,7 +318,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
             .join('')}</ol>`;
     const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(boarding.name)} 上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
     const dirLeft = d.querySelector('.ot-dir-chips')?.scrollLeft || 0;
-    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
     // (The row of ways where it was; the one chosen in sight.)
     const row = d.querySelector('.ot-dir-chips');
     if (row) {
@@ -325,8 +326,25 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       const on = row.querySelector('[aria-pressed="true"]');
       if (on && (on.offsetLeft < row.scrollLeft || on.offsetLeft + on.offsetWidth > row.scrollLeft + row.clientWidth)) row.scrollLeft = on.offsetLeft - 16;
     }
+    ttDays();
     d.scrollTop = keep;
   };
+  // The timetable's days: the coming week on the family's strip (📅 among
+  // them), a swipe across the times for the day either side.
+  const ttRec = {};
+  const week = () => kitUI.dayList(today().date, addDays(today().date, 6));
+  const pickDay = date => {
+    day = week().indexOf(date);
+    if (day < 0) return void (day = 0);
+    dayPicked = true;
+    moved = '';
+    draw();
+  };
+  const ttDays = () => d.querySelector('.ot-tt-strip')?.replaceWith(kitUI.dayBar(ttRec, { flat: true, days: week(), current: addDays(today().date, day), today: today().date, follow: true, onPick: pickDay }));
+  kitUI.daySwipe(d.querySelector('#rt'), dir => {
+    const next = view === 'table' && kitUI.dayStep(week(), addDays(today().date, day), dir);
+    return Boolean(next && (pickDay(next), true));
+  });
   // A ride pinned on at this stop, either way (the way back gets on where the ride gets off).
   const rideAt = uid => x => x.routeUID === route.uid && (x.stopUID === uid || x.back?.stopUID === uid);
   const pinnedAt = uid => {
@@ -410,13 +428,6 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const v = ev.target.closest('[data-view]');
     if (v) {
       view = v.dataset.view;
-      return draw();
-    }
-    const dy = ev.target.closest('[data-day]');
-    if (dy) {
-      day = Number(dy.dataset.day);
-      dayPicked = true;
-      moved = '';
       return draw();
     }
     const cur = ways?.[way];

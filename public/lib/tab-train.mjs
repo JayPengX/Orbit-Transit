@@ -16,6 +16,7 @@ import { COLOR, tile, tag, section, rowCard, emptyNote } from './look.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
+import * as kitUI from '#kit/ui.mjs';
 const $ = id => document.getElementById(id);
 let ctx = null;
 let shownNow = '';
@@ -28,7 +29,11 @@ export function init(c) {
   $('panel-train').addEventListener('click', onClick);
   $('panel-train').addEventListener('change', ev => {
     if (ev.target.id === 't-time') state.time = ev.target.value && ev.target.value !== shownNow ? ev.target.value : null;
-    if (ev.target.id === 't-date') state.date = ev.target.value || null;
+  });
+  // A swipe across the page: the day either side (the strip's days).
+  kitUI.daySwipe($('panel-train'), dir => {
+    const next = kitUI.dayStep(trainDays(), state.date || tw().date, dir);
+    return Boolean(next && (pickDay(next), true));
   });
   const last = ctx.data.trains[0];
   if (last) Object.assign(state, { from: last.from, to: last.to });
@@ -65,18 +70,28 @@ async function nearestStart() {
   } catch {}
 }
 
+// The day: the family's strip of days pinned at the top (today and the 30
+// after, as far as timetables go), 📅 among them; a day picked asks again.
+const dayRec = {};
+const trainDays = () => kitUI.dayList(tw().date, addDays(tw().date, 30));
+function pickDay(d) {
+  state.date = d === tw().date ? null : d;
+  if (state.from && state.to && state.results) return search();
+  render();
+}
 // The search is the page's card: the two stations, turned round with ⇄,
-// the day and time, and 查詢.
+// the time, and 查詢 (the day on the strip above it).
 const stPick = (which, st) => `<button class="ot-tq-st" type="button" data-pick="${which}"><small>${which === 'from' ? W('出發', 'From') : W('抵達', 'To')}</small>${st ? `<b>${e(stationLabel(st))}</b>` : `<b class="muted">${W('選車站', 'Pick')}</b>`}</button>`;
 function render() {
   const today = tw().date;
   const date = state.date || today;
   const recent = ctx.data.trains.filter(x => trainKey(x) !== (state.from && state.to ? trainKey({ from: state.from, to: state.to }) : '')).slice(0, 4);
   $('panel-train').innerHTML = `
+    <div class="ot-tq-days"></div>
     <section class="q-hero-card ot-tq" style="--q-hc-b:#0ea5e9;--q-hc-a:color-mix(in srgb, #0ea5e9 55%, #0b1020)">
       <span class="q-hc-eyebrow">${icon('tra')}<span>${W('台鐵・高鐵', 'TRA・HSR')}</span></span>
       <div class="ot-tq-pair">${stPick('from', state.from)}<button class="ot-tq-swap" type="button" data-act="swap" aria-label="${W('對調', 'Swap')}">${icon('swap')}</button>${stPick('to', state.to)}</div>
-      <div class="ot-tq-when"><label class="ot-tq-pill">${icon('clock')}<input id="t-date" type="date" value="${date}" min="${today}" max="${addDays(today, 30)}" aria-label="${W('日期', 'Date')}"></label><label class="ot-tq-pill"><input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}" aria-label="${W('出發時間', 'Leave at')}"></label></div>
+      <div class="ot-tq-when"><label class="ot-tq-pill">${icon('clock')}<input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}" aria-label="${W('出發時間', 'Leave at')}"></label></div>
       <button class="q-hc-btn ot-tq-go" type="button" data-act="go" ${state.from && state.to ? '' : 'disabled'}>${icon('search')} ${W('查詢', 'Search')}</button>
     </section>
     <div class="q-chips ot-chip-rail" role="group" aria-label="${W('搭什麼', 'Trains')}">
@@ -84,6 +99,7 @@ function render() {
     </div>
     <div id="t-results">${resultsHtml()}</div>
     ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
+  $('panel-train').querySelector('.ot-tq-days').replaceWith(kitUI.dayBar(dayRec, { days: trainDays(), current: date, today, follow: true, onPick: pickDay }));
 }
 
 function resultsHtml() {
@@ -262,7 +278,6 @@ function onClick(ev) {
     // The time shown when nobody changed it is "now", whenever 查詢 is pressed.
     const v = $('t-time').value;
     state.time = v && v !== shownNow ? v : null;
-    state.date = $('t-date').value || null;
     return search();
   }
 }

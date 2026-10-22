@@ -36,6 +36,7 @@ const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
 import * as kit from '#kit/quadra.mjs';
 
 import { W, en } from '#kit/lang.mjs';
+import * as kitUI from '#kit/ui.mjs';
 const $ = id => document.getElementById(id);
 const FALLBACK = { lat: 25.0478, lon: 121.517 }; // 台北車站
 const HERE = W('目前位置', 'Here');
@@ -1613,19 +1614,20 @@ function setWhen(kind) {
   }
   const base = when.at && when.at > Date.now() ? when.at : Date.now() + 15 * 60_000;
   const today = tw().date;
-  const dayChips = [0, 1, 2].map(n => [addDays(today, n), [W('今天', 'Today'), W('明天', 'Tmrw'), W('後天', 'Next day')][n]]);
   let date = tw(base).date;
   const d = sheet(`${sheetHead(kind === 'arrive' ? W('抵達時間', 'Arrive by') : W('出發時間', 'Leave at'))}
-    <div class="ot-field ot-when-day"><span>${W('日期', 'Date')}</span><div class="ot-days" role="group" aria-label="${W('日期', 'Date')}">${dayChips.map(([v, n]) => `<button type="button" data-day="${v}" aria-pressed="${v === date}">${n}<small>${e(v.slice(5).replace('-', '/'))}</small></button>`).join('')}</div></div>
+    <div class="ot-field ot-when-day"><span>${W('日期', 'Date')}</span><div class="ot-when-strip"></div></div>
     <label class="ot-field ot-when-time"><span>${W('時間', 'Time')}</span><input id="w-time" type="time" value="${tw(base).hm}"></label>
     <button class="q-btn primary block ot-when-go" type="button" data-ok="1">${W('查詢', 'Search')}</button>`);
+  // The day: the family's strip, the coming week (📅 among them).
+  const dayRec = {};
+  const pick = d2 => {
+    date = d2;
+    kitUI.dayBar(dayRec, { flat: true, days: kitUI.dayList(today, addDays(today, 6)), current: date, today, onPick: pick });
+  };
+  pick(date);
+  d.querySelector('.ot-when-strip').replaceWith(dayRec.bar);
   d.addEventListener('click', ev => {
-    const b = ev.target.closest('[data-day]');
-    if (b) {
-      date = b.dataset.day;
-      d.querySelectorAll('[data-day]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.day === date)));
-      return;
-    }
     if (!ev.target.closest('[data-ok]')) return;
     const time = d.querySelector('#w-time').value || '08:00';
     let at = twAt(date, time);
