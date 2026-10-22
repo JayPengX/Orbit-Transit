@@ -1923,9 +1923,10 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const ahead = !riding ? p.legs : nv.offSoon ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : [];
   const bikes = planBikes(ahead);
   const marks = live => [
-    ...(start?.lat != null && lit <= 0 ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
+    ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || W('目的地', 'Destination'))}">${icon('pin')}</i>` }] : []),
-    ...(riding ? [] : p.legs.filter((l, k) => k >= Math.max(0, lit))).filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
+    // (On a ride: where you got on stays marked, the line never left dangling: the owner, 2026-10-22.)
+    ...(riding ? [p.legs[lit]] : p.legs.filter((l, k) => k >= Math.max(0, lit))).filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
     ...bikes.map(b => planBikeMarker(b, live?.get(b.st.uid))),
     ...bikeReturns(ahead).filter(l => !l.ret?.uid && !l.park).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
@@ -2121,7 +2122,7 @@ function navView(plan, i, tries = 0) {
   if (document.visibilityState !== 'visible') return;
   viewAt = Date.now();
   const n = navNow();
-  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath);
+  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath, n?.ride ? { ...n.ride, next: n.next } : null);
   if (!pts.length) return;
   const box = $('map').getBoundingClientRect();
   const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;

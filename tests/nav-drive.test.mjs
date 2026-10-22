@@ -173,7 +173,8 @@ test('looking ahead on the bus still follows it: your stop next, back on the rid
     pos(off(st[1], 0, x));
   }
   assert.equal(s.reached, 2);
-  assert.equal(log.filter(x => x[0] === 'buzz').length, 1);
+  // (Told to get ready a few stops before, then once more with yours next.)
+  assert.equal(log.filter(x => x[0] === 'buzz').length, 2);
 });
 
 test('tripAt says how far along a ride you are', () => {

@@ -3032,22 +3032,15 @@ body.tab-map {
   font: 500 13px/18px var(--q-font);
   white-space: nowrap;
 }
+/* Late or early: in the same line as what's left, its colour alone (one baseline, one size: the owner, 2026-10-22). */
 .ot-nav-eta em {
-  flex: none;
-  align-self: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--q-fill-3);
-  font: 700 12px/16px var(--q-font);
   font-style: normal;
-  white-space: nowrap;
+  font-weight: 700;
 }
 .ot-nav-eta em.good {
-  background: color-mix(in srgb, var(--q-green) 16%, transparent);
   color: var(--ot-ink-green);
 }
 .ot-nav-eta em.bad {
-  background: color-mix(in srgb, var(--q-red) 14%, transparent);
   color: var(--q-red);
 }
 .ot-nav-end {
