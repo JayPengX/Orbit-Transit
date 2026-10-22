@@ -14,16 +14,40 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
-# A newer push replaces a deploy still running or waiting: only the latest goes out.
-concurrency:
-  group: 'pages'
-  cancel-in-progress: true
-
 jobs:
+  # One deploy at a time, without cancelling any (a cancelled run mails its
+  # pusher): a run waits for the earlier ones still going, and steps aside,
+  # quietly, when a newer run of this workflow will deploy instead.
+  queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    outputs:
+      go: ${{ steps.wait.outputs.go }}
+    steps:
+      - name: Wait for the earlier deploys; step aside for a newer one
+        id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          api() { gh api "repos/$GITHUB_REPOSITORY/$1" --jq "$2" 2>/dev/null; }
+          wf=$(api "actions/runs/$GITHUB_RUN_ID" .workflow_id) || wf=
+          while [ -n "$wf" ]; do
+            runs=$(api "actions/workflows/$wf/runs?branch=$GITHUB_REF_NAME&per_page=30" "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID) | {n: .run_number, done: (.status == \"completed\")}]") || runs='[]'
+            if [ "$(jq "[.[] | select(.n > $GITHUB_RUN_NUMBER)] | length" <<<"$runs")" != 0 ]; then
+              echo "A newer run deploys instead."; echo go=false >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            [ "$(jq "[.[] | select(.n < $GITHUB_RUN_NUMBER and (.done | not))] | length" <<<"$runs")" = 0 ] && break
+            echo "Waiting for an earlier run to finish."; sleep 20
+          done
+          echo go=true >> "$GITHUB_OUTPUT"
+
   build:
+    needs: queue
+    if: needs.queue.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,9 +78,17 @@ jobs:
     needs: build
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.again.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
+        uses: actions/deploy-pages@v5
+        # A clash with another deploy or a hiccup at GitHub: tried once more.
+        continue-on-error: true
+      - if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - name: Deploy to GitHub Pages (again)
+        id: again
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v5
