@@ -2777,3 +2777,16 @@ test('a long route name sits in its badge on two lines, its words over its numbe
   assert.equal(noHtml('1813E'), '<span>1813E</span>');
   assert.equal(noHtml('藍15'), '<span>藍15</span>');
 });
+
+test('a weekday trip skips a typhoon day where it goes: 停課 for a school, 停班 for work', async () => {
+  const { keepDayOff } = await import('#kit/dayoff.mjs');
+  const { holidayOn, tripNeed } = await import('../public/lib/util.mjs');
+  const school = { name: '上學', to: { name: '竹東高中', lat: 24.74, lon: 121.09 } };
+  const office = { name: '上班', to: { name: '公司', lat: 24.74, lon: 121.09 } };
+  assert.equal(tripNeed(school), 'class');
+  assert.equal(tripNeed(office), 'work');
+  keepDayOff({ lat: 24.74, lon: 121.09 }, { '2026-10-23': { work: { off: false, from: null }, class: { off: true, from: null } } });
+  assert.equal(holidayOn('2026-10-23', school), true);
+  assert.equal(holidayOn('2026-10-23', office), false);
+  assert.equal(holidayOn('2026-10-23'), false);
+});

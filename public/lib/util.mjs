@@ -2,6 +2,7 @@
 // encodings the planners use.
 
 import { twHoliday } from '#kit/holidays.mjs';
+import { dayOffOn } from '#kit/dayoff.mjs';
 import { W } from '#kit/lang.mjs';
 import { addDays } from '#kit/format.mjs';
 
@@ -179,9 +180,15 @@ export const zh = v => (v && typeof v === 'object' ? v.Zh_tw || v.En || '' : Str
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 // Taiwan's national holidays (the kit's holidays.mjs): a trip saved for
-// weekdays only (家 → 學校) keeps the work calendar and skips them.
-// holidayOn('YYYY-MM-DD') → true on one.
-export const holidayOn = date => Boolean(twHoliday(date));
+// weekdays only (家 → 學校) keeps the work calendar and skips them. And a
+// typhoon day off where the trip goes (the kit's dayoff.mjs): 停課 there for
+// a trip to a school, 停班 for any other.
+// holidayOn('YYYY-MM-DD', trip?) → true on one.
+const SCHOOL = /學|校|園|school|college|universit|class/i;
+export const tripNeed = t => (SCHOOL.test(`${t?.name || ''} ${t?.to?.name || ''}`) ? 'class' : 'work');
+// (A stop from later in the day leaves the morning's trip as it is.)
+const offAllDay = o => Boolean(o && (!o.from || o.from <= '08:00'));
+export const holidayOn = (date, trip = null) => Boolean(twHoliday(date)) || Boolean(trip?.to && Number.isFinite(trip.to.lat) && offAllDay(dayOffOn(date, { lat: trip.to.lat, lon: trip.to.lon }, tripNeed(trip))));
 export const weekdaysOnly = days => days.length > 0 && !days.includes(0) && !days.includes(6);
 
 // Google's and TDX's names for one route differ (快捷8經興隆大橋, 快捷8號;
