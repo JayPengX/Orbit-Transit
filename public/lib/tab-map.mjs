@@ -1880,11 +1880,13 @@ export function planBikes(legs) {
 const dockLevel = s => (s.ok === false ? 'off' : s.ret === 0 ? 'none' : s.ret <= 3 ? 'few' : 'ok');
 const LEVELS = ['ok', 'few', 'none', 'off'];
 // (The station now when the city's bikes are in: `live`.)
-export function planBikeMarker({ st, rent, ret }, live = null) {
+// (Bare: its bike alone, no counts: on a ride, in the map's own view.)
+export function planBikeMarker({ st, rent, ret }, live = null, bare = false) {
   const s = live || st;
   const lv = [rent && bikeLevel(s), ret && dockLevel(s)].filter(Boolean).sort((a, b) => LEVELS.indexOf(b) - LEVELS.indexOf(a))[0];
   // (Docks as a parking sign's P, bikes as the map's own: its bike, the count, ⚡.)
   const parts = s.ok === false ? [`${icon('bike')}<b>${W('停', '–')}</b>`] : [ret && `${icon('dock')}<b>${s.ret}</b>`, rent && `${icon('bike')}<b>${s.bikes}</b>${s.ebike ? `<i>${icon('bolt')}${s.ebike}</i>` : ''}`].filter(Boolean);
+  if (bare) return { id: `pbike:${st.uid}`, lat: st.lat, lon: st.lon, cls: `bike plan bare ${lv}`, z: 20, kind: 'bike', data: s, html: icon('bike') };
   return { id: `pbike:${st.uid}`, lat: st.lat, lon: st.lon, cls: `bike plan ${lv}`, z: 20, kind: 'bike', data: s, html: parts.join('<s></s>') };
 }
 // A ride's end without its station (a plan from elsewhere): a bike at the spot.
@@ -1923,17 +1925,18 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const nv = lit >= 0 ? navNow() : null;
   const riding = Boolean(nv?.aboard);
   const nextRide = p.legs.findIndex((l, k) => k > lit && isRide(l));
-  // On the ride, none in the map's own view, near your stop too; moved by a
-  // finger, to look: your own YouBike stations with their bikes now, never
-  // the others round them (the owner, 2026-10-22); off it, as any step.
-  const ahead = !riding ? p.legs : !navFollow ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : [];
+  // On the ride, your own YouBike stations only, never the others round them:
+  // in the map's own view a bare bike, no counts; zoomed or moved by a finger,
+  // with their bikes now (the owner, 2026-10-22); off it, as any step.
+  const ahead = !riding ? p.legs : p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide);
+  const bare = riding && navFollow;
   const bikes = planBikes(ahead);
   const marks = live => [
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || W('目的地', 'Destination'))}">${icon('pin')}</i>` }] : []),
     // (On a ride: where you got on stays marked, the line never left dangling: the owner, 2026-10-22.)
     ...(riding ? [p.legs[lit]] : p.legs.filter((l, k) => k >= Math.max(0, lit))).filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
-    ...bikes.map(b => planBikeMarker(b, live?.get(b.st.uid))),
+    ...bikes.map(b => planBikeMarker(b, live?.get(b.st.uid), bare)),
     ...bikeReturns(ahead).filter(l => !l.ret?.uid && !l.park).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
     // (On board: from the stop you're coming to, that one marked next.)
@@ -2155,7 +2158,7 @@ function dragged() {
   }
   const was = navFollow;
   navFollow = false;
-  // (Looking round: the trip's own YouBike stations shown.)
+  // (Looking round: the trip's own YouBike stations with their counts.)
   const n0 = navNow();
   if (was && n0) drawPlan(n0.plan, { fit: false, lit: n0.i });
   clearTimeout(followBack);

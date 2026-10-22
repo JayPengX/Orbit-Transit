@@ -1401,6 +1401,16 @@ body.tab-map {
   background: #374151;
   color: #9ca3af;
 }
+/* On a ride, in the map's own view: the station's bike alone, a round badge. */
+.ot-mk.bike.bare {
+  width: 24px;
+  margin-left: -12px;
+  padding: 0;
+  justify-content: center;
+}
+.ot-mk.bike.bare::after {
+  left: 7px;
+}
 /* A trip's own station: its bikes and its docks, a bar between. */
 .ot-mk.bike.plan s {
   width: 1px;
