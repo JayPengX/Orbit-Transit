@@ -210,6 +210,8 @@ function legPts(l) {
   return w || (l.from?.lat != null && l.to?.lat != null ? [l.from, l.to] : null);
 }
 // How near its way you are to be on a step: a walk's or a ride's road, a bus's, a train's line (a station is wide, its line drawn loosely).
+// On a bus that's due or has come, this far along its way past the stop (two fixes going its way).
+const BUS_ON_M = 60;
 const ON_WAY = { walk: 50, bike: 60, bus: 90, tra: 250, hsr: 300, metro: 200, lightrail: 120 };
 // Where you are on the trip, from where it was (`i`) on: the furthest step
 // whose way you're on and well into — a bus or train once its first stop is
@@ -237,7 +239,9 @@ export function tripAt(plan, pos, i = 0, now = Date.now(), { anyTime = false } =
     const a = at(k);
     if (!a?.on) continue;
     if (isRide(l)) {
-      if (a.d > 200 && a.left > 150 && (anyTime || now >= (l.dep ?? 0) - 3 * 60_000)) return { i: k, phase: 'on', d: a.d };
+      // (A bus that's due: a block on its way is on it, BUS_ON_M.)
+      const due = now >= (l.dep ?? 0) - 60_000 && !anyTime;
+      if (a.d > (l.mode === 'bus' && due ? BUS_ON_M : 200) && a.left > 150 && (anyTime || now >= (l.dep ?? 0) - 3 * 60_000)) return { i: k, phase: 'on', d: a.d };
     } else if (k > i && a.d > 60 && !busy) return { i: k, phase: 'before' };
   }
   return null;
@@ -1059,8 +1063,18 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           }
         } else state.leftAlong = null;
       } else {
-        // On board once you've left the stop behind.
-        if (state.phase === 'before' && l.from?.lat && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 200 && left < meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) && aboard(state.i, meters(p.lat, p.lon, l.from.lat, l.from.lon))) {
+        // On board once you've left the stop behind: along its own way (a
+        // route that turns away first, too), 200 m on; a bus that's due or
+        // has come, 60 m on (the owner, 2026-10-22: on 快捷8號 a block past
+        // the stop, the card still said 進站了・招手上車); two fixes going its way.
+        const pts = state.phase === 'before' && l.from?.lat ? legPts(l) : null;
+        const cum = pts && routeCum(pts);
+        const a = pts && alongRoute(pts, p, cum);
+        const onWay = a && a.off < (ON_WAY[l.mode] || 80) && cum.at(-1) - a.d > 100;
+        const need = l.mode === 'bus' && Date.now() >= (state.liveAt.get(state.i) ?? l.dep) - 60_000 ? BUS_ON_M : 200;
+        const fromStop = l.from?.lat ? meters(p.lat, p.lon, l.from.lat, l.from.lon) : 0;
+        const leftStop = onWay ? a.d > need : fromStop > 200 && left < meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon);
+        if (state.phase === 'before' && l.from?.lat && leftStop && aboard(state.i, onWay ? a.d : fromStop)) {
           state.phase = 'on';
           if (state.i === state.reached) state.reachedPhase = 'on';
           state.where = null;
