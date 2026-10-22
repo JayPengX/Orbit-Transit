@@ -11,6 +11,7 @@ const settle = async () => {
   for (let n = 0; n < 50; n++) await new Promise(r => setImmediate(r));
 };
 const topHtml = () => box.querySelector('.ot-nav-topw').innerHTML;
+const topText = () => topHtml().replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 
 test('off the bus too early (walking away from its road): asked (and buzzed) about two minutes on at a walk, with 從這裡重新規劃 one tap away', async () => {
   const { plan, st, rs } = busTrip();
@@ -129,16 +130,31 @@ test('off a YouBike ride’s road (a wrong turn): its way found again from where
   assert.ok(s.pos && Math.abs(s.pos.lat - off(O, 360, 300).lat) < 1e-6);
 });
 
-test('told to get off by stops: passing the last stop about 4 minutes before yours (an express: the one before; a city route: a few before), never over 6 minutes early', () => {
-  const { offAlertStop } = nav;
-  const t0 = T(17, 30);
-  // 快捷8號: stops 4 minutes apart: the stop before yours.
-  const express = { i: 0, j: 8 };
-  assert.equal(offAlertStop(express, k => t0 + k * 4 * 60e3), 7);
-  // A city route, a stop a minute: four stops before.
-  assert.equal(offAlertStop({ i: 0, j: 12 }, k => t0 + k * 60e3), 8);
-  // A long gap (9 minutes) before the stop before yours: that one, not 10+ minutes early.
-  assert.equal(offAlertStop({ i: 0, j: 5 }, k => t0 + (k <= 3 ? k : 3 + 9 + (k - 4) * 1) * 60e3 ), 4);
-  // No times: the stop before yours.
-  assert.equal(offAlertStop({ i: 0, j: 5 }, () => null), 4);
+test('told to get off once, when the bus is at the stop before yours (that is when you ring), not stops early', async () => {
+  const { log } = await import('./navsim.mjs');
+  const { plan, st, rs } = busTrip({ stops: 8, offAt: 5 });
+  clock.set(plan.legs[1].dep + 60e3);
+  const { st: s } = start(plan, { resume: { i: 1, phase: 'on', reached: 1 } });
+  s.ride.set(1, rs);
+  const n0 = log.filter(x => x[0] === 'buzz').length;
+  const buzzes = () => log.filter(x => x[0] === 'buzz').length - n0;
+  // Stops 400 m apart: 站2, 站3, nearly at 站4: nothing yet.
+  for (const d of [250, 450, 750, 1000, 1150]) {
+    clock.add(30e3);
+    pos(off(st[1], 0, d));
+  }
+  assert.equal(buzzes(), 0);
+  assert.ok(!(s.render(), topText()).includes('下一站 站5 下車'));
+  // At 站4, the stop before 站5: buzzed, the card says ring.
+  clock.add(30e3);
+  pos(off(st[1], 0, 1195));
+  assert.equal(buzzes(), 1);
+  assert.ok((s.render(), topText()).includes('下一站 站5 下車'));
+  assert.ok(topHtml().includes('按下車鈴'));
+  // On to yours: not again.
+  clock.add(30e3);
+  pos(off(st[1], 0, 1400));
+  assert.equal(buzzes(), 1);
+  assert.equal(nav.ringNow(rs, 4), false);
+  assert.equal(nav.ringNow(rs, 5), true);
 });

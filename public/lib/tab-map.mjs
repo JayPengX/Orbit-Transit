@@ -61,6 +61,8 @@ let reopened = () => {};
 let leftAt = Infinity;
 const REOPEN_MS = 5 * 60_000;
 globalThis.document?.addEventListener('visibilitychange', () => {
+  // (Back to the app: the step you're at framed as a tap on it would.)
+  if (document.visibilityState === 'visible') return setTimeout(() => refitNav(), 350);
   if (document.visibilityState !== 'hidden') return;
   leftAt = Date.now();
   pause();
@@ -338,6 +340,9 @@ function follow() {
 let idleTimer = 0;
 function idle() {
   clearTimeout(idleTimer);
+  // (Navigating: zoomed past the line for counts, or back out: drawn again.)
+  const n = navFull() ? navNow() : null;
+  if (n && lookBare != null && navLook(n.plan, n.i).bare !== lookBare) drawPlan(n.plan, { fit: false, lit: n.i });
   idleTimer = setTimeout(drawLayers, 250);
   const c = map.center();
   writeJson(VIEW_KEY, { lat: c.lat, lon: c.lon, z: map.zoom() });
@@ -1895,6 +1900,41 @@ export const bikeReturns = legs =>
     const next = legs[k + 1];
     return l.mode === 'bike' && l.to?.lat != null && !(next?.mode === 'bike' && next.from?.lat != null && meters(l.to.lat, l.to.lon, next.from.lat, next.from.lon) < 40);
   });
+// The navigation map, one standard (Jay, 2026-10-22: "make it some standard").
+// Every draw (start, opened again, back from small, 換一條路, a new fix, 我的位置,
+// a finger on the map and 10 s after it) reads it from where things are now,
+// never from what was drawn before.
+//
+//   step              framed (the map's own view)          marks
+//   walk / YouBike    you to where this step ends            start, end, boarding marks ahead,
+//                                                            your YouBike stations with bikes/docks
+//   at the stop       the stop and you                       the same
+//   on a bus/train    you to your stop, every stop between   the ride's stops (yours named), where
+//                                                            you got on, the end; your YouBike
+//                                                            stations as a bare bike, no counts
+//   the stop before   you, your stop, the walk after it      the same, ring alert (nav.mjs ringNow)
+//   yours             (close: find your YouBike)
+//   a finger moved    where you put it; back to the view     on a ride, zoomed in (16+): counts
+//   the map           10 s after                             shown; zoomed out: bare again
+//
+// Never: other YouBike stations, a station's counts on a ride in the map's own view.
+// (Framing: nav.mjs stageView. Bare or counted is checked again whenever the map stops moving.)
+const COUNT_ZOOM = 16;
+function navLook(p, lit) {
+  const nv = lit >= 0 ? navNow() : null;
+  const riding = Boolean(nv?.aboard);
+  const nextRide = p.legs.findIndex((l, k) => k > lit && isRide(l));
+  const bare = riding && (navFollow || (map?.zoom?.() ?? 0) < COUNT_ZOOM);
+  return {
+    riding,
+    bare,
+    // Your own YouBike stations: on a ride, the ones after it up to the next ride; else all ahead.
+    bikeLegs: riding ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : p.legs,
+    // Where each ride (and a YouBike of your own) starts: on a ride, only where you got on.
+    boards: riding ? [p.legs[lit]] : p.legs.filter((l, k) => k >= Math.max(0, lit))
+  };
+}
+let lookBare = null;
 let planDraw = 0;
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
@@ -1920,22 +1960,15 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const end = p.dest?.lat != null ? p.dest : p.legs.at(-1)?.to;
   // The place's own dropped pin already marks where it ends: one mark there, not two on top of each other.
   const marked = selDrop && end?.lat != null && meters(selDrop.lat, selDrop.lon, end.lat, end.lon) < 60;
-  // On a bus or train: only that ride's stops and where the trip ends (the
-  // owner, 2026-10-22: the bike badges piled on the pin while riding).
-  const nv = lit >= 0 ? navNow() : null;
-  const riding = Boolean(nv?.aboard);
-  const nextRide = p.legs.findIndex((l, k) => k > lit && isRide(l));
-  // On the ride, your own YouBike stations only, never the others round them:
-  // in the map's own view a bare bike, no counts; zoomed or moved by a finger,
-  // with their bikes now (the owner, 2026-10-22); off it, as any step.
-  const ahead = !riding ? p.legs : p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide);
-  const bare = riding && navFollow;
+  const look = navLook(p, lit);
+  const { riding, bare } = look;
+  const ahead = look.bikeLegs;
   const bikes = planBikes(ahead);
   const marks = live => [
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || W('目的地', 'Destination'))}">${icon('pin')}</i>` }] : []),
     // (On a ride: where you got on stays marked, the line never left dangling: the owner, 2026-10-22.)
-    ...(riding ? [p.legs[lit]] : p.legs.filter((l, k) => k >= Math.max(0, lit))).filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
+    ...look.boards.filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
     ...bikes.map(b => planBikeMarker(b, live?.get(b.st.uid), bare)),
     ...bikeReturns(ahead).filter(l => !l.ret?.uid && !l.park).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
@@ -1951,6 +1984,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
     )
   ];
   const run = ++planDraw;
+  lookBare = lit >= 0 ? bare : null;
   map.layer('plan').set(marks(null));
   // Its YouBike stations as they are now (bikes to take, docks to return to).
   if (bikes.length)
@@ -2121,8 +2155,9 @@ async function navigate(p, resume = null, { swap = false } = {}) {
 // stage of the trip (nav.mjs stageView: a walk close up, a ride to its end).
 function navDraw(plan, i) {
   if (!map) return;
-  drawPlan(plan, { fit: false, lit: i });
+  // (Following first: the marks are drawn for the map's own view, never left as a finger's.)
   navFollow = true;
+  drawPlan(plan, { fit: false, lit: i });
   navView(plan, i);
 }
 // Between the card on top and the one at the bottom: the stage you're at, you on it.
@@ -2203,12 +2238,18 @@ function restoreNav() {
   const n = navNow();
   if (n) navDraw(n.plan, n.i);
   drawLayers();
-  setTimeout(() => {
-    const m = navNow();
-    if (!m || !navFull()) return;
-    map?.resize();
-    navView(m.plan, m.i);
-  }, 350);
+  setTimeout(refitNav, 350);
+  // (Opened again after the app was swiped away: the cards and the map only
+  // have their size once the loading screen lifts; framed again then, the same
+  // as a tap on the step you're at, never left zoomed out: Jay, 2026-10-22.)
+  ready.then(() => setTimeout(refitNav, 300));
+}
+// The step you're at framed again as the map's own view (navView), if it's being followed.
+function refitNav() {
+  const m = navNow();
+  if (!m || !navFull() || !navFollow) return;
+  map?.resize();
+  navView(m.plan, m.i);
 }
 
 // What the navigation card asks for: back to it (the bar), its ⋯, a new plan from here.
