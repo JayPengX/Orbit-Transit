@@ -128,3 +128,17 @@ test('off a YouBike ride’s road (a wrong turn): its way found again from where
   assert.equal(s.i, 0);
   assert.ok(s.pos && Math.abs(s.pos.lat - off(O, 360, 300).lat) < 1e-6);
 });
+
+test('told to get off by stops: passing the last stop about 4 minutes before yours (an express: the one before; a city route: a few before), never over 6 minutes early', () => {
+  const { offAlertStop } = nav;
+  const t0 = T(17, 30);
+  // 快捷8號: stops 4 minutes apart: the stop before yours.
+  const express = { i: 0, j: 8 };
+  assert.equal(offAlertStop(express, k => t0 + k * 4 * 60e3), 7);
+  // A city route, a stop a minute: four stops before.
+  assert.equal(offAlertStop({ i: 0, j: 12 }, k => t0 + k * 60e3), 8);
+  // A long gap (9 minutes) before the stop before yours: that one, not 10+ minutes early.
+  assert.equal(offAlertStop({ i: 0, j: 5 }, k => t0 + (k <= 3 ? k : 3 + 9 + (k - 4) * 1) * 60e3 ), 4);
+  // No times: the stop before yours.
+  assert.equal(offAlertStop({ i: 0, j: 5 }, () => null), 4);
+});
