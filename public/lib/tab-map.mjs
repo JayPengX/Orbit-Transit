@@ -26,7 +26,7 @@ import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
-import { sheet, sheetHead, icon, legChips, depChips, legColor, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
+import { sheet, sheetHead, icon, legChips, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
@@ -1843,7 +1843,10 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
   ]);
   p.walk = p.legs.filter(l => l.mode === 'walk').reduce((a, l) => a + (l.dist || 0), 0);
   if (card?.plans?.includes(p) && (card.plans[card.sel] === p || (card.sel < 0 && card.plans[0] === p) || navFull())) {
-    drawPlan(p, { fit: false, lit });
+    // (Navigating: the trip as navigation draws it, the step you're at lit, never the plan's own look over it.)
+    const n = navFull() ? navNow() : null;
+    if (n) drawPlan(n.plan, { fit: false, lit: n.i });
+    else drawPlan(p, { fit: false, lit });
     if (!navFull()) renderCard();
   }
 }
@@ -1927,8 +1930,14 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
     ...bikeReturns(ahead).filter(l => !l.ret?.uid && !l.park).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
     // (On board: from the stop you're coming to, that one marked next.)
-    ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops, cur }) =>
-      (cur ? stops : stops.slice(1)).map((s, x, all) => ({ id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${x === all.length - 1 ? ' off' : cur && x === 0 ? ' next' : ''}`, z: 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>` }))
+    // (Each stop a ringed dot; behind you dimmed, the next one bigger, yours ringed and named.)
+    ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops, cur, next }) =>
+      stops.slice(1).map((s, x, all) => {
+        const at = x + 1;
+        const off = x === all.length - 1;
+        const cls = off ? ' off' : cur && at < next ? ' past' : cur && at === next ? ' next' : '';
+        return { id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${cls}`, z: off ? 18 : 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>${off && s.name ? `<b style="--c:${e(legColor(p.legs[k]))};color:${e(inkOn(legColor(p.legs[k])))}">${e(s.name)}</b>` : ''}` };
+      })
     )
   ];
   const run = ++planDraw;
@@ -2112,7 +2121,7 @@ function navView(plan, i, tries = 0) {
   if (document.visibilityState !== 'visible') return;
   viewAt = Date.now();
   const n = navNow();
-  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath, n?.ride ? { ...n.ride, next: n.next } : null);
+  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath);
   if (!pts.length) return;
   const box = $('map').getBoundingClientRect();
   const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;
