@@ -2168,6 +2168,7 @@ function navAction(a, info) {
   if (a === 'replan') return replanFromHere();
   if (a === 'late') return navLate(info);
   if (a === 'stayed') return stayedOn(info);
+  if (a === 'rest') return restAfter(info);
   // Its cards grew, shrank or folded (the stops on board coming in, a fold):
   // the stage fitted again in the room left, so you're never under a card.
   if (a === 'cards') {
@@ -2371,6 +2372,17 @@ async function stayedOn({ k, was, stop }) {
   if (navNow()?.plan !== n.plan) return ctx.status('');
   navChangeOff(k, rest);
   ctx.status(W(`過了 ${was}：改在 ${stop.name} 下車`, `Past ${was}: off at ${stop.name}`));
+}
+// A ride ahead with none left to catch from where it boards (started half
+// way, the trip's times put right): the rest of the trip planned again from
+// there, leaving when you'll be there.
+async function restAfter({ k, at }) {
+  const n = navNow();
+  const from = n?.plan.legs[k]?.to;
+  if (!from || from.lat == null) return;
+  const rest = await restFrom({ name: from.name || '', lat: from.lat, lon: from.lon }, navDest(n), at ?? Date.now());
+  if (navNow()?.plan !== n.plan) return;
+  navRest(rest, k);
 }
 const nextOf = n => {
   const rs = n.ride;

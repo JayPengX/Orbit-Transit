@@ -186,6 +186,8 @@ function readFold() {
 }
 const saveFold = f => foldUnread || writeJson(FOLD_KEY, f);
 const grip = (which, folded) => `<button class="ot-nav-grip" type="button" data-nav="fold-${which}" aria-label="${folded ? W('展開', 'Expand') : W('收合', 'Collapse')}" aria-expanded="${!folded}"></button>`;
+// A step looked ahead to goes back to the one you're at after this long untouched.
+const LOOK_MS = 20_000;
 // Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
 const AWAY_MS = 45_000;
 // A walk's or a ride's own way on the map (its road from the router), as
@@ -213,8 +215,10 @@ const ON_WAY = { walk: 50, bike: 60, bus: 90, tra: 250, hsr: 300, metro: 200, li
 // way to go on the same road) — or null when nothing says you've moved on.
 // Opened half way, it finds the step you're at; on the way, a step's end
 // missed (a fix that skipped it) is caught by the next one's start.
+// `anyTime`: by where you are alone (a plan whose clock is off: started
+// half way on a trip timed for another day, or a later train than planned).
 // → { i, phase: 'before' | 'on' } or null.
-export function tripAt(plan, pos, i = 0, now = Date.now()) {
+export function tripAt(plan, pos, i = 0, now = Date.now(), { anyTime = false } = {}) {
   if (!pos || pos.lat == null) return null;
   const at = k => {
     const pts = legPts(plan.legs[k]);
@@ -230,7 +234,7 @@ export function tripAt(plan, pos, i = 0, now = Date.now()) {
     const a = at(k);
     if (!a?.on) continue;
     if (isRide(l)) {
-      if (a.d > 200 && a.left > 150 && now >= (l.dep ?? 0) - 3 * 60_000) return { i: k, phase: 'on', d: a.d };
+      if (a.d > 200 && a.left > 150 && (anyTime || now >= (l.dep ?? 0) - 3 * 60_000)) return { i: k, phase: 'on', d: a.d };
     } else if (k > i && a.d > 60 && !busy) return { i: k, phase: 'before' };
   }
   return null;
@@ -509,6 +513,76 @@ export function retimeRide(plan, k, opt) {
   return m < plan.legs.length && plan.legs[m - 1].arr + 60_000 > plan.legs[m].dep ? rideName(plan.legs[m]) : '';
 }
 
+// ---- Started (or opened again) half way: the plan put back on today's clock ----
+// A trip found where you are on it (tripAt anyTime) but timed for another
+// day (a time picked already past rolls to tomorrow; a pinned trip's next
+// run): the whole plan moved by whole days to the day you're on it (the
+// owner, 2026-10-22: 區間 16:12 on board at 17:18 said "1374 分後").
+// → the days moved (0: none).
+const DAY_MS = 86_400_000;
+export function shiftDays(plan, k, now = Date.now()) {
+  const l = plan.legs[k];
+  const n = Math.round(((l?.dep ?? plan.dep) - now) / DAY_MS);
+  if (!n) return 0;
+  const d = -n * DAY_MS;
+  for (const x of plan.legs) {
+    if (x.dep != null) x.dep += d;
+    if (x.arr != null) x.arr += d;
+  }
+  plan.dep += d;
+  plan.arr += d;
+  if (plan.deadline) plan.deadline += d;
+  return -n;
+}
+// The train you're on now, between where the leg boards and where it gets
+// off: of today's trains of its railway calling at both (that way round),
+// the one whose place now (by its timetable with its live delay, TDX's
+// station for it when it has one) is nearest you, within 2.5 km (stations on
+// a branch line are kilometres apart). → { dep, arr, delay, train } (a
+// rideOptions row), or null.
+export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.now()) {
+  const byKey = new Map(stations.map(s => [s.key, s]));
+  const near = pt => new Set(stations.filter(s => s.sys === l.mode && s.lat != null && meters(pt.lat, pt.lon, s.lat, s.lon) < 800).map(s => s.key));
+  const [from, to] = [near(l.from), near(l.to)];
+  let best = null;
+  for (const t of trips) {
+    if (t.sys !== l.mode) continue;
+    const a = t.stops.findIndex(s => from.has(s.st));
+    const b = a >= 0 ? t.stops.findIndex((s, x) => x > a && to.has(s.st)) : -1;
+    if (b < 0) continue;
+    const lv = live.get(String(t.no));
+    const delay = (lv?.delay || 0) * 60_000;
+    const st = t.stops.map(s => ({ ...s, p: byKey.get(s.st) }));
+    if (st[a].dep + delay > now + 2 * 60_000 || st[b].arr + delay < now - 2 * 60_000) continue;
+    // Where it is by the clock: at a station, or part way between two.
+    let at = null;
+    for (let x = a; x < b && !at; x++) {
+      const [s0, s1] = [st[x], st[x + 1]];
+      const d0 = (s0.dep ?? s0.arr) + delay, a1 = (s1.arr ?? s1.dep) + delay;
+      if (now < d0 && x === a) at = s0.p;
+      else if (now >= d0 && now <= a1 && s0.p && s1.p) {
+        const f = a1 > d0 ? (now - d0) / (a1 - d0) : 1;
+        at = { lat: s0.p.lat + (s1.p.lat - s0.p.lat) * f, lon: s0.p.lon + (s1.p.lon - s0.p.lon) * f };
+      } else if (now > a1 && x + 1 < b && now < (s1.dep ?? a1) + delay) at = s1.p;
+    }
+    at ||= st[b].p;
+    if (!at) continue;
+    let d = meters(pos.lat, pos.lon, at.lat, at.lon);
+    // TDX's own word on where it is: at (or just left) a station near you counts too.
+    const ls = lv?.st && byKey.get(lv.st);
+    if (ls && t.stops.slice(a, b + 1).some(s => s.st === lv.st)) d = Math.min(d, meters(pos.lat, pos.lon, ls.lat, ls.lon) + 300);
+    if (d < 2500 && (!best || d < best.d)) best = { d, opt: { dep: st[a].dep, arr: st[b].arr, live: Boolean(lv), delay: delay / 60_000, train: { sys: t.sys, no: t.no, type: t.type, code: t.code } } };
+  }
+  return best?.opt || null;
+}
+// A bus or metro you're on, its times moved so you're where you are now
+// (`frac`: how far along the ride, 0–1). → retimeRide's word.
+export function retimeAlong(plan, k, frac, now = Date.now()) {
+  const l = plan.legs[k];
+  const delta = now - (l.dep + Math.max(0, Math.min(1, frac)) * (l.arr - l.dep));
+  return retimeRide(plan, k, { dep: l.dep + delta, arr: l.arr + delta });
+}
+
 // To be there by a time (a trip planned 抵達 by it: `plan.deadline`): how
 // late, in minutes, getting in at `eta`; 0 on time.
 export const lateBy = (plan, eta) => (plan.deadline && eta > plan.deadline + 60_000 ? Math.ceil((eta - plan.deadline) / 60_000) : 0);
@@ -542,7 +616,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   stopNav();
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
   // (`i`: the step shown; `reached`: the furthest step the trip has got to by itself, where you are, the arrivals, getting off: the steps before it are done, never a tap's.)
-  const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min), swap30 };
+  const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min), swap30, gen: 0, settled: false, reachedPhase: 'before', lookAt: 0 };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
   const notices = () => nav === state && push?.(navNotices(plan, state.i, state.info));
@@ -714,13 +788,16 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     render();
     refreshLive();
     notices();
+    boarded();
   };
   // The trip moving you on (or back on a ride you stayed on) by itself:
   // that step is where you've got to. (A tap only shows a step: go.)
   const reach = (i, phase = 'before', off = false) => {
     const was = state.reached;
     state.reached = Math.max(0, Math.min(plan.legs.length - 1, i));
+    state.reachedPhase = phase;
     state.look = null;
+    state.lookAt = 0;
     // (Steps passed on the way, the phone locked between them: a bike given back there is ended too.)
     for (let k = was + 1; k < state.reached; k++) if (rentalStep(plan, k) === 'end' && rental()) endRental();
     bikeTimer(state.reached);
@@ -775,7 +852,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       if (l?.mode === 'bus' && l.from?.lat && !state.info.has(ri)) state.info.set(ri, await busInfo(l).catch(() => ({ leg: l })));
       if (l && !state.ride.has(ri)) {
         const had = l.train?.no;
+        const g = state.gen;
         const rs = await rideStops(l, state.info.get(ri)).catch(() => null);
+        if (state.gen !== g || nav !== state) return;
         state.ride.set(ri, rs);
         // A ride the planner gave no shape: drawn through its stops (not a straight line across town).
         const noShape = rs && !l.poly && !l.path;
@@ -889,6 +968,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.pos = p;
     state.posAt = Date.now();
     follow?.(p);
+    // (No fix when it started: where you are on the trip found with the first.)
+    if (!state.settled) settle(p);
     // Looked ahead while on a ride: it's still followed; your stop next, back
     // on it (and buzzed); nothing else moves the trip meanwhile.
     if (state.look && state.i > state.reached) {
@@ -930,9 +1011,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (on && (on.i > state.i || (on.phase === 'on' && state.phase !== 'on')) && (on.phase !== 'on' || (on.i === state.i && riding) || aboard(on.i, on.d)) && (!riding || on.i === state.i || offEnd(p, state.i, true, true))) {
       if (on.i === state.i) {
         state.phase = 'on';
+        if (state.i === state.reached) state.reachedPhase = 'on';
         state.where = null;
         saveNav(state);
         refreshLive();
+        boarded();
       } else return reach(on.i, on.phase, isRide(plan.legs[on.i - 1]) && state.i === on.i - 1);
     }
     const l = plan.legs[state.i];
@@ -976,9 +1059,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         // On board once you've left the stop behind.
         if (state.phase === 'before' && l.from?.lat && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 200 && left < meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) && aboard(state.i, meters(p.lat, p.lon, l.from.lat, l.from.lon))) {
           state.phase = 'on';
+          if (state.i === state.reached) state.reachedPhase = 'on';
           state.where = null;
           saveNav(state);
           refreshLive();
+          boarded();
         }
         // On it: the stop you're coming to (its stops, from where you are).
         const rs = state.phase === 'on' ? state.ride.get(state.i) : null;
@@ -1047,6 +1132,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // departure: picked from its times, or the next once you've missed it.
   const takeOther = (k, opt, text) => {
     const late = retimeRide(plan, k, opt);
+    state.gen++;
     for (const m of [state.ride, state.info, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
     state.swap = { at: Date.now(), text: late ? `${text}・${W(`可能趕不上 ${late}，按「換一條路」`, `may miss ${late}; tap Another way`)}` : text };
     go(state.i, state.phase);
@@ -1091,6 +1177,131 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     buzz();
     takeOther(k, next, W(`沒趕上 ${rideName(l)}，改搭 ${optText(next, l)}`, `Missed ${rideName(l)}; next: ${optText(next, l)}`));
   };
+  // ---- Started (or opened again) half way ----
+  // Where you are on the trip, by where you are alone, with the first good
+  // fix: the plan moved onto today's clock when it was timed for another day;
+  // the train you're on found (today's run nearest you, by its timetable and
+  // live delay), a bus or metro by where you are along it; every ride after
+  // it moved to the first it can still catch (none: the rest planned again
+  // from where it can't). Then it goes on exactly as a trip started at its
+  // start: the steps behind you done, the countdowns, the live train, the
+  // buzzes and getting off all the same (the owner, 2026-10-22).
+  const settle = async p => {
+    if (state.settled || !p || p.lat == null) return;
+    state.settled = true;
+    const now = Date.now();
+    // (Or standing at a later ride's stop: the steps to it are behind you.)
+    const stopAt = plan.legs.findIndex((l, m) => m > state.reached && isRide(l) && l.from?.lat != null && meters(p.lat, p.lon, l.from.lat, l.from.lon) < 150);
+    const by = tripAt(plan, p, state.reached, now, { anyTime: true });
+    const at = stopAt > (by?.i ?? 0) ? { i: stopAt, phase: 'before' } : by;
+    const k = at?.i ?? state.i;
+    // Timed for another day (12 hours and more off): onto today's.
+    const off = Math.abs((plan.legs[k].dep ?? plan.dep) - now) > 12 * 3_600_000 && (at || k > 0 || plan.dep < now);
+    const days = off ? shiftDays(plan, k, now) : 0;
+    if (days) {
+      state.gen++;
+      state.ride.clear();
+      state.liveAt.clear();
+    }
+    let phase = at?.phase ?? state.phase;
+    if (at?.phase === 'on' && !(await boardFix(k, p))) phase = at.i === state.i ? state.phase : null;
+    if (nav !== state) return;
+    if (phase && (k > state.reached || (k === state.reached && phase !== state.reachedPhase))) {
+      // (On a bike the trip takes, found half way: its timer too.)
+      reach(k, phase);
+    } else if (days) go(state.i, state.phase);
+    if (days || at) await cascade();
+  };
+  // On a ride by its way: really on one? A train: the one of today's nearest
+  // you, its times taken (another train than planned, a later one); none near,
+  // not on a train. A bus or metro off its time: its times moved to where
+  // you are along it. → true when on board.
+  const boardFix = async (k, p) => {
+    const l = plan.legs[k];
+    const now = Date.now();
+    if (l.mode === 'tra' || l.mode === 'hsr') {
+      let t;
+      try {
+        const [trips, sts, lv] = await Promise.all([dayTrips(tw(now).date), railStations(), l.mode === 'tra' ? traLive().catch(() => new Map()) : new Map()]);
+        t = trainNow(trips, sts, l, p, lv, now);
+      } catch {
+        // (No timetable to go by: where you are says it.)
+        return true;
+      }
+      if (!t) return false;
+      if (String(t.train.no) !== String(l.train?.no ?? '') || Math.abs(t.dep - l.dep) > 60_000) {
+        retimeRide(plan, k, t);
+        state.gen++;
+        for (const m of [state.ride, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
+      }
+      if (t.live) state.delay = t.delay;
+      return true;
+    }
+    if (now < l.dep - 5 * 60_000 || now > l.arr + 5 * 60_000) {
+      const pts = legPts(l);
+      const cum = pts && routeCum(pts);
+      const a = pts && alongRoute(pts, p, cum);
+      if (a && cum.at(-1) > 0) {
+        retimeAlong(plan, k, a.d / cum.at(-1), now);
+        state.gen++;
+        for (const m of [state.ride, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
+      }
+    }
+    return true;
+  };
+  // Got on (by the map, or found on it): a train boarded well off its time
+  // (a later one than planned, an earlier one) or a bus off its time: which
+  // it is, then what follows it moved to fit (once a step).
+  const boarded = () => {
+    const k = state.i;
+    const l = plan.legs[k];
+    if (state.phase !== 'on' || !isRide(l) || state.boardAt === k || !state.pos || !state.settled) return;
+    state.boardAt = k;
+    const now = Date.now();
+    const rail = l.mode === 'tra' || l.mode === 'hsr';
+    const dep = l.dep + (state.delay || 0) * 60_000;
+    if (rail ? now >= dep - 3 * 60_000 && now <= dep + 4 * 60_000 : now >= l.dep - 5 * 60_000 && now <= l.arr + 5 * 60_000) return;
+    const was = `${l.dep}|${l.train?.no ?? ''}`;
+    boardFix(k, state.pos).then(on => {
+      if (nav !== state || state.i !== k || !on || `${l.dep}|${l.train?.no ?? ''}` === was) return;
+      saveNav(state);
+      draw(plan, state.i);
+      refreshLive();
+      cascade();
+    });
+  };
+  // Each ride ahead that can't be caught as timed now (you'll be at its stop
+  // after it's gone; or it's another day's): the first one after you're there,
+  // today; none, the rest of the trip planned again from there.
+  const cascade = async () => {
+    let changed = false;
+    for (let m = state.i; m < plan.legs.length; m++) {
+      const l = plan.legs[m];
+      if (!isRide(l) || (m === state.i && state.phase === 'on')) continue;
+      const now = Date.now();
+      // (The step you're at, waiting at its stop: missed() takes the next once it's gone.)
+      if (m === state.i && l.dep < now + 3 * 3_600_000) continue;
+      const ready = m === state.i ? now : navTimes(plan, state.i, state.phase, state.pos, new Map(), now, state.phase === 'on' ? (state.arrAt ?? null) : null).ready.get(m);
+      if (ready == null || (l.dep >= ready - 60_000 && l.dep - ready < 3 * 3_600_000)) continue;
+      const opts = await rideOptions(l, state.info.get(m), ready).catch(() => []);
+      if (nav !== state) return;
+      const opt = opts.find(o => o.dep + (o.delay || 0) * 60_000 >= ready - 30_000);
+      if (!opt) {
+        if (changed) saveNav(state);
+        return onAction?.('rest', { k: m - 1, at: ready });
+      }
+      retimeRide(plan, m, opt);
+      state.gen++;
+      for (const x of [state.ride, state.liveAt]) for (const key of [...x.keys()]) if (key >= m) x.delete(key);
+      changed = true;
+    }
+    if (!changed || nav !== state) return;
+    saveNav(state);
+    draw(plan, state.i);
+    render();
+    refreshLive();
+    notices();
+  };
   state.go = go;
   state.render = render;
   // Followed where you are; started again on coming back to the app, and
@@ -1114,6 +1325,12 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       return onEnd?.();
     }
     if (document.visibilityState === 'visible' && Date.now() - Math.max(state.posAt || 0, state.watchAt || 0) > 30_000) watch();
+    // Looked ahead and left there: after 20 s the card, the chips and the map are on the step you're at again (the owner, 2026-10-22).
+    if (state.lookAt && Date.now() - state.lookAt > LOOK_MS && state.i !== state.reached) {
+      state.lookAt = 0;
+      state.look = null;
+      return go(state.reached, state.reachedPhase || 'before');
+    }
     if (Date.now() - state.drawn >= 10_000) {
       arrive();
       return render();
@@ -1131,6 +1348,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       if (Number(k) !== state.i && state.i === state.reached && state.phase === 'on' && isRide(plan.legs[state.i])) state.look = { k: state.i };
       const back = Number(k) === state.look?.k;
       if (back) state.look = null;
+      // (A step ahead looked at: back on the one you're at by itself in a while.)
+      state.lookAt = Number(k) === state.reached ? 0 : Date.now();
       return go(Number(k), Number(k) === state.i ? state.phase : back ? 'on' : 'before');
     }
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
@@ -1216,16 +1435,20 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // (Or at the station of a trip that starts with the bike.)
   const atBike = start.i === 0 && plan.legs[0].mode === 'bike' && fresh && plan.legs[0].from?.lat != null && meters(fresh.lat, fresh.lon, plan.legs[0].from.lat, plan.legs[0].from.lon) < 60;
   if ((start === here0 && start.i > 0) || atBike) bikeTimer(state.reached);
+  state.reachedPhase = start.i === state.reached ? start.phase : 'before';
   go(start.i, start.phase);
+  if (fresh) settle(fresh);
   // Every ride's stops, for the map (each stop a dot on its line), ahead of
   // reaching it; refreshLive finds them kept.
   (async () => {
     for (const [k, l] of plan.legs.entries()) {
       if (!isRide(l) || state.ride.has(k) || k < state.i) continue;
       if (l.mode === 'bus' && l.from?.lat && !state.info.has(k)) state.info.set(k, await busInfo(l).catch(() => ({ leg: l })));
+      // (Its times moved meanwhile, another train: its stops are that one's, found again.)
+      const g = state.gen;
       const rs = await rideStops(l, state.info.get(k)).catch(() => null);
       if (nav !== state) return;
-      if (!state.ride.has(k)) state.ride.set(k, rs);
+      if (!state.ride.has(k) && state.gen === g) state.ride.set(k, rs);
     }
     if (nav === state) draw(plan, state.i);
   })();
@@ -1365,16 +1588,19 @@ export function navChangeOff(k, rest = []) {
   s.alerted = -1;
   navRest(rest);
 }
-// The trip after the ride you're on, planned again (`rest`: its new legs).
-export function navRest(rest = []) {
+// The trip after the ride you're on (or after step `after`, ahead of it),
+// planned again (`rest`: its new legs).
+export function navRest(rest = [], after = null) {
   if (!nav) return;
   const s = nav;
-  s.plan.legs = [...s.plan.legs.slice(0, s.i + 1), ...rest];
+  const k = Math.max(s.i, Math.min(after ?? s.i, s.plan.legs.length - 1));
+  s.plan.legs = [...s.plan.legs.slice(0, k + 1), ...rest];
   const end = s.plan.legs.at(-1);
-  s.plan.arr = end.arr ?? s.plan.legs[s.i].arr;
+  s.plan.arr = end.arr ?? s.plan.legs[k].arr;
   s.plan.dur = Math.round((s.plan.arr - s.plan.dep) / 1000);
+  s.gen++;
   // What was known of the legs after it is of the old ones.
-  for (const m of [s.ride, s.info, s.liveAt]) for (const key of [...m.keys()]) if (key > s.i) m.delete(key);
+  for (const m of [s.ride, s.info, s.liveAt]) for (const key of [...m.keys()]) if (key > k) m.delete(key);
   s.go(s.i, s.phase);
 }
 
