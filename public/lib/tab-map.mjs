@@ -128,7 +128,8 @@ export async function init(c) {
       centered = true;
       map.setView(here.lat, here.lon, 16, aboveDy(), aboveDx());
       follow();
-    } else if (following) map.setView(here.lat, here.lon, undefined, aboveDy(), aboveDx());
+      // (Navigating, the stage of the trip is what's in view (navView): never you alone, re-centred over it.)
+    } else if (following && !navFull()) map.setView(here.lat, here.lon, undefined, aboveDy(), aboveDx());
   };
   ctx.moved.push(arrived);
   reopened = () => {
@@ -227,10 +228,7 @@ export function show({ back = false } = {}) {
   else if (back && map && following && !navigating()) follow();
   if (pendingTrip && map) return takePending();
   // Back to the app while navigating: the stage you're at again, once the page has its size.
-  if (map && navFull()) setTimeout(() => {
-    const n = navNow();
-    if (n && navFollow && navFull()) navView(n.plan, n.i);
-  }, 350);
+  if (map && navFull()) restoreNav();
   // A station sent from another tab (捷運's 在地圖上看).
   if (map && ctx.mapFocus) {
     const st = ctx.mapFocus;
@@ -314,6 +312,12 @@ function drawMe(h) {
   map?.layer('me').set([{ id: 'me', lat: h.lat, lon: h.lon, cls: 'me', z: 50, html: '<i class="ot-me"></i>' }]);
 }
 async function locateMe() {
+  // (Where you were seen a moment ago, at once (navigation's own watch keeps it fresh); then the fresh fix.)
+  const was = ctx.here && Date.now() - (ctx.here.at || 0) < 15_000 ? ctx.here : null;
+  if (was) {
+    map.setView(was.lat, was.lon, Math.max(map.zoom(), 16), aboveDy(), aboveDx());
+    follow();
+  }
   const h = await ctx.locate({ force: true });
   if (!h) return ctx.status(W('無法取得位置：請在設定允許定位', 'Can’t get your location: allow it in Settings'));
   map.setView(h.lat, h.lon, Math.max(map.zoom(), 16), aboveDy(), aboveDx());
@@ -325,7 +329,7 @@ function follow() {
   stopWatch = watchPosition(p => {
     ctx.here = { ...p, at: Date.now() };
     drawMe(ctx.here);
-    if (following) map.setView(p.lat, p.lon, undefined, aboveDy(), aboveDx());
+    if (following && !navFull()) map.setView(p.lat, p.lon, undefined, aboveDy(), aboveDx());
   });
 }
 
@@ -959,7 +963,7 @@ function buildSheet() {
       // (Down from large, the keyboard goes: the field is no longer the thing.)
       if (d !== 'large' && document.activeElement === $('q')) $('q').blur();
       // You, followed: kept in the middle of the map you can see as the sheet moves.
-      if (following && ctx.here && d !== 'large') map?.setView(ctx.here.lat, ctx.here.lon, undefined, aboveDy(), aboveDx());
+      if (following && !navFull() && ctx.here && d !== 'large') map?.setView(ctx.here.lat, ctx.here.lon, undefined, aboveDy(), aboveDx());
     }
   });
   home = createHome($('home'), ctx, homeActs());
@@ -2104,8 +2108,9 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       if (card.plans?.length) drawPlan(card.plans[card.sel >= 0 ? card.sel : 0], { fit: false });
     }
   });
-  // (Only the way on the map now.)
-  drawLayers();
+  // (Only the way on the map now; fitted again once the page has its new
+  // size: 換一條路 from the bar had left the old framing.)
+  restoreNav();
 }
 // The way being navigated on the map, the step you're on lit; in view, that
 // stage of the trip (nav.mjs stageView: a walk close up, a ride to its end).
@@ -2169,13 +2174,32 @@ function shrinkNav(on) {
     drawLayers();
     return;
   }
+  // Back: one way in, as navigation draws itself (the owner, 2026-10-22: back
+  // from the bar, the map's focus was off): the map's own follow stopped (it
+  // re-centred on you over the trip), the map following the trip again
+  // whatever a finger did meanwhile, the stage fitted now and again once the
+  // page has its new size.
   ctx.goTab('map');
   closeResults();
   $('card').hidden = true;
+  stopWatch();
   follows(true);
+  restoreNav();
+}
+function restoreNav() {
+  clearTimeout(followBack);
+  navFollow = true;
+  map?.resize();
+  msheet?.relayout();
   const n = navNow();
   if (n) navDraw(n.plan, n.i);
   drawLayers();
+  setTimeout(() => {
+    const m = navNow();
+    if (!m || !navFull()) return;
+    map?.resize();
+    navView(m.plan, m.i);
+  }, 350);
 }
 
 // What the navigation card asks for: back to it (the bar), its ⋯, a new plan from here.

@@ -690,6 +690,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   };
   Promise.all(infos).then(notices);
   nav = state;
+  state.box = box;
   box.hidden = false;
   box.className = 'ot-nav';
   const render = () => {
@@ -1693,6 +1694,9 @@ export function navOffer(o) {
 export function setNavMin(on) {
   if (!nav) return;
   nav.min = Boolean(on);
+  // (Back: the steps' row scrolled to the step you're at again; hidden, it couldn't be.)
+  const row = nav.box?.querySelector?.('.ot-nav-chips');
+  if (row) row._on = null;
   saveNav(nav);
   nav.render?.();
 }
