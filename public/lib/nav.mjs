@@ -95,13 +95,13 @@ async function rideStops(l, info) {
   if (l.mode === 'tra' || l.mode === 'hsr') {
     // Its number from the day's timetable when the planner gave only the line (the live board and its stops go by it).
     if (!l.train?.no && l.dep && l.from?.lat != null && l.to?.lat != null) {
-      const t = trainFor(await dayTrips(tw(l.dep).date), await railStations(), l);
+      const t = trainFor(await rail.dayTrips(tw(l.dep).date), await rail.railStations(), l);
       if (t) l.train = { ...(l.train || {}), ...t };
     }
     if (!l.train?.no) return null;
-    const trip = (await dayTrips(tw(l.dep).date)).find(t => t.sys === l.mode && String(t.no) === String(l.train.no));
+    const trip = (await rail.dayTrips(tw(l.dep).date)).find(t => t.sys === l.mode && String(t.no) === String(l.train.no));
     if (!trip) return null;
-    const sts = new Map((await railStations()).map(s => [s.key, s]));
+    const sts = new Map((await rail.railStations()).map(s => [s.key, s]));
     const stops = trip.stops.map(x => ({ id: x.st, name: sts.get(x.st)?.name || '', lat: sts.get(x.st)?.lat, lon: sts.get(x.st)?.lon, at: x.arr, dep: x.dep })).filter(x => x.lat != null);
     const i = nearestStop(stops, l.from, 0, 800);
     const j = i >= 0 ? nearestStop(stops, l.to, i + 1, 800) : -1;
@@ -192,7 +192,9 @@ const grip = (which, folded) => `<button class="ot-nav-grip" type="button" data-
 // A step looked ahead to goes back to the one you're at after this long untouched.
 const LOOK_MS = 20_000;
 // Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
-const AWAY_MS = 45_000;
+const AWAY_MS = 30_000;
+// …this far from its line and its road (a train's station is wide).
+const AWAY_M = { bus: 150, lightrail: 150 };
 // A walk's or a ride's own way on the map (its road from the router), as
 // points along it; none when it's only the straight line.
 const shapes = new WeakMap();
@@ -377,6 +379,8 @@ function bikesText(bk, plan, i, pos) {
   if (bk.moved) out.push(`<span class="note warn">${icon('bike')}${e(bk.moved)}</span>`);
   if (bk.none) out.push(`<span class="note bad">${icon('bike')}${e(bk.none)}${W('，按「換一條路」重新規劃', '. Tap Another way to replan')}</span>`);
   const taking = !kept && (park || bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150);
+  // (None there now, said before you're off the bus: the swap below finds the nearest that has some.)
+  if (bk.rent && taking && !canRent(bk.rent, plan.legs[bk.k].ebike) && !bk.none) out.push(`<span class="note bad">${icon('bike')}${W('這站現在沒車', 'No bikes there now')}</span>`);
   if (bk.rent && taking) out.push(`<span>${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・${icon('bolt')}${bk.rent.ebike}` : ''}</span>`);
   if (bk.ret) out.push(`<span>${W('還車空位', 'Docks')} ${bk.ret.ret}</span>`);
   const btn = (end, text) => `<button class="ot-nav-gm" type="button" data-nav-bike="${end}">${icon('route')}${text}</button>`;
@@ -456,11 +460,11 @@ export function boardHtml(rs, next, ahead, delay, end = null, paced = null, dela
   const at = k => ahead?.get(k) ?? (delayLive ? tt(k) : null) ?? paced?.get(k) ?? tt(k) ?? (k === rs.j ? end : null) ?? guess?.(k) ?? null;
   const ks = [];
   for (let k = next; k <= rs.j; k++) ks.push(k);
-  const show = ks.length > 4 ? [ks[0], ks[1], null, ks.at(-1)] : ks;
+  const show = ks.length > 3 ? [ks[0], null, ks.at(-1)] : ks;
   return `<ol class="ot-stops">${show
     .map(k =>
       k == null
-        ? `<li class="more"><i></i><span>${W(`再 ${ks.length - 3} 站`, `${ks.length - 3} more stops`)}</span></li>`
+        ? `<li class="more"><i></i><span>${W(`再 ${ks.length - 2} 站`, `${ks.length - 2} more stops`)}</span></li>`
         : `<li class="${k === next ? 'next' : ''}${k === rs.j ? ' you' : ''}"><i></i><span>${e(rs.stops[k].name)}</span>${k === rs.j ? `<em>${W('下車', 'Get off')}</em>` : k === next ? `<em>${W('下一站', 'Next')}</em>` : ''}${at(k) ? `<time>${e(hm(at(k)))}</time>` : ''}</li>`
     )
     .join('')}</ol>`;
@@ -730,7 +734,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         </div>
         ${rentLine}
         ${fold.top ? '' : `${track}${board}`}
-        ${paceText || gm ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map(x => `<span>${e(x)}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}${W('重新規劃', 'Replan')}</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
+        ${(paceText || gm) && !(board && !fold.top && !state.live && !late) ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map(x => `<span>${e(x)}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}${W('重新規劃', 'Replan')}</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
         ${bikeLine && !fold.top ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
         ${fold.top ? '' : then}
         ${grip('top', fold.top)}
@@ -908,7 +912,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           state.fresh = next && !next.planned ? Date.now() : 0;
         }
       } else if (l?.mode === 'tra' && l.train?.no) {
-        const lv = (await traLive()).get(String(l.train.no)) || null;
+        const lv = (await rail.traLive()).get(String(l.train.no)) || null;
         const d = lv?.delay || 0;
         if (lv) {
           state.liveAt.set(ri, l.dep + d * 60_000);
@@ -1085,16 +1089,31 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         // On it: the stop you're coming to (its stops, from where you are).
         const rs = state.phase === 'on' ? state.ride.get(state.i) : null;
         const knew = state.next != null;
+        const nextWas = state.next;
         if (rs) state.next = nextStop(rs.stops, rs.i, rs.j, p);
+        // Past a stop: the map's stops from the next one; your stop near, the YouBike after it shown, its bikes now.
+        if (rs && state.next !== nextWas) {
+          const soon = offSoon(state);
+          if (soon !== Boolean(state.soon)) {
+            state.soon = soon;
+            refreshLive();
+          }
+          draw(plan, state.i);
+        }
         // Where you are along it, kept for 10 minutes: your own pace says when you're at each stop ahead.
         if (rs) {
           rs.cum ||= routeCum(rs.stops);
           const a = alongRoute(rs.stops, p, rs.cum, Math.max(0, rs.i - 1));
           const t = Date.now();
           // Off it (its stops' line and its road both far), for 45 s or more: asked if you got off.
-          const away = a && offRide(rs.stops, p, rs.cum, Math.max(0, rs.i - 1), legPts(l)) > 250;
+          const away = a && offRide(rs.stops, p, rs.cum, Math.max(0, rs.i - 1), legPts(l)) > (AWAY_M[l.mode] || 250);
           state.away = away ? state.away + 1 : 0;
           state.awayAt = away ? state.awayAt || t : 0;
+          // (Asked with a buzz, once a ride: the phone is in a pocket by then.)
+          if (state.away >= 2 && t - state.awayAt >= AWAY_MS && state.strayBuzz !== state.i) {
+            state.strayBuzz = state.i;
+            buzz();
+          }
           if (a && a.off < 150) {
             state.track = [...state.track.filter(x => x.t > t - 10 * 60_000), { d: a.d, t }];
             const pace = ridePace(state.track, t);
@@ -1110,15 +1129,21 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           buzz();
         }
         if (state.phase === 'on' && state.i < plan.legs.length - 1 && (rs ? offEnd(p, state.i, false) : left < (OFF_M[l.mode] || 120))) return reach(state.i + 1, 'before', true);
+        // Still at the stop with its time gone: the next one now, not at the next 20 s read.
+        if (state.phase === 'before') missed();
       }
       arrive();
     }
     render();
   };
   // The bike ride coming up: this step's, or after the walks to it.
+  // (On board: once your stop is two or fewer on, the bike after it.)
   const bikeAhead = () => {
-    const k = plan.legs.findIndex((x, n) => n >= state.i && x.mode === 'bike');
-    return k >= 0 && plan.legs.slice(state.i, k).every(x => x.mode === 'walk') ? k : -1;
+    const on = isRide(plan.legs[state.i]) && state.phase === 'on';
+    if (on && !offSoon(state)) return -1;
+    const from = on ? state.i + 1 : state.i;
+    const k = plan.legs.findIndex((x, n) => n >= from && x.mode === 'bike');
+    return k >= 0 && plan.legs.slice(from, k).every(x => x.mode === 'walk') ? k : -1;
   };
   // Found empty where you take it (or full where you leave it), said with a
   // tap: the ride moved to the nearest station within 500 m that has a bike
@@ -1472,10 +1497,24 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   return state;
 }
 // Each ride's stops from where it boards to where it gets off, for the map: [{ k, stops }].
+// On board, only the ride you're on, from the stop you're coming to: the
+// stops behind you and the rides after it aren't drawn (the owner,
+// 2026-10-22: every stop a big dot, the map a mess). `cur`: that one.
 export function navStops() {
   if (!nav) return [];
-  return [...nav.ride].filter(([k, rs]) => rs?.stops && k >= nav.i).map(([k, rs]) => ({ k, stops: rs.stops.slice(rs.i, rs.j + 1).filter(s => s.lat != null) }));
+  const on = isRide(nav.plan.legs[nav.i]) && nav.phase === 'on';
+  return [...nav.ride]
+    .filter(([k, rs]) => rs?.stops && k >= nav.i && (!on || k === nav.i))
+    .map(([k, rs]) => {
+      const cur = on && k === nav.i && nav.next != null;
+      return { k, cur, stops: rs.stops.slice(cur ? Math.max(rs.i, nav.next) : rs.i, rs.j + 1).filter(s => s.lat != null) };
+    });
 }
+// On board with your stop two or fewer stops on: the YouBike you take after it is shown (its bikes now).
+const offSoon = n => {
+  const rs = n.ride.get(n.i);
+  return Boolean(rs && n.next != null && rs.j - n.next <= 2);
+};
 
 // The ride being navigated, for the screens around it: the plan, the step,
 // its stops (a bus or train's, once known), shrunk or not.
@@ -1505,9 +1544,24 @@ export function arrival(near, p, to, along = null, now = Date.now()) {
   return { near, done: now - near.t > 60_000 };
 }
 
-export function stageView(plan, i, phase, me, path) {
+// On board with its stops known (`ride`: { stops, j, next }): you and the
+// next three stops (your own among them once it's that near), at least ~600 m
+// across: where you are and what's next readable, not the whole ride shrunk
+// (the owner, 2026-10-22).
+export function stageView(plan, i, phase, me, path, ride = null) {
   const l = plan.legs[i];
   if (!l) return [];
+  if (phase === 'on' && isRide(l) && ride?.stops && ride.next != null && me?.lat != null) {
+    const ks = [];
+    for (let k = ride.next; k <= Math.min(ride.j, ride.next + 2); k++) ks.push(k);
+    const pts = [{ lat: me.lat, lon: me.lon }, ...ks.map(k => ride.stops[k]).filter(s => s?.lat != null).map(s => ({ lat: s.lat, lon: s.lon }))];
+    const lat = pts.map(p => p.lat);
+    const lon = pts.map(p => p.lon);
+    const c = { lat: (Math.min(...lat) + Math.max(...lat)) / 2, lon: (Math.min(...lon) + Math.max(...lon)) / 2 };
+    const dLat = 0.0027;
+    const dLon = dLat / Math.cos((c.lat * Math.PI) / 180);
+    return [...pts, { lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat + dLat, lon: c.lon + dLon }];
+  }
   // (Waiting: only the stop.)
   const waiting = isRide(l) && phase !== 'on';
   let pts = waiting ? (l.from?.lat != null ? [{ lat: l.from.lat, lon: l.from.lon }] : []) : path(l).map(([lat, lon]) => ({ lat, lon }));
@@ -1537,7 +1591,8 @@ export function stageView(plan, i, phase, me, path) {
 
 export function navNow() {
   if (!nav) return null;
-  return { plan: nav.plan, i: nav.i, phase: nav.phase, pos: nav.pos, ride: nav.ride.get(nav.i) || null, min: nav.min, offer: nav.offer || null };
+  const on = isRide(nav.plan.legs[nav.i]) && nav.phase === 'on';
+  return { plan: nav.plan, i: nav.i, phase: nav.phase, pos: nav.pos, ride: nav.ride.get(nav.i) || null, next: nav.next, aboard: on, offSoon: on && offSoon(nav), min: nav.min, offer: nav.offer || null };
 }
 // Said on the card (to be there by a time, late): { title, sub, plan } or null.
 export function navOffer(o) {

@@ -1615,20 +1615,30 @@ body.tab-map {
   stroke-width: 2.4;
 }
 /* A ride's stops on its line, navigating: small dots, where you get off a ring. */
+/* A ride's stops on its line: small ticks in its colour; the next one and
+   yours (ringed) stand out, the rest stay out of the way. */
 .ot-mk.stopdot i {
   display: block;
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
-  border: 2px solid var(--c);
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
   border-radius: 50%;
+  background: color-mix(in srgb, var(--c) 45%, #fff);
+  box-shadow: 0 0 0 1.5px var(--c);
+}
+.ot-mk.stopdot.next i {
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
   background: #fff;
+  box-shadow: 0 0 0 3px var(--c);
 }
 .ot-mk.stopdot.off i {
   width: 15px;
   height: 15px;
   margin: -7.5px 0 0 -7.5px;
-  border-width: 4px;
+  background: #fff;
+  box-shadow: 0 0 0 4px var(--c);
 }
 /* A metro map's stations: a dot in the line's colour (a ring at an interchange), names zoomed in. */
 .ot-mk.mstop {

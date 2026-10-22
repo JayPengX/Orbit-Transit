@@ -1911,16 +1911,24 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const end = p.dest?.lat != null ? p.dest : p.legs.at(-1)?.to;
   // The place's own dropped pin already marks where it ends: one mark there, not two on top of each other.
   const marked = selDrop && end?.lat != null && meters(selDrop.lat, selDrop.lon, end.lat, end.lon) < 60;
-  const bikes = planBikes(p.legs);
+  // On a bus or train: only that ride's stops ahead and where the trip ends;
+  // the YouBike after it once your stop is two or fewer on (the owner,
+  // 2026-10-22: the bike badges piled on the pin while riding).
+  const nv = lit >= 0 ? navNow() : null;
+  const riding = Boolean(nv?.aboard);
+  const nextRide = p.legs.findIndex((l, k) => k > lit && isRide(l));
+  const ahead = !riding ? p.legs : nv.offSoon ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : [];
+  const bikes = planBikes(ahead);
   const marks = live => [
-    ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
+    ...(start?.lat != null && lit <= 0 ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || W('目的地', 'Destination'))}">${icon('pin')}</i>` }] : []),
-    ...p.legs.filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
+    ...(riding ? [] : p.legs.filter((l, k) => k >= Math.max(0, lit))).filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
     ...bikes.map(b => planBikeMarker(b, live?.get(b.st.uid))),
-    ...bikeReturns(p.legs).filter(l => !l.ret?.uid && !l.park).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
+    ...bikeReturns(ahead).filter(l => !l.ret?.uid && !l.park).map((l, k) => ({ id: `r${k}`, lat: l.to.lat, lon: l.to.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon('bike')}</i>` })),
     // Navigating: each ride's stops on its line (a bus's, a train's, the metro's), where you get off ringed.
-    ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops }) =>
-      stops.slice(1).map((s, x) => ({ id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${x === stops.length - 2 ? ' off' : ''}`, z: 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>` }))
+    // (On board: from the stop you're coming to, that one marked next.)
+    ...(lit >= 0 ? navStops() : []).flatMap(({ k, stops, cur }) =>
+      (cur ? stops : stops.slice(1)).map((s, x, all) => ({ id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${x === all.length - 1 ? ' off' : cur && x === 0 ? ' next' : ''}`, z: 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>` }))
     )
   ];
   const run = ++planDraw;
@@ -2104,7 +2112,7 @@ function navView(plan, i, tries = 0) {
   if (document.visibilityState !== 'visible') return;
   viewAt = Date.now();
   const n = navNow();
-  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath);
+  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath, n?.ride ? { ...n.ride, next: n.next } : null);
   if (!pts.length) return;
   const box = $('map').getBoundingClientRect();
   const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;
