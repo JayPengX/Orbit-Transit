@@ -12,7 +12,7 @@
 // Only the ways of moving the person allows (我的 → 交通偏好) are used.
 
 import { routePlans, townships, walksTo, walkKnown } from './api.mjs';
-import { cityBikes, bikesBy } from './bike.mjs';
+import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
@@ -260,8 +260,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
       for (const p of list) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
       list = [...list, ...more];
     }
-    // (YouBike late or failing: planned without it, never held up or failed by it.)
-    const bikes = await bikesBy(bikesNow, stage === 1 ? 2500 : 1000);
+    const bikes = await bikesNow;
     await streetWalks(bikes, from, to);
     const t2 = performance.now();
     let ranked = withBikes(list, from, to, bikes, t0, { modes, swap: bikeSwap(prefs), cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
@@ -343,8 +342,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           });
           list = await Promise.all(list.map(async p => (p.legs.some(l => l.nextP) ? { ...p, legs: await Promise.all(p.legs.map(async ({ nextP, ...l }) => (nextP ? { ...l, next: await nextP.catch(() => []) } : l))) } : p)));
           if (direct.length) {
-            const more = await bikesBy(bikesAt(bikePoints(direct, from, to)).then(x => x.flat()), 1500);
-            const all = await bikesBy(bikesNow, 1000);
+            const more = (await bikesAt(bikePoints(direct, from, to))).flat();
+            const all = await bikesNow;
             bikesNow = Promise.resolve([...new Map([...all, ...more].map(s => [s.uid, s])).values()]);
           }
           lap('later', t3);

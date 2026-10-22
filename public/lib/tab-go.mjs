@@ -16,7 +16,6 @@ import { errorText, liveMs } from './api.mjs';
 import { stopsEta, etaRank } from './bus.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
-import { bikesBy } from './bike.mjs';
 import { railNetwork, railSpan, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
@@ -433,7 +432,7 @@ async function loadNear({ force = false } = {}) {
   const old = S.near;
   if (!force && old && !old.kept && Date.now() - old.at < 20_000 && !nearMoved(old, h)) return;
   try {
-    const [stops, bikes] = await Promise.all([nearStops(h, { n: 3, r: 350 }), bikesBy(bikesAround(h.lat, h.lon), 3000)]);
+    const [stops, bikes] = await Promise.all([nearStops(h, { n: 3, r: 350 }), bikesAround(h.lat, h.lon).catch(() => [])]);
     // (A newer read, for where you are now, already in: it stays.)
     if (S.near !== old && ctx.here !== h) return;
     S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: keepNear(h, stops), bikes: bikes.map(s => ({ ...s, d: meters(h.lat, h.lon, s.lat, s.lon) })).filter(s => s.d <= 700).sort((a, b) => a.d - b.d).slice(0, 3) };
@@ -454,7 +453,7 @@ async function loadPlace(id) {
   const old = S.places.get(id);
   if (old && Date.now() - old.at < 25_000) return;
   try {
-    const [stops, bikes] = await Promise.all([nearStops(p, { n: 2, r: 400 }), bikesBy(bikesAround(p.lat, p.lon), 3000)]);
+    const [stops, bikes] = await Promise.all([nearStops(p, { n: 2, r: 400 }), bikesAround(p.lat, p.lon).catch(() => [])]);
     S.places.set(id, { at: Date.now(), stops, bikes: bikes.map(s => ({ ...s, d: meters(p.lat, p.lon, s.lat, s.lon) })).filter(s => s.d <= 500).sort((a, b) => a.d - b.d).slice(0, 2) });
     // The buses shown with none on their way: the timetable's next there.
     const quiet = placeBuses(stops).filter(x => !(x.v?.status === 0 && x.v.sec != null) && !S.planned.has(x.stopUID));
