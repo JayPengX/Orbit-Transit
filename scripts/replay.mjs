@@ -1,5 +1,5 @@
 // Runs a trip from a 除錯紀錄 again, on this computer, through the ranking
-// the phone ran (Quadra Pass → 除錯紀錄 → 複製紀錄 or 分享檔案, saved as
+// the phone ran (Orbit Pass → 除錯紀錄 → 複製紀錄 or 分享檔案, saved as
 // a file): the same plans, bikes, time and settings, so what the phone
 // showed is shown here, and a change to plan.mjs can be tried on it.
 //   node scripts/replay.mjs <log.json> [n]   (n: which trip, from the last: 1, 2…; default all)

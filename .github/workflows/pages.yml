@@ -1,5 +1,5 @@
 # Tests, then deploys public/ to GitHub Pages on every push to main (the
-# same as the other Quadra apps). One-time setup: Settings -> Pages ->
+# same as the other Orbit apps). One-time setup: Settings -> Pages ->
 # Source: GitHub Actions.
 name: Deploy to Pages
 

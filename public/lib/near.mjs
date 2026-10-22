@@ -14,7 +14,7 @@
 // Each falls back to TDX's own search around the point when the packs
 // can't be had.
 
-import * as kit from '#kit/quadra.mjs';
+import * as kit from '#kit/orbit.mjs';
 import { tdx, rows, dataAt, liveMs } from './api.mjs';
 import { pack } from './packs.mjs';
 import { stationsNear, etaOf, routeCity } from './bus.mjs';

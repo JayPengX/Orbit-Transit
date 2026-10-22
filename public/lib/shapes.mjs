@@ -11,7 +11,7 @@
 // way between them taken. Null when there's no such way (a pack not built,
 // a stop off every line): the map draws through the stops, as before.
 
-import * as kit from '#kit/quadra.mjs';
+import * as kit from '#kit/orbit.mjs';
 import { decodeLine } from './util.mjs';
 import { squareOf } from './packs.mjs';
 
