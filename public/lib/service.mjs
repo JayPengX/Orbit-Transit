@@ -364,12 +364,19 @@ function about(x, uid, name, stopUID = '') {
   if (stopUID && x.stops.size && !x.routes.size && x.stops.has(stopUID.slice(3)) && (!x.city || x.city === cityOfUid(stopUID))) return true;
   return false;
 }
+// Each notice once: an operator's Alert and its News often say the same
+// words (different ids, a space or a mark apart), or one says all the
+// other does and more; the fuller one stays. Every list of notices goes
+// through here, so no screen or count shows the same words twice.
+const words = n => String(n.text || n.title || '').replace(/[\s\p{P}\p{S}]/gu, '');
+export function oneEach(list) {
+  const keys = list.map(words);
+  return list.filter((n, i) => !keys.some((k, j) => j !== i && k.includes(keys[i]) && (k.length > keys[i].length || j < i)) && !list.some((m, j) => j < i && m.title && m.title === n.title));
+}
 // The notices about a route today, strongest first.
 export function routeNotices(notices, uid, name, now = Date.now(), stopUID = '') {
   if (!uid && !name) return [];
-  return liveNotices(notices, now)
-    .filter(x => about(x, uid, name, stopUID))
-    .sort((a, b) => EFFECTS.indexOf(a.effect) - EFFECTS.indexOf(b.effect));
+  return oneEach(liveNotices(notices, now).filter(x => about(x, uid, name, stopUID))).sort((a, b) => EFFECTS.indexOf(a.effect) - EFFECTS.indexOf(b.effect));
 }
 // The notice that stops a route today, or null.
 export const busOff = (notices, uid, name, now = Date.now()) => routeNotices(notices, uid, name, now).find(x => x.stop) || null;
@@ -523,8 +530,7 @@ export function summarize({ tra, hsr, bus, metro, bikes, cities = [], running = 
   // Your cities' buses: none on the road (likely off), and today's notices from them and the 公路客運's naming them.
   const idle = cities.filter(c => cityIdle(running?.[c], now));
   const mine = liveNotices(bus || [], now).filter(n => (n.city ? here.has(n.city) : [...n.cities].some(c => here.has(c))) && (n.typhoon || (n.effect !== 'info' && (n.routes.size || n.names.size || n.stops.size))));
-  const seen = new Set();
-  const uniq = mine.filter(n => !seen.has(n.title) && seen.add(n.title)).sort((a, b) => EFFECTS.indexOf(a.effect) - EFFECTS.indexOf(b.effect));
+  const uniq = oneEach(mine).sort((a, b) => EFFECTS.indexOf(a.effect) - EFFECTS.indexOf(b.effect));
   if (uniq.length || idle.length) {
     const offs = uniq.filter(n => n.stop).length;
     const sum = [idle.length ? W(`${idle.map(cityName).join('、')}的公車幾乎都沒在路上`, `Almost no buses on the road in ${idle.map(cityName).join(', ')}`) : '', offs ? W(`${offs} 則停駛公告`, `${offs} suspension notice${offs > 1 ? 's' : ''}`) : '', uniq.length > offs ? W(`${uniq.length - offs} 則異動`, `${uniq.length - offs} change${uniq.length - offs > 1 ? 's' : ''}`) : ''].filter(Boolean).join(W('・', ' · '));

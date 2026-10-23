@@ -135,3 +135,14 @@ test('台鐵: a planner\'s ride our timetable has no train for, on a stopped lin
   // 湖口 → 新竹, a 區間 on the 縱貫線: runs.
   assert.equal(traLegOff(ride('湖口', '新竹', { name: '區間車', short: '區間車' }), tra.rules, stationAt), null);
 });
+
+test('a notice said twice (Alert and News, a space or a mark apart, or one inside a fuller one) is shown once', async () => {
+  const { oneEach } = await import('../public/lib/service.mjs');
+  const a = { id: '1', title: '颱風停駛', text: '因受颱風影響，10月23日 各路線全日停駛 如有不便 敬請見諒！' };
+  const b = { id: '2', title: '颱風停駛公告', text: '因受颱風影響、10月23日各路線全日停駛如有不便敬請見諒' };
+  const c = { id: '3', title: '公告', text: '因受颱風影響，10月23日 各路線全日停駛 如有不便 敬請見諒！另 5614 改道。' };
+  const d = { id: '4', title: '改道', text: '光明六路施工改道' };
+  assert.deepEqual(oneEach([a, b]).map(n => n.id), ['1']);
+  assert.deepEqual(oneEach([a, c, d]).map(n => n.id), ['3', '4']);
+  assert.deepEqual(oneEach([d]).map(n => n.id), ['4']);
+});
