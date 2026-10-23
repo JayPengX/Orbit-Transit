@@ -3454,64 +3454,64 @@ button.ot-trip-foot {
 #panel-metro {
   margin-top: 16px;
 }
-/* 火車: from and to on the hero, the date and time as pills, 查詢. */
+/* 火車: the search as an iOS list: 出發 over 抵達 (⇅ beside them), then the
+   time and which railways. Any change asks at once. */
 .ot-tq {
-  gap: 12px;
+  display: grid;
+  gap: 10px;
 }
 .ot-tq-pair {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
-  align-items: center;
-  gap: 6px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--q-surface);
 }
 .ot-tq-st {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   min-width: 0;
-  padding: 10px 14px;
+  min-height: 52px;
+  padding: 14px 64px 14px 16px;
   border: 0;
-  border-radius: 16px;
-  background: rgb(255 255 255 / 0.16);
-  color: #fff;
+  background: none;
+  color: var(--q-label);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.ot-tq-st:last-child {
-  text-align: right;
+.ot-tq-st + .ot-tq-st {
+  background: linear-gradient(var(--q-sep), var(--q-sep)) 16px 0 / calc(100% - 80px) 0.5px no-repeat;
 }
 .ot-tq-st small {
-  color: rgb(255 255 255 / 0.75);
-  font: 600 12px/16px var(--q-font);
+  flex: none;
+  color: var(--q-label-2);
+  font: 500 15px/22px var(--q-font);
 }
 .ot-tq-st b {
-  display: -webkit-box;
-  overflow: hidden;
-  font: 700 22px/28px var(--q-font-rounded);
+  min-width: 0;
+  font: 600 19px/24px var(--q-font);
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-@media (max-width: 340px) {
-  .ot-tq-st b {
-    font-size: 18px;
-    line-height: 24px;
-  }
 }
 .ot-tq-st b.muted {
-  color: rgb(255 255 255 / 0.7);
-  font-size: 18px;
+  color: var(--q-label-3);
+  font-weight: 500;
 }
 .ot-tq-swap {
+  position: absolute;
+  top: 50%;
+  right: 12px;
   display: grid;
   place-items: center;
   width: 40px;
   height: 40px;
+  margin-top: -20px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #fff;
-  color: var(--q-hc-b);
+  background: var(--q-fill-3);
+  color: var(--q-accent);
   cursor: pointer;
 }
 .ot-tq-swap .ot-i {
@@ -3519,44 +3519,43 @@ button.ot-trip-foot {
   height: 18px;
 }
 .ot-tq-when {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  display: flex;
   gap: 8px;
+  align-items: center;
+}
+.ot-tq-sys {
+  flex: 1;
+  min-width: 0;
 }
 .ot-tq-pill {
+  position: relative;
   display: flex;
+  flex: none;
   align-items: center;
   gap: 6px;
-  min-width: 0;
-  min-height: 44px;
+  height: 36px;
   padding: 0 12px;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.16);
-  color: #fff;
+  background: var(--q-fill-3);
+  color: var(--q-label);
 }
 .ot-tq-pill .ot-i {
   width: 16px;
   height: 16px;
-  opacity: 0.85;
+  color: var(--q-label-2);
 }
 .ot-tq-pill input {
   -webkit-appearance: none;
   appearance: none;
-  flex: 1;
-  width: 100%;
-  min-width: 0;
-  height: 44px;
+  width: 52px;
+  height: 36px;
   padding: 0;
   border: 0;
   outline: 0;
   background: none;
-  color: #fff;
-  font: 600 16px/44px var(--q-font);
+  color: inherit;
+  font: 600 16px/36px var(--q-font);
   font-variant-numeric: tabular-nums;
-  color-scheme: dark;
-}
-.ot-tq-pill {
-  position: relative;
 }
 .ot-tq-pill input::-webkit-date-and-time-value {
   text-align: left;
@@ -3570,19 +3569,12 @@ button.ot-trip-foot {
   margin: 0;
   opacity: 0;
 }
-.ot-tq-go {
-  width: 100%;
-  min-height: 44px;
-}
-/* The journeys: a card each, the times big, its trains as chips. */
-span.ot-pass {
-  margin-left: 8px;
-}
+/* The journeys: a card each, the times big, its trains as chips, a mark only for what changes the choice. */
 .ot-jny {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 0;
   border-radius: var(--q-r-card, 20px);
   background: var(--q-surface);
@@ -3592,7 +3584,7 @@ span.ot-pass {
   cursor: pointer;
 }
 .ot-jny + .ot-jny {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 .ot-jny.on {
   box-shadow: inset 0 0 0 2px var(--q-blue);
@@ -3624,6 +3616,13 @@ span.ot-pass {
   align-items: center;
   gap: 6px;
 }
+.ot-jny-legs .q-tags {
+  margin-left: auto;
+}
+.ot-jny-maybe {
+  color: var(--q-orange);
+  font: 600 13px/16px var(--q-font);
+}
 .ot-train-chip {
   display: inline-flex;
   align-items: center;
@@ -3641,6 +3640,16 @@ span.ot-pass {
 .ot-train-chip.local {
   background: color-mix(in srgb, #0ea5e9 16%, transparent);
   color: #0369a1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ot-train-chip.local {
+    background: color-mix(in srgb, #0ea5e9 22%, transparent);
+    color: #7dd3fc;
+  }
+}
+:root[data-theme='dark'] .ot-train-chip.local {
+  background: color-mix(in srgb, #0ea5e9 22%, transparent);
+  color: #7dd3fc;
 }
 .ot-jny .ot-steps {
   margin-top: 6px;
@@ -4784,12 +4793,6 @@ span.ot-pass {
   .ot-ride-n {
     font-size: 26px;
   }
-  .ot-tq-st {
-    padding: 10px 12px;
-  }
-  .ot-tq-st b {
-    font-size: 19px;
-  }
   .ot-nav-text b {
     font-size: 17px;
     line-height: 22px;
@@ -4943,19 +4946,6 @@ span.ot-pass {
   opacity: 0;
 }
 
-/* No white in dark mode (Jay 2026-10-21): the swap is glass on the card. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .ot-tq-swap {
-    background: rgba(255, 255, 255, 0.2);
-    color: #fff;
-    box-shadow: none;
-  }
-}
-:root[data-theme='dark'] .ot-tq-swap {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  box-shadow: none;
-}
 
 /* What isn't running today (look.mjs noticesHtml): a row each, opened for the notice. */
 .ot-notices {

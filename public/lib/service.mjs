@@ -507,14 +507,15 @@ export function bikesOff(stations) {
   if (known.length < 3 || known.some(s => s.ok !== false)) return '';
   return W('附近的站全部暫停營運', 'Every station near you is closed');
 }
-// What's stopped, said short: 「對號列車停駛・平溪線、內灣線停駛」 (the banner's line).
+// What's stopped, said short: 「對號列車停駛・平溪線、內灣線停駛」, 「…・7 條路線停駛」 (the banner's line).
 export function traSummary(rules, date) {
   const on = (rules || []).filter(r => !r.date || r.date === date);
   const parts = [];
   if (on.some(r => !r.maybe && r.cls === 'reserved' && !r.name)) parts.push(W('對號列車停駛', 'Reserved-seat trains off'));
   if (on.some(r => !r.maybe && r.cls !== 'reserved' && !r.name)) parts.push(W('區間車停駛', 'Local trains off'));
   const lines = [...new Set(on.filter(r => !r.maybe && r.name).map(r => r.name))];
-  if (lines.length) parts.push(W(`${lines.join('、')}停駛`, `${lines.length} lines off`));
+  // (Many lines: their count, the names a tap away in the notice.)
+  if (lines.length) parts.push(lines.length > 2 ? W(`${lines.length} 條路線停駛`, `${lines.length} lines off`) : W(`${lines.join('、')}停駛`, `${lines.join(', ')} off`));
   return parts.join(W('・', ' · '));
 }
 
