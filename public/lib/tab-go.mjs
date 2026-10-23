@@ -520,7 +520,7 @@ const planTags = p => [
   p.transfers ? tag(W(`轉乘 ${p.transfers}`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`)) : '',
   p.live ? tag(W('即時', 'Live'), 'green') : ''
 ].join('');
-const planWarn = p => (p.miss || p.off || p.late || lateBy(p, p.arr) || p.rivers?.length ? `<small class="ot-warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? W(`晚 ${lateBy(p, p.arr)} 分到`, `${lateBy(p, p.arr)} min late`) : '') || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')}`))}</small>` : '');
+const planWarn = p => (p.miss || p.off || p.late || lateBy(p, p.arr) || p.note || p.rivers?.length ? `<small class="ot-warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? W(`晚 ${lateBy(p, p.arr)} 分到`, `${lateBy(p, p.arr)} min late`) : '') || p.note || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')}`))}</small>` : '');
 // Under a ride's countdown: its clock time, or its day when not today.
 // (Never the clock the big number already shows: past an hour it is the clock.)
 const whenSmall = at => {

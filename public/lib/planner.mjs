@@ -17,9 +17,10 @@ import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
 import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
-import { adjustPlan, busLink, busTimes, officialPlan } from './live.mjs';
+import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn } from './live.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
+import { traNotices, traLegOff } from './service.mjs';
 import { modeList } from './store.mjs';
 import { meters, hm, isRide } from './util.mjs';
 import { crossings } from './rivers.mjs';
@@ -250,6 +251,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const cost = p => fareOf(p, coverage(p, pass, cityOf)).cost;
   // Both ends inside your TPASS's area: only what the pass takes (no 高鐵, no 普悠瑪), unless there's nothing else.
   const keep = passTrip ? p => passOk(p, pass, cityOf) : null;
+  const stopped = new Set();
+  const stopErr = () => (stopped.size ? Object.assign(new Error('stopped'), { code: 'STOPPED', said: [...stopped].slice(0, 4).join('、') }) : null);
   const finishOff = async (list, stage) => {
     // Each route's next departures (the times its card offers): the trains
     // after it from our timetable, the buses after it.
@@ -260,6 +263,23 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
       for (const p of list) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
       list = [...list, ...more];
     }
+    // A bus its operator says isn't running today (or none on the road in a
+    // city where they all are off): no plan, never its timetable instead.
+    // (Nothing left: which buses, said, not 找不到.)
+    // (A 台鐵 ride the alerts stop that only a planner still has: the same.)
+    const tra = (await traNotices().catch(() => null))?.rules || [];
+    const stationAt = pt => net && [...net.st.entries()].filter(([, s]) => s.sys === 'tra').map(([key, s]) => ({ key, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m).find(x => x.m < 400)?.key;
+    const offs = await Promise.all(
+      list.map(async p => {
+        const t = p.legs.find(l => traLegOff(l, tra, stationAt));
+        if (t) return t.short || t.name;
+        // (Which bus: its name, before the label.)
+        const off = p.stopped ? p.off : p.off ? '' : await stoppedOn(p.legs, now).catch(() => '');
+        return off.replace(/ \S+$/, '');
+      })
+    );
+    for (const o of offs) if (o) stopped.add(o);
+    list = list.filter((p, i) => !offs[i]);
     const bikes = await bikesNow;
     await streetWalks(bikes, from, to);
     const t2 = performance.now();
@@ -347,7 +367,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
             bikesNow = Promise.resolve([...new Map([...all, ...more].map(s => [s.uid, s])).values()]);
           }
           lap('later', t3);
-          return { plans: await finishOff(list, 2), sources: res.sources || {}, error: null };
+          const two = await finishOff(list, 2);
+          return { plans: two, sources: res.sources || {}, error: two.length ? null : stopErr() };
         })().catch(() => null);
   // By a time nothing gets you there for any more (07:21 for 08:00, the
   // owner's 上學): the ways leaving now (the buses, the rides, each one's
@@ -366,5 +387,5 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     const after = (later || Promise.resolve(null)).then(o => (o?.plans?.some(inTime) ? o : nowLater));
     return { ...r, plans: mark(r.plans), later: after };
   }
-  return { plans: first, sources: res.sources || {}, error: first.length ? null : res.err || null, later, ms };
+  return { plans: first, sources: res.sources || {}, error: first.length ? null : stopErr() || res.err || null, later, ms };
 }

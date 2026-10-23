@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { traRules, traCut, traSummary, busNotice, busOff, liveNotices, metroNoticesOf, hsrNoticeOf, summarize } from '../public/lib/service.mjs';
+import { traRules, traCut, traSummary, busNotice, busOff, liveNotices, metroNoticesOf, hsrNoticeOf, summarize, effectOf, routeNotices, cityIdle, likelyOff, traLegOff } from '../public/lib/service.mjs';
 import { traTrips } from '../public/lib/rail.mjs';
 
 const F = name => JSON.parse(readFileSync(new URL(`./fixtures/typhoon-2026-10-23/${name}`, import.meta.url), 'utf8'));
@@ -88,6 +88,50 @@ test('捷運 and 高鐵: what isn’t 正常營運 is said', () => {
 test('the banner: 台鐵, and the bus notices of your city', () => {
   const rows = summarize({ tra, bus, cities: ['Hsinchu'] }, NOW);
   assert.deepEqual(rows.map(r => r.kind), ['tra', 'bus']);
-  assert.ok(rows[1].lines.some(t => t.includes('182')));
-  assert.ok(!rows[1].lines.some(t => t.includes('高雄')));
+  assert.ok(rows[1].said.some(n => n.text.includes('182')));
+  assert.ok(!rows[1].said.some(n => n.text.includes('高雄')));
+  // With 新竹市's buses all off the road, it says so first.
+  const idle = summarize({ bus, cities: ['Hsinchu'], running: { Hsinchu: { routes: Object.fromEntries(Array.from({ length: 29 }, (_, i) => [`HSZ${i}`, 0])) } } }, NOW);
+  assert.match(idle[0].sum, /新竹市的公車幾乎都沒在路上/);
+});
+
+test('every kind of notice, in two words', () => {
+  assert.equal(effectOf('因受薔琵颱風影響，全線停駛一日。'), 'off');
+  assert.equal(effectOf('【全航客運】6268F(經國六)中午十二點前停駛'), 'part');
+  assert.equal(effectOf('取消停靠 因施工本路線取消停靠XX站'), 'stops');
+  assert.equal(effectOf('施工改道 本路線改道行駛'), 'detour');
+  assert.equal(effectOf('配合高市府宣布停班停課，市公車於早上8點至晚上7點採颱風/豪雨班表行駛'), 'less');
+  assert.equal(effectOf('7314 因道路封閉短駛至石棹站止'), 'short');
+  assert.equal(effectOf('28路公車自115年10月19日起，自坪頂延伸至都會南街發車'), 'route');
+  assert.equal(effectOf('245路公車自115年10月19日起，調整亞大醫院發車部分班次'), 'time');
+  // 統聯's 部分班次異動 on its routes: its times, not the route.
+  const u = bus.find(n => n.title.includes('部分班次異動'));
+  assert.equal(u.effect, 'time');
+  // A route's notices, strongest first.
+  const ns = routeNotices(bus, 'HSZ0182', '182', NOW);
+  assert.equal(ns[0].effect, 'off');
+});
+
+test('no bus on the road: likely off only when the whole city is off it, by day', () => {
+  const hsz = { routes: Object.fromEntries(Array.from({ length: 29 }, (_, i) => [`HSZ${String(i).padStart(4, '0')}`, i < 20 ? -1 : 0])) };
+  assert.equal(cityIdle(hsz, NOW), true);
+  assert.equal(likelyOff(hsz, 'HSZ0025', NOW), true);
+  // Night: buses not running is no news.
+  assert.equal(cityIdle(hsz, Date.parse('2026-10-23T22:30:00+08:00')), false);
+  // Taipei's buses on the road (99 of 271 routes): a route between its buses is only that.
+  const tpe = { routes: Object.fromEntries(Array.from({ length: 271 }, (_, i) => [`TPE${i}`, i < 99 ? 3 : 0])) };
+  assert.equal(likelyOff(tpe, 'TPE200', NOW), false);
+});
+
+test('台鐵: a planner\'s ride our timetable has no train for, on a stopped line: stopped', () => {
+  const at = { 竹東: 'tra:1203', 新竹: 'tra:1210', 湖口: 'tra:1180' };
+  const stationAt = p => at[p.name];
+  const dep = Date.parse('2026-10-23T17:12:00+08:00');
+  const ride = (from, to, extra = {}) => ({ mode: 'tra', name: '內灣-新竹', short: '內灣-新竹', from: { name: from, lat: 1, lon: 1 }, to: { name: to, lat: 1, lon: 1 }, dep, ...extra });
+  // TDX's planner still had 內灣-新竹 from 竹東 on 2026-10-23.
+  assert.equal(traLegOff(ride('竹東', '新竹'), tra.rules, stationAt)?.name, '內灣線');
+  // Our timetable named it (a train that runs): never cut here.
+  assert.equal(traLegOff(ride('竹東', '新竹', { train: { no: '1831' } }), tra.rules, stationAt), null);
+  // 湖口 → 新竹, a 區間 on the 縱貫線: runs.
+  assert.equal(traLegOff(ride('湖口', '新竹', { name: '區間車', short: '區間車' }), tra.rules, stationAt), null);
 });
