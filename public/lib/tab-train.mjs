@@ -12,7 +12,8 @@ import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind, stationLabel } from './ui.mjs';
-import { COLOR, tile, tag, section, rowCard, emptyNote } from './look.mjs';
+import { COLOR, tile, tag, section, rowCard, emptyNote, noticesHtml } from './look.mjs';
+import { loadNotices, onNotices } from './service.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -82,7 +83,18 @@ function pickDay(d) {
 // The search is the page's card: the two stations, turned round with ⇄,
 // the time, and 查詢 (the day on the strip above it).
 const stPick = (which, st) => `<button class="ot-tq-st" type="button" data-pick="${which}"><small>${which === 'from' ? W('出發', 'From') : W('抵達', 'To')}</small>${st ? `<b>${e(stationLabel(st))}</b>` : `<b class="muted">${W('選車站', 'Pick')}</b>`}</button>`;
+// 台鐵's and 高鐵's notices today (a typhoon's 停駛), above the trains.
+let notices = [];
+const loadTrainNotices = () =>
+  loadNotices({ kinds: ['tra', 'hsr'] })
+    .then(n => {
+      notices = n;
+      const box = $('t-notices');
+      if (box) box.innerHTML = noticesHtml(notices);
+    })
+    .catch(() => {});
 function render() {
+  loadTrainNotices();
   const today = tw().date;
   const date = state.date || today;
   const recent = ctx.data.trains.filter(x => trainKey(x) !== (state.from && state.to ? trainKey({ from: state.from, to: state.to }) : '')).slice(0, 4);
@@ -97,6 +109,7 @@ function render() {
     <div class="q-chips ot-chip-rail" role="group" aria-label="${W('搭什麼', 'Trains')}">
       ${[['all', W('台鐵＋高鐵', 'TRA + HSR')], ['tra', W('台鐵', 'TRA')], ['hsr', W('高鐵', 'HSR')]].map(([k, n]) => `<button class="q-chip" type="button" data-mode="${k}" aria-pressed="${state.mode === k}">${n}</button>`).join('')}
     </div>
+    <div id="t-notices">${noticesHtml(notices)}</div>
     <div id="t-results">${resultsHtml()}</div>
     ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
   $('panel-train').querySelector('.ot-tq-days').replaceWith(kitUI.dayBar(dayRec, { days: trainDays(), current: date, today, follow: true, onPick: pickDay }));
@@ -117,7 +130,8 @@ function resultsHtml() {
         .map((j, i) => {
           const rides = j.legs.filter(l => !l.walk);
           const delay = rides.reduce((a, l) => a + (l.trip.sys === 'tra' ? state.delays.get(l.trip.no) || 0 : 0), 0);
-          const t = [j.transfers ? tag(W(`轉乘 ${j.transfers}`, `${j.transfers} change${j.transfers > 1 ? 's' : ''}`)) : tag(tagText('直達'), 'green'), delay ? tag(W(`晚 ${delay} 分`, `${delay} min late`), 'red') : '', fareText(rides) ? tag(fareText(rides)) : '', ...(labels.get(j) || []).slice(0, 1).map(x => tag(tagText(x), 'blue'))].join('');
+          const maybe = rides.some(l => l.trip.maybe) ? tag(W('視天候行駛', 'Weather permitting'), 'red') : '';
+          const t = [maybe, j.transfers ? tag(W(`轉乘 ${j.transfers}`, `${j.transfers} change${j.transfers > 1 ? 's' : ''}`)) : tag(tagText('直達'), 'green'), delay ? tag(W(`晚 ${delay} 分`, `${delay} min late`), 'red') : '', fareText(rides) ? tag(fareText(rides)) : '', ...(labels.get(j) || []).slice(0, 1).map(x => tag(tagText(x), 'blue'))].join('');
           return `<button class="ot-jny${i === state.open ? ' on' : ''}" type="button" data-j="${i}">
         <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><i></i><b>${e(hm(j.arr))}</b><span class="ot-jny-dur">${e(minsText((j.arr - j.dep) / 1000))}</span></span>
         <span class="ot-jny-legs">${rides.map(l => `<span class="ot-train-chip ${l.trip.sys}${l.trip.code === '6' || l.trip.code === '10' ? ' local' : ''}">${e(trainKind(l.trip.type))} ${e(l.trip.no)}</span>`).join('<span class="ot-leg-sep">›</span>')}</span>

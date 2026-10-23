@@ -5096,3 +5096,42 @@ span.ot-pass {
     margin-top: 0;
   }
 }
+
+/* What isn't running today (look.mjs noticesHtml): a row each, opened for the notice. */
+.ot-notices {
+  margin: 12px 0 16px;
+}
+.ot-notice > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.ot-notice > summary::-webkit-details-marker {
+  display: none;
+}
+.ot-notice > summary .q-ritem-text small {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  text-wrap: pretty;
+  -webkit-line-clamp: unset;
+}
+.ot-notice.stop > summary .q-ritem-text small {
+  color: var(--q-red);
+}
+.ot-notice + .ot-notice {
+  border-top: var(--q-hairline) solid var(--q-sep);
+}
+.ot-notice-body {
+  padding: 0 16px 12px 60px;
+  color: var(--q-label-2);
+  font: 400 14px/20px var(--q-font);
+}
+.ot-notice-body p {
+  margin: 8px 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.ot-m-notice .ot-notices {
+  margin: 12px 0 0;
+}

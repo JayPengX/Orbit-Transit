@@ -5,6 +5,7 @@ import { packRoute } from './packs.mjs';
 import { tdx, rows } from './api.mjs';
 import { zh, hm, etaAge, meters, TDX_DAYS } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
+import { stoppedNow } from './service.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 // 'InterCity' is 公路客運 and 國道客運 (they belong to no city).
@@ -147,11 +148,16 @@ export function stationEtaAsk(station) {
 }
 
 // One N1 row → { sec (to arrival from now, or null), status, next (ms), last, plate, more: [sec…] }.
+// A route its operator says isn't running today (service.mjs), with no bus on
+// the road to the stop: 今日停駛, never the timetable's next.
 export function etaOf(r, now = Date.now()) {
   const age = etaAge(r, now);
   const sec = r.EstimateTime == null ? null : Math.max(0, Math.round(Number(r.EstimateTime) - age));
   const more = (r.Estimates || []).map(x => Math.round(Number(x.EstimateTime) - age)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
-  return { t: now, sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null };
+  const status = Number(r.StopStatus) || 0;
+  const notice = (status !== 0 || sec == null) && !more.length ? stoppedNow(r.RouteUID, zh(r.RouteName), now) : null;
+  if (notice) return { t: now, sec: null, status: 4, next: null, last: false, plate: '', more: [], countdown: null, notice: notice.title };
+  return { t: now, sec: Number.isFinite(sec) ? sec : null, status, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null };
 }
 export function etaMap(j) {
   const out = new Map();
@@ -177,7 +183,7 @@ export function etaText(v, now = Date.now()) {
   if (v.status === 1) return { main: v.next ? W(`${hm(v.next)} 發車`, `Leaves ${hm(v.next)}`) : W('尚未發車', 'Not yet out'), sub: v.next && v.next - now > 0 ? W(`${Math.round((v.next - now) / 60_000)} 分後`, `in ${Math.round((v.next - now) / 60_000)} min`) : '', tone: 'wait' };
   if (v.status === 2) return { main: W('交管不停靠', 'Not stopping'), sub: '', tone: 'off' };
   if (v.status === 3) return { main: W('末班已過', 'Last one gone'), sub: '', tone: 'off' };
-  if (v.status === 4) return { main: W('今日未營運', 'Not today'), sub: '', tone: 'off' };
+  if (v.status === 4) return v.notice ? { main: W('今日停駛', 'Off today'), sub: '', tone: 'off' } : { main: W('今日未營運', 'Not today'), sub: '', tone: 'off' };
   if (v.next) return { main: `${hm(v.next)}`, sub: W('預計', 'planned'), tone: 'wait' };
   return { main: '—', sub: '', tone: 'off' };
 }
