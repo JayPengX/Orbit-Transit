@@ -5,7 +5,7 @@
 // where to change and how long you wait, the fare, and today's delays.
 
 import { railStations, railNetwork, railSpan, traDelays, legFare } from './raildata.mjs';
-import { journeys } from './rail.mjs';
+import { journeys, findStations, bigFirst as findStationsBig } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { CITIES, cityShort } from './city.mjs';
 import { remember, trainKey } from './store.mjs';
@@ -14,7 +14,7 @@ import { tpassOf, passTrainTrip } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind, stationLabel } from './ui.mjs';
 import { COLOR, tile, tag, section, rowCard, emptyNote, noticesHtml } from './look.mjs';
 import { loadNotices, onNotices } from './service.mjs';
-import { e, hm, minsText, tw, twAt, addDays, meters, distText, stationKey } from './util.mjs';
+import { e, hm, minsText, tw, twAt, addDays, meters, distText, readJson, writeJson } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';
@@ -288,18 +288,23 @@ function onClick(ev) {
   }
 }
 
-// ---- Picking a station: the nearest, or by city -------------------------------------------------------
+// ---- Picking a station ---------------------------------------------------------------------------------
+// Search first (a character or two finds it, either railway); with nothing
+// typed: the stations you've asked about (常用), the nearest, then a county's,
+// its big stations first and the rest behind 更多 (the county remembered).
+// (The owner, 2026-10-23: every station of a county in a grid was too many to find one.)
 
+const CITY_KEY = 'orbit-transit.st-city';
+const MAJOR = 9;
 async function pickStation(which) {
   let sys = state[which]?.sys === 'hsr' ? 'hsr' : 'tra';
-  let city = ctx.city || 'Taipei';
+  let city = readJson(CITY_KEY) || ctx.city || 'Taipei';
+  let all = false;
   let list = [];
+  const other = state[which === 'from' ? 'to' : 'from'];
   const d = sheet(`${sheetHead(which === 'from' ? W('出發車站', 'From station') : W('抵達車站', 'To station'))}
-    <div class="q-seg ot-sys" role="group"><button type="button" data-sys="tra">${W('台鐵', 'TRA')}</button><button type="button" data-sys="hsr">${W('高鐵', 'HSR')}</button></div>
-    <label class="q-search ot-search-in"><input id="s-q" type="search" placeholder="${W('站名，例如 竹中、新竹', 'Station, e.g. 新竹')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
-    <div id="s-near"></div>
-    <div class="q-chips ot-chip-rail" id="s-city"></div>
-    <div id="s-list" class="ot-st-grid"></div>`, 'ot-tall-sheet');
+    <label class="q-search ot-search-in"><input id="s-q" type="search" placeholder="${W('站名', 'Station')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
+    <div id="s-body"></div>`, 'ot-tall-sheet');
   const choose = s => {
     state[which] = { sys: s.sys, id: s.id, name: s.name };
     state.results = null;
@@ -307,20 +312,42 @@ async function pickStation(which) {
     render();
     if (state.from && state.to) search();
   };
+  const isOther = s => other && other.sys === s.sys && other.id === s.id;
+  const row = (s, value = '') => `<button class="q-ritem" type="button" data-st="${e(s.key)}">${tile(s.sys, s.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(s))}</span></span>${value ? `<span class="q-ritem-value">${e(value)}</span>` : ''}</button>`;
+  const btn = s => `<button class="ot-st-btn" type="button" data-st="${e(s.key)}">${e(s.sys === 'hsr' ? stationLabel(s) : s.name)}</button>`;
   const draw = () => {
-    d.querySelectorAll('[data-sys]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sys === sys)));
-    const t = d.querySelector('#s-q').value.trim() && stationKey(d.querySelector('#s-q').value);
+    const q = d.querySelector('#s-q').value;
+    const body = d.querySelector('#s-body');
+    if (q.trim()) {
+      const found = findStations(list, q).filter(s => !isOther(s)).slice(0, 12);
+      body.innerHTML = found.length ? rowCard(found.map(s => row(s, cityShort(s.city))).join('')) : `<p class="ot-note">${W('沒有符合的車站', 'No matching station')}</p>`;
+      return;
+    }
+    // 常用: both ends of what you've asked, most recent first.
+    const seen = new Set();
+    const usual = ctx.data.trains
+      .flatMap(x => [x.from, x.to])
+      .map(x => x && list.find(s => s.sys === x.sys && s.id === x.id))
+      .filter(s => s && !isOther(s) && !seen.has(s.key) && seen.add(s.key))
+      .slice(0, 6);
+    const h = ctx.here;
+    const near = h ? list.filter(s => !isOther(s)).map(s => [meters(h.lat, h.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0]).slice(0, 3) : [];
     const mine = list.filter(s => s.sys === sys);
     const cities = CITIES.filter(([k]) => mine.some(s => s.city === k));
     if (!cities.some(([k]) => k === city)) city = cities[0]?.[0] || city;
-    d.querySelector('#s-city').innerHTML = t ? '' : cities.map(([k]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(cityShort(k))}</button>`).join('');
-    const shown = t ? mine.filter(s => stationKey(s.name).includes(t)) : mine.filter(s => s.city === city);
-    d.querySelector('#s-list').innerHTML = shown.map(s => `<button class="ot-st-btn" type="button" data-st="${e(s.key)}">${e(s.name)}${s.cls === '0' || s.cls === '1' ? '<i></i>' : ''}</button>`).join('') || `<p class="ot-note">${W('沒有符合的車站', 'No matching station')}</p>`;
-    const h = ctx.here;
-    const near = h ? mine.map(s => [meters(h.lat, h.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0]).slice(0, 3) : [];
-    d.querySelector('#s-near').innerHTML = !t && near.length ? `<h3 class="q-sheet-h">${W('最近', 'Nearest')}</h3>${rowCard(near.map(([m, s]) => `<button class="q-ritem" type="button" data-st="${e(s.key)}">${tile(s.sys, s.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(s))}</span></span><span class="q-ritem-value">${e(distText(m))}</span></button>`).join(''))}<h3 class="q-sheet-h">${W('依縣市', 'By city')}</h3>` : '';
+    const inCity = findStationsBig(mine.filter(s => s.city === city));
+    const shown = all || sys === 'hsr' ? inCity : inCity.slice(0, MAJOR);
+    body.innerHTML = `${usual.length ? `<h3 class="q-sheet-h">${W('常用', 'Yours')}</h3><div class="ot-st-grid">${usual.map(btn).join('')}</div>` : ''}
+      ${near.length ? `<h3 class="q-sheet-h">${W('附近', 'Nearby')}</h3>${rowCard(near.map(([m, s]) => row(s, distText(m))).join(''))}` : ''}
+      <h3 class="q-sheet-h">${W('依縣市', 'By city')}</h3>
+      <div class="q-seg ot-sys" role="group"><button type="button" data-sys="tra" aria-pressed="${sys === 'tra'}">${W('台鐵', 'TRA')}</button><button type="button" data-sys="hsr" aria-pressed="${sys === 'hsr'}">${W('高鐵', 'HSR')}</button></div>
+      ${sys === 'hsr' ? '' : `<div class="q-chips ot-chip-rail" id="s-city">${cities.map(([k]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(cityShort(k))}</button>`).join('')}</div>`}
+      <div class="ot-st-grid">${(sys === 'hsr' ? mine : shown).map(btn).join('')}${sys !== 'hsr' && !all && inCity.length > MAJOR ? `<button class="ot-st-btn more" type="button" data-all>${W(`更多 ${inCity.length - MAJOR}`, `${inCity.length - MAJOR} more`)}</button>` : ''}</div>`;
+    // (The county picked in sight in its row.)
+    const on = d.querySelector('#s-city [aria-pressed="true"]');
+    if (on) on.parentElement.scrollLeft = on.offsetLeft - 16;
   };
-  d.querySelector('#s-list').innerHTML = `<p class="ot-note">${W('載入車站中…', 'Loading stations…')}</p>`;
+  d.querySelector('#s-body').innerHTML = `<p class="ot-note">${W('載入車站中…', 'Loading stations…')}</p>`;
   d.querySelector('#s-q').addEventListener('input', draw);
   d.addEventListener('click', ev => {
     const s = ev.target.closest('[data-sys]');
@@ -331,6 +358,12 @@ async function pickStation(which) {
     const c = ev.target.closest('[data-city]');
     if (c) {
       city = c.dataset.city;
+      all = false;
+      writeJson(CITY_KEY, city);
+      return draw();
+    }
+    if (ev.target.closest('[data-all]')) {
+      all = true;
       return draw();
     }
     const st = ev.target.closest('[data-st]');
@@ -343,6 +376,6 @@ async function pickStation(which) {
     list = await railStations();
     draw();
   } catch (err) {
-    d.querySelector('#s-list').innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`;
+    d.querySelector('#s-body').innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`;
   }
 }
