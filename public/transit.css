@@ -591,48 +591,6 @@ button.ot-hero {
   vertical-align: middle;
 }
 
-/* YouBike as a small rail card: the name, the bikes big (⚡ the 電輔車), tags. */
-.ot-bike-card {
-  gap: 4px;
-}
-.q-rail.small.ot-bikes {
-  --q-rail-w: 172px;
-}
-.ot-bike-n {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.ot-bike-n strong {
-  font: 700 28px/32px var(--q-font-rounded);
-  font-variant-numeric: tabular-nums;
-}
-.ot-bike-n em {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  color: var(--ot-ink-amber);
-  font: 700 15px/1 var(--q-font-rounded);
-  font-style: normal;
-}
-.ot-bike-n em .ot-i {
-  width: 14px;
-  height: 14px;
-  fill: currentColor;
-  stroke: none;
-}
-.ot-bike-card.few .ot-bike-n strong {
-  color: var(--q-orange);
-}
-.ot-bike-card.none .ot-bike-n strong,
-.ot-bike-card.off .ot-bike-n strong {
-  color: var(--q-red);
-}
-.ot-bike-card .q-tags {
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-
 /* ==== 3. 地圖 ==================================================================================== */
 
 /* The map the whole column down to the tab bar. */
@@ -1297,9 +1255,16 @@ body.tab-map {
 .ot-bk.few .ot-bk-n b {
   color: var(--q-orange);
 }
-.ot-bk.none .ot-bk-n b,
-.ot-bk.off .ot-bk-n b {
+.ot-bk.none .ot-bk-n b {
   color: var(--q-red);
+}
+/* Paused: greyed, one quiet word where the bikes go. */
+.ot-bk.off .ot-bk-n b {
+  color: var(--q-label-3);
+  font-size: 24px;
+}
+.ot-bk.off .ot-bk-name {
+  color: var(--q-label-3);
 }
 .ot-bk-f {
   display: flex;
@@ -3295,7 +3260,8 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
   color: var(--q-label-2);
   font: 500 13px/17px var(--q-font);
 }
-.ot-bikes {
+.ot-bikes,
+.q-rowcard.ot-near-bikes {
   margin-top: 12px;
 }
 /* A trip: its head, then a row for each ride (the time big, the legs), a foot. */

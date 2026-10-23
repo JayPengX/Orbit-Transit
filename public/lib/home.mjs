@@ -14,8 +14,9 @@
 import * as kitUI from '#kit/ui.mjs';
 import { suggest } from './suggest.mjs';
 import { tripNow, keptLead, pinnedTrainsNext, rideNow } from './tab-go.mjs';
-import { stopsEta, etaRank } from './bus.mjs';
-import { nearStops, keptNear, keepNear, nearMoved, strip, fitStrips, busWhen } from './bus-ui.mjs';
+import { stopsEta } from './bus.mjs';
+import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
+import { nearStops, keptNear, keepNear, nearMoved, fitStrips } from './bus-ui.mjs';
 import { stationLabel, icon, legChips } from './ui.mjs';
 import { COLOR, tile, tag, countHtml, tick, hero } from './look.mjs';
 import { tripKey } from './store.mjs';
@@ -176,25 +177,10 @@ export function createHome(box, ctx, act) {
     return `<section class="ot-shelf">${head(W('最近', 'Recents'), { more: W('清除', 'Clear'), moreTap: 'clear-recents' })}<div class="q-rowcard">${rows.join('')}</div></section>`;
   };
 
-  const bikeCard = b => {
-    const lv = b.ok === false ? 'off' : b.bikes + b.ebike === 0 ? 'none' : b.bikes + b.ebike <= 3 ? 'few' : 'ok';
-    const mins = b.walk ? Math.max(1, Math.round(b.walk.sec / 60)) : null;
-    return `<button class="ot-bk ${lv}" type="button" data-bk="${e(b.uid)}"><span class="ot-bk-name">${e(b.name)}</span><span class="ot-bk-n">${b.ok === false ? `<b>—</b><em>${W('暫停', 'Closed')}</em>` : `<b>${b.bikes}</b>${b.ebike ? `<em>${icon('bolt')}${b.ebike}</em>` : ''}`}</span><span class="ot-bk-f"><i>${icon('dock')}${b.ret}</i>${mins != null ? `<i class="walk">${icon('walk')}${mins} ${W('分', 'min')}</i>` : ''}</span></button>`;
-  };
   const nearby = () => {
     if (!ctx.here) return '';
-    // (Still being asked: bars the height of the rows, so nothing moves when they come.)
-    const wait = S.stops === null;
-    const seen = new Set();
-    const buses = (S.stops || [])
-      .flatMap(st => st.rows.slice(0, 3).map(r => ({ ...r, dist: st.dist })))
-      .sort((a, b) => etaRank(a.v) - etaRank(b.v))
-      .filter(x => !seen.has(x.uid) && seen.add(x.uid))
-      .slice(0, NEAR_BUSES);
-    const rows = wait
-      ? ['', ''].map(() => `<div class="ot-strip">${strip({ no: '', wait: true })}</div>`).join('')
-      : buses.map(x => `<div class="ot-strip">${strip({ no: x.route, note: Number.isFinite(x.dist) ? e(distText(x.dist)) : '', main: e(x.stop || ''), eta: busWhen(x.v, null), attrs: `data-route="${e(JSON.stringify({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"` })}</div>`).join('');
-    const bikes = (S.bikes || []).length ? `<div class="q-rail ot-bikes">${S.bikes.map(bikeCard).join('')}</div>` : '';
+    const rows = nearBusRows(S.stops, { max: NEAR_BUSES });
+    const bikes = nearBikes(S.bikes);
     if (!rows && !bikes) return '';
     return `<section class="ot-shelf">${head(W('附近', 'Nearby'))}${rows ? `<div class="q-rowcard">${rows}</div>` : ''}${bikes}</section>`;
   };
@@ -217,15 +203,20 @@ export function createHome(box, ctx, act) {
   async function readStops() {
     const h = ctx.here;
     if (!h) return;
-    try {
-      const stops = await nearStops(h, { n: 3, r: 350 });
-      if (ctx.here !== h && S.near?.at > 0 && !nearMoved(S.near, ctx.here)) return;
-      S.stops = keepNear(h, stops);
-      S.near = { at: Date.now(), lat: h.lat, lon: h.lon };
-    } catch {
-      if (nearMoved(S.near, h)) S.stops = [];
-      S.stops ||= [];
-    }
+    const read = nearStops(h, { n: 3, r: 350 }).then(
+      stops => {
+        if (ctx.here !== h && S.near?.at > 0 && !nearMoved(S.near, ctx.here)) return;
+        S.stops = keepNear(h, stops);
+        S.near = { at: Date.now(), lat: h.lat, lon: h.lon };
+      },
+      () => {
+        if (nearMoved(S.near, h)) S.stops = [];
+      }
+    );
+    const done = await inTime(read);
+    // (Never bars for ever: nothing yet, nothing shown; the read lands in its own time.)
+    S.stops ||= [];
+    if (!done) read.then(draw);
   }
   async function readPinned() {
     const items = ctx.data.groups.flatMap(g => g.items).map(it => ({ ...it, ...rideNow(it, ctx.here) }));
