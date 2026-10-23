@@ -4996,6 +4996,32 @@ span.ot-pass {
   margin: 12px 0 0;
 }
 /* What's said about a route today (bus-ui.mjs saidHtml): its two words, the notice's first line, the notice a tap away. */
+/* A route's status in its sheet's head: a small chip, the notice a tap away. */
+.ot-rt-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 8px;
+  padding: 1px 6px 1px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--q-fill-3);
+  color: var(--q-label);
+  font: 600 13px/19px var(--q-font);
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.ot-rt-flag.off {
+  background: color-mix(in srgb, var(--q-red) 16%, transparent);
+  color: var(--q-red);
+}
+.ot-rt-flag .ot-i {
+  width: 13px;
+  height: 13px;
+}
+.ot-sheet-sub > .ot-rt-flag:first-child {
+  margin-left: 0;
+}
 .ot-said {
   display: grid;
   gap: 6px;
@@ -5025,12 +5051,11 @@ span.ot-pass {
 .ot-said-row.off > summary b {
   color: var(--q-red);
 }
+/* (A notice's first line said whole: a long one takes a second line, never cut.) */
 .ot-said-row > summary span {
   min-width: 0;
   color: var(--q-label-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 /* Open: the whole notice below, so the line above isn't said twice. */
 .ot-said-row[open] > summary span {

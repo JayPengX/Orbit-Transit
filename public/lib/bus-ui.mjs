@@ -134,10 +134,16 @@ export function fitStrips(box) {
   fitNumbers(all());
 }
 
-// What's said about a route today, each a row (look.mjs saidRows); 可能停駛 says why.
+// What's said about a route today (service.mjs routeStatus): a small chip in
+// the route sheet's head (今日停駛 ›), the whole of it a tap away in its own
+// sheet. (The owner, 2026-10-23: two fat notice cards over the stops took the
+// room and made the list scroll strangely.) 可能停駛 says why there.
+const OFF = new Set(['off', 'likely', 'part']);
+export const saidChip = said => (said ? `<button class="ot-rt-flag${OFF.has(said.effect) ? ' off' : ''}" type="button" data-said>${e(said.label)}${icon('chevron')}</button>` : '');
+const why = (label, title, text) => `<div class="ot-said"><details open class="ot-said-row off"><summary><b>${label}</b><span>${title}</span></summary><p>${text}</p></details></div>`;
 export const saidHtml = said =>
   said
-    ? `${said.why === 'idle' ? `<div class="ot-said"><details class="ot-said-row off"><summary><b>${effectLabel('likely')}</b><span>${W('路上沒有公車', 'No bus on the road')}</span></summary><p>${W('這一帶的公車現在幾乎都不在路上，這條也沒有；業者沒有公告，所以只說可能。', 'Almost no buses around here are on the road now, this one included. Its operator hasn’t said, so it’s only likely.')}</p></details></div>` : said.why === 'tdx' ? `<div class="ot-said"><details class="ot-said-row off"><summary><b>${effectLabel('off')}</b><span>${W('每一站都今日未營運', 'Not running at any stop today')}</span></summary><p>${W('公車動態系統說這條路線今天每一站都未營運。', 'The bus tracking system says this route isn’t running at any stop today.')}</p></details></div>` : ''}${said.notices.length ? saidRows(said.notices) : ''}`
+    ? `${said.why === 'idle' ? why(effectLabel('likely'), W('路上沒有公車', 'No bus on the road'), W('這一帶的公車現在幾乎都不在路上，這條也沒有；業者沒有公告，所以只說可能。', 'Almost no buses around here are on the road now, this one included. Its operator hasn’t said, so it’s only likely.')) : said.why === 'tdx' ? why(effectLabel('off'), W('每一站都今日未營運', 'Not running at any stop today'), W('公車動態系統說這條路線今天每一站都未營運。', 'The bus tracking system says this route isn’t running at any stop today.')) : ''}${said.notices.length ? saidRows(said.notices, { open: true }) : ''}`
     : '';
 
 // What a stop's time says: the live time while a bus is on its way, else the
@@ -292,7 +298,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const where = route.city === INTERCITY ? W('公路客運', 'Intercity') : cityShort(route.city);
     // Two ways: the segmented control under the head names them, so the head says where (not 往 … twice).
     const both = Boolean(ways && ways.length > 1);
-    const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${both ? e(where) : w ? `${W('往', 'To')} ${e(w.headsign)}` : W('路線', 'Route')}</h2>${both ? (w?.subName && w.subName !== route.name ? `<p class="ot-sheet-sub">${e(w.subName)}</p>` : '') : `<p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}</p>`}</div></div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">✕</button></div>`;
+    const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${both ? e(where) : w ? `${W('往', 'To')} ${e(w.headsign)}` : W('路線', 'Route')}</h2>${both ? (w?.subName && w.subName !== route.name ? `<p class="ot-sheet-sub">${e(w.subName)}${saidChip(said)}</p>` : said ? `<p class="ot-sheet-sub">${saidChip(said)}</p>` : '') : `<p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}${saidChip(said)}</p>`}</div></div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">✕</button></div>`;
     // Two short ways: a segmented control. More (a loop's branches, 5 to 10 on
     // some intercity routes) or long names: chips in a row to scroll, each said whole.
     const many = Boolean(ways && (ways.length > 2 || ways.some(x => String(x.headsign || '').length > 7)));
@@ -335,7 +341,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
             .join('')}</ol>`;
     const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(boarding.name)} 上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
     const dirLeft = d.querySelector('.ot-dir-chips')?.scrollLeft || 0;
-    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${saidHtml(said)}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
     // (The row of ways where it was; the one chosen in sight.)
     const row = d.querySelector('.ot-dir-chips');
     if (row) {
@@ -436,6 +442,11 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     draw();
   });
   d.addEventListener('click', ev => {
+    if (ev.target.closest('[data-said]')) {
+      const said = routeStatus(route.uid, route.name);
+      if (said) sheet(`${sheetHead(e(route.name))}${saidHtml(said)}`, 'ot-said-sheet');
+      return;
+    }
     const w = ev.target.closest('[data-way]');
     if (w) {
       way = Number(w.dataset.way);
