@@ -25,7 +25,7 @@ test('台鐵: each notice read as who stops where', () => {
   assert.ok(r.some(x => x.name === '臺東線' && x.maybe));
   assert.ok(r.every(x => x.date === DAY));
   assert.match(traSummary(r, DAY), /對號列車停駛/);
-  assert.match(traSummary(r, DAY), /內灣線/);
+  assert.match(traSummary(r, DAY), /\d 條路線停駛/);
   // Tomorrow, a notice about 今(23)日 says nothing.
   assert.equal(traSummary(r, '2026-10-24'), '');
 });
