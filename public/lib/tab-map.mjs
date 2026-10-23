@@ -2103,6 +2103,8 @@ async function navigate(p, resume = null, { swap = false } = {}) {
     onEnd: (how = {}) => {
       // Arrived at a stop with places after it: on to the next (its plans from here, ready to go).
       const next = how.arrived && how.plan?.then?.length ? how.plan.then : null;
+      // Arrived: one more toward the 十趟旅程 milestone.
+      if (how.arrived) kit.milestone?.(ctx.q, 'transit');
       if (how.arrived) ctx.status(next ? W(`已抵達 ${how.arrived}，接著去 ${next[0].name || '下一站'}`, `Arrived at ${how.arrived}; next, ${next[0].name || 'the next stop'}`) : W(`已抵達 ${how.arrived}，導航結束`, `Arrived at ${how.arrived}`));
       // (Navigation over: the map no longer follows you, until 我的位置 is tapped.)
       follows(false);
