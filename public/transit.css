@@ -4301,6 +4301,9 @@ button.ot-trip-foot {
   font: 600 15px/20px var(--q-font);
   cursor: pointer;
 }
+.ot-st-btn.more {
+  color: var(--q-accent);
+}
 .ot-st-btn i {
   position: absolute;
   top: 6px;

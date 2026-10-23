@@ -28,6 +28,7 @@ export function traStations(j) {
       sys: 'tra',
       id: s.StationID,
       name: zh(s.StationName),
+      en: s.StationName?.En || '',
       lat: Number(s.StationPosition?.PositionLat),
       lon: Number(s.StationPosition?.PositionLon),
       cls: String(s.StationClass ?? ''),
@@ -43,11 +44,40 @@ export function hsrStations(list) {
     sys: 'hsr',
     id: s.StationID,
     name: zh(s.StationName),
+    en: s.StationName?.En || '',
     lat: Number(s.StationPosition?.PositionLat),
     lon: Number(s.StationPosition?.PositionLon),
     cls: '0',
     city: cityFromAddress(`${s.LocationCity || ''}${s.StationAddress || ''}`)
   }));
+}
+
+// The stations a person means by what they typed (a character or two, 竹北,
+// zhub, Hsinchu): the name or its English starting with it first, then
+// containing it; within each, the bigger station (its class: 特等 0 … 簡易 4)
+// first. 台/臺 and a trailing 站 don't matter.
+const big = s => (/^\d$/.test(s.cls) ? Number(s.cls) : 9);
+// A county's stations, the big ones first (in the line's order within a class: as given).
+export const bigFirst = list => list.map((s, i) => [s, i]).sort((a, b) => big(a[0]) - big(b[0]) || a[1] - b[1]).map(([s]) => s);
+export function findStations(list, q) {
+  const k = String(q || '').trim();
+  if (!k) return [];
+  const zhq = k.replace(/\s+/g, '').replace(/台/g, '臺').replace(/(火車站|車站|站)$/, '');
+  const enq = k.toLowerCase().replace(/[^a-z]/g, '');
+  const rank = s => {
+    const n = s.name.replace(/台/g, '臺');
+    const e = (s.en || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (zhq && n.startsWith(zhq)) return 0;
+    if (enq && e.startsWith(enq)) return 1;
+    if (zhq && n.includes(zhq)) return 2;
+    if (enq.length > 2 && e.includes(enq)) return 3;
+    return -1;
+  };
+  return list
+    .map(s => [rank(s), s])
+    .filter(([r]) => r >= 0)
+    .sort((a, b) => a[0] - b[0] || big(a[1]) - big(b[1]) || a[1].name.length - b[1].name.length)
+    .map(([, s]) => s);
 }
 
 // ---- Timetables → trips ---------------------------------------------------------------------
