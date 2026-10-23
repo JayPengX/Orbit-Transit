@@ -56,13 +56,11 @@ body {
 .ot-scroll {
   min-height: calc(100dvh - var(--ot-tabs));
 }
-/* A page: the kit's column (a phone's width, wider on an iPad), room under its last card for the tab bar. */
+/* A page: 16 px in, room under its last card for the tab bar. */
 .ot-page {
-  --q-margin: var(--q-gutter, 16px);
+  --q-margin: 16px;
   box-sizing: border-box;
-  max-width: var(--q-col, 640px);
-  margin: 0 auto;
-  padding: 0 var(--q-gutter, 16px) calc(var(--q-nav, 0px) + 32px);
+  padding: 0 16px calc(var(--q-nav, 0px) + 32px);
 }
 .ot-i {
   flex: none;
@@ -637,10 +635,10 @@ button.ot-hero {
 
 /* ==== 3. 地圖 ==================================================================================== */
 
-/* The map the whole screen down to the tab bar. */
+/* The map the whole column down to the tab bar. */
 .ot-map-panel {
   position: fixed;
-  inset: 0 0 var(--ot-tabs) 0;
+  inset: 0 var(--q-side, 0px) var(--ot-tabs);
   overflow: hidden;
 }
 .ot-map {
@@ -692,8 +690,8 @@ body.tab-map {
 .tab-map .q-appbar {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
+  left: var(--q-side, 0px);
+  right: var(--q-side, 0px);
   z-index: 40;
   background: none;
   box-shadow: none;
@@ -3132,13 +3130,11 @@ body.tab-map {
 body.ot-navigating:not(.tab-map) .ot-nav-mini,
 body.ot-navigating.ot-nav-min .ot-nav-mini {
   position: fixed;
-  left: 10px;
-  right: 10px;
+  left: calc(var(--q-side, 0px) + 10px);
+  right: calc(var(--q-side, 0px) + 10px);
   bottom: calc(var(--q-nav, 0px) + 8px);
   z-index: 60;
   display: block;
-  max-width: 560px;
-  margin: 0 auto;
 }
 .ot-nav-mini-b {
   display: flex;
@@ -4966,9 +4962,7 @@ span.ot-pass {
 #panel-times > .q-nav-title,
 #panel-me > .q-nav-title {
   box-sizing: border-box;
-  max-width: var(--q-col, 640px);
-  margin-inline: auto;
-  padding-inline: var(--q-gutter, 16px);
+  padding-inline: 16px;
 }
 /* 交通's large title sits in the page's own margin (the kit's title brings one too: not twice). */
 .ot-page > .q-nav-title {
@@ -4995,106 +4989,6 @@ span.ot-pass {
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
   box-shadow: none;
-}
-
-/* ==== 11. iPad ==================================================================================== */
-
-/* Upright (and split view): the map's sheet runs the screen's width, its rails to the edges. */
-@media (min-width: 700px) {
-  .ot-msheet {
-    max-width: none;
-  }
-}
-/* On its side: the sheet is a column down the map's left, its whole height, as Maps on iPad
-   (tab-map.mjs's SIDE, the same query: every stop is that height and nothing drags it). */
-@media (min-width: 1000px) and (orientation: landscape) {
-  .ot-msheet {
-    top: 12px;
-    right: auto;
-    bottom: 12px;
-    left: max(16px, env(safe-area-inset-left));
-    width: min(400px, 36vw);
-    height: auto !important;
-    margin: 0;
-    border-radius: 24px;
-    transform: none !important;
-    touch-action: pan-x pan-y;
-    box-shadow: var(--q-glass-rim), var(--ot-shadow);
-  }
-  .ot-msheet .ot-ms-grab {
-    visibility: hidden;
-    pointer-events: none;
-  }
-  .ot-msheet[data-detent='peek'] .ot-ms-body {
-    overflow-y: auto;
-  }
-  .ot-ms-body {
-    padding-bottom: calc(24px + var(--ot-kb, 0px));
-  }
-  /* The round buttons stay: the column never covers them. The chips sit right of it. */
-  .ot-map-panel[data-sheet='large'] .ot-fabs {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .ot-map-chips {
-    left: calc(max(16px, env(safe-area-inset-left)) + min(400px, 36vw) + 12px);
-  }
-  /* The nearest YouBikes in the column: two a row, all of them (a lone last one across). */
-  .ot-msheet .q-rail.ot-bikes {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin: 0;
-    padding: 2px 0 8px;
-    overflow: visible;
-  }
-  .ot-msheet .q-rail.ot-bikes > :last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-  }
-}
-
-/* 交通 and 我的: their sections two a row, an odd last one across. */
-@media (min-width: 700px) {
-  #panel-go > .ot-page,
-  #me-main > .ot-page {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 28px;
-    align-items: start;
-  }
-  #panel-go > .ot-page > *,
-  #me-main > .ot-page > * {
-    grid-column: 1 / -1;
-    min-width: 0;
-  }
-  #panel-go > .ot-page > section.ot-sec,
-  #me-main > .ot-page > section.ot-sec {
-    grid-column: auto;
-  }
-  #panel-go > .ot-page > section.ot-sec:last-of-type:nth-of-type(odd),
-  #me-main > .ot-page > section.ot-sec:last-of-type:nth-of-type(odd) {
-    grid-column: 1 / -1;
-  }
-}
-/* 查時刻's trains, once asked: the search beside the trains it found. */
-@media (min-width: 1000px) {
-  #panel-train:has(> #t-results:not(:empty)) {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    grid-template-rows: auto auto auto 1fr;
-    column-gap: 28px;
-    align-items: start;
-  }
-  #panel-train:has(> #t-results:not(:empty)) > * {
-    grid-column: 1;
-    min-width: 0;
-  }
-  #panel-train > #t-results:not(:empty) {
-    grid-column: 2;
-    grid-row: 1 / -1;
-  }
-  #panel-train > #t-results > .q-section:first-child {
-    margin-top: 0;
-  }
 }
 
 /* What isn't running today (look.mjs noticesHtml): a row each, opened for the notice. */
