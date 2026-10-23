@@ -5062,7 +5062,13 @@ span.ot-pass {
 .ot-said-row > summary span {
   min-width: 0;
   color: var(--q-label-2);
-  text-wrap: pretty;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Open: the whole notice below, so the line above isn't said twice. */
+.ot-said-row[open] > summary span {
+  visibility: hidden;
 }
 .ot-said-row > p {
   margin: 0;
