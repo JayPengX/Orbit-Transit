@@ -14,6 +14,7 @@
 import * as kitUI from '#kit/ui.mjs';
 import { errorText, liveMs } from './api.mjs';
 import { stopsEta, etaRank } from './bus.mjs';
+import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
 import { railNetwork, railSpan, traDelays } from './raildata.mjs';
@@ -449,13 +450,20 @@ async function loadNear({ force = false } = {}) {
   S.near ||= keptNearAll(h);
   const old = S.near;
   if (!force && old && !old.kept && Date.now() - old.at < 20_000 && !nearMoved(old, h)) return;
-  try {
-    const [stops, bikes] = await Promise.all([nearStops(h, { n: 3, r: 350 }), bikesAround(h.lat, h.lon).catch(() => [])]);
-    // (A newer read, for where you are now, already in: it stays.)
-    if (S.near !== old && ctx.here !== h) return;
-    S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: keepNear(h, stops), bikes: bikes.map(s => ({ ...s, d: meters(h.lat, h.lon, s.lat, s.lon) })).filter(s => s.d <= 700).sort((a, b) => a.d - b.d).slice(0, 3) };
-  } catch {
-    if (!old || nearMoved(old, h)) S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: [], bikes: [] };
+  const read = Promise.all([nearStops(h, { n: 3, r: 350 }), bikesAround(h.lat, h.lon).catch(() => [])]).then(
+    ([stops, bikes]) => {
+      // (A newer read, for where you are now, already in: it stays.)
+      if (S.near !== old && ctx.here !== h) return;
+      S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: keepNear(h, stops), bikes: bikes.map(s => ({ ...s, d: meters(h.lat, h.lon, s.lat, s.lon) })).filter(s => s.d <= 700).sort((a, b) => a.d - b.d).slice(0, 3) };
+    },
+    () => {
+      if (!S.near || nearMoved(S.near, h)) S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: [], bikes: [] };
+    }
+  );
+  // (Never bars for ever (near-ui.mjs): nothing yet, nothing shown; the read drawn when it lands.)
+  if (!(await inTime(read))) {
+    S.near ||= { at: 0, lat: h.lat, lon: h.lon, stops: [], bikes: [] };
+    read.then(render);
   }
   render();
 }
@@ -606,25 +614,14 @@ function placesRail() {
 }
 
 // YouBike stations as a small rail: the bikes there now, big.
-const bikeLevelOf = b => (b.ok === false ? 'off' : b.bikes + b.ebike === 0 ? 'none' : b.bikes + b.ebike <= 3 ? 'few' : 'ok');
-const bikeCard = b => {
-  const lv = bikeLevelOf(b);
-  return `<div class="q-rail-card ot-bike-card ${lv}"><small>${e(b.name)}</small><span class="ot-bike-n"><strong>${b.ok === false ? '—' : b.bikes}</strong>${b.ebike ? `<em>${icon('bolt')}${b.ebike}</em>` : ''}</span><span class="q-tags">${b.ok === false ? tag(W('暫停', 'Closed'), 'red') : tag(`${W('空位', 'Docks')} ${b.ret}`, 'blue')}${b.d != null ? tag(distText(b.d)) : ''}</span></div>`;
-};
-
-// What's around you now: the buses at the nearest stops (not the one the card leads with), the YouBike stations.
+// What's around you now: the buses at the nearest stops (not the one the card leads with), the YouBike stations (near-ui.mjs, as 地圖's sheet).
 function nearHtml(skip) {
   const n = S.near;
-  if (!n) return ctx.here ? section(W('附近', 'Nearby'), rowCard(['', ''].map(() => `<div class="ot-strip">${strip({ no: '', wait: true })}</div>`).join(''))) : '';
-  const seen = new Set();
-  const rows = n.stops
-    .flatMap(st => st.rows.slice(0, 3).map(r => ({ ...r, dist: st.dist })))
-    .sort((a, b) => etaRank(a.v) - etaRank(b.v))
-    .filter(x => skip !== `near:${x.stopUID}:${x.uid}` && !seen.has(`${x.uid}|${x.dir}`) && seen.add(`${x.uid}|${x.dir}`))
-    .slice(0, 4);
-  const buses = rows.map(x => `<div class="ot-strip">${strip({ no: x.route, note: Number.isFinite(x.dist) ? e(distText(x.dist)) : '', main: e(x.stop || ''), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: routeAttr({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }) })}</div>`).join('');
-  if (!buses && !n.bikes.length) return '';
-  return section(W('附近', 'Nearby'), `${buses ? rowCard(buses) : ''}${n.bikes.length ? `<div class="q-rail small ot-bikes">${n.bikes.map(bikeCard).join('')}</div>` : ''}`);
+  if (!ctx.here) return '';
+  const buses = nearBusRows(n ? n.stops : null, { skip, planned: S.planned });
+  const bikes = nearBikes(n?.bikes);
+  if (!buses && !bikes) return '';
+  return section(W('附近', 'Nearby'), `${buses ? rowCard(buses) : ''}${bikes}`);
 }
 
 // The next thing you'd take, soonest of: a trip's best way, a pinned bus, a
@@ -778,7 +775,7 @@ function openPlace(id) {
     d.innerHTML = `${sheetHead(e(p.name), here ? e(distText(meters(here.lat, here.lon, p.lat, p.lon))) : '', tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place))}
       ${!x ? `<p class="ot-note">${W('載入中…', 'Loading…')}</p>` : x.error ? `<p class="ot-note bad">${e(x.error)}</p>` : ''}
       ${buses.length ? `<h3 class="q-sheet-h">${W('公車', 'Buses')}</h3>${rowCard(buses.map(busRow).join(''))}` : ''}
-      ${x?.bikes.length ? `<h3 class="q-sheet-h">YouBike</h3><div class="q-rail small ot-bikes">${x.bikes.map(bikeCard).join('')}</div>` : ''}
+      ${x?.bikes.length ? `<h3 class="q-sheet-h">YouBike</h3>${nearBikes(x.bikes)}` : ''}
       <button class="q-btn primary block ot-sheet-go" type="button" data-go-place="${e(id)}">${icon('route')} ${W('怎麼去', 'Directions')}</button>`;
     fitStrips(d);
   };
@@ -811,6 +808,14 @@ function onClick(ev) {
     S.flip.has(id) ? S.flip.delete(id) : S.flip.add(id);
     render();
     return refresh();
+  }
+  // A YouBike station: on the map, its card open.
+  const bk = ev.target.closest('[data-bk]');
+  if (bk) {
+    const b = [...(S.near?.bikes || []), ...[...S.places.values()].flatMap(x => x.bikes || [])].find(x => x.uid === bk.dataset.bk);
+    if (!b) return;
+    ctx.mapFocus = { ...b, sys: 'bike' };
+    return ctx.goTab('map');
   }
   const r = ev.target.closest('[data-route]');
   if (r) {

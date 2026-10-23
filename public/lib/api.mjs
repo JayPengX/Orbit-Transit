@@ -26,7 +26,9 @@ const token = async (renew = false) => {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const passing = err => !err.status || err.status === 429 || err.status >= 500;
 async function ask(path, { signal, wait = 15_000, meta = null, renew = false } = {}) {
-  const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(await token(renew))}`;
+  // (The token is waited for within `wait` too: a sign-in refresh that never answered held every ask behind it.)
+  const t = await Promise.race([token(renew), sleep(wait).then(() => Promise.reject(Object.assign(new Error('network'), { code: 'TIMEOUT', status: 0 })))]);
+  const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(t)}`;
   const timer = typeof AbortController !== 'undefined' ? new AbortController() : null;
   // (The answer's body is waited for too, not only its headers: a body that
   // stalled on a weak link, a city's YouBike list, half a megabyte, never
