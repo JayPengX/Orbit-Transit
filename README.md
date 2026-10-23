@@ -69,6 +69,14 @@ Live: https://jaypengx.github.io/Orbit-Transit/
 
 ## Decisions in force
 
+- What isn't running comes from the operators' own notices (TDX Alert/News),
+  never guessed (`service.mjs`): 台鐵's stopped trains leave the day's
+  timetable (TDX's own lags: 內灣線 still listed on 2026-10-23), those run
+  "視風雨情形" keep a 視天候行駛 tag; a bus route a notice stops is 今日停駛
+  everywhere and never planned, unless a bus is seen on the road. A notice
+  that says 部分, 減班, a time of day and the like is shown, never a stop.
+  The banner rows (交通, 火車, 公車, 捷運) open to the notice as written.
+
 - Judged by how the owner really travels. Every real choice is shown, with
   official names, times and live data first.
 - A plan costs what it costs a person, in minutes:
@@ -117,6 +125,7 @@ Live: https://jaypengx.github.io/Orbit-Transit/
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |
 | `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; the buzz; bus alerts |
+| `lib/service.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules |
 | `lib/tab-*.mjs`, `map.mjs` | Each tab; Google or Leaflet+NLSC behind one interface |
 | `lib/store.mjs` | The Pass's data |
 

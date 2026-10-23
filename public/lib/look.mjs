@@ -49,3 +49,14 @@ export function hero({ eyebrow = '', glyph = '', big = '', title = '', sub = '',
 export const emptyNote = title => kitUI.emptyHtml({ title });
 // A non-first tab's large title (the kit's navTitle).
 export const navTitle = title => kitUI.navTitleHtml(title);
+
+// What isn't running today (service.mjs summarize): a row each, opened in
+// place for the operator's own words. Nothing when nothing's off.
+export const noticesHtml = items =>
+  items?.length
+    ? `<div class="q-rowcard ot-notices">${items
+        .map(
+          n => `<details class="ot-notice${n.stop ? ' stop' : ''}"><summary class="q-ritem">${tile(n.kind === 'metro' && n.sys === 'TRTCMG' ? 'gondola' : n.kind, COLOR[n.kind] || COLOR.route, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(n.title)}</span><small>${e(n.sum)}</small></span></summary>${n.lines.length ? `<div class="ot-notice-body">${n.lines.map(t => `<p>${e(t)}</p>`).join('')}</div>` : ''}</details>`
+        )
+        .join('')}</div>`
+    : '';

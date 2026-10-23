@@ -13,7 +13,8 @@ import { openRoute, useBusCtx, strip, fitStrips, nextNear, busWhen } from './bus
 import { errorText } from './api.mjs';
 import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
-import { COLOR, tile, section, rowCard, hero, emptyNote } from './look.mjs';
+import { COLOR, tile, section, rowCard, hero, emptyNote, noticesHtml } from './look.mjs';
+import { loadNotices } from './service.mjs';
 import { e, meters, distText, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -99,6 +100,7 @@ function busInit() {
   // The search is the page's card (its field on the app's colour, as Law's ask).
   box.innerHTML = `${hero({ eyebrow: W('公車', 'Bus'), glyph: 'bus', title: W('路線或站牌', 'Route or stop'), body: `<label class="q-hc-pill ot-hc-field">${icon('search')}<input id="tb-q" type="search" inputmode="search" placeholder="${W('藍1、182、新竹火車站', '182, 307…')}" autocomplete="off" enterkeyhint="search" aria-label="${W('路線或站名', 'Route or stop')}"></label>` })}
     <div class="q-chips ot-chip-rail" id="tb-city"></div>
+    <div id="tb-notices"></div>
     <div id="tb-list"></div>`;
   // (Drawn once the typing pauses: each letter asked for every route it matched.)
   let typing = 0;
@@ -110,6 +112,7 @@ function busInit() {
     const c = ev.target.closest('[data-city]');
     if (c) {
       bus.city = c.dataset.city;
+      busNotices();
       return busLoad();
     }
     const r = ev.target.closest('[data-r]');
@@ -126,8 +129,19 @@ function busInit() {
 // The next buses again every 30 s while the list is on screen (only the
 // strips in view are asked).
 let ticking = 0;
+// The bus notices of the city chosen (附近: yours) today, above its routes.
+function busNotices() {
+  const city = bus.city === NEAR || !bus.city ? ctx.city || 'Taipei' : bus.city;
+  loadNotices({ kinds: ['bus'], cities: city === INTERCITY ? [] : [city] })
+    .then(n => {
+      const box = $('tb-notices');
+      if (box) box.innerHTML = noticesHtml(n);
+    })
+    .catch(() => {});
+}
 function busShow() {
   ticking ||= setInterval(() => !$('times-bus').hidden && $('times-bus').offsetParent && document.visibilityState === 'visible' && busDraw(), 30_000);
+  busNotices();
   const home = ctx.city || 'Taipei';
   if (bus.loaded !== `${bus.city}:${home}`) busLoad();
   else busDraw();

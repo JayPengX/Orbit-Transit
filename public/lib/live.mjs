@@ -13,6 +13,7 @@ import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stopTimes, routeCity } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish, walkLeg } from './plan.mjs';
+import { stoppedNow, ensureBus } from './service.mjs';
 import { meters, walkSec, zh, tw, twAt, addDays, etaAge, routeNorm, sameRoute, isRide, RAIL } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -33,9 +34,12 @@ export function liveTimes(list, name, now = Date.now(), { dir = null, routeUID =
   const mine = list.filter(r => (routeUID ? r.RouteUID === routeUID : sameRoute(zh(r.RouteName), name)) && (dir == null || Number(r.Direction) === dir));
   const times = [];
   let off = 0;
-  const running = mine.some(r => ![3, 4].includes(Number(r.StopStatus) || 0));
+  // (Its operator's notice that it isn't running today: 今日未營運, but for a bus already on the road.)
+  const said = r => (Number(r.StopStatus) || 0) !== 0 && !(r.Estimates || []).length && stoppedNow(r.RouteUID, zh(r.RouteName), now);
+  const status = r => (said(r) ? 4 : Number(r.StopStatus) || 0);
+  const running = mine.some(r => ![3, 4].includes(status(r)));
   for (const r of mine) {
-    const st = Number(r.StopStatus) || 0;
+    const st = status(r);
     // (From when TDX made the estimate, not from now: util.mjs etaAge.)
     const made = now - etaAge(r, now) * 1000;
     if (r.EstimateTime != null && st === 0) times.push({ at: made + Number(r.EstimateTime) * 1000, last: r.IsLastBus === true, plate: r.PlateNumb || '' });
@@ -282,6 +286,14 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
       for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + back, arr: legs[a].arr + back };
     }
   }
+  // A bus later today its operator says isn't running (a typhoon): the plan says so,
+  // unless that bus was seen on the road.
+  if (!off) {
+    const cities = legs.filter(l => l.mode === 'bus' && l.route?.uid).map(l => routeCity(l.route.uid));
+    if (cities.length) await ensureBus(cities).catch(() => {});
+    const l = legs.find(x => x.mode === 'bus' && x.route?.uid && !(x.live && !x.live.planned) && tw(x.dep).date === tw(now).date && stoppedNow(x.route.uid, x.short || x.name, now));
+    if (l) off = W(`${l.short || l.name} 今日停駛`, `${l.short || l.name}: off today`);
+  }
   const out = changed ? finish({ ...plan, legs }) : { ...plan, legs };
   out.live = legs.some(l => l.live);
   if (miss) out.miss = miss;
@@ -376,6 +388,8 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     let isLive = false;
     const live = await liveAsk;
     const lt = liveTimes(live, c.route, now, { dir: w.dir, routeUID: c.uid });
+    // Not running today (TDX's 今日未營運, or its operator's notice): never its timetable instead.
+    if (lt.off === 4 || (!lt.times.length && stoppedNow(c.uid, c.route, now))) return void trace?.why.push(`${c.route}: not running today`);
     // (A bus 'coming' the timetable has nowhere near: resting with its tracker on.)
     lt.times = lt.times.filter(x => liveTrusted(sched, w, i, x.at));
     const t = lt.times.find(x => x.at >= ready - 30_000);

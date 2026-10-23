@@ -6,6 +6,7 @@ import { tdx, rows, keptLocal, keepLocal } from './api.mjs';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, traFare, hsrFare } from './rail.mjs';
 import { loadSystem, mapsNear } from './metro.mjs';
 import { tw, zh, twAt, addDays } from './util.mjs';
+import { traNotices, traCut, onNotices } from './service.mjs';
 
 const DAY = 86_400_000;
 
@@ -59,7 +60,23 @@ export function unpackTrips(p) {
     return { ...t, stops };
   });
 }
+// A day's trains as they really run: those 台鐵's notices stop (a typhoon's
+// 停駛) taken out, those it may not run marked `maybe` (service.mjs). Cut
+// again when a notice changes.
+const cut = new Map();
+onNotices(() => {
+  cut.clear();
+  nets.clear();
+});
 export function dayTrips(date) {
+  if (!cut.has(date)) {
+    const p = Promise.all([rawTrips(date), traNotices()]).then(([trips, n]) => traCut(trips, n.rules, date));
+    p.catch(() => cut.delete(date));
+    cut.set(date, p);
+  }
+  return cut.get(date);
+}
+function rawTrips(date) {
   if (!days.has(date)) {
     days.set(
       date,

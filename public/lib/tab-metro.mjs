@@ -12,7 +12,8 @@ import { codesHtml, linesOf, loadBoards, boardHtml, firstLastHtml, exitsHtml } f
 import { createMap } from './map.mjs';
 import { errorText, liveMs, keptLocal, keepLocal } from './api.mjs';
 import { sheet, sheetHead, icon, inkOn } from './ui.mjs';
-import { tile, tick } from './look.mjs';
+import { tile, tick, noticesHtml } from './look.mjs';
+import { loadNotices } from './service.mjs';
 import { e, meters } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -39,6 +40,7 @@ export function init(c) {
   } catch {}
   const panel = $('panel-metro');
   panel.innerHTML = `<nav class="q-chips ot-chip-rail" id="m-maps" aria-label="${W('城市', 'City')}">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(m.name)}</button>`).join('')}</nav>
+    <div id="m-notice" class="ot-m-notice"></div>
     <div class="ot-metro-view" id="m-view">
       <div id="m-schem" class="mm-box" role="img" aria-label="${W('捷運路線圖', 'Metro map')}"></div>
       <div id="m-map" class="ot-map" hidden></div>
@@ -122,6 +124,11 @@ async function open(id) {
   const box = rail.getBoundingClientRect();
   if (chip.right > box.right || chip.left < box.left) rail.scrollBy({ left: chip.right > box.right ? chip.right - box.right + 16 : chip.left - box.left - 16, behavior: 'smooth' });
   const m = MAPS.find(x => x.id === id);
+  // Its systems' notices when one isn't running as usual (a typhoon's headways, 貓空 closed).
+  $('m-notice').innerHTML = '';
+  loadNotices({ kinds: ['metro'], systems: m.systems })
+    .then(n => current === id && ($('m-notice').innerHTML = noticesHtml(n)))
+    .catch(() => {});
   $('m-msg').textContent = W('載入路網…', 'Loading the network…');
   clearTimeout(retry);
   clearTimeout(trainTimer);

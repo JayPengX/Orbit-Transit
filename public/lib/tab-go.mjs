@@ -22,9 +22,11 @@ import { planTrip } from './planner.mjs';
 import { setTripPush } from './alerts.mjs';
 import { pickSig } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
+import { loadNotices, bikesOff, onNotices } from './service.mjs';
+import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
-import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero, navTitle } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero, navTitle, noticesHtml } from './look.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -45,7 +47,8 @@ const S = {
   places: new Map(), // place id → { stops, bikes, at }
   open: new Set(), // places opened
   more: new Set(), // trips showing every plan
-  flip: new Set() // rides turned round by hand (⇄)
+  flip: new Set(), // rides turned round by hand (⇄)
+  notices: [] // what isn't running today around you (service.mjs)
 };
 
 // A pinned ride the way you'd take it now: from whichever of its two ends
@@ -68,6 +71,8 @@ export function init(c) {
   (ctx.onRefresh ||= []).push(() => shown && render());
   // (A typhoon day off announced where a trip goes: its next time moves on.)
   onDayOff(() => render());
+  // (An operator's new notice: what's stopped, again.)
+  onNotices(() => shown && loadNotices_().then(render));
   // The phone's fix somewhere else than 附近 was read for (the last place kept, at an opening): read again.
   (ctx.moved ||= []).push(h => shown && nearMoved(S.near, h) && loadNear({ force: true }));
 }
@@ -229,7 +234,7 @@ async function refresh() {
     const items = ctx.data.groups.flatMap(g => g.items).map(sideOf);
     if (items.length) jobs.push(stopsEta(items).then(m => ((S.pinned = m), (S.pinnedAt = Date.now()))).then(() => plannedTimes(items)).catch(() => {}));
     jobs.push(trainPins());
-    jobs.push(loadNear());
+    jobs.push(loadNear().then(loadNotices_));
     // The two trips that matter most get their plans at once (planned once, their times kept up: `loadTrip`).
     for (const { w } of trips().slice(0, 2)) jobs.push(loadTrip(w));
     for (const id of S.open) jobs.push(loadPlace(id));
@@ -239,6 +244,16 @@ async function refresh() {
     refreshing = false;
   }
   render();
+}
+
+// What isn't running today: 台鐵, 高鐵, the buses of your city and of your
+// trips' ends, the metros around you, YouBike around you.
+async function loadNotices_() {
+  const h = ctx.here;
+  const ends = ctx.data.trips.flatMap(t => [t.from, t.to]).filter(p => p && Number.isFinite(p.lat)).slice(0, 6);
+  const cities = [...new Set([ctx.city, ...(await Promise.all(ends.map(p => ctx.cityOf(p.lat, p.lon).catch(() => null))))].filter(Boolean))];
+  const systems = h ? [...new Set(mapsNear([h.lat - 0.05, h.lon - 0.05, h.lat + 0.05, h.lon + 0.05]).flatMap(m => m.systems))] : [];
+  S.notices = await loadNotices({ cities, systems, bikes: bikesOff(S.near?.bikes) }).catch(() => S.notices);
 }
 
 async function trainPins() {
@@ -733,6 +748,7 @@ function render() {
   const railX = box.querySelector('.ot-places')?.scrollLeft || 0;
   box.innerHTML = `<div class="ot-page">
     ${navTitle(W('交通', 'Transit'))}
+    ${noticesHtml(S.notices)}
     ${lead.html}
     ${placesRail()}
     ${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}
