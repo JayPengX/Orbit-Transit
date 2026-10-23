@@ -17,9 +17,9 @@
 // "部分", "減班", "視…" or a time of day, is shown as written and never
 // taken as a stop (Jay: never invent). A bus seen on the road beats a notice.
 
-import { tdx, rows } from './api.mjs';
+import { tdx, rows, busesRunning } from './api.mjs';
 import { tw, zh, addDays, routeNorm } from './util.mjs';
-import { CITIES, CITY_CODES } from './city.mjs';
+import { CITIES, CITY_CODES, cityShort } from './city.mjs';
 
 import { W } from '#kit/lang.mjs';
 
@@ -190,6 +190,24 @@ export function traRuleFor(trip, rules, date) {
   }
   return maybe;
 }
+// A planner's 台鐵 ride our (cut) timetable has no train for (nameTrains
+// found none): stopped when a stopping rule today takes in either end
+// (TDX's planner, like its timetable, lags the alerts: 內灣-新竹 from 竹東).
+// `stationAt(point)`: our station id near a point.
+export function traLegOff(l, rules, stationAt) {
+  if (l.mode !== 'tra' || l.train?.no || !rules?.length || !l.from?.lat || !l.to?.lat) return null;
+  const ends = [stationAt(l.from), stationAt(l.to)].filter(Boolean).map(k => String(k).replace(/^tra:/, ''));
+  if (!ends.length) return null;
+  const code = /自強|莒光|普悠瑪|太魯閣|復興|EMU3000/.test(`${l.name} ${l.short}`) ? '1' : '6';
+  const date = tw(l.dep).date;
+  for (const r of rules) {
+    if (r.maybe || !ruleOn(r, date, l.dep)) continue;
+    if (r.cls === 'reserved' && UNRESERVED.has(code)) continue;
+    if (r.cls === 'unreserved' && !UNRESERVED.has(code)) continue;
+    if (ends.some(k => r.stations.has(k))) return r;
+  }
+  return null;
+}
 // A day's trips with the stopped trains out, and those that may not run marked.
 export function traCut(trips, rules, date) {
   if (!rules?.length) return trips;
@@ -248,16 +266,48 @@ export async function metroNotices(systems) {
 
 // ---- 公車 ----------------------------------------------------------------------------------------
 
-const STOPS = /停駛|停止營運|暫停行駛|停止行駛|暫停營運|取消發車|不營運/;
-// What makes a notice only part of a day or some buses: shown, never a stop.
+const STOPS = /停駛|停止營運|暫停行駛|停止行駛|暫停營運|取消發車|不營運|停開/;
+// What makes a notice only part of a day or some buses: never the whole route off.
 const PARTLY = /部分|部份|減班|調整|機動|視.{0,8}(情形|情況|狀況|天候)|正常行駛|改道|短駛|截|折返|繞駛|班距|班次如下|\d{1,2}\s*[:：點時]|上午|下午|中午|晚間|起停駛|前停駛|後停駛/;
 const TYPHOON = /颱風|豪雨|停班停課|停止上班/;
 const CITY_NAMES = CITIES.map(([code, name]) => [code, name, name.replace(/^臺/, '台')]);
 // The cities a notice speaks of (新竹市, 宜蘭縣): its city routes are matched by id there.
 const citiesIn = text => new Set(CITY_NAMES.filter(([, a, b]) => text.includes(a) || text.includes(b)).map(([code]) => code));
 
+// What a notice does to a route, strongest first, and its two-word label:
+// the status a bus shows (an arrival, a timetable, a plan), its notice a tap away.
+export const EFFECTS = ['off', 'likely', 'part', 'less', 'short', 'detour', 'route', 'stops', 'time', 'info'];
+export const effectLabel = k =>
+  ({
+    off: W('今日停駛', 'Off today'),
+    likely: W('可能停駛', 'Likely off'),
+    part: W('部分停駛', 'Some runs off'),
+    less: W('減班', 'Fewer buses'),
+    short: W('縮短行駛', 'Cut short'),
+    detour: W('改道', 'Detour'),
+    route: W('路線異動', 'Route changed'),
+    stops: W('停靠異動', 'Stops changed'),
+    time: W('班次異動', 'Times changed'),
+    info: W('公告', 'Notice')
+  })[k] || '';
+export function effectOf(text) {
+  if (STOPS.test(text) && !PARTLY.test(text)) return 'off';
+  if (STOPS.test(text)) return 'part';
+  if (/改道|繞駛|改行|改經|改走|動線/.test(text)) return 'detour';
+  if (/取消停靠|不停靠|暫停停靠|停靠站/.test(text)) return 'stops';
+  if (/取消/.test(text)) return 'part';
+  if (/減班|班距|颱風.{0,4}班表|豪雨班表|假日班|例假日/.test(text)) return 'less';
+  if (/短駛|縮駛|截|折返|行駛至.{1,12}止/.test(text)) return 'short';
+  if (/封路|封閉|管制/.test(text)) return 'detour';
+  if (/延伸|延駛|路線異動|起訖|發車站/.test(text)) return 'route';
+  if (/停靠|站位|臨時站|遷移|裁撤|不停/.test(text)) return 'stops';
+  if (/時刻|班次|發車時間|首班|末班|調整/.test(text)) return 'time';
+  return 'info';
+}
+
 // A TDX Bus Alert or News row → { id, city (null: 公路客運's), title, text,
-// routes (Set of RouteIDs), names (Set of routeNorm'd 【numbers】), cities, stop, typhoon, from, to, url }.
+// routes (Set of RouteIDs), names (Set of routeNorm'd 【numbers】), stops
+// (Set of StopIDs), cities, effect, stop, typhoon, from, to, url }.
 export function busNotice(a, city = null) {
   const title = zh(a.Title).trim();
   const desc = zh(a.Description).trim();
@@ -267,6 +317,8 @@ export function busNotice(a, city = null) {
   const to = !Number.isFinite(end) ? Infinity : /T00:00(:00)?/.test(a.EndTime) ? end + 86_400_000 - 1 : end;
   const routes = new Set([...(a.Scope?.Routes || []), ...(a.Scope?.SubRoutes || [])].map(r => String(r.RouteID || r.SubRouteID || '')).filter(Boolean));
   const names = new Set([...text.matchAll(/【([^【】]{1,12})】/g)].map(m => routeNorm(m[1])).filter(n => n && !/客運|公司|巴士|颱風|公告|說明/.test(n)));
+  const stops = new Set((a.Scope?.Stops || []).map(x => String(x.StopID || '')).filter(Boolean));
+  const effect = effectOf(text);
   return {
     id: String(a.AlertID ?? a.NewsID ?? title),
     city,
@@ -274,8 +326,10 @@ export function busNotice(a, city = null) {
     text,
     routes,
     names,
+    stops,
     cities: citiesIn(text),
-    stop: STOPS.test(text) && !PARTLY.test(text),
+    effect,
+    stop: effect === 'off',
     typhoon: TYPHOON.test(text),
     from: Date.parse(a.StartTime) || Date.parse(a.PublishTime) || 0,
     to,
@@ -294,22 +348,31 @@ export function liveNotices(list, now = Date.now()) {
   });
 }
 
-// The notice that stops a route today, or null. `uid`: TDX's RouteUID
-// (HSZ0010: 新竹市's 0010; THB…: 公路客運's); `name`: its number (182).
-export function busOff(notices, uid, name, now = Date.now()) {
-  if (!uid && !name) return null;
+const cityOfUid = uid => CITY_CODES[/^[A-Z]{3}/.exec(uid || '')?.[0]] || null;
+// Whether a notice is about a route: a city's by its id or the 【number】 in
+// its text; the 公路客運's by id (a city's route only when it names that city).
+// With `stopUID`: a notice about that stop (its scope's stops) counts too.
+function about(x, uid, name, stopUID = '') {
   const id = uid ? uid.slice(3) : '';
-  const city = CITY_CODES[/^[A-Z]{3}/.exec(uid || '')?.[0]] || null;
+  const city = cityOfUid(uid);
   const n = routeNorm(name);
-  for (const x of liveNotices(notices, now)) {
-    if (!x.stop) continue;
-    // A city's own notice: its routes by id, or by the number in its text.
-    if (x.city && x.city === city && ((id && x.routes.has(id)) || (n && x.names.has(n)))) return x;
-    // 公路客運's: its own routes by id; a city's routes by id only when it names that city.
-    if (!x.city && id && x.routes.has(id) && (!city || x.cities.has(city))) return x;
-  }
-  return null;
+  if (x.city && x.city === city && ((id && x.routes.has(id)) || (n && x.names.has(n)))) return true;
+  if (!x.city && id && x.routes.has(id) && (!city || x.cities.has(city))) return true;
+  // (A 公路客運 notice naming its 【5614】: that route.)
+  if (!x.city && !city && n && x.names.has(n)) return true;
+  // A stop's own notice (closed, moved) with no routes named: every route there.
+  if (stopUID && x.stops.size && !x.routes.size && x.stops.has(stopUID.slice(3)) && (!x.city || x.city === cityOfUid(stopUID))) return true;
+  return false;
 }
+// The notices about a route today, strongest first.
+export function routeNotices(notices, uid, name, now = Date.now(), stopUID = '') {
+  if (!uid && !name) return [];
+  return liveNotices(notices, now)
+    .filter(x => about(x, uid, name, stopUID))
+    .sort((a, b) => EFFECTS.indexOf(a.effect) - EFFECTS.indexOf(b.effect));
+}
+// The notice that stops a route today, or null.
+export const busOff = (notices, uid, name, now = Date.now()) => routeNotices(notices, uid, name, now).find(x => x.stop) || null;
 
 // The cities TDX has bus notices for (連江 none; Alert not for 臺南).
 const NO_ALERT = new Set(['Tainan', 'LienchiangCounty']);
@@ -325,11 +388,33 @@ export async function busNotices(cities = []) {
   return lists.flat();
 }
 
+// ---- Buses on the road --------------------------------------------------------------------------
+
+// A city's routes with a bus on the road ({ RouteUID: n stops with one
+// coming; -1 TDX's 今日未營運 }, transit.js running) → whether that city's
+// buses are, near enough, all off the road: under one route in twenty with
+// a bus, of ten or more, between 07:00 and 20:00 (when every city's buses
+// run). On 2026-10-23 at 16:00: 新竹市 0 of 29, 新竹縣 0 of 57.
+export function cityIdle(run, now = Date.now()) {
+  const list = Object.values(run?.routes || {});
+  const h = tw(now).min / 60;
+  if (list.length < 10 || h < 7 || h >= 20) return false;
+  return list.filter(n => n > 0).length < list.length * 0.05;
+}
+// A route with no bus on the road while its city's buses are all off it:
+// likely not running, said as that (never 今日停駛, which is the operator's word).
+export const likelyOff = (run, uid, now = Date.now()) => Boolean(run?.routes) && (run.routes[uid] ?? 0) <= 0 && cityIdle(run, now);
+
 // What's known so far, for the views that draw at once (a stop's buses): the
-// notices of every city asked for, kept 3 minutes; a city not asked yet is
-// asked behind, and the views told (onNotices) when it comes.
+// notices and the buses on the road of every city asked for, kept 3 and 1
+// minutes; a city not asked yet is asked behind, and the views told
+// (onNotices) when it comes.
 const busKnown = new Map(); // city ('' the 公路客運's) → { at, list }
 const busAsking = new Map();
+const runKnown = new Map(); // city → { at, run }
+const runAsking = new Map();
+const RUN_FRESH = 60_000;
+const sigOf = () => [...busKnown].map(([k, v]) => `${k}:${v.list.map(n => `${n.id}${n.effect}`).join(',')}`).join('|') + [...runKnown].map(([k, v]) => `${k}:${cityIdle(v.run)}`).join('|');
 export function ensureBus(cities = []) {
   const want = ['', ...cities.filter(Boolean)].filter(c => !(busKnown.get(c) && Date.now() - busKnown.get(c).at < NOTICE_FRESH));
   const asks = want.map(c => {
@@ -339,21 +424,64 @@ export function ensureBus(cities = []) {
         busNotices(c ? [c] : [])
           .then(list => {
             busKnown.set(c, { at: Date.now(), list: c ? list.filter(n => n.city === c) : list });
-            changed([...busKnown].map(([k, v]) => `${k}:${v.list.filter(n => n.stop).map(n => n.id).join(',')}`).join('|'));
+            changed(sigOf());
           })
           .finally(() => busAsking.delete(c))
       );
     }
     return busAsking.get(c);
   });
+  for (const c of cities) if (c) ensureRunning(c);
   return Promise.all(asks).then(() => [...busKnown.values()].flatMap(v => v.list));
 }
-// Whether what's known stops a route today: its notice, or null (a city not
-// known yet: asked for, null now).
-export function stoppedNow(uid, name, now = Date.now()) {
-  const city = CITY_CODES[/^[A-Z]{3}/.exec(uid || '')?.[0]] || '';
+export function ensureRunning(city) {
+  const k = runKnown.get(city);
+  if (k && Date.now() - k.at < RUN_FRESH) return Promise.resolve(k.run);
+  if (!runAsking.has(city)) {
+    runAsking.set(
+      city,
+      busesRunning(city)
+        .then(run => {
+          runKnown.set(city, { at: Date.now(), run });
+          changed(sigOf());
+          return run;
+        })
+        .catch(() => k?.run || null)
+        .finally(() => runAsking.delete(city))
+    );
+  }
+  return runAsking.get(city);
+}
+export const runningIn = city => runKnown.get(city)?.run || null;
+
+// A route's status now, from what's known: { effect, label, notice (or
+// null for `likely`), notices (all of today's about it) } or null. The
+// operator's word first; then, with nothing said, no bus on the road in a
+// city whose buses are all off it. `stopUID`: a stop's own notices too.
+export function routeStatus(uid, name, now = Date.now(), stopUID = '') {
+  const city = cityOfUid(uid) || '';
+  const runCity = city || 'InterCity';
   if (!busKnown.has('') || (city && !busKnown.has(city))) ensureBus([city]).catch(() => {});
-  return busOff([...(busKnown.get('')?.list || []), ...(busKnown.get(city)?.list || [])], uid, name, now);
+  if (!runKnown.has(runCity)) ensureRunning(runCity);
+  if (!city && home && !runKnown.has(home)) ensureRunning(home);
+  const ns = routeNotices([...(busKnown.get('')?.list || []), ...(busKnown.get(city)?.list || [])], uid, name, now, stopUID);
+  if (ns[0]?.effect === 'off') return { effect: 'off', label: effectLabel('off'), notice: ns[0], notices: ns };
+  const run = runningIn(runCity);
+  const n = run?.routes?.[uid];
+  // TDX's 今日未營運 at every one of its stops: the operator's system says it, so it's off.
+  if (n === -1) return { effect: 'off', label: effectLabel('off'), notice: null, why: 'tdx', notices: ns };
+  // None on the road while its city's are all off it (a 公路客運 route: while yours are).
+  const idle = city ? likelyOff(run, uid, now) : n === 0 && home && cityIdle(runningIn(home), now);
+  if (idle) return { effect: 'likely', label: effectLabel('likely'), notice: null, why: 'idle', notices: ns };
+  return ns.length ? { effect: ns[0].effect, label: effectLabel(ns[0].effect), notice: ns[0], notices: ns } : null;
+}
+// Where the phone is (TDX City): a 公路客運 route there is judged by its buses.
+let home = '';
+export const setHome = city => (home = city || '');
+// Not running today (the operator's word, or likely so): its status, else null.
+export function stoppedNow(uid, name, now = Date.now()) {
+  const s = routeStatus(uid, name, now);
+  return s && (s.effect === 'off' || s.effect === 'likely') ? s : null;
 }
 
 // ---- Everything for a place ---------------------------------------------------------------------
@@ -363,8 +491,8 @@ export function stoppedNow(uid, name, now = Date.now()) {
 // `kinds`: which to ask for ('tra', 'hsr', 'bus', 'metro'); `bikes`: the YouBike line, when they're all off.
 export async function loadNotices({ cities = [], systems = [], kinds = ['tra', 'hsr', 'bus', 'metro'], bikes = '' } = {}, now = Date.now()) {
   const want = k => kinds.includes(k);
-  const [tra, hsr, bus, metro] = await Promise.all([want('tra') ? traNotices() : null, want('hsr') ? hsrNotice() : null, want('bus') ? ensureBus(cities) : [], want('metro') ? metroNotices(systems) : []]);
-  return summarize({ tra, hsr, bus, metro, cities, bikes }, now);
+  const [tra, hsr, bus, metro, runs] = await Promise.all([want('tra') ? traNotices() : null, want('hsr') ? hsrNotice() : null, want('bus') ? ensureBus(cities) : [], want('metro') ? metroNotices(systems) : [], want('bus') ? Promise.all(cities.map(c => ensureRunning(c))) : []]);
+  return summarize({ tra, hsr, bus, metro, cities, bikes, running: Object.fromEntries(cities.map((c, i) => [c, runs[i]])) }, now);
 }
 // YouBike closed around you (TDX's ServiceStatus 0 at every station near, three at least): its line.
 export function bikesOff(stations) {
@@ -384,7 +512,7 @@ export function traSummary(rules, date) {
 }
 
 // The banners' rows: [{ kind, sys?, title, sum, lines: [text], stop }].
-export function summarize({ tra, hsr, bus, metro, bikes, cities = [] }, now = Date.now()) {
+export function summarize({ tra, hsr, bus, metro, bikes, cities = [], running = {} }, now = Date.now()) {
   const out = [];
   const today = tw(now).date;
   const traNow = (tra?.notes || []).filter(n => n.from <= now + 6 * 3600_000 && now <= n.to && n.days.some(d => !d || d === today));
@@ -392,16 +520,18 @@ export function summarize({ tra, hsr, bus, metro, bikes, cities = [] }, now = Da
   if (hsr) out.push({ kind: 'hsr', title: W('高鐵', 'HSR'), sum: hsr.title, lines: [hsr.text].filter(t => t && t !== hsr.title), stop: /停駛|停止/.test(hsr.title + hsr.text) });
   for (const m of metro || []) out.push({ kind: 'metro', sys: m.sys, title: METRO_NAMES[m.sys] || m.sys, sum: m.title, lines: [m.text].filter(t => t && t !== m.title), stop: m.stop });
   const here = new Set(cities);
-  // Today's bus notices from the cities you're in, and the 公路客運's that name them: stops, and typhoon changes.
-  const mine = liveNotices(bus || [], now).filter(n => (n.typhoon || n.stop) && (n.city ? here.has(n.city) : n.typhoon && [...n.cities].some(c => here.has(c))));
+  // Your cities' buses: none on the road (likely off), and today's notices from them and the 公路客運's naming them.
+  const idle = cities.filter(c => cityIdle(running?.[c], now));
+  const mine = liveNotices(bus || [], now).filter(n => (n.city ? here.has(n.city) : [...n.cities].some(c => here.has(c))) && (n.typhoon || (n.effect !== 'info' && (n.routes.size || n.names.size || n.stops.size))));
   const seen = new Set();
-  const uniq = mine.filter(n => !seen.has(n.title) && seen.add(n.title)).sort((a, b) => b.stop - a.stop);
-  if (uniq.length) {
-    const stops = uniq.filter(n => n.stop).length;
-    const sum = [stops ? W(`${stops} 則停駛公告`, `${stops} suspension notice${stops > 1 ? 's' : ''}`) : '', uniq.length > stops ? W(`${uniq.length - stops} 則班次調整`, `${uniq.length - stops} change${uniq.length - stops > 1 ? 's' : ''}`) : ''].filter(Boolean).join(W('・', ' · '));
-    out.push({ kind: 'bus', title: W('公車', 'Buses'), sum, lines: uniq.map(n => n.text), stop: stops > 0 });
+  const uniq = mine.filter(n => !seen.has(n.title) && seen.add(n.title)).sort((a, b) => EFFECTS.indexOf(a.effect) - EFFECTS.indexOf(b.effect));
+  if (uniq.length || idle.length) {
+    const offs = uniq.filter(n => n.stop).length;
+    const sum = [idle.length ? W(`${idle.map(cityName).join('、')}的公車幾乎都沒在路上`, `Almost no buses on the road in ${idle.map(cityName).join(', ')}`) : '', offs ? W(`${offs} 則停駛公告`, `${offs} suspension notice${offs > 1 ? 's' : ''}`) : '', uniq.length > offs ? W(`${uniq.length - offs} 則異動`, `${uniq.length - offs} change${uniq.length - offs > 1 ? 's' : ''}`) : ''].filter(Boolean).join(W('・', ' · '));
+    out.push({ kind: 'bus', title: W('公車', 'Buses'), sum, lines: [], said: uniq, stop: offs > 0 || idle.length > 0 });
   }
   if (bikes) out.push({ kind: 'bike', title: 'YouBike', sum: bikes, lines: [], stop: true });
   return out;
 }
+const cityName = c => cityShort(c);
 const METRO_NAMES = { TRTC: W('臺北捷運', 'Taipei Metro'), TRTCMG: W('貓空纜車', 'Maokong Gondola'), TYMC: W('桃園捷運', 'Taoyuan Metro'), TMRT: W('臺中捷運', 'Taichung Metro'), KRTC: W('高雄捷運', 'Kaohsiung Metro'), KLRT: W('高雄輕軌', 'Kaohsiung LRT') };

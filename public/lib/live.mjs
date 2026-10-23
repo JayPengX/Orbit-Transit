@@ -13,7 +13,7 @@ import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stopTimes, routeCity } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish, walkLeg } from './plan.mjs';
-import { stoppedNow, ensureBus } from './service.mjs';
+import { stoppedNow, ensureBus, routeStatus } from './service.mjs';
 import { meters, walkSec, zh, tw, twAt, addDays, etaAge, routeNorm, sameRoute, isRide, RAIL } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -199,8 +199,11 @@ export async function laterBuses(list, l, after, { now = Date.now(), stops = rou
   const route = { uid: r.RouteUID, name: zh(r.RouteName), city: routeCity(r.RouteUID) };
   const [ways, sched] = await Promise.all([stops(route, l.from).catch(() => []), schedule(route, l.from).catch(() => [])]);
   const way = l.to?.lat != null ? wayOf(ways, l.from, l.to) : null;
-  const live = liveTimes(list, name, now, { routeUID: r.RouteUID, ...(way ? { dir: way.w.dir } : {}) })
-    .times.map(t => t.at)
+  const lt = liveTimes(list, name, now, { routeUID: r.RouteUID, ...(way ? { dir: way.w.dir } : {}) });
+  // Not running today (TDX's 今日未營運, or its operator's notice): no timetable times either.
+  if (lt.off === 4 || (!lt.times.length && stoppedNow(r.RouteUID, route.name, now))) return [];
+  const live = lt.times
+    .map(t => t.at)
     .filter(t => t > after + MIN && (!way || liveTrusted(sched, way.w, way.i, t)));
   const out = [...live];
   if (way) for (const t of departuresAt(sched, way.w, way.i, after + MIN, n + 1)) if (out.length < n && !out.some(x => Math.abs(x - t) < 3 * MIN)) out.push(t);
@@ -228,6 +231,8 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
   let changed = false;
   let miss = '';
   let off = '';
+  // (Not running all day, not only its last bus gone: no plan at all, planner.mjs.)
+  let dead = false;
   let done = 0;
   // Both buses' stops asked at once (one ask a city, not one a bus, one after
   // the other); a second bus moved past the 90 minutes just isn't used.
@@ -263,6 +268,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     const bus = times.find(t => t.at >= ready - 30_000);
     if (!bus) {
       if (stopped) off = stopped === 3 ? W(`${l.short || l.name} 末班已過`, `${l.short || l.name}: last one gone`) : W(`${l.short || l.name} 今日未營運`, `${l.short || l.name}: not running today`);
+      if (stopped === 4) dead = true;
       continue;
     }
     legs[i].live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
@@ -286,19 +292,34 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
       for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + back, arr: legs[a].arr + back };
     }
   }
-  // A bus later today its operator says isn't running (a typhoon): the plan says so,
-  // unless that bus was seen on the road.
-  if (!off) {
-    const cities = legs.filter(l => l.mode === 'bus' && l.route?.uid).map(l => routeCity(l.route.uid));
-    if (cities.length) await ensureBus(cities).catch(() => {});
-    const l = legs.find(x => x.mode === 'bus' && x.route?.uid && !(x.live && !x.live.planned) && tw(x.dep).date === tw(now).date && stoppedNow(x.route.uid, x.short || x.name, now));
-    if (l) off = W(`${l.short || l.name} 今日停駛`, `${l.short || l.name}: off today`);
-  }
+  // A bus later today its operator says isn't running (a typhoon), or likely
+  // not (none on the road in its city): the plan says so, unless that bus was seen.
+  // (Anything else said about its buses, 改道, 減班: a note on the plan.)
+  if (!off && (off = await stoppedOn(legs, now))) dead = true;
   const out = changed ? finish({ ...plan, legs }) : { ...plan, legs };
   out.live = legs.some(l => l.live);
   if (miss) out.miss = miss;
   if (off) out.off = off;
+  if (dead) out.stopped = true;
+  const said = legs.filter(x => x.mode === 'bus' && x.route?.uid).map(x => [x, routeStatus(x.route.uid, x.short || x.name, now, x.route.stopUID)]).find(([, st]) => st && st.effect !== 'off' && st.effect !== 'likely');
+  if (said && !off) out.note = `${said[0].short || said[0].name} ${said[1].label}`;
   return out;
+}
+
+// A bus today on these legs its operator says isn't running (a typhoon), or
+// likely not (none on the road in its city), and not seen live: '5801 今日停駛'.
+// (Every plan is asked, not only the soon ones adjustPlan sees: the ranking drops them.)
+export async function stoppedOn(legs, now = Date.now()) {
+  // (Seen: the very bus boarded, a live estimate at its time; a later time copied from it is not.)
+  const seen = x => x.live && !x.live.planned && Math.abs(x.live.at - x.dep) < 3 * MIN;
+  const buses = legs.filter(x => x.mode === 'bus' && x.route?.uid && !seen(x) && tw(x.dep).date === tw(now).date);
+  if (!buses.length) return '';
+  await ensureBus(buses.map(l => routeCity(l.route.uid))).catch(() => {});
+  for (const x of buses) {
+    const st = stoppedNow(x.route.uid, x.short || x.name, now);
+    if (st) return `${x.short || x.name} ${st.label}`;
+  }
+  return '';
 }
 
 // ---- A direct bus between two places ---------------------------------------------------------

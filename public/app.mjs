@@ -18,6 +18,7 @@ import { useSession, config, townships, getPosition } from './lib/api.mjs';
 import { emptyData, encodeData, decodeData, mergeData } from './lib/store.mjs';
 import { cityAt } from './lib/city.mjs';
 import { warmRail } from './lib/raildata.mjs';
+import { setHome, onNotices } from './lib/service.mjs';
 import { startAlerts } from './lib/alerts.mjs';
 import { savedNav, useMapsApp } from './lib/nav.mjs';
 import * as mapTab from './lib/tab-map.mjs';
@@ -106,6 +107,9 @@ export const ctx = {
   onRefresh: [],
   refreshTabs: () => ctx.onRefresh.forEach(f => f())
 };
+// What's said about the buses and trains (service.mjs): the tabs drawn again when it changes.
+setHome(ctx.city);
+onNotices(() => ctx.refreshTabs());
 let locating = null;
 async function locateNow(force) {
   // (Always asked, never skipped by a note that it was asked before: the session's one watch, api.mjs, answers it.)
@@ -118,7 +122,7 @@ async function locateNow(force) {
   for (const fn of ctx.moved) fn(ctx.here);
   towns.then(t => {
     const c = t && cityAt(t, pos.lat, pos.lon);
-    if (c?.city) ctx.city = local.city = c.city;
+    if (c?.city) setHome((ctx.city = local.city = c.city));
     saveLocal();
   });
   return ctx.here;

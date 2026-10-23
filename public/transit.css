@@ -5029,3 +5029,51 @@ span.ot-pass {
 .ot-m-notice .ot-notices {
   margin: 12px 0 0;
 }
+/* What's said about a route today (bus-ui.mjs saidHtml): its two words, the notice's first line, the notice a tap away. */
+.ot-said {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+.ot-said-row {
+  border-radius: 12px;
+  background: var(--q-fill-4);
+}
+.ot-said-row > summary {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 12px;
+  list-style: none;
+  cursor: pointer;
+  font: 400 14px/20px var(--q-font);
+}
+.ot-said-row > summary::-webkit-details-marker {
+  display: none;
+}
+.ot-said-row > summary b {
+  flex: none;
+  color: var(--q-orange);
+  font-weight: 600;
+}
+.ot-said-row.off > summary b {
+  color: var(--q-red);
+}
+.ot-said-row > summary span {
+  min-width: 0;
+  color: var(--q-label-2);
+  text-wrap: pretty;
+}
+.ot-said-row > p {
+  margin: 0;
+  padding: 0 12px 10px;
+  color: var(--q-label-2);
+  font: 400 13px/19px var(--q-font);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+/* A bus not running today (今日停駛, 可能停駛): said in red. */
+.ot-strip-eta.stopped b,
+.ot-rs-eta.stopped {
+  color: var(--q-red);
+}

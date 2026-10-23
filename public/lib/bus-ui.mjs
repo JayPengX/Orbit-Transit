@@ -4,8 +4,8 @@
 // (常用, 上班, 回家…), managing the groups, and the stops around a point with
 // every bus due.
 
-import { emptyNote } from './look.mjs';
-import { routeStops, routeEta, routeEtaPath, etaText, etaOf, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
+import { emptyNote, saidRows } from './look.mjs';
+import { routeStops, routeEta, routeEtaPath, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
@@ -13,6 +13,7 @@ import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
 import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson } from './util.mjs';
 import { nextRun, liveTrusted } from './live.mjs';
+import { routeStatus, effectLabel } from './service.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';
@@ -133,9 +134,20 @@ export function fitStrips(box) {
   fitNumbers(all());
 }
 
+// What's said about a route today, each a row (look.mjs saidRows); 可能停駛 says why.
+export const saidHtml = said =>
+  said
+    ? `${said.why === 'idle' ? `<div class="ot-said"><details class="ot-said-row off"><summary><b>${effectLabel('likely')}</b><span>${W('路上沒有公車', 'No bus on the road')}</span></summary><p>${W('這一帶的公車現在幾乎都不在路上，這條也沒有；業者沒有公告，所以只說可能。', 'Almost no buses around here are on the road now, this one included. Its operator hasn’t said, so it’s only likely.')}</p></details></div>` : said.why === 'tdx' ? `<div class="ot-said"><details class="ot-said-row off"><summary><b>${effectLabel('off')}</b><span>${W('每一站都今日未營運', 'Not running at any stop today')}</span></summary><p>${W('公車動態系統說這條路線今天每一站都未營運。', 'The bus tracking system says this route isn’t running at any stop today.')}</p></details></div>` : ''}${said.notices.length ? saidRows(said.notices) : ''}`
+    : '';
+
 // What a stop's time says: the live time while a bus is on its way, else the
 // timetable's next there (`planned`: { at, day }, its day when not today's).
-export const busWhen = (v, planned) => (planned && !(v?.status === 0 && v.sec != null) ? { main: hm(planned.at), sub: planned.day ? dayLabel(tw(planned.at).date) : W('預計', 'planned'), tone: 'wait' } : etaText(v));
+// (Not running today, 今日停駛 or 可能停駛: that, never the timetable's next.)
+export function busWhen(v, planned) {
+  v = v && saidNow(v);
+  if (planned && !(v?.status === 0 && v.sec != null) && !(v?.status === 4 && v.flag)) return { main: hm(planned.at), sub: v?.flag ? v.flag.label : planned.day ? dayLabel(tw(planned.at).date) : W('預計', 'planned'), tone: 'wait' };
+  return etaText(v);
+}
 // The timetable's next bus at a stop with none on its way (`r`: routeUID,
 // route, city, dir, stopUID; `near`: where, for the route's pack): its stops
 // and times from the bus packs, no proxy read. → { at, day } or null.
@@ -269,7 +281,10 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   let offDay = 0;
   const draw = () => {
     const w = ways?.[way];
-    const off = w && sched?.length ? offNote(w) : '';
+    // What's said about it today (service.mjs): its status at the top, the notice a tap away.
+    const said = routeStatus(route.uid, route.name);
+    const stopped = said && (said.effect === 'off' || said.effect === 'likely');
+    const off = stopped ? '' : w && sched?.length ? offNote(w) : '';
     offDay = off ? planned(w, 0).day : 0;
     const keep = d.scrollTop;
     // Like a stop's sign: the route's number big, where it's going beside it;
@@ -303,7 +318,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
               const v = lives[k];
               let t = etaText(v);
               // No bus on its way to it (尚未發車, 末班已過 the other way…): the timetable's next.
-              const p = !v || v.status !== 0 || v.sec == null ? planned(w, k) : null;
+              const p = !stopped && (!v || v.status !== 0 || v.sec == null) ? planned(w, k) : null;
+              // (Said once at the top: each stop only a dash.)
+              if (stopped && !(v?.status === 0 && v.sec != null)) t = { main: '—', sub: '', tone: 'off' };
               // (Another day's said once above the stops, when it's every stop's.)
               // (Said once above the stops that it's the timetable; another day's only when it's this stop's own.)
               if (p) t = { main: hm(p.at), sub: p.day && p.day !== offDay ? dayName(p.day) : '', tone: 'wait' };
@@ -318,7 +335,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
             .join('')}</ol>`;
     const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(boarding.name)} 上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
     const dirLeft = d.querySelector('.ot-dir-chips')?.scrollLeft || 0;
-    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${saidHtml(said)}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
     // (The row of ways where it was; the one chosen in sight.)
     const row = d.querySelector('.ot-dir-chips');
     if (row) {

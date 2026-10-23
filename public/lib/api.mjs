@@ -193,6 +193,8 @@ export const rows = j => (Array.isArray(j) ? j : j && typeof j === 'object' ? Ob
 // ---- The rest of the proxy -------------------------------------------------------------------
 
 export const config = () => get('/transit/config');
+// Which of a city's bus routes have a bus on the road now: { at, routes: { RouteUID: n } } (transit.js running).
+export const busesRunning = city => get(`/transit/running?city=${encodeURIComponent(city)}`);
 export const searchPlaces = (q, { lat, lon, session: s } = {}, opts) => get(`/transit/search?q=${encodeURIComponent(q)}${lat != null ? `&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}` : ''}${s ? `&s=${s}` : ''}`, opts);
 export const placeDetails = (id, { name = false, session: s } = {}) => get(`/transit/place?id=${encodeURIComponent(id)}${name ? '&name=1' : ''}${s ? `&s=${s}` : ''}`);
 // (`src`: one planner's alone, google or tdx: Google's come in a tenth of a second, TDX's in seconds.)
@@ -287,7 +289,9 @@ export function watchPosition(fn, nav = globalThis.navigator) {
 
 // What went wrong, said plainly: the network here, the data source there, or busy.
 export const errorText = err =>
-  err?.code === 'OFFLINE'
+  err?.code === 'STOPPED'
+    ? W(`這段路的車今日停駛或路上沒車：${err.said}`, `Not running today (or none on the road): ${err.said}`)
+    : err?.code === 'OFFLINE'
     ? W('沒有網路連線，連上後會自動更新。', 'Offline. It updates once you’re back.')
     : err?.code === 'TDX_BUSY' || err?.status === 429
       ? W('查詢的人有點多，稍後自動再試。', 'Busy right now. Retrying shortly.')
