@@ -63,4 +63,6 @@ export const noticesHtml = items =>
     : '';
 // Notices as rows: their two words and first line, the whole notice a tap away.
 const firstLine = t => String(t || '').split('\n').find(x => x.trim()) || '';
-export const saidRows = list => `<div class="ot-said">${list.map(n => `<details class="ot-said-row${n.effect === 'off' || n.effect === 'part' ? ' off' : ''}"><summary><b>${e(effectLabel(n.effect))}</b><span>${e(firstLine(n.title))}</span></summary><p>${e(n.text)}</p></details>`).join('')}</div>`;
+// (The same words twice, as an operator's Alert and its News: once.)
+const sameSaid = list => list.filter((n, i) => list.findIndex(m => (m.text || m.title) === (n.text || n.title)) === i);
+export const saidRows = list => `<div class="ot-said">${sameSaid(list).map(n => `<details class="ot-said-row${n.effect === 'off' || n.effect === 'part' ? ' off' : ''}"><summary><b>${e(effectLabel(n.effect))}</b><span>${e(firstLine(n.title))}</span></summary><p>${e(n.text)}</p></details>`).join('')}</div>`;
