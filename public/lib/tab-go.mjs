@@ -752,7 +752,7 @@ function render() {
     ${pinnedHtml(lead.key)}
     ${nearHtml(lead.key)}
   </div>`;
-  kitUI.wireNavTitles(box, { scroller: box });
+  kitUI.wireNavTitles(box);
   fitStrips(box);
   box.scrollTop = keep;
   const rail = box.querySelector('.ot-places');
