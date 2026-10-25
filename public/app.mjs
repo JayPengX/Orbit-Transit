@@ -164,7 +164,7 @@ $('panel-map')?.setAttribute('data-no-ptr', '');
 // A large title at the top of each tab but the first (the kit's navTitle, in the panel that scrolls).
 for (const [id, title, before] of [['times', W('查時刻', 'Times'), '.ot-page'], ['me', W('我的', 'Me'), '#me-main']]) {
   const panel = $(`panel-${id}`);
-  if (panel) panel.insertBefore(kitUI.navTitle(title, { scroller: panel }), panel.querySelector(before));
+  if (panel) panel.insertBefore(kitUI.navTitle(title), panel.querySelector(before));
 }
 
 async function boot() {
