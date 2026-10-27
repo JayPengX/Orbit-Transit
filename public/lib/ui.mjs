@@ -193,12 +193,12 @@ export function fitLegs(box) {
   const run = () => {
     fitRows(box.querySelectorAll('.ot-legs, .ot-jny-legs'));
     for (const card of box.querySelectorAll('.ot-fit-group')) fitRows(card.querySelectorAll('.ot-fit-row'), { group: true });
-    // A plan's top line: its times whole before a second tag (「最快抵達」 dropped, never "09:…").
+    // A plan's top line: its times whole before any tag (「最少轉乘」 dropped, never "09:…").
     for (const top of box.querySelectorAll('.ot-plan-top')) {
       const time = top.querySelector('.ot-plan-time');
       const tags = [...top.querySelectorAll('.ot-tag')];
       for (const x of tags) x.style.display = '';
-      while (time && time.scrollWidth > time.clientWidth + 1 && tags.length > 1) tags.pop().style.display = 'none';
+      while (time && time.scrollWidth > time.clientWidth + 1 && tags.length) tags.pop().style.display = 'none';
     }
   };
   run();
