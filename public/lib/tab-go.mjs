@@ -605,12 +605,13 @@ function pinnedHtml(skip) {
   return section(W('釘選', 'Pinned'), rowCard(buses + trains));
 }
 
-// Your places, a row of cards to scroll (as Law's starters): a tap opens what's around it.
+// Your places, a row of cards to scroll (as Law's starters): a tap opens what's around it. Each card
+// its tile beside its name (the owner, 2026-10-27: one place alone, stacked, was a big empty card).
 function placesRail() {
   const here = ctx.here;
   const list = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
   if (!list.length) return '';
-  return `<div class="q-rail small ot-places">${list.map(p => `<button class="q-rail-card q-press ot-place" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place)}<strong>${e(nameIn(p.name))}</strong>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`).join('')}</div>`;
+  return `<div class="q-rail small ot-places">${list.map(p => `<button class="q-rail-card q-press ot-place" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place)}<span class="ot-place-text"><strong>${e(nameIn(p.name))}</strong>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</span></button>`).join('')}</div>`;
 }
 
 // YouBike stations as a small rail: the bikes there now, big.

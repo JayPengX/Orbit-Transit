@@ -3401,31 +3401,36 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
 
 /* ==== 6. 交通 ==================================================================================== */
 
-/* Your places: a rail of small cards under the hero, an emoji each. */
+/* Your places: a rail of small cards under the hero, the tile beside the name and how far. */
 .ot-places {
+  --q-rail-w: 152px;
   margin-top: 16px;
 }
 .ot-place {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
   border: 0;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.ot-place {
-  gap: 4px;
-}
-.ot-place .q-tile {
-  margin-bottom: 6px;
+.ot-place-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 .ot-place strong {
   overflow: hidden;
-  font: 600 16px/21px var(--q-font);
+  font: 500 16px/21px var(--q-font);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .ot-place small {
   color: var(--q-label-2);
-  font: 500 13px/17px var(--q-font);
+  font: var(--q-t-footnote);
+  font-variant-numeric: tabular-nums;
 }
 .ot-bikes,
 .q-rowcard.ot-near-bikes {
