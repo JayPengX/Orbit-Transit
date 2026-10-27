@@ -3,11 +3,13 @@
 // are kept here too: in memory, and what lasts (stations, routes, a day's
 // timetable) in this device's cache, so a second look costs nothing.
 
+import * as kit from '#kit/orbit.mjs';
 import { dev } from '#kit/orbit.mjs';
 import { WALK_M_MIN, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
-const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev';
+// (api.<domain> on the family's own domain: the kit's API, kit/domain.mjs.)
+const PROXY = kit.API || 'https://orbit-workers-proxy.pengzjay.workers.dev';
 const DATA_CACHE = 'orbit-transit-data';
 
 let session = null;
