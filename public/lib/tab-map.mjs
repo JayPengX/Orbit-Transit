@@ -737,7 +737,7 @@ function renderCard() {
   } else if (c.kind === 'tra') {
     const s = c.item;
     const list = Array.isArray(c.live) ? c.live.filter(r => r.sched == null || r.sched + r.delay * 60_000 > Date.now() - 60_000).slice(0, 10) : null;
-    html = `${head(W(`${s.name}車站`, `${s.name} Station`), W('台鐵', 'TRA'), 'tra')}${err}
+    html = `${head(W(`${s.name}車站`, `${s.en || shown(s.name)} Station`), W('台鐵', 'TRA'), 'tra')}${err}
       <div class="ot-board">${
         list
           ? list.map(r => `<div class="ot-board-row"><span class="ot-time">${e(hm(r.sched))}</span><span class="ot-train"><b>${e(trainKind(r.type))} ${e(r.no)}</b><small>${W('往', 'to')} ${e(shown(r.dest))}${r.platform ? W(` · 第 ${e(r.platform)} 月台`, ` · platform ${e(r.platform)}`) : ''}</small></span><span class="ot-delay ${r.status === 2 ? 'bad' : r.delay ? 'warn' : 'ok'}">${r.status === 2 ? W('取消', 'Cancelled') : r.delay ? W(`晚 ${r.delay} 分`, `${r.delay} min late`) : W('準點', 'On time')}</span></div>`).join('') || `<p class="ot-note">${W('接下來一小時沒有列車。', 'No trains in the next hour.')}</p>`
@@ -1269,7 +1269,7 @@ async function localMatches(t) {
       .sort((a, b) => b.exact - a.exact || a.d - b.d)
       .map(x => ({ ...x.s, dist: c ? x.d : null }))
       .slice(0, 6)
-      .map(s => ({ kind: s.sys, key: s.key, id: s.id, op: s.op, name: s.sys === 'hsr' ? W(`高鐵${s.name}站`, `HSR ${s.name}`) : s.sys === 'tra' ? W(`${s.name}車站`, `${s.name} Station`) : stationTitle(s.name), sub: s.sys === 'metro' ? OPERATORS[s.op] : s.sys === 'hsr' ? W('台灣高鐵', 'HSR') : W('台鐵', 'TRA'), lat: s.lat, lon: s.lon, dist: s.dist }));
+      .map(s => ({ kind: s.sys, key: s.key, id: s.id, op: s.op, name: s.sys === 'hsr' ? W(`高鐵${s.name}站`, `HSR ${s.en || shown(s.name)}`) : s.sys === 'tra' ? W(`${s.name}車站`, `${s.en || shown(s.name)} Station`) : stationTitle(s.name), sub: s.sys === 'metro' ? OPERATORS[s.op] : s.sys === 'hsr' ? W('台灣高鐵', 'HSR') : W('台鐵', 'TRA'), lat: s.lat, lon: s.lon, dist: s.dist }));
   }
   return [...places, ...trips, ...stations].slice(0, 12);
 }

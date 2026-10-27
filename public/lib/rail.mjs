@@ -11,7 +11,7 @@
 // again from just after each first departure so that every option is the
 // latest way to leave for its arrival.
 
-import { meters, twAt, zh, WALK_M_MIN } from './util.mjs';
+import { meters, twAt, zh, WALK_M_MIN, cleanEn } from './util.mjs';
 import { cityFromAddress } from './city.mjs';
 
 const TRAIN_TYPES = { 1: '太魯閣', 2: '普悠瑪', 3: '自強', 4: '莒光', 5: '復興', 6: '區間', 7: '普快', 10: '區間快', 11: '自強' };
@@ -28,7 +28,7 @@ export function traStations(j) {
       sys: 'tra',
       id: s.StationID,
       name: zh(s.StationName),
-      en: s.StationName?.En || '',
+      en: cleanEn(s.StationName?.En),
       lat: Number(s.StationPosition?.PositionLat),
       lon: Number(s.StationPosition?.PositionLon),
       cls: String(s.StationClass ?? ''),
@@ -44,7 +44,7 @@ export function hsrStations(list) {
     sys: 'hsr',
     id: s.StationID,
     name: zh(s.StationName),
-    en: s.StationName?.En || '',
+    en: cleanEn(s.StationName?.En),
     lat: Number(s.StationPosition?.PositionLat),
     lon: Number(s.StationPosition?.PositionLon),
     cls: '0',

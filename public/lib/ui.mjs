@@ -83,7 +83,7 @@ export const MODE_NAME = en
 const TAG_EN = { 推薦: 'Best', 最快抵達: 'Fastest', 最少轉乘: 'Fewest changes', 最少步行: 'Least walking', 電輔車: 'E-bike', 即時: 'Live', 最早抵達: 'Earliest', 車程最短: 'Shortest', 直達: 'Direct', '全程 YouBike': 'All YouBike', 騎車: 'Ride', 步行: 'Walk' };
 export const tagText = t => (en ? TAG_EN[t] || t : t);
 // TRA's train kinds in English (their own names, as on the board).
-const TRAIN_EN = [[/區間快/, 'Fast Local'], [/區間/, 'Local'], [/自強/, 'Tze‑Chiang'], [/莒光/, 'Chu‑Kuang'], [/復興/, 'Fu‑Hsing'], [/普悠瑪/, 'Puyuma'], [/太魯閣/, 'Taroko'], [/新自強|EMU3000/, 'EMU3000'], [/觀光|鳴日/, 'Tourist'], [/普快/, 'Ordinary']];
+const TRAIN_EN = [[/區間快/, 'Fast Local'], [/區間/, 'Local'], [/自強/, 'Tze‑Chiang'], [/莒光/, 'Chu‑Kuang'], [/復興/, 'Fu‑Hsing'], [/普悠瑪/, 'Puyuma'], [/太魯閣/, 'Taroko'], [/新自強|EMU3000/, 'EMU3000'], [/觀光|鳴日/, 'Tourist'], [/普快/, 'Ordinary'], [/高鐵/, 'HSR']];
 export const trainKind = s => {
   const t = String(s || '');
   const hit = en && TRAIN_EN.find(([re]) => re.test(t));
