@@ -84,8 +84,19 @@ function lineStations(ix, name) {
 
 // The day a notice is about: 「今(23)日」 or 「10/23」 or 「10月23日」, else
 // every day it's up.
+// (Each notice's day worked out once: the map's every redraw asks it of every
+// notice, and its date sums held the phone 0.7 s when 交通 opened.)
+const noticeDays = new Map();
 function noticeDay(text, start) {
-  const s = tw(start || Date.now()).date;
+  if (!start) return noticeDayOf(text, tw().date);
+  const key = `${start}|${text}`;
+  if (noticeDays.has(key)) return noticeDays.get(key);
+  if (noticeDays.size > 500) noticeDays.clear();
+  const d = noticeDayOf(text, tw(start).date);
+  noticeDays.set(key, d);
+  return d;
+}
+function noticeDayOf(text, s) {
   const m = /今\s*[（(]\s*(\d{1,2})\s*[)）]\s*日/.exec(text) || /\d{1,2}\s*[月/]\s*(\d{1,2})\s*日?/.exec(text);
   if (!m) return null;
   const day = Number(m[1]);
