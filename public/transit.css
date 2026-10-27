@@ -1368,7 +1368,11 @@ body.tab-map {
 .ot-mk > * {
   pointer-events: auto;
 }
-/* YouBike: a yellow pill with its bike and the bikes there (⚡ the 電輔車), a point under it. */
+/* YouBike (Shared-Proxy docs/DESIGN.md §7): the stations that matter a
+   white pill, a yellow edge and bike, the bikes there in dark type, a point
+   under it; few bikes in orange type; none grey. The rest (.dot) a small
+   yellow dot ringed in white, a 28px target round it. A trip's own station
+   is the one filled yellow (.plan). */
 .ot-mk.bike {
   display: flex;
   align-items: center;
@@ -1376,24 +1380,20 @@ body.tab-map {
   height: 24px;
   margin: -12px 0 0 -16px;
   padding: 0 8px 0 5px;
-  border: 2px solid #fff;
+  border: 1.5px solid var(--ot-bike);
   border-radius: 12px;
-  background: var(--ot-bike);
-  color: #1a1300;
-  font: 800 12px/1 var(--q-font);
+  background: #fff;
+  color: #1c1c1e;
+  font: 700 13px/1 var(--q-font-rounded);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 0.4);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
 }
 .ot-mk.bike .ot-i {
   width: 14px;
   height: 14px;
   stroke-width: 2.4;
-}
-.ot-mk.bike i {
-  font-size: 10.5px;
-  font-style: normal;
-  font-weight: 700;
-  opacity: 0.85;
+  color: #b07d00;
 }
 .ot-mk.bike::after {
   content: '';
@@ -1401,19 +1401,86 @@ body.tab-map {
   bottom: -6px;
   left: 12px;
   border: 5px solid transparent;
-  border-top-color: #fff;
+  border-top-color: var(--ot-bike);
   border-bottom: 0;
 }
-.ot-mk.bike.few {
-  background: #f59e0b;
+.ot-mk.bike.few b {
+  color: #c25e00;
 }
-.ot-mk.bike.none {
-  background: #6b7280;
-  color: #f3f4f6;
+.ot-mk.bike:is(.none, .off) {
+  border-color: #aeaeb2;
+  color: #8e8e93;
 }
-.ot-mk.bike.off {
-  background: #374151;
-  color: #9ca3af;
+.ot-mk.bike:is(.none, .off) .ot-i {
+  color: #8e8e93;
+}
+.ot-mk.bike:is(.none, .off)::after {
+  border-top-color: #aeaeb2;
+}
+.ot-mk.bike.plan {
+  border-color: #fff;
+  background: var(--ot-bike);
+  color: #1a1300;
+}
+.ot-mk.bike.plan .ot-i {
+  color: inherit;
+}
+.ot-mk.bike.plan::after {
+  border-top-color: #fff;
+}
+.ot-mk.bike.dot {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.ot-mk.bike.dot::after {
+  content: none;
+}
+.ot-mk.bike.dot i {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--ot-bike);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+.ot-mk.bike.dot:is(.none, .off) i {
+  background: #aeaeb2;
+}
+/* Dark: the pill a dark glass, never a white plate; the dot ringed dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ot-mk.bike:not(.plan, .dot) {
+    background: #2c2c2e;
+    color: #fff;
+  }
+  :root:not([data-theme='light']) .ot-mk.bike:not(.plan, .dot) .ot-i {
+    color: var(--ot-bike);
+  }
+  :root:not([data-theme='light']) .ot-mk.bike.few:not(.plan) b {
+    color: #ffb340;
+  }
+  :root:not([data-theme='light']) .ot-mk.bike.dot i {
+    border-color: #1c1c1e;
+  }
+}
+:root[data-theme='dark'] .ot-mk.bike:not(.plan, .dot) {
+  background: #2c2c2e;
+  color: #fff;
+}
+:root[data-theme='dark'] .ot-mk.bike:not(.plan, .dot) .ot-i {
+  color: var(--ot-bike);
+}
+:root[data-theme='dark'] .ot-mk.bike.few:not(.plan) b {
+  color: #ffb340;
+}
+:root[data-theme='dark'] .ot-mk.bike.dot i {
+  border-color: #1c1c1e;
 }
 /* On a ride, in the map's own view: the station's bike alone, a round badge. */
 .ot-mk.bike.bare {
