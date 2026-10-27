@@ -26,7 +26,7 @@ import { canNav, lateBy } from './nav.mjs';
 import { loadNotices, bikesOff, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { sheet, sheetHead, icon, legChips, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
+import { sheet, sheetHead, icon, legChips, fitLegs, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
 import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, hero, navTitle, noticesHtml } from './look.mjs';
 import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
@@ -522,10 +522,10 @@ export function tripPlans(plans, picks = [], now = Date.now()) {
 }
 
 // A plan's facts as tags: when it's there, how long, its changes, live.
+// (Its changes are its chips; on a narrow row the minutes go short, then go: fitLegs.)
 const planTags = p => [
   tag(W(`${hm(p.arr)} 到`, `arr ${hm(p.arr)}`)),
-  tag(minsText(p.dur)),
-  p.transfers ? tag(W(`轉乘 ${p.transfers}`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`)) : '',
+  `<span class="q-tag dur"><span class="long">${e(minsText(p.dur))}</span><span class="short">${e(W(`${Math.round(p.dur / 60)} 分`, `${Math.round(p.dur / 60)} min`))}</span></span>`,
   p.live ? tag(W('即時', 'Live'), 'green') : ''
 ].join('');
 const planWarn = p => (p.miss || p.off || p.late || lateBy(p, p.arr) || p.note || p.rivers?.length ? `<small class="ot-warn">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? W(`晚 ${lateBy(p, p.arr)} 分到`, `${lateBy(p, p.arr)} min late`) : '') || p.note || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')}`))}</small>` : '');
@@ -551,7 +551,7 @@ function tripCard({ t, w }) {
     const pin = t.picks.includes(pickSig(p));
     const times = (lead.times || []).filter(j => all[j] && all[j].dep >= Date.now() - 2 * 60_000);
     const deps = depChips(all, times, i, j => `data-go-dep="${e(w.id)}" data-lead="${at}" data-i="${j}"`);
-    return `<div class="ot-ride"><button class="ot-ride-main" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ot-ride-top"><span class="ot-ride-when">${countHtml(p.dep, { cls: 'ot-ride-n' })}${whenSmall(p.dep) ? `<small>${e(whenSmall(p.dep))}</small>` : ''}</span><span class="q-tags">${planTags(p)}</span></span><span class="ot-legs">${legChips(p.legs)}</span>${planWarn(p)}</button><button class="q-icon-btn ot-star${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? W('取消釘選這個方案', 'Unpin this route') : W('釘選這個方案', 'Pin this route')}">${icon('star')}</button>${deps}</div>`;
+    return `<div class="ot-ride"><button class="ot-ride-main" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ot-ride-top"><span class="ot-ride-when">${countHtml(p.dep, { cls: 'ot-ride-n' })}${whenSmall(p.dep) ? `<small>${e(whenSmall(p.dep))}</small>` : ''}</span><span class="q-tags ot-fit-row">${planTags(p)}</span></span><span class="ot-legs">${legChips(p.legs)}</span>${planWarn(p)}</button><button class="q-icon-btn ot-star${pin ? ' on' : ''}" type="button" data-pick-trip="${e(w.id)}" data-i="${i}" aria-label="${pin ? W('取消釘選這個方案', 'Unpin this route') : W('釘選這個方案', 'Pin this route')}">${icon('star')}</button>${deps}</div>`;
   };
   const behind = w.by === 'arrive' && w.at && first.length && first.every(p => lateBy(p, p.arr)) ? `<p class="ot-trip-note ot-warn">${W(`${e(hm(w.at))} 前到不了`, `Can’t make ${e(hm(w.at))}`)}</p>` : '';
   const more = S.more.has(w.id);
@@ -754,6 +754,7 @@ function render() {
   </div>`;
   kitUI.wireNavTitles(box);
   fitStrips(box);
+  fitLegs(box);
   box.scrollTop = keep;
   const rail = box.querySelector('.ot-places');
   if (rail) rail.scrollLeft = railX;

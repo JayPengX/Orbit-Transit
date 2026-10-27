@@ -17,7 +17,7 @@ import { tripNow, keptLead, pinnedTrainsNext, rideNow } from './tab-go.mjs';
 import { stopsEta } from './bus.mjs';
 import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, fitStrips } from './bus-ui.mjs';
-import { stationLabel, icon, legChips } from './ui.mjs';
+import { stationLabel, icon, legChips, fitLegs } from './ui.mjs';
 import { COLOR, tile, tag, countHtml, tick, hero } from './look.mjs';
 import { tripKey } from './store.mjs';
 import { e, hm, distText, meters } from './util.mjs';
@@ -196,6 +196,7 @@ export function createHome(box, ctx, act) {
     box.querySelectorAll('.q-rail').forEach((r, i) => (r.scrollLeft = rails[i] || 0));
     kitUI.wireLogos(box);
     fitStrips(box);
+    fitLegs(box);
   }
 
   // ---- reading (what 交通 reads too; the kept copies first) ----

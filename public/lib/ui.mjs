@@ -93,6 +93,15 @@ export const trainKind = s => {
 // One piece on a narrow row: never broken at its hyphen (Tze‑Chiang, a
 // non-breaking one) nor between kind and number (a no-break space).
 export const trainName = t => (t.sys === 'hsr' ? W(`高鐵 ${t.no}`, `HSR ${t.no}`) : `${trainKind(t.type)} ${t.no}`);
+// A train's colour by its kind, the same on every card, chip and step:
+// 自強 (太魯閣, 普悠瑪, EMU3000) red, 莒光 amber, 復興・普快 purple, 區間快 teal,
+// 區間 sky, 高鐵 orange. `t`: { sys, code, type } (a code or a name is enough).
+const CODE_COLOR = { 1: '#dc2626', 2: '#dc2626', 3: '#dc2626', 11: '#dc2626', 4: '#d97706', 5: '#7c3aed', 7: '#7c3aed', 10: '#0d9488', 6: '#0ea5e9' };
+const KIND_COLOR = [[/太魯閣|普悠瑪|自強|3000/, '#dc2626'], [/莒光/, '#d97706'], [/復興|普快/, '#7c3aed'], [/區間快/, '#0d9488'], [/區間/, '#0ea5e9']];
+export function trainColor(t = {}) {
+  if (t.sys === 'hsr' || t.code === 'hsr') return '#f97316';
+  return CODE_COLOR[t.code] || KIND_COLOR.find(([re]) => re.test(String(t.type || t.typeFull || '')))?.[1] || '#0ea5e9';
+}
 const MODE_COLOR = { walk: '#8a92a3', bike: '#f5b301', bus: '#22c55e', metro: '#3b82f6', lightrail: '#14b8a6', tra: '#0ea5e9', hsr: '#f97316', ferry: '#06b6d4', gondola: '#84cc16', car: '#eab308', plane: '#a78bfa', rail: '#0ea5e9' };
 // The text on a colour: white, or near-black on a light one (環狀線's yellow).
 export function inkOn(hex) {
@@ -102,7 +111,7 @@ export function inkOn(hex) {
   return 0.299 * r + 0.587 * g + 0.114 * b > 0.72 ? '#1c1c1e' : '#fff';
 }
 // (A metro ride the planner sent without a colour: its line's own, 板南線 blue, 淡水信義線 red.)
-export const legColor = l => (l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : ((l.mode === 'metro' || l.mode === 'lightrail') && metroColor(`${l.short || ''} ${l.name || ''}`)) || MODE_COLOR[l.mode] || '#94a3b8');
+export const legColor = l => (l.mode === 'hsr' || (l.mode === 'tra' && (l.train?.code || l.train?.type)) ? trainColor({ sys: l.mode, ...l.train }) : l.color && /^#?[0-9a-f]{6}$/i.test(l.color.replace('#', '')) ? (l.color.startsWith('#') ? l.color : `#${l.color}`) : ((l.mode === 'metro' || l.mode === 'lightrail') && metroColor(`${l.short || ''} ${l.name || ''}`)) || MODE_COLOR[l.mode] || '#94a3b8');
 
 // What a leg is called on its chip: 「區間車」「板南線」「182」「YouBike」.
 export function legLabel(l) {
@@ -151,9 +160,47 @@ export function legChips(legs) {
       const mins = `${Math.max(1, Math.round((l.dur || 0) / 60))}′`;
       if (l.mode === 'walk') return `<span class="ot-leg walk" aria-label="${W('步行', 'Walk')} ${mins}">${icon('walk')}${mins}</span>`;
       if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${mins}">${icon(l.ebike ? 'bolt' : 'bike')}<b>${mins}</b></span>`;
-      return `<span class="ot-leg" style="--c:${e(c)};--ink:${inkOn(c)}">${icon(l.mode)}<b>${e(legLabel(l))}</b></span>`;
+      // A train: its kind and number apart (a narrow row keeps the number, the colour says the kind).
+      const label = l.mode === 'hsr' && l.train?.no ? `${MODE_NAME.hsr} ${l.train.no}` : legLabel(l);
+      const [, kind, no] = (l.mode === 'tra' || l.mode === 'hsr') && /^(.*\S)\s+(\d{1,4}[A-Z]?)$/.exec(label) || [];
+      return `<span class="ot-leg" style="--c:${e(c)};--ink:${inkOn(c)}">${icon(l.mode)}<b>${no ? `<span class="k">${e(kind)} </span>${e(no)}` : e(label)}</b></span>`;
     })
     .join('<span class="ot-leg-sep">›</span>');
+}
+
+// One line, never two (Jay 2026-10-27: a trip on two rows is hard to read):
+// each row is drawn tighter, a step at a time, until it fits its width
+// (.f1 tighter chips, .f2 a train's number only, .f3 no walks, .f4 smaller,
+// .f5 a ride's colour and number without its icon);
+// `group`: rows that take the same step (a card's time lines alike).
+const FIT_STEPS = ['f1', 'f2', 'f3', 'f4', 'f5'];
+const overflows = el => el.scrollWidth > el.clientWidth + 1;
+export function fitRows(rows, { group = false } = {}) {
+  rows = [...rows].filter(r => r.isConnected && r.clientWidth);
+  for (const r of rows) r.classList.remove(...FIT_STEPS);
+  let need = 0;
+  for (const r of rows) {
+    let k = 0;
+    while (k < FIT_STEPS.length && overflows(r)) r.classList.add(FIT_STEPS[k++]);
+    need = Math.max(need, k);
+  }
+  if (group) for (const r of rows) r.classList.add(...FIT_STEPS.slice(0, need));
+}
+// Every row in `box` fitted, now and when its width changes (a phone turned, a font loaded).
+const fitted = new WeakSet();
+export function fitLegs(box) {
+  if (!box) return;
+  const run = () => {
+    fitRows(box.querySelectorAll('.ot-legs, .ot-jny-legs'));
+    for (const card of box.querySelectorAll('.ot-fit-group')) fitRows(card.querySelectorAll('.ot-fit-row'), { group: true });
+  };
+  run();
+  document.fonts?.ready?.then(run);
+  if (!fitted.has(box) && typeof ResizeObserver !== 'undefined') {
+    fitted.add(box);
+    let w = box.clientWidth;
+    new ResizeObserver(() => box.clientWidth !== w && ((w = box.clientWidth), run())).observe(box);
+  }
 }
 
 export const timeRange = (dep, arr) => `${hm(dep)} – ${hm(arr)}`;
