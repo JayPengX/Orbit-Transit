@@ -16,9 +16,9 @@
 Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planned the way people really travel. Part of **Orbit**, a family of phone apps for life in Taiwan that share one sign-in, the Orbit Pass. See them all at [jaypengx.com](https://jaypengx.com/).
 
 <p align="center">
-  <img src="docs/screenshots/transit-1.webp" width="240" alt="The map">
-  <img src="docs/screenshots/transit-2.webp" width="240" alt="Train times">
-  <img src="docs/screenshots/transit-3.webp" width="240" alt="A metro map">
+  <img src="docs/screenshots/transit-1.webp" width="30%" alt="The map">
+  <img src="docs/screenshots/transit-2.webp" width="30%" alt="Train times">
+  <img src="docs/screenshots/transit-3.webp" width="30%" alt="A metro map">
 </p>
 
 ## Features
