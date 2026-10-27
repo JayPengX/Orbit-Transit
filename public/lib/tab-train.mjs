@@ -109,6 +109,9 @@ function render() {
   const today = tw().date;
   const date = state.date || today;
   const recent = ctx.data.trains.filter(x => trainKey(x) !== (state.from && state.to ? trainKey({ from: state.from, to: state.to }) : '')).slice(0, 4);
+  // 全部 / 台鐵 / 高鐵 kept across a redraw (the owner, 2026-10-27: it switched with no slide): a tap
+  // redraws the page twice (the search's loading, then its trains), and a control drawn anew lands.
+  const seg = $('panel-train').querySelector('.ot-tq-sys');
   $('panel-train').innerHTML = `
     <div class="ot-tq-days"></div>
     <section class="ot-tq">
@@ -119,6 +122,10 @@ function render() {
     <div id="t-results">${resultsHtml()}</div>
     ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
   $('panel-train').querySelector('.ot-tq-days').replaceWith(kitUI.dayBar(dayRec, { days: trainDays(), current: date, today, follow: true, onPick: pickDay }));
+  if (seg) {
+    $('panel-train').querySelector('.ot-tq-sys').replaceWith(seg);
+    for (const b of seg.children) b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode));
+  }
   drawn();
 }
 // After the trains are drawn: their chips on one line, the next train's countdown kept true.
