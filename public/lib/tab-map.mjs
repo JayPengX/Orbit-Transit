@@ -380,10 +380,19 @@ async function drawLayersNow() {
     map.layer('bike').set([]);
     return;
   }
-  // YouBike: the city's stations, the 200 nearest the middle.
+  // YouBike: the city's stations, the 200 nearest the middle. Weighed by
+  // what matters (Shared-Proxy docs/DESIGN.md §7): the few nearest you (the
+  // middle when you're off the map) and every one at street level show their
+  // bikes; the rest are quiet dots, still there and still tappable.
   if (L.bike && z >= 15 && city) {
     jobs.push(cityBikes(city)
-      .then(list => run === drawing && map.layer('bike').set(closest(list.filter(s => inView(b, s)), c, 200).map(bikeMarker)))
+      .then(list => {
+        if (run !== drawing) return;
+        const shown = closest(list.filter(s => inView(b, s)), c, 200);
+        const me = ctx.here && inView(b, ctx.here) ? ctx.here : c;
+        const near = new Set(z >= BIKE_COUNTS_ZOOM ? shown.map(s => s.uid) : closest(shown, me, BIKE_COUNTS_NEAR).map(s => s.uid));
+        map.layer('bike').set(shown.map(s => bikeMarker(s, !near.has(s.uid))));
+      })
       .catch(() => {}));
   } else map.layer('bike').set([]);
   // Bus stops: around the middle, from a closer zoom.
@@ -405,9 +414,14 @@ async function drawLayersNow() {
   await Promise.all(jobs);
 }
 
-const bikeMarker = s => {
+const BIKE_COUNTS_ZOOM = 17;
+const BIKE_COUNTS_NEAR = 4;
+// A station: its bikes (both kinds as one number; the split is in its card),
+// or, quiet, a dot in its level's colour.
+const bikeMarker = (s, dot = false) => {
   const lv = bikeLevel(s);
-  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: `${icon('bike')}<b>${s.ok === false ? W('停', '–') : s.bikes}</b>${s.ebike ? `<i>${icon('bolt')}${s.ebike}</i>` : ''}` };
+  if (dot) return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike dot ${lv}`, z: 2, kind: 'bike', data: s, html: '<i></i>' };
+  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: `${icon('bike')}<b>${s.ok === false ? W('停', '–') : s.bikes + (s.ebike || 0)}</b>` };
 };
 const busMarker = s => ({ id: `bus:${s.uid}`, lat: s.lat, lon: s.lon, cls: 'bus', z: 2, kind: 'bus', data: s, html: icon('bus') });
 // A stop with a side on each side of the street, close in (zoom 17 on): a
