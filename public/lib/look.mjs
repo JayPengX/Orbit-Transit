@@ -46,6 +46,16 @@ export function hero({ eyebrow = '', glyph = '', big = '', title = '', sub = '',
   return attrs ? `<button class="q-hero-card q-press ot-hero" type="button" ${attrs}${style}>${inner}</button>` : `<div class="q-hero-card ot-hero"${style}>${inner}</div>`;
 }
 
+// The page's answer, open on the page (the kit's .q-focus): a quiet label, the
+// countdown at the focal size, the line under it, the facts as grey text (`facts`:
+// plain strings; `live`: a word in the live colour; `warn`: the one exception, a
+// tag), `body` (html), then the buttons. `attrs`: the whole block a button.
+export function focus({ eyebrow = '', big = '', title = '', sub = '', facts = [], live = false, warn = '', body = '', actions = [], attrs = '' }) {
+  const line = [live ? `<span class="ot-now">${W('即時', 'Live')}</span>` : '', ...facts.filter(Boolean).map(e)].filter(Boolean).join(' · ');
+  const inner = `${eyebrow ? `<span class="q-focus-label">${e(eyebrow)}</span>` : ''}${big}${title ? `<strong class="ot-focus-title">${e(title)}</strong>` : ''}${sub ? `<span class="q-focus-sub">${e(sub)}</span>` : ''}${line || warn ? `<span class="q-focus-sub ot-focus-facts">${line}${warn ? `${line ? ' ' : ''}${tag(warn, 'red')}` : ''}</span>` : ''}${body}${actions.length ? `<div class="ot-focus-acts">${actions.map(a => `<button class="q-btn${a.primary ? ' primary' : ' tinted'}" type="button" ${a.attrs}>${a.label}</button>`).join('')}</div>` : ''}`;
+  return attrs ? `<button class="q-focus q-press ot-focus" type="button" ${attrs}>${inner}</button>` : `<section class="q-focus ot-focus">${inner}</section>`;
+}
+
 // Nothing here: the kit's empty state.
 export const emptyNote = title => kitUI.emptyHtml({ title });
 // A non-first tab's large title (the kit's navTitle).

@@ -18,7 +18,7 @@ import { stopsEta } from './bus.mjs';
 import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, fitStrips } from './bus-ui.mjs';
 import { stationLabel, icon, legChips, fitLegs } from './ui.mjs';
-import { COLOR, tile, tag, countHtml, tick, hero } from './look.mjs';
+import { COLOR, tile, countHtml, tick, focus } from './look.mjs';
 import { tripKey } from './store.mjs';
 import { e, hm, distText, meters } from './util.mjs';
 
@@ -28,7 +28,6 @@ import { W } from '#kit/lang.mjs';
 
 const PLACE_WORD = { home: W('家', 'Home'), work: W('公司', 'Work'), school: W('學校', 'School') };
 const KINDS = ['home', 'work', 'school'];
-const HERO_COLOR = { tra: COLOR.tra, hsr: COLOR.hsr, home: '#ef7d00' };
 const RECENTS = 4;
 const NEAR_BUSES = 4;
 // A read of the pinned buses and the stops around you is this old before it is asked again.
@@ -101,7 +100,7 @@ export function createHome(box, ctx, act) {
         eyebrow: x.label,
         title: `${x.from ? x.from.name : W('目前位置', 'Here')} → ${x.to.name}`,
         at: x.leaveAt,
-        tags: [x.arriveBy ? tag(W(`${hm(x.arriveBy)} 前到`, `Arrive by ${hm(x.arriveBy)}`), 'solid') : tag(W(`${hm(x.leaveAt)} 出發`, `Leave ${hm(x.leaveAt)}`), 'solid'), p ? tag(W(`${hm(p.arr)} 到`, `Arrive ${hm(p.arr)}`), 'solid') : ''],
+        facts: [x.arriveBy ? W(`${hm(x.arriveBy)} 前到`, `Arrive by ${hm(x.arriveBy)}`) : W(`${hm(x.leaveAt)} 出發`, `Leave ${hm(x.leaveAt)}`), p ? W(`${hm(p.arr)} 到`, `Arrive ${hm(p.arr)}`) : ''],
         body: p ? `<span class="ot-legs ot-hc-legs">${legChips(p.legs)}</span>` : '',
         tile: tile('route', COLOR.route)
       };
@@ -114,7 +113,9 @@ export function createHome(box, ctx, act) {
         sub: W(`${x.stop} 上車`, `Board at ${x.stop}`),
         at: x.at,
         floor: true,
-        tags: [tag(W('即時', 'Live'), 'solid green'), x.d != null ? tag(distText(x.d), 'solid') : '', x.last ? tag(W('末班車', 'Last bus'), 'solid red') : ''],
+        live: true,
+        facts: [x.d != null ? distText(x.d) : ''],
+        warn: x.last ? W('末班車', 'Last bus') : '',
         tile: tile('bus', COLOR.bus)
       };
     if (x.kind === 'train')
@@ -123,8 +124,8 @@ export function createHome(box, ctx, act) {
         eyebrow: x.hsr ? W('高鐵', 'HSR') : W('台鐵', 'TRA'),
         title: `${x.from} → ${x.to}`,
         at: x.dep,
-        color: x.hsr ? HERO_COLOR.hsr : HERO_COLOR.tra,
-        tags: [tag(`${hm(x.dep)}${x.arr ? ` → ${hm(x.arr)}` : ''}`, 'solid'), x.label ? tag(x.label, 'solid') : '', x.delay ? tag(W(`晚 ${x.delay} 分`, `${x.delay} min late`), 'solid orange') : ''],
+        facts: [`${hm(x.dep)}${x.arr ? ` → ${hm(x.arr)}` : ''}`, x.label],
+        warn: x.delay ? W(`晚 ${x.delay} 分`, `${x.delay} min late`) : '',
         tile: tile(x.hsr ? 'hsr' : 'tra', x.hsr ? COLOR.hsr : COLOR.tra)
       };
     if (x.kind === 'bike') {
@@ -133,9 +134,9 @@ export function createHome(box, ctx, act) {
         glyph: 'bike',
         eyebrow: W('附近的 YouBike', 'YouBike near you'),
         title: x.name,
-        big: `<strong class="q-hc-big">${n}<small>${W('台可借', 'bikes')}</small></strong>`,
+        big: `<strong class="q-focus-value ot-count">${n}<small>${W('台可借', 'bikes')}</small></strong>`,
         num: n,
-        tags: [x.d != null ? tag(distText(x.d), 'solid') : '', x.ebike ? tag(W(`電輔車 ${x.ebike}`, `E-bikes ${x.ebike}`), 'solid') : '', tag(W(`空位 ${x.ret}`, `Docks ${x.ret}`), 'solid')],
+        facts: [x.d != null ? distText(x.d) : '', x.ebike ? W(`電輔車 ${x.ebike}`, `E-bikes ${x.ebike}`) : '', W(`空位 ${x.ret}`, `Docks ${x.ret}`)],
         tile: tile('bike', COLOR.bike)
       };
     }
@@ -143,10 +144,9 @@ export function createHome(box, ctx, act) {
       glyph: 'home',
       eyebrow: W('回家', 'Head home'),
       title: x.place.name,
-      big: `<strong class="q-hc-big">${e(distText(x.d))}</strong>`,
+      big: `<strong class="q-focus-value ot-count">${e(distText(x.d))}</strong>`,
       numText: distText(x.d),
-      color: HERO_COLOR.home,
-      tags: [tag(W('從目前位置', 'From here'), 'solid')],
+      facts: [W('從目前位置', 'From here')],
       tile: placeTile('home')
     };
   };
@@ -156,8 +156,8 @@ export function createHome(box, ctx, act) {
     S.sug = list;
     const cards = list.map((x, i) => {
       const s = say(x);
-      const big = s.big || (s.at != null ? countHtml(s.at, { floor: Boolean(s.floor) }) : '');
-      if (i === 0) return hero({ eyebrow: s.eyebrow, glyph: s.glyph, big, title: s.title, sub: s.sub || '', tags: s.tags, body: s.body || '', color: s.color || '', attrs: `data-sg="${e(x.key)}"` });
+      const big = s.big || (s.at != null ? countHtml(s.at, { floor: Boolean(s.floor), cls: 'q-focus-value' }) : '');
+      if (i === 0) return focus({ eyebrow: s.eyebrow, big, title: s.title, sub: s.sub || '', facts: s.facts, live: s.live, warn: s.warn, body: s.body || '', attrs: `data-sg="${e(x.key)}"` });
       // The rest: a row, its number on the right.
       const end = s.num != null ? `<span class="ot-eta"><strong class="ot-eta-n">${s.num}</strong><small>${W('台', 'bikes')}</small></span>` : s.numText ? `<span class="ot-eta"><strong class="ot-eta-n sm">${e(s.numText)}</strong></span>` : s.at != null ? `<span class="ot-eta">${countHtml(s.at, { floor: Boolean(s.floor), cls: 'ot-eta-n' })}<small>${e(hm(s.at))}</small></span>` : '';
       return `<button class="q-ritem ot-sg" type="button" data-sg="${e(x.key)}">${s.tile}<span class="q-ritem-text"><span class="q-ritem-title">${e(s.eyebrow)}</span><small>${e(s.title)}</small></span>${end}</button>`;
