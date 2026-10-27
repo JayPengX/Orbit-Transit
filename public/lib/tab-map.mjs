@@ -26,7 +26,7 @@ import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
-import { sheet, sheetHead, icon, legChips, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
+import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
@@ -736,6 +736,7 @@ function renderCard() {
   // A long station name shrinks to its row (never a second row, never cut).
   fitNumbers([...box.querySelectorAll('.ot-bike-name')]);
   fitStrips(box);
+  fitLegs(box);
   // The plans keep most of the map in view: the sheet stays at its half.
   box.classList.toggle('plans', c.kind === 'plans');
 }
