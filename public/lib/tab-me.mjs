@@ -13,7 +13,7 @@ import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf, passModes } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters, dayLabel } from './util.mjs';
-import { COLOR, PLACE_COLOR, tile, tag, section, rowCard } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, section, rowCard } from './look.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
@@ -67,7 +67,7 @@ function render() {
       const chips = k => (t.alt || []).filter(a => a[k]).map(a => `<i class="ot-tt-alt">${e(altDays(a))} ${e(a[k])}</i>`).join('');
       const col = (label, time, k) => (time || chips(k) ? `<span class="ot-tt-col"><small>${e(label)}</small><b>${e(time || '—')}</b>${chips(k)}</span>` : '');
       const cols = col(t.by === 'arrive' ? W('去・抵達', 'Go · arrive') : W('去・出發', 'Go · leave'), t.time, 'time') + col(W('回・出發', 'Back · leave'), t.back, 'back');
-      return `<button class="q-ritem chevron" type="button" data-trip="${e(t.id)}">${tile(t.date ? 'calendar' : t.days.length ? 'clock' : 'route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title ot-tt-name"><span>${e(t.name || t.to.name)}</span>${when ? ` <span class="q-tag ot-trip-when">${e(when)}</span>` : ''}</span><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}</small>${cols ? `<span class="ot-tt">${cols}</span>` : ''}</span></button>`;
+      return `<button class="q-ritem chevron" type="button" data-trip="${e(t.id)}">${tile(t.date ? 'calendar' : t.days.length ? 'clock' : 'route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title ot-tt-name"><span>${e(t.name || t.to.name)}</span></span><small>${e(t.from ? t.from.name : W('目前位置', 'Here'))} → ${e(t.to.name)}${when ? ` · ${e(when)}` : ''}</small>${cols ? `<span class="ot-tt">${cols}</span>` : ''}</span></button>`;
     })
     .join('');
   const stops = D.groups.reduce((n, g) => n + g.items.length, 0);
@@ -79,7 +79,7 @@ function render() {
     ${section(W('地點', 'Places'), rowCard(places + addRow('add-place', W('釘選地點', 'Pin a place'))))}
     ${section(
       W('釘選', 'Pinned'),
-      rowCard(`<button class="q-ritem chevron" type="button" data-act="groups">${tile('bus', COLOR.bus)}<span class="q-ritem-text"><span class="q-ritem-title">${W('公車站牌', 'Bus stops')}</span>${D.groups.some(g => g.items.length) ? `<span class="q-tags">${D.groups.filter(g => g.items.length).map(g => tag(`${g.name} ${g.items.length}`)).join('')}</span>` : ''}</span>${Number(stops) ? `<span class="q-ritem-value">${stops}</span>` : ''}</button>${pins}${addRow('times', W('查時刻', 'Find times'))}`)
+      rowCard(`<button class="q-ritem chevron" type="button" data-act="groups">${tile('bus', COLOR.bus)}<span class="q-ritem-text"><span class="q-ritem-title">${W('公車站牌', 'Bus stops')}</span>${D.groups.some(g => g.items.length) ? `<small>${D.groups.filter(g => g.items.length).map(g => e(`${g.name} ${g.items.length}`)).join(' · ')}</small>` : ''}</span>${Number(stops) ? `<span class="q-ritem-value">${stops}</span>` : ''}</button>${pins}${addRow('times', W('查時刻', 'Find times'))}`)
     )}
     ${section(
       W('設定', 'Settings'),

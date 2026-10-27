@@ -697,12 +697,13 @@ function renderCard() {
   if (c.kind === 'bike') {
     const s = c.live || c.item;
     html = `${head(s.name, s.kind, 'bike')}
-      <div class="q-stats ot-bike-now" style="--q-stats-n:3">
-        <div class="q-stat"><small>${W('一般', 'Bikes')}</small><strong>${s.bikes}</strong></div>
-        <div class="q-stat e"><small>${icon('bolt')} ${W('電輔', 'E-bikes')}</small><strong>${s.ebike}</strong></div>
-        <div class="q-stat d"><small>${W('空位', 'Docks')}</small><strong>${s.ret}</strong></div>
-      </div>
-      <span class="q-tags ot-card-tags">${s.ok === false ? `<span class="q-tag red">${W('暫停營運', 'Closed')}</span>` : ''}${s.cap ? `<span class="q-tag">${W(`共 ${s.cap} 柱`, `${s.cap} docks`)}</span>` : ''}${s.at ? `<span class="q-tag">${e(ago(s.at))}</span>` : ''}</span>${err}${rentButtons(c)}${actions(c)}`;
+      <section class="q-focus ot-bike-now">
+        <span class="q-focus-label">${W('可借', 'Bikes to take')}</span>
+        <div class="ot-bike-row"><b class="q-focus-value${s.bikes ? '' : ' none'}">${s.bikes}</b>
+        <div class="q-focus-figs"><div><small>${W('電輔車', 'E-bikes')}</small><b>${s.ebike}</b></div><div><small>${W('空位', 'Docks')}</small><b>${s.ret}</b></div></div></div>
+        ${s.ok === false || s.cap || s.at ? `<span class="q-focus-sub ot-card-tags">${[s.cap ? W(`共 ${s.cap} 柱`, `${s.cap} docks`) : '', s.at ? ago(s.at) : ''].filter(Boolean).map(e).join(' · ')}${s.ok === false ? ` <span class="q-tag red">${W('暫停營運', 'Closed')}</span>` : ''}</span>` : ''}
+      </section>
+      ${err}${rentButtons(c)}${actions(c)}`;
   } else if (c.kind === 'bus') {
     const s = c.item;
     const live = Array.isArray(c.live) ? c.live : null;

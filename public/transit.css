@@ -163,7 +163,7 @@ body {
   margin-top: 28px;
 }
 .ot-sec .q-section-head h2 {
-  font: 700 20px/25px var(--q-font);
+  font: var(--q-t-title3);
 }
 .ot-sec .q-section-head button {
   padding: 0;
@@ -177,7 +177,48 @@ body {
   margin-top: 12px;
 }
 
-/* The hero: the page's one card on the app's colour. */
+/* The focus: the answer open on the page (look.mjs focus). */
+.ot-focus {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--q-label);
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+button.ot-focus {
+  cursor: pointer;
+}
+.ot-focus .ot-count {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.ot-focus-title {
+  font: 500 17px/22px var(--q-font);
+  overflow-wrap: anywhere;
+}
+.ot-focus-facts {
+  display: block;
+}
+.ot-focus-facts .q-tag {
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+.ot-now {
+  color: var(--q-green);
+}
+.ot-focus-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--q-s-2);
+  margin-top: var(--q-s-3);
+}
+
+/* The hero card: only 查時刻's field still uses it. */
 .ot-hero {
   width: 100%;
   box-sizing: border-box;
@@ -295,7 +336,7 @@ button.ot-hero {
   gap: 2px;
 }
 .ot-eta-n {
-  font: 700 22px/24px var(--q-font-rounded);
+  font: 600 22px/24px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
 }
 .ot-eta small {
@@ -348,11 +389,10 @@ button.ot-hero {
   height: 40px;
   padding: 0 4px;
   border-radius: 12px;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--q-green) 80%, #fff), var(--q-green) 60%);
+  background: var(--q-green);
   color: #fff;
-  font: 700 15px/1.2 var(--q-font);
+  font: 600 15px/1.2 var(--q-font);
   white-space: nowrap;
-  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.18);
 }
 /* Still being asked: a grey tile, not a green one with dots in it. */
 .ot-strip-no.wait {
@@ -410,7 +450,7 @@ button.ot-hero {
   text-align: right;
 }
 .ot-strip-eta b {
-  font: 700 20px/24px var(--q-font-rounded);
+  font: 600 20px/24px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -511,13 +551,20 @@ button.ot-hero {
   display: none;
 }
 /* A ride's facts: the minutes long (1 小時 14 分), short (74 分) on a narrow row, then gone. */
-.q-tag.dur .short,
-.q-tags.f1 .q-tag.dur .long,
-.q-tags.f2 .q-tag.dur {
+.ot-fact.dur .short,
+.ot-facts.f1 .ot-fact.dur .long,
+.ot-facts.f2 .ot-fact.dur {
   display: none;
 }
-.q-tags.f1 .q-tag.dur .short {
+.ot-facts.f1 .ot-fact.dur .short {
   display: inline;
+}
+.ot-fact + .ot-fact::before {
+  content: '·';
+  margin: 0 6px;
+}
+.ot-late {
+  color: var(--q-red);
 }
 .ot-leg {
   display: inline-flex;
@@ -568,18 +615,9 @@ button.ot-hero {
   font: 800 11px/1 var(--q-font);
   font-variant-numeric: tabular-nums;
 }
-/* On the hero: white chips, the line's colour in the ink. */
-.ot-hc-legs .ot-leg {
-  background: #fff;
-  color: var(--c, #333);
-}
-.ot-hc-legs .ot-leg.walk,
-.ot-hc-legs .ot-leg-sep {
-  background: none;
-  color: rgb(255 255 255 / 0.8);
-}
-.ot-hc-legs .ot-leg.bike b {
-  color: #3a2a00;
+/* The focus's ride, in chips under its line. */
+.ot-hc-legs {
+  margin-top: var(--q-s-2);
 }
 
 /* A route's other departures: times to pick, the one shown filled. */
@@ -1064,11 +1102,11 @@ body.tab-map {
 }
 .ot-shelf > * + .q-rowcard,
 .ot-shelf > * + .q-rail,
-.ot-shelf > * + .ot-hero {
+.ot-shelf > * + .ot-focus {
   margin-top: 0;
 }
 .ot-shelf > .q-rowcard + .q-rail,
-.ot-sugs > .ot-hero + .q-rowcard {
+.ot-sugs > .ot-focus + .q-rowcard {
   margin-top: 12px;
 }
 
@@ -1265,7 +1303,7 @@ body.tab-map {
   min-width: 0;
   padding: 14px 14px 12px;
   border: 0;
-  border-radius: 20px;
+  border-radius: var(--q-r-card);
   background: var(--q-surface);
   color: inherit;
   font: inherit;
@@ -1287,24 +1325,21 @@ body.tab-map {
   margin-top: auto;
 }
 .ot-bk-n b {
-  color: var(--ot-ink-amber);
-  font: 700 34px/36px var(--q-font-rounded);
+  color: var(--q-label);
+  font: 600 34px/36px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
 }
 .ot-bk-n em {
   display: inline-flex;
   align-items: center;
   gap: 1px;
-  color: var(--ot-ink-amber);
-  font: 700 15px/1 var(--q-font-rounded);
+  color: var(--q-label-2);
+  font: 600 15px/1 var(--q-font-rounded);
   font-style: normal;
 }
 .ot-bk-n em .ot-i {
   width: 14px;
   height: 14px;
-}
-.ot-bk.few .ot-bk-n b {
-  color: var(--q-orange);
 }
 .ot-bk.none .ot-bk-n b {
   color: var(--q-red);
@@ -1329,9 +1364,6 @@ body.tab-map {
   align-items: center;
   gap: 3px;
   font-style: normal;
-}
-.ot-bk-f i:first-child {
-  color: var(--q-blue);
 }
 .ot-bk-f .ot-i {
   width: 14px;
@@ -1861,7 +1893,7 @@ body.tab-map {
 }
 .ot-card-title h2 {
   margin: 0;
-  font: 700 20px/25px var(--q-font);
+  font: var(--q-t-title3);
   overflow-wrap: anywhere;
 }
 .ot-card-title p {
@@ -1873,7 +1905,7 @@ body.tab-map {
   display: none;
 }
 .ot-card-tags {
-  margin: 10px 0 0;
+  margin: var(--q-s-2) 0 0;
 }
 .ot-card-tags:empty {
   display: none;
@@ -1921,22 +1953,24 @@ body.tab-map {
   height: 17px;
 }
 
-/* A YouBike station: its bikes, its 電輔車, its docks, three big numbers. */
+/* A YouBike station: the bikes to take at the focal size, 電輔車 and docks as figures. */
 .ot-bike-now {
-  margin-top: 14px;
+  margin-top: var(--q-s-3);
+  padding-left: 0;
+  padding-right: 0;
 }
-.ot-bike-now .q-stat {
-  padding: 12px 14px;
+.ot-bike-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--q-s-4);
 }
-.ot-bike-now .q-stat strong {
-  font-size: 30px;
-  line-height: 34px;
+.ot-bike-row .q-focus-figs {
+  margin: 0 0 6px;
+  gap: var(--q-s-4);
 }
-.ot-bike-now .q-stat:first-child strong {
-  color: var(--ot-ink-amber);
-}
-.ot-bike-now .q-stat.d strong {
-  color: var(--q-blue);
+.ot-bike-now .q-focus-value.none {
+  color: var(--q-red);
 }
 
 /* A stop's buses (a bell each) and a station's trains: a card of rows. */
@@ -2000,7 +2034,7 @@ body.tab-map {
 .ot-time {
   flex: none;
   width: 58px;
-  font: 700 20px/24px var(--q-font-rounded);
+  font: 600 20px/24px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -2018,23 +2052,17 @@ body.tab-map {
 }
 .ot-delay {
   flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--q-fill-3);
   color: var(--q-label-2);
-  font: 600 12px/16px var(--q-font);
+  font: 500 13px/18px var(--q-font);
   white-space: nowrap;
 }
 .ot-delay.ok {
-  background: color-mix(in srgb, var(--q-green) 16%, transparent);
-  color: var(--q-green);
+  color: var(--q-good);
 }
 .ot-delay.warn {
-  background: color-mix(in srgb, var(--q-orange) 16%, transparent);
-  color: var(--q-orange);
+  color: var(--q-warn);
 }
 .ot-delay.bad {
-  background: color-mix(in srgb, var(--q-red) 16%, transparent);
   color: var(--q-red);
 }
 .ot-times {
@@ -2285,7 +2313,7 @@ body.tab-map {
   white-space: nowrap;
 }
 .ot-plan-dur {
-  font: 700 22px/26px var(--q-font-rounded);
+  font: 600 22px/26px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
 }
 .ot-plan-time {
@@ -2422,7 +2450,7 @@ body.tab-map {
 .ot-step-time {
   padding-top: 5px;
   color: var(--q-label-2);
-  font: 700 13px/18px var(--q-font);
+  font: 600 13px/18px var(--q-font);
   font-variant-numeric: tabular-nums;
 }
 .ot-step-time .ot-livedot {
@@ -3417,6 +3445,7 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
   font: 600 17px/22px var(--q-font);
 }
 .ot-trip-hd small {
+  white-space: normal;
   color: var(--q-label-2);
   font: 400 13px/18px var(--q-font);
 }
@@ -3465,7 +3494,7 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
 }
 .ot-ride-n {
   color: var(--q-label);
-  font: 700 28px/32px var(--q-font-rounded);
+  font: 600 26px/30px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
@@ -3481,13 +3510,16 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
 .ot-ride-top {
   flex-wrap: nowrap;
 }
-.ot-ride-top .q-tags {
+.ot-facts {
+  display: flex;
   flex: 1 1 auto;
-  flex-wrap: nowrap;
   min-width: 0;
   overflow: hidden;
+  color: var(--q-label-2);
+  font: var(--q-t-subhead);
+  white-space: nowrap;
 }
-.ot-ride-top .q-tag {
+.ot-fact {
   flex: none;
 }
 /* (Below the star: the legs take the card's whole width.) */
@@ -5083,16 +5115,13 @@ button.ot-trip-foot {
 }
 .ot-tt-col > b {
   color: var(--q-label);
-  font: 700 20px/26px var(--q-font);
+  font: 500 20px/26px var(--q-font);
   font-variant-numeric: tabular-nums;
 }
 .ot-tt-alt {
-  margin-top: 3px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--q-fill-3);
+  margin-top: 2px;
   color: var(--q-label-2);
-  font: 600 12px/18px var(--q-font);
+  font: 400 12px/18px var(--q-font);
   font-style: normal;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -5114,11 +5143,6 @@ button.ot-trip-foot {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.ot-tt-name > .ot-trip-when {
-  flex: none;
-  width: auto;
-  margin: 0;
 }
 
 /* A place search's field takes typing and pasting inside a sheet (iOS's selection, never switched off). */
@@ -5285,4 +5309,10 @@ button.ot-trip-foot {
 .ot-strip-eta.stopped b,
 .ot-rs-eta.stopped {
   color: var(--q-red);
+}
+
+/* A pinned train's next two, in words: they wrap rather than cut. */
+.ot-page .ot-train-row .q-ritem-text small {
+  white-space: normal;
+  overflow: visible;
 }
