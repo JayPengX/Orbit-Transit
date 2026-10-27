@@ -389,8 +389,11 @@ async function drawLayersNow() {
       .then(list => {
         if (run !== drawing) return;
         const shown = closest(list.filter(s => inView(b, s)), c, 200);
-        const me = ctx.here && inView(b, ctx.here) ? ctx.here : c;
-        const near = new Set(z >= BIKE_COUNTS_ZOOM ? shown.map(s => s.uid) : closest(shown, me, BIKE_COUNTS_NEAR).map(s => s.uid));
+        // (Counted among what you can see: not under the sheet or the buttons at the top, where
+        // you under the sheet put the counts on four stations round a dot nobody could see.)
+        const seen = seenBounds(b);
+        const me = ctx.here && inView(seen, ctx.here, 0) ? ctx.here : { lat: (seen.n + seen.s) / 2, lon: (seen.w + seen.e) / 2 };
+        const near = new Set(z >= BIKE_COUNTS_ZOOM ? shown.map(s => s.uid) : closest(shown.filter(s => inView(seen, s, 0)), me, BIKE_COUNTS_NEAR).map(s => s.uid));
         map.layer('bike').set(shown.map(s => bikeMarker(s, !near.has(s.uid))));
       })
       .catch(() => {}));
@@ -416,6 +419,14 @@ async function drawLayersNow() {
 
 const BIKE_COUNTS_ZOOM = 17;
 const BIKE_COUNTS_NEAR = 4;
+// The part of the map not covered: below the buttons at the top, above the sheet (its height now).
+function seenBounds(b) {
+  const band = seenBand();
+  if (!band) return b;
+  const { room, top, bottom } = band;
+  const lat = y => b.n - (b.n - b.s) * Math.min(1, Math.max(0, y / room));
+  return { ...b, n: lat(top), s: lat(bottom) };
+}
 // A station: its bikes (both kinds as one number; the split is in its card),
 // or, quiet, a dot in its level's colour.
 const bikeMarker = (s, dot = false) => {
@@ -945,11 +956,17 @@ const fitPad = (m, share) => ({
 // How far under the middle of the map the middle of what the sheet leaves in view is, px: a point put
 // that high above the middle sits in the middle of the map you can see.
 function aboveDy() {
-  if (!msheet || !$('panel-map').clientHeight) return 0;
-  const room = $('panel-map').clientHeight;
+  const band = seenBand();
+  return band ? Math.round(band.room / 2 - (band.top + band.bottom) / 2) : 0;
+}
+// The band of the map left showing, px from its top: below the buttons at the top, above the sheet
+// (null: no sheet yet, or too little left to matter).
+function seenBand() {
+  const room = $('panel-map')?.clientHeight;
+  if (!msheet || !room) return null;
   const top = Math.max(0, ($('top-actions')?.getBoundingClientRect().bottom || 0) + 8);
   const bottom = room - msheet.heights()[msheet.detent] - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
-  return bottom - top > 80 ? Math.round(room / 2 - (top + bottom) / 2) : 0;
+  return bottom - top > 80 ? { room, top, bottom } : null;
 }
 // The room the round buttons take at the map's right, px: what is brought to the middle of the map
 // is the middle of what they leave (so a pin is never put under ⊙), and a trip is fitted clear of them.
