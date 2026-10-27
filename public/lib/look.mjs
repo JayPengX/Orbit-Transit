@@ -46,7 +46,7 @@ export function hero({ eyebrow = '', glyph = '', big = '', title = '', sub = '',
   return attrs ? `<button class="q-hero-card q-press ot-hero" type="button" ${attrs}${style}>${inner}</button>` : `<div class="q-hero-card ot-hero"${style}>${inner}</div>`;
 }
 
-// The page's answer, open on the page (the kit's .q-focus): a quiet label, the
+// The page's answer on its card (the kit's .q-focus): a quiet label, the
 // countdown at the focal size, the line under it, the facts as grey text (`facts`:
 // plain strings; `live`: a word in the live colour; `warn`: the one exception, a
 // tag), `body` (html), then the buttons. `attrs`: the whole block a button.
