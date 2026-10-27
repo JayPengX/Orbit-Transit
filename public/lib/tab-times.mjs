@@ -15,7 +15,7 @@ import { CITIES, cityShort, NEAR_CITIES } from './city.mjs';
 import { icon } from './ui.mjs';
 import { COLOR, tile, section, rowCard, hero, emptyNote, noticesHtml } from './look.mjs';
 import { loadNotices } from './service.mjs';
-import { e, meters, distText, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
+import { e, meters, distText, readJson, readSaved, UNREAD, writeJson, shown } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
@@ -193,7 +193,7 @@ const where = r => (r.city === INTERCITY ? W('公路客運', 'Intercity') : city
 const row = r => {
   const n = next.get(r.uid);
   const attrs = `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"`;
-  if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `${W('往', 'to')} ${e(n.x.headsign)}`, main: e(n.x.stop), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
+  if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `${W('往', 'to')} ${e(shown(n.x.headsign))}`, main: e(shown(n.x.stop)), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
   if (ctx.here && !n?.at) return `<div class="ot-strip">${strip({ no: r.name, wait: true, attrs })}</div>`;
   const ends = r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `${W('往', 'to')} ${r.to}` : where(r));
   return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: ends, attrs })}</div>`;
@@ -236,7 +236,7 @@ function watchRows() {
   for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]')) seen.observe(el);
 }
 // A stop near you: its name and distance, its routes as numbers to tap.
-const nearStop = s => `<div class="q-ritem ot-stop-row">${tile('bus', COLOR.bus, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(s.name)}</span><span class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-no" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}" data-stop-name="${e(s.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(r.name)}</button>`).join('')}</span></span><span class="q-ritem-value">${e(distText(s.dist))}</span></div>`;
+const nearStop = s => `<div class="q-ritem ot-stop-row">${tile('bus', COLOR.bus, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(shown(s.name))}</span><span class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-no" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}" data-stop-name="${e(s.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(shown(r.name))}</button>`).join('')}</span></span><span class="q-ritem-value">${e(distText(s.dist))}</span></div>`;
 function busDraw() {
   const home = ctx.city || 'Taipei';
   $('tb-city').innerHTML = [[NEAR, W(`${cityShort(home)}附近`, `Near ${cityShort(home)}`)], [INTERCITY, W('公路客運', 'Intercity')], ...CITIES.map(([k]) => [k, cityShort(k)])]

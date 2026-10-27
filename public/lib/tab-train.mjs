@@ -14,7 +14,7 @@ import { tpassOf, passTrainTrip } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind, trainColor, inkOn, stationLabel, fitLegs } from './ui.mjs';
 import { COLOR, tile, section, rowCard, emptyNote, noticesHtml } from './look.mjs';
 import { loadNotices, onNotices } from './service.mjs';
-import { e, hm, minsText, tw, twAt, addDays, meters, distText, readJson, writeJson } from './util.mjs';
+import { e, hm, minsText, tw, twAt, addDays, meters, distText, readJson, writeJson, shown } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';
@@ -248,7 +248,7 @@ function detailHtml(j) {
     const d = delayOf(t);
     const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no && p.sys === t.sys);
     const facts = [W(`${l.stops} 站`, `${l.stops} stops`), minsText((l.arr - l.dep) / 1000), onPass(l) ? 'TPASS' : state.fares.get(fareKey(l)) ? `NT$${state.fares.get(fareKey(l))}` : '', t.bike ? W('可攜車', 'bikes OK') : ''].filter(Boolean).join(' · ');
-    out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(String(t.headsign || '').replace(/^往/, ''))}${d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : d === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span></span></li>`);
+    out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : d === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span></span></li>`);
   });
   out.push(`<li class="end" style="--c:${COLOR.walk}"><span class="ot-step-time">${e(hm(j.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e(nameOf(j.legs.at(-1).to))}</b></span></li>`);
   return `<ol class="ot-steps">${out.join('')}</ol>`;
@@ -392,7 +392,7 @@ async function pickStation(which) {
   };
   const isOther = s => other && other.sys === s.sys && other.id === s.id;
   const row = (s, value = '') => `<button class="q-ritem" type="button" data-st="${e(s.key)}">${tile(s.sys, s.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(s))}</span></span>${value ? `<span class="q-ritem-value">${e(value)}</span>` : ''}</button>`;
-  const btn = s => `<button class="ot-st-btn" type="button" data-st="${e(s.key)}">${e(s.sys === 'hsr' ? stationLabel(s) : s.name)}</button>`;
+  const btn = s => `<button class="ot-st-btn" type="button" data-st="${e(s.key)}">${e(stationLabel(s))}</button>`;
   const draw = () => {
     const q = d.querySelector('#s-q').value;
     const body = d.querySelector('#s-body');

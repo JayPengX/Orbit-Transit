@@ -7,7 +7,7 @@ import { loadSystem, stationBoard, stationExits, stationTitle, interchanges, OPE
 import { metroSystems } from './raildata.mjs';
 import { countHtml, rowCard, emptyNote } from './look.mjs';
 import { icon, inkOn } from './ui.mjs';
-import { e, hm, meters } from './util.mjs';
+import { e, hm, meters, shown } from './util.mjs';
 import { W } from '#kit/lang.mjs';
 
 // A station's whole group (台北車站: BL12 and R10), each with its system's lines.
@@ -33,7 +33,7 @@ export function codesHtml(list, lines) {
       return (own.length ? own : [lineFor(lines, st.op, '')]).map(l => ({ code: st.id, color: l.color, name: l.name }));
     })
     .filter(c => !seen.has(`${c.code}|${c.name}`) && seen.add(`${c.code}|${c.name}`))
-    .map(c => `<span class="mm-code" style="--c:${e(c.color)};--ink:${inkOn(c.color)}"><b>${e(c.code)}</b><span>${e(c.name)}</span></span>`)
+    .map(c => `<span class="mm-code" style="--c:${e(c.color)};--ink:${inkOn(c.color)}"><b>${e(c.code)}</b><span>${e(shown(c.name))}</span></span>`)
     .join('');
 }
 
@@ -57,7 +57,7 @@ export function boardHtml(boards, lines) {
         const sub = [r.l.name, r.note || (r.every ? W('依班距行駛', 'Runs every few minutes') : then.length ? W(`再來 ${then.map(hm).join('、')}`, `then ${then.map(hm).join(', ')}`) : '')].filter(Boolean).join(' · ');
         // (A live train at the platform: 進站, as the station's own sign says.)
         const right = r.every ? `<span class="mb-every"><small>${W('每', 'every')}</small>${e(r.every)}<small>${W('分', 'min')}</small></span>` : first == null ? `<span class="mb-none">—</span>` : r.live && first - Date.now() < 45_000 ? `<strong class="mb-count mb-now">${W('進站', 'Due')}</strong>` : countHtml(first, { floor: true, cls: 'mb-count' });
-        return `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(r.dest)}` : e(r.l.name)}</span><small>${e(sub)}</small></span>${r.live ? `<span class="mb-live" title="${W('即時', 'Live')}">${icon('live')}</span>` : ''}${right}</div>`;
+        return `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(shown(r.dest))}` : e(r.l.name)}</span><small>${e(sub)}</small></span>${r.live ? `<span class="mb-live" title="${W('即時', 'Live')}">${icon('live')}</span>` : ''}${right}</div>`;
       })
       .join('')
   ).replace('q-rowcard', 'q-rowcard mb-board');
@@ -69,7 +69,7 @@ export function firstLastHtml(boards, lines) {
   if (!rows.length) return '';
   return `<h3 class="q-sheet-h">${W('首末班車', 'First and last trains')}</h3>${rowCard(
     rows
-      .map(r => `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(r.dest)}` : e(r.l.name)}</span><small>${e(r.l.name)}</small></span><span class="mb-fl"><span><small>${W('首班', 'First')}</small><b>${e(hm(r.first))}</b></span><span><small>${W('末班', 'Last')}</small><b>${e(hm(r.last))}</b></span></span></div>`)
+      .map(r => `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(shown(r.dest))}` : e(r.l.name)}</span><small>${e(shown(r.l.name))}</small></span><span class="mb-fl"><span><small>${W('首班', 'First')}</small><b>${e(hm(r.first))}</b></span><span><small>${W('末班', 'Last')}</small><b>${e(hm(r.last))}</b></span></span></div>`)
       .join('')
   )}`;
 }

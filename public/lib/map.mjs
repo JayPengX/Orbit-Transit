@@ -6,7 +6,7 @@
 
 import { TAIWAN_BOX } from './util.mjs';
 
-import { W } from '#kit/lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
 const NLSC = 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
 
@@ -67,7 +67,7 @@ function loadGoogle(key) {
     googleLoad = Promise.race([globalThis.__otMapsEarly, new Promise((_, reject) => setTimeout(() => reject(new Error('maps timeout')), 15_000))]);
   googleLoad ||= new Promise((resolve, reject) => {
     globalThis.__otMaps = resolve;
-    script(`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&language=zh-TW&region=TW&loading=async&callback=__otMaps`).catch(reject);
+    script(`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&language=${en ? 'en' : 'zh-TW'}&region=TW&loading=async&callback=__otMaps`).catch(reject);
     setTimeout(() => reject(new Error('maps timeout')), 15_000);
   });
   return googleLoad;

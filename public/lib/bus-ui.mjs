@@ -11,7 +11,7 @@ import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
-import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson } from './util.mjs';
+import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson, shown } from './util.mjs';
 import { nextRun, liveTrusted } from './live.mjs';
 import { routeStatus, effectLabel } from './service.mjs';
 
@@ -119,7 +119,7 @@ export function strip({ no, note = '', main = '', eta = null, attrs = '', wait =
       ? `<span class="ot-strip-eta ${eta.tone}${/\d/.test(eta.main) ? '' : ' words'}${/分|進站|min|Arriving|Due/.test(eta.main) ? ' live' : ''}"><b data-q-live="${e(`eta:${no}:${attrs}`)}">${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>`
       : '';
   const sub = wait ? `<small>${skel('84px')}</small>` : note ? `<small>${note}</small>` : '';
-  return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no${wait && !no ? ' wait' : ''}">${wait && !no ? '' : noHtml(no)}</span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
+  return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no${wait && !no ? ' wait' : ''}">${wait && !no ? '' : noHtml(shown(no))}</span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
 }
 // (The number too: its badge one width, so every strip's words start in one column.)
 // A note still too wide at the smallest size drops its less useful part
@@ -274,7 +274,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // The coming week: the family's strip of days (drawn in after, ttDays).
     const days = '<div class="ot-tt-strip"></div>';
     // The stop: a native picker (an iPhone's wheel), its name the label.
-    const stopPick = `<label class="ot-tt-stop"><b>${e(s.name)}</b>${icon('down')}<select data-pickstop aria-label="${W('換站牌', 'Change stop')}">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(x.name)}</option>`).join('')}</select></label>`;
+    const stopPick = `<label class="ot-tt-stop"><b>${e(shown(s.name))}</b>${icon('down')}<select data-pickstop aria-label="${W('換站牌', 'Change stop')}">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(shown(x.name))}</option>`).join('')}</select></label>`;
     const body = times.length
       ? `<div class="ot-timetable">${hours(times)
           .map(([h, list]) => `<div class="ot-tt-hour"><b>${e(h)}</b><span>${list.map(t => `<i class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t.slice(3, 5))}</i>`).join('')}</span></div>`)
@@ -298,11 +298,11 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const where = route.city === INTERCITY ? W('公路客運', 'Intercity') : cityShort(route.city);
     // Two ways: the segmented control under the head names them, so the head says where (not 往 … twice).
     const both = Boolean(ways && ways.length > 1);
-    const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(route.name)}</span><div><h2>${both ? e(where) : w ? `${W('往', 'To')} ${e(w.headsign)}` : W('路線', 'Route')}</h2>${both ? (w?.subName && w.subName !== route.name ? `<p class="ot-sheet-sub">${e(w.subName)}${saidChip(said)}</p>` : said ? `<p class="ot-sheet-sub">${saidChip(said)}</p>` : '') : `<p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(w.subName)}` : ''}${saidChip(said)}</p>`}</div></div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">✕</button></div>`;
+    const head = `<div class="q-sheet-head ot-rt-head"><div class="ot-rt-id"><span class="ot-rt-no">${e(shown(route.name))}</span><div><h2>${both ? e(where) : w ? `${W('往', 'To')} ${e(shown(w.headsign))}` : W('路線', 'Route')}</h2>${both ? (w?.subName && w.subName !== route.name ? `<p class="ot-sheet-sub">${e(shown(w.subName))}${saidChip(said)}</p>` : said ? `<p class="ot-sheet-sub">${saidChip(said)}</p>` : '') : `<p class="ot-sheet-sub">${e(where)}${w?.subName && w.subName !== route.name ? ` · ${e(shown(w.subName))}` : ''}${saidChip(said)}</p>`}</div></div><button class="q-close" type="button" data-act="close" aria-label="${W('關閉', 'Close')}">✕</button></div>`;
     // Two short ways: a segmented control. More (a loop's branches, 5 to 10 on
     // some intercity routes) or long names: chips in a row to scroll, each said whole.
     const many = Boolean(ways && (ways.length > 2 || ways.some(x => String(x.headsign || '').length > 7)));
-    const tabs = ways && ways.length > 1 ? `<div class="${many ? 'q-chips ot-dir ot-dir-chips' : 'q-seg ot-dir'}" role="group" aria-label="${W('方向', 'Direction')}">${ways.map((x, i) => `<button type="button"${many ? ' class="q-chip"' : ''} data-way="${i}" aria-pressed="${i === way}">${W('往', 'To')} ${e(x.headsign)}</button>`).join('')}</div>` : '';
+    const tabs = ways && ways.length > 1 ? `<div class="${many ? 'q-chips ot-dir ot-dir-chips' : 'q-seg ot-dir'}" role="group" aria-label="${W('方向', 'Direction')}">${ways.map((x, i) => `<button type="button"${many ? ' class="q-chip"' : ''} data-way="${i}" aria-pressed="${i === way}">${W('往', 'To')} ${e(shown(x.headsign))}</button>`).join('')}</div>` : '';
     const views = `<div class="q-seg ot-view" role="group" aria-label="${W('即時或時刻表', 'Live or timetable')}"><button type="button" data-view="live" aria-pressed="${view === 'live'}">${W('即時到站', 'Live')}</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">${W('時刻表', 'Timetable')}</button></div>`;
     // Each stop's live time, trusted: a bus 'coming' that the timetable has
     // nowhere near (resting with its tracker on) isn't taken (the
@@ -336,10 +336,10 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
               const at = boarding ? w.stops.findIndex(x => x.uid === boarding.uid) : -1;
               const pick = boarding ? (k > at ? ' can-off' : k === at ? ' on-here' : ' before') : '';
               // A bus at the stop (進站中, 即將進站) rides on its dot.
-              return `<li class="${t.tone}${busAt(lives, k) ? ' at' : ''}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span>${between(k) ? `<i class="ot-rs-bus" aria-label="${W('公車在這兩站之間', 'Bus between these stops')}">${icon('bus')}</i>` : ''}<span class="ot-rs-dot">${busAt(lives, k) ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(s.name)}</b>${k === at ? `<small>${W('上車', 'Board')}</small>` : ride?.off ? `<small>${icon('star')} ${W('到', 'to')} ${e(ride.off.stop)}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? W('取消釘選', 'Unpin') : W('從這站上車，釘選', 'Board here and pin')}">${icon('star')}</button>`}</li>`;
+              return `<li class="${t.tone}${busAt(lives, k) ? ' at' : ''}${mine ? ' mine' : ''}${pick}" data-stop="${e(s.uid)}"${boarding && k > at ? ` data-off="${e(s.uid)}"` : ''}><span class="ot-rs-eta ${t.tone}">${e(t.main)}</span>${between(k) ? `<i class="ot-rs-bus" aria-label="${W('公車在這兩站之間', 'Bus between these stops')}">${icon('bus')}</i>` : ''}<span class="ot-rs-dot">${busAt(lives, k) ? icon('bus') : ''}</span><span class="ot-rs-name"><b>${e(shown(s.name))}</b>${k === at ? `<small>${W('上車', 'Board')}</small>` : ride?.off ? `<small>${icon('star')} ${W('到', 'to')} ${e(shown(ride.off.stop))}</small>` : t.sub ? `<small>${e(t.sub)}</small>` : ''}</span>${boarding ? '' : `<button class="ot-rs-star${ride ? ' on' : ''}" type="button" data-add="${e(s.uid)}" aria-label="${ride ? W('取消釘選', 'Unpin') : W('從這站上車，釘選', 'Board here and pin')}">${icon('star')}</button>`}</li>`;
             })
             .join('')}</ol>`;
-    const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(boarding.name)} 上車`, `Board at ${e(boarding.name)}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
+    const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(shown(boarding.name))} 上車`, `Board at ${e(shown(boarding.name))}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
     const dirLeft = d.querySelector('.ot-dir-chips')?.scrollLeft || 0;
     d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
     // (The row of ways where it was; the one chosen in sight.)
@@ -498,11 +498,11 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
 // Which group a stop goes into (or a new one).
 export function chooseGroup(raw, done) {
   const item = cleanItem({ ...raw, id: 'i' + uid() });
-  const d = sheet(`${sheetHead(W('加入群組', 'Add to group'), `${e(item.route)} · ${e(item.stop)}`)}
+  const d = sheet(`${sheetHead(W('加入群組', 'Add to group'), `${e(shown(item.route))} · ${e(shown(item.stop))}`)}
     <div class="ot-list">${ctx.data.groups
       .map((g, i) => {
         const has = g.items.some(x => x.stopUID === item.stopUID);
-        return `<button class="ot-row-btn" type="button" data-to="${i}" ${has ? 'disabled' : ''}><span><b>${e(g.name)}</b><small>${W(`${g.items.length} 個站牌`, `${g.items.length} stops`)}${has ? W(' · 已在這裡', ' · already here') : ''}</small></span>${icon('plus')}</button>`;
+        return `<button class="ot-row-btn" type="button" data-to="${i}" ${has ? 'disabled' : ''}><span><b>${e(shown(g.name))}</b><small>${W(`${g.items.length} 個站牌`, `${g.items.length} stops`)}${has ? W(' · 已在這裡', ' · already here') : ''}</small></span>${icon('plus')}</button>`;
       })
       .join('')}</div>
     ${ctx.data.groups.length < MAX_GROUPS ? `<label class="ot-field"><span>${W('或新的群組', 'Or a new group')}</span><div class="ot-row"><input id="g-new" maxlength="12" placeholder="${W('上班、回家', 'Work, Home')}"><button class="q-btn" type="button" data-new="1">${W('建立並加入', 'Create')}</button></div></label>` : ''}`);
@@ -542,7 +542,7 @@ export function manageSheet() {
             <button class="q-icon-btn" type="button" data-gdel="${i}" aria-label="${W('刪除群組', 'Delete group')}" ${all.length > 1 ? '' : 'disabled'}>${icon('trash')}</button></div>
           ${g.items
             .map(
-              (it, k, list) => `<div class="ot-order-row"><span><b>${e(it.route)}</b> ${e(it.stop)}${it.off ? ` → ${e(it.off.stop)}` : ''}<small>${W('往', 'to')} ${e(it.headsign)}${it.back ? W(' · 回程自動對調', ' · back flips') : ''}</small></span>
+              (it, k, list) => `<div class="ot-order-row"><span><b>${e(shown(it.route))}</b> ${e(shown(it.stop))}${it.off ? ` → ${e(shown(it.off.stop))}` : ''}<small>${W('往', 'to')} ${e(shown(it.headsign))}${it.back ? W(' · 回程自動對調', ' · back flips') : ''}</small></span>
               <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="-1" aria-label="${W('上移', 'Move up')}" ${k ? '' : 'disabled'}>${icon('up')}</button>
               <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="1" aria-label="${W('下移', 'Move down')}" ${k < list.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
               <button class="q-icon-btn" type="button" data-idel="${i}:${k}" aria-label="${W('移除', 'Remove')}">${icon('trash')}</button></div>`

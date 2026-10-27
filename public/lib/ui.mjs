@@ -1,13 +1,13 @@
 // Shared UI: sheets, the transport icons, a plan's legs as chips.
 
-import { e, minsText, hm, rides } from './util.mjs';
+import { e, minsText, hm, rides, shown } from './util.mjs';
 import { metroColor } from './metro.mjs';
 import * as kitUI from '#kit/ui.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 
 // A railway station's name as shown: 高鐵 before an HSR station's.
-export const stationLabel = s => (!s ? '' : s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.name}`) : s.name);
+export const stationLabel = s => (!s ? '' : s.sys === 'hsr' ? W(`高鐵${s.name}`, `HSR ${s.en || shown(s.name)}`) : (en && s.en) || shown(s.name));
 // A modal sheet (the kit's look): closed by its ✕, a tap on the page
 // behind or Escape, sliding down as every app's sheets do; `d.shut()`
 // closes it the same way and `d.onclosed` runs once after.

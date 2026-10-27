@@ -3,7 +3,7 @@
 
 import { twHoliday } from '#kit/holidays.mjs';
 import { dayOffOn } from '#kit/dayoff.mjs';
-import { W } from '#kit/lang.mjs';
+import { W, en } from '#kit/lang.mjs';
 import { addDays } from '#kit/format.mjs';
 
 export { escHtml as e } from '#kit/ui.mjs';
@@ -176,7 +176,24 @@ export function readSaved(key, fallback = null) {
   }
 }
 
-export const zh = v => (v && typeof v === 'object' ? v.Zh_tw || v.En || '' : String(v ?? ''));
+export const zh = v => {
+  if (!v || typeof v !== 'object') return String(v ?? '');
+  if (v.Zh_tw && v.En && !/[\u3400-\u9fff]/.test(v.En)) EN_NAMES.set(v.Zh_tw, v.En);
+  return v.Zh_tw || v.En || '';
+};
+// Every stop, station and route TDX names in both languages, kept as it's read (Chinese →
+// English), and shown(name): the name as the reader sees it, in English when TDX has one.
+// (Only for showing: matching and keys stay on the Chinese.)
+const EN_NAMES = new Map();
+export const shown = name => (en && (EN_NAMES.get(name) || routeEn(name))) || name;
+// A route TDX names only in Chinese, when its words have plain English (藍線 Blue, 藍15區
+// Blue 15, 11甲 11A, 世博3號 Expo 3); any other, as it is.
+const ROUTE_WORDS = [[/藍線?/g, 'Blue '], [/綠線?/g, 'Green '], [/紅線?/g, 'Red '], [/[橘橙]線?/g, 'Orange '], [/黃線?/g, 'Yellow '], [/棕線?/g, 'Brown '], [/紫線?/g, 'Purple '], [/幹線/g, ' Trunk'], [/世博/g, 'Expo '], [/甲/g, 'A'], [/乙/g, 'B'], [/丙/g, 'C'], [/(\d)區/g, '$1'], [/號/g, '']];
+const routeEn = name => {
+  const t = ROUTE_WORDS.reduce((x, [re, to]) => x.replace(re, to), String(name ?? '')).replace(/\s+/g, ' ').trim();
+  return t !== name && !/[\u3400-\u9fff]/.test(t) ? t : '';
+};
+export const learnName = (zhName, enName) => zhName && enName && !/[\u3400-\u9fff]/.test(enName) && EN_NAMES.set(zhName, enName);
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 // Taiwan's national holidays (the kit's holidays.mjs): a trip saved for

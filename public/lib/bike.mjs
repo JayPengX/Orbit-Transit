@@ -2,7 +2,7 @@
 // there now, regular bikes and 電輔車 apart.
 
 import { tdx, rows } from './api.mjs';
-import { zh } from './util.mjs';
+import { zh, learnName } from './util.mjs';
 import { BIKE_CITIES } from './city.mjs';
 
 const STATION_FIELDS = '$select=StationUID,StationName,StationPosition,BikesCapacity,ServiceType';
@@ -23,7 +23,7 @@ export function mergeBikes(stations, live) {
       const ebike = Number(detail.ElectricBikes) || 0;
       return {
         uid: s.StationUID,
-        name: bikeName(zh(s.StationName)),
+        name: (learnName(bikeName(zh(s.StationName)), bikeName(s.StationName?.En)), bikeName(zh(s.StationName))),
         lat: Number(s.StationPosition?.PositionLat),
         lon: Number(s.StationPosition?.PositionLon),
         cap: Number(s.BikesCapacity) || 0,
