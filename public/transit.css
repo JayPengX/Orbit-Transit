@@ -183,7 +183,6 @@ body {
   box-sizing: border-box;
   margin: 0;
   border: 0;
-  color: var(--q-label);
   font: inherit;
   text-align: left;
   -webkit-tap-highlight-color: transparent;
@@ -209,6 +208,20 @@ button.ot-focus {
 }
 .ot-now {
   color: var(--q-green);
+}
+/* On the focus card's colour: 即時 white and bold, the buttons white as on the hero. */
+.q-focus .ot-now {
+  color: #fff;
+  font-weight: 600;
+}
+.ot-focus-acts .q-btn.primary {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-weight: 600;
+}
+.ot-focus-acts .q-btn.tinted {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 .ot-focus-acts {
   display: flex;
@@ -3762,7 +3775,7 @@ button.ot-trip-foot {
   margin-top: 8px;
 }
 .ot-jny.next {
-  box-shadow: inset 0 0 0 1.5px var(--q-accent);
+  box-shadow: inset 0 0 0 2px var(--q-accent);
 }
 .ot-jny.on {
   box-shadow: inset 0 0 0 2px var(--q-blue);
