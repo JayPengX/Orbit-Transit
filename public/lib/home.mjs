@@ -20,7 +20,7 @@ import { nearStops, keptNear, keepNear, nearMoved, fitStrips } from './bus-ui.mj
 import { stationLabel, icon, legChips, fitLegs } from './ui.mjs';
 import { COLOR, tile, countHtml, tick, focus } from './look.mjs';
 import { tripKey } from './store.mjs';
-import { e, hm, distText, meters } from './util.mjs';
+import { e, hm, distText, meters, shown } from './util.mjs';
 
 // Where you already are (within 100 m): 這裡, not 0 公尺.
 const near = m => (m < 100 ? W('這裡', 'Here') : distText(m));
@@ -52,7 +52,7 @@ export function createHome(box, ctx, act) {
     const here = ctx.here;
     const rank = p => (KINDS.includes(p.icon) ? KINDS.indexOf(p.icon) : KINDS.length);
     const list = ctx.data.places.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(x => x.p);
-    const tiles = list.map(p => `<button class="ot-fav" type="button" data-fav="${e(p.id)}">${placeTile(p.icon)}<b>${e(p.name)}</b>${here ? `<small>${e(near(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`);
+    const tiles = list.map(p => `<button class="ot-fav" type="button" data-fav="${e(p.id)}">${placeTile(p.icon)}<b>${e(shown(p.name))}</b>${here ? `<small>${e(near(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`);
     // 家 and 公司 not set yet: their tiles wait, to be filled in with a tap.
     const ghosts = ['home', 'work'].filter(k => !ctx.data.places.some(p => p.icon === k)).map(k => `<button class="ot-fav ghost" type="button" data-fav-add="${k}">${placeTile(k)}<b>${e(PLACE_WORD[k])}</b><small>${W('加入', 'Add')}</small></button>`);
     const add = `<button class="ot-fav add" type="button" data-fav-add="" aria-label="${W('釘選地點', 'Pin a place')}"><span class="ot-fav-plus">${icon('plus')}</span><b>${W('新增', 'New')}</b></button>`;

@@ -22,7 +22,7 @@ import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
-import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson } from './util.mjs';
+import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown } from './util.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 let nav = null;
@@ -314,9 +314,9 @@ function stepText(plan, i, phase) {
     return { title: `${W('走到', 'Walk to')} ${last && !l.to?.name ? W('目的地', 'destination') : where}`, sub: next?.mode === 'bike' ? `${W('在這裡借', 'Rent a')} ${next.ebike ? W('電輔車', 'e-bike') : 'YouBike'}${W('', ' here')}` : isRide(next) ? `${W('搭', 'Take')} ${rideName(next)}` : '' };
   }
   // (One bike kept the whole trip with stops: ridden on from each, parked, not returned, at each.)
-  if (l.mode === 'bike') return { title: `${W('騎到', 'Ride to')} ${l.to.name}`, sub: l.swap ? W('還車再借一台（每 30 分鐘換一次車）', 'Return and re-rent (a new bike every 30 min)') : `${l.kept ? W('騎同一台', 'Same bike') : `${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'}・${W(`在 ${l.from.name} 借⁠車`, `rent at ${l.from.name}`)}`}${l.park ? W('・到了先停好，不還⁠車', '・park it, don’t return') : ''}` };
-  if (phase === 'on') return { title: W(`坐到 ${l.to.name} 下車`, `Ride to ${l.to.name}`), sub: `${rideName(l)}${wayText(l) ? ` ${wayText(l)}` : ''}` };
-  return { title: `${W('搭', 'Take')} ${rideName(l)}`, sub: `${l.from.name}${wayText(l) ? `・${wayText(l)}` : ''}${l.train?.platform ? W(`・${l.train.platform} 月台`, `・platform ${l.train.platform}`) : ''}` };
+  if (l.mode === 'bike') return { title: `${W('騎到', 'Ride to')} ${shown(l.to.name)}`, sub: l.swap ? W('還車再借一台（每 30 分鐘換一次車）', 'Return and re-rent (a new bike every 30 min)') : `${l.kept ? W('騎同一台', 'Same bike') : `${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'}・${W(`在 ${shown(l.from.name)} 借⁠車`, `rent at ${shown(l.from.name)}`)}`}${l.park ? W('・到了先停好，不還⁠車', '・park it, don’t return') : ''}` };
+  if (phase === 'on') return { title: W(`坐到 ${shown(l.to.name)} 下車`, `Ride to ${shown(l.to.name)}`), sub: `${rideName(l)}${wayText(l) ? ` ${wayText(l)}` : ''}` };
+  return { title: `${W('搭', 'Take')} ${rideName(l)}`, sub: `${shown(l.from.name)}${wayText(l) ? `・${wayText(l)}` : ''}${l.train?.platform ? W(`・${l.train.platform} 月台`, `・platform ${l.train.platform}`) : ''}` };
 }
 // The ride this step leads to (the bus or train you're on your way to catch), or this step's own.
 const rideOf = (plan, i) => plan.legs.slice(i).findIndex(isRide) + i;
@@ -706,7 +706,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // Yours the next stop (ringNow): the card turned round to say so.
     const offNext = on && !state.done && (rs && state.next != null ? ringNow(rs, state.next) : left != null && left < NEXT_STOP_M);
     if (offNext) {
-      title = W(`下一站 ${l.to.name} 下車`, `Get off next: ${l.to.name}`);
+      title = W(`下一站 ${shown(l.to.name)} 下車`, `Get off next: ${shown(l.to.name)}`);
       sub = l.mode === 'bus' ? W('按下車鈴，準備下車', 'Press the bell') : W('準備下車', 'Get ready');
     }
     // The bus or train at your stop now.

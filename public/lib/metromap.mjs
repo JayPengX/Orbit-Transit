@@ -5,7 +5,7 @@
 // (no DOM: tested), `metroSvg` draws it, `panZoom` moves it under a finger.
 
 import { interchanges, lineRuns } from './metro.mjs';
-import { e, meters } from './util.mjs';
+import { e, meters, shown } from './util.mjs';
 
 const STEP = Math.PI / 4;
 
@@ -418,7 +418,7 @@ export function metroSvg(map, { pad = 24 } = {}) {
   const names = live
     .map(n => {
       const l = lab.get(n.i);
-      return `<text class="mm-name${n.big ? ' big' : ''}${n.end ? ' end' : ''}" data-node="${n.i}" x="${(l.x - x0).toFixed(1)}" y="${(l.y - y0).toFixed(1)}" text-anchor="${l.anchor}">${e(n.name)}</text>`;
+      return `<text class="mm-name${n.big ? ' big' : ''}${n.end ? ' end' : ''}" data-node="${n.i}" x="${(l.x - x0).toFixed(1)}" y="${(l.y - y0).toFixed(1)}" text-anchor="${l.anchor}">${e(shown(n.name))}</text>`;
     })
     .join('');
   return { w: W, h: H, at, svg: `<svg class="mm-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}"><g class="mm-tracks">${track}</g><g class="mm-trains"></g><g class="mm-dots">${dots}</g><g class="mm-names">${names}</g><g class="mm-here"></g></svg>` };

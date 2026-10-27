@@ -28,7 +28,7 @@ import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, tagText, trainKind, trainName, stationLabel } from './ui.mjs';
 import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, countHtml, tick, focus, navTitle, noticesHtml } from './look.mjs';
-import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
+import { e, hm, minsText, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson, shown as nameIn } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 import { onDayOff } from '#kit/dayoff.mjs';
@@ -503,7 +503,7 @@ const placeBuses = stops =>
     .slice(0, 5);
 const busRow = x => {
   const pinned = ctx.data.groups.some(g => g.items.some(i => i.stopUID === x.stopUID));
-  return `<div class="ot-strip">${strip({ no: x.route, note: x.dir ? W('返程', 'Return') : W('去程', 'Outbound'), main: e(x.stop || ''), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: routeAttr({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }) })}<button class="q-icon-btn ot-strip-act${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="${W('釘選', 'Pin')}" ${pinned ? 'disabled' : ''}>${icon('star')}</button></div>`;
+  return `<div class="ot-strip">${strip({ no: x.route, note: x.dir ? W('返程', 'Return') : W('去程', 'Outbound'), main: e(nameIn(x.stop || '')), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: routeAttr({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }) })}<button class="q-icon-btn ot-strip-act${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="${W('釘選', 'Pin')}" ${pinned ? 'disabled' : ''}>${icon('star')}</button></div>`;
 };
 
 // A trip's plans to show: the ways you pinned first (their next
@@ -540,7 +540,7 @@ const whenSmall = at => {
 function tripCard({ t, w }) {
   const st = tripOf(w);
   const when = w.at ? `${tw(w.at).date !== tw().date ? `${dayLabel(tw(w.at).date)} ` : ''}${hm(w.at)}` : '';
-  const head = `<header class="ot-trip-head">${tile(w.recurring ? 'clock' : 'route', COLOR.route, 'sm')}<span class="ot-trip-hd"><b>${e(w.label)}</b><small>${e(w.from ? w.from.name : W('目前位置', 'Here'))} → ${e(w.to.name)}${when ? ` · ${e(when)}` : ''}</small></span><button class="q-icon-btn" type="button" data-edit-trip="${e(t.id)}" aria-label="${W('編輯', 'Edit')}">${icon('edit')}</button></header>`;
+  const head = `<header class="ot-trip-head">${tile(w.recurring ? 'clock' : 'route', COLOR.route, 'sm')}<span class="ot-trip-hd"><b>${e(w.label)}</b><small>${e(w.from ? w.from.name : W('目前位置', 'Here'))} → ${e(nameIn(w.to.name))}${when ? ` · ${e(when)}` : ''}</small></span><button class="q-icon-btn" type="button" data-edit-trip="${e(t.id)}" aria-label="${W('編輯', 'Edit')}">${icon('edit')}</button></header>`;
   if (!st) return `<article class="ot-trip">${head}<button class="ot-trip-foot" type="button" data-load-trip="${e(t.id)}">${W('看班次', 'See rides')}${icon('chevron')}</button></article>`;
   const all = st.plans || [];
   const { first, rest } = tripPlans(all, t.picks);
@@ -584,8 +584,8 @@ function pinnedHtml(skip) {
       // One row, as every bus here: the line, where you get on and where you
       // get off; a ride with a way back has its 去程/回程 first, a tap turning it round.
       const dir = it.back ? `<span class="ot-strip-dir" role="button" data-flip="${e(it.id)}" aria-label="${r.back ? W('回程，改看去程', 'Return; show outbound') : W('去程，改看回程', 'Outbound; show return')}">${icon('swap')}${r.back ? W('回程', 'Return') : W('去程', 'Out')}</span>` : '';
-      const note = r.off ? `${dir}${W('到', 'to')} ${e(r.off.stop)}${it.n ? `<span class="ot-drop"> · ${W(`${it.n} 站`, `${it.n} stops`)}</span>` : ''}` : `${W('往', 'to')} ${e(r.headsign || '—')}`;
-      return `<div class="ot-strip">${strip({ no: it.route, note, main: e(r.stop), eta: busWhen(v, planned), attrs: routeAttr({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }) })}</div>`;
+      const note = r.off ? `${dir}${W('到', 'to')} ${e(nameIn(r.off.stop))}${it.n ? `<span class="ot-drop"> · ${W(`${it.n} 站`, `${it.n} stops`)}</span>` : ''}` : `${W('往', 'to')} ${e(r.headsign || '—')}`;
+      return `<div class="ot-strip">${strip({ no: it.route, note, main: e(nameIn(r.stop)), eta: busWhen(v, planned), attrs: routeAttr({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }) })}</div>`;
     })
     .join('');
   const trains = ctx.data.pins
@@ -610,7 +610,7 @@ function placesRail() {
   const here = ctx.here;
   const list = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
   if (!list.length) return '';
-  return `<div class="q-rail small ot-places">${list.map(p => `<button class="q-rail-card q-press ot-place" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place)}<strong>${e(p.name)}</strong>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`).join('')}</div>`;
+  return `<div class="q-rail small ot-places">${list.map(p => `<button class="q-rail-card q-press ot-place" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place)}<strong>${e(nameIn(p.name))}</strong>${here ? `<small>${e(distText(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`).join('')}</div>`;
 }
 
 // YouBike stations as a small rail: the bikes there now, big.
@@ -695,7 +695,7 @@ function heroOf(ts) {
       html: focus({
         eyebrow: W('附近的下一班', 'Next near you'),
         big: countHtml((stop.v.t ?? S.near.at) + stop.v.sec * 1000, { floor: true, cls: 'q-focus-value' }),
-        title: `${stop.route}${stop.stop ? `・${stop.stop}` : ''}`,
+        title: `${nameIn(stop.route)}${stop.stop ? `・${nameIn(stop.stop)}` : ''}`,
         live: true,
         facts: [Number.isFinite(stop.dist) ? distText(stop.dist) : ''],
         warn: stop.v.last ? W('末班車', 'Last bus') : '',

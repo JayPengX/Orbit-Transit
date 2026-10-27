@@ -38,6 +38,8 @@ if (en) {
   set('#q', 'placeholder', 'Search places');
   set('#q', 'aria-label', 'Search');
   set('#q-clear', 'aria-label', 'Clear');
+  set('#map', 'aria-label', 'Map');
+  set('#msheet', 'aria-label', 'Map');
   set('#ms-grab', 'aria-label', 'Resize the panel');
   const cancel = document.getElementById('q-cancel');
   if (cancel) cancel.textContent = 'Cancel';

@@ -14,7 +14,7 @@ import { errorText, liveMs, keptLocal, keepLocal } from './api.mjs';
 import { sheet, sheetHead, icon, inkOn } from './ui.mjs';
 import { tile, tick, noticesHtml } from './look.mjs';
 import { loadNotices } from './service.mjs';
-import { e, meters } from './util.mjs';
+import { e, meters, shown } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
@@ -39,7 +39,7 @@ export function init(c) {
     mode = localStorage.getItem(MODE_KEY) === 'geo' ? 'geo' : 'schem';
   } catch {}
   const panel = $('panel-metro');
-  panel.innerHTML = `<nav class="q-chips ot-chip-rail" id="m-maps" aria-label="${W('城市', 'City')}">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(m.name)}</button>`).join('')}</nav>
+  panel.innerHTML = `<nav class="q-chips ot-chip-rail" id="m-maps" aria-label="${W('城市', 'City')}">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(shown(m.name))}</button>`).join('')}</nav>
     <div id="m-notice" class="ot-m-notice"></div>
     <div class="ot-metro-view" id="m-view">
       <div id="m-schem" class="mm-box" role="img" aria-label="${W('捷運路線圖', 'Metro map')}"></div>
@@ -185,7 +185,7 @@ function legend() {
   const seen = new Set();
   $('m-legend').innerHTML = schem.lines
     .filter(l => !seen.has(l.name) && seen.add(l.name))
-    .map(l => `<button type="button" data-line="${e(l.key)}" style="--c:${e(l.color)};--ink:${inkOn(l.color)}" aria-pressed="false"><i></i>${e(l.name)}</button>`)
+    .map(l => `<button type="button" data-line="${e(l.key)}" style="--c:${e(l.color)};--ink:${inkOn(l.color)}" aria-pressed="false"><i></i>${e(shown(l.name))}</button>`)
     .join('');
 }
 function focusLine(key) {
@@ -287,7 +287,7 @@ function geoNames() {
       const lon = g.reduce((a, x) => a + x.lon, 0) / g.length;
       const big = g.length > 1 || s.lines.length > 1;
       const label = z >= 14 || (big && z >= 12);
-      return { id: `m:${s.key}`, lat, lon, cls: `mstop${big ? ' x' : ''}${z < 13 ? ' far' : ''}`, z: big ? 6 : 5, data: g, html: `<i style="--c:${e(colorOf(s))}"></i>${label ? `<span>${e(s.name)}</span>` : ''}` };
+      return { id: `m:${s.key}`, lat, lon, cls: `mstop${big ? ' x' : ''}${z < 13 ? ' far' : ''}`, z: big ? 6 : 5, data: g, html: `<i style="--c:${e(colorOf(s))}"></i>${label ? `<span>${e(shown(s.name))}</span>` : ''}` };
     })
   );
 }
