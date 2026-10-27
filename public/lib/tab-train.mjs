@@ -87,8 +87,9 @@ function pickDay(d) {
 }
 // The search is the page's card, as iOS lists it: 出發 over 抵達, ⇅ beside
 // them, the time and which railways under; any change asks at once (no 查詢).
-// (A station in its railway's colour: 台鐵 blue, 高鐵 orange.)
-const stPick = (which, st) => `<button class="ot-tq-st" type="button" data-pick="${which}"><small>${which === 'from' ? W('出發', 'From') : W('抵達', 'To')}</small>${st ? `${tile(st.sys === 'hsr' ? 'hsr' : 'tra', st.sys === 'hsr' ? COLOR.hsr : COLOR.tra)}<b>${e(stationLabel(st))}</b>` : `<b class="muted">${W('選車站', 'Pick a station')}</b>`}</button>`;
+// A station in its railway's colour: 台鐵 blue, 高鐵 orange.
+// (Only when the two ends are on different railways: a pair all of one kind needs no tile, DESIGN.md §3.)
+const stPick = (which, st) => `<button class="ot-tq-st" type="button" data-pick="${which}"><small>${which === 'from' ? W('出發', 'From') : W('抵達', 'To')}</small>${st ? `${state.from && state.to && state.from.sys !== state.to.sys ? tile(st.sys === 'hsr' ? 'hsr' : 'tra', st.sys === 'hsr' ? COLOR.hsr : COLOR.tra) : ''}<b>${e(stationLabel(st))}</b>` : `<b class="muted">${W('選車站', 'Pick a station')}</b>`}</button>`;
 // The time asked from, as the app writes it (24-hour; iPhone's own field said 晚上 7:09 and
 // wrapped in the pill): 現在, the time picked, or 首班 on another day. The field itself is
 // over it, unseen, so a tap still opens iPhone's wheel.
@@ -191,7 +192,8 @@ function journeyHtml(j, i, next) {
   const rides = j.legs.filter(l => !l.walk);
   const delays = rides.map(l => delayOf(l.trip));
   const late = delays.reduce((a, d) => a + (d || 0), 0);
-  // What changes the choice: late (red), on time by the live board (green), run only if the weather allows.
+  // What changes the choice: late or run only if the weather allows (a tag: the exception),
+  // on time by the live board (plain green text: a fact, DESIGN.md §6).
   const state_ = late
     ? `<span class="ot-jny-st late">${W(`晚 ${late} 分`, `${late} min late`)}</span>`
     : delays.some(d => d === 0)
@@ -206,7 +208,7 @@ function journeyHtml(j, i, next) {
       return at + trainChip(l.trip);
     })
     .join('');
-  const eyebrow = next ? `<span class="ot-jny-next">${W('下一班', 'Next train')}<b data-leave="${leaveAt(j)}">${e(leaveText(leaveAt(j)))}</b></span>` : '';
+  const eyebrow = next ? `<span class="ot-jny-next">${W('下一班', 'Next train')} · <b data-leave="${leaveAt(j)}">${e(leaveText(leaveAt(j)))}</b></span>` : '';
   return `<button class="ot-jny${i === state.open ? ' on' : ''}${next ? ' next' : ''}" type="button" data-j="${i}">
     ${eyebrow}
     <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><span class="ot-jny-mid"><small>${e(minsText((j.arr - j.dep) / 1000))}</small>${barHtml(j)}</span><b>${e(hm(j.arr))}</b></span>
