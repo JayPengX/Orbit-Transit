@@ -177,13 +177,12 @@ body {
   margin-top: 12px;
 }
 
-/* The focus: the answer open on the page (look.mjs focus). */
+/* The focus: the answer on its card (look.mjs focus). */
 .ot-focus {
   width: 100%;
   box-sizing: border-box;
   margin: 0;
   border: 0;
-  background: none;
   color: var(--q-label);
   font: inherit;
   text-align: left;
@@ -1956,8 +1955,6 @@ body.tab-map {
 /* A YouBike station: the bikes to take at the focal size, 電輔車 and docks as figures. */
 .ot-bike-now {
   margin-top: var(--q-s-3);
-  padding-left: 0;
-  padding-right: 0;
 }
 .ot-bike-row {
   display: flex;
