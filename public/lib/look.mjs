@@ -67,10 +67,11 @@ export const noticesHtml = items =>
   items?.length
     ? `<div class="q-rowcard ot-notices">${items
         .map(
-          n => `<details class="ot-notice${n.stop ? ' stop' : ''}"><summary class="q-ritem">${tile(n.kind === 'metro' && n.sys === 'TRTCMG' ? 'gondola' : n.kind, COLOR[n.kind] || COLOR.route, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(n.title)}</span><small>${e(n.sum)}</small></span></summary>${n.said?.length ? `<div class="ot-notice-body">${saidRows(n.said)}</div>` : n.lines.length ? `<div class="ot-notice-body">${n.lines.map(t => `<p>${e(t)}</p>`).join('')}</div>` : ''}</details>`
+          n => `<details class="ot-notice${n.stop ? ' stop' : ''}"><summary class="q-ritem">${tile(n.kind === 'metro' && n.sys === 'TRTCMG' ? 'gondola' : n.kind, COLOR[n.kind] || COLOR.route, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title"${/[\u3400-\u9fff]/.test(n.title) ? ' lang="zh-Hant"' : ''}>${e(n.title)}</span><small>${e(n.sum)}</small></span></summary>${n.said?.length ? `<div class="ot-notice-body">${saidRows(n.said)}</div>` : n.lines.length ? `<div class="ot-notice-body">${n.lines.map(t => `<p>${e(t)}</p>`).join('')}</div>` : ''}</details>`
         )
         .join('')}</div>`
     : '';
+// (An operator's notice is written in Chinese only: marked so, as it stays in English too.)
 // Notices as rows: their two words and first line, the whole notice a tap away.
 const firstLine = t => String(t || '').split('\n').find(x => x.trim()) || '';
 // (`open`: each shown whole, in the notice's own sheet.)
