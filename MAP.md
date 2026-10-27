@@ -5,7 +5,7 @@ YouBike; trips planned the way a person really travels; navigation that
 follows the trip. Signs in with the Orbit Pass, which keeps places, trips
 and pins. Light or dark follows the phone; the look is `lib/look.mjs` on the kit.
 
-Live: https://jaypengx.com/transit/
+Live: https://orbit.jaypengx.com/transit/
 
 ## How it works
 
