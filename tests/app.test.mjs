@@ -2790,3 +2790,33 @@ test('a weekday trip skips a typhoon day where it goes: 停課 for a school, 停
   assert.equal(holidayOn('2026-10-23', office), false);
   assert.equal(holidayOn('2026-10-23'), false);
 });
+
+test('我的位置 standing still: a forced ask starts the watch again, which answers at once', async () => {
+  const { getPosition } = await import('../public/lib/api.mjs');
+  // A phone's watch: one fix when started, then nothing (standing still).
+  const watches = [];
+  const nav = {
+    geolocation: {
+      watchPosition(ok) {
+        const id = watches.length + 1;
+        watches.push({ id, live: true });
+        setTimeout(() => watches[id - 1].live && ok({ coords: { latitude: 24.81, longitude: 121 + id, accuracy: 10 } }), 5);
+        return id;
+      },
+      clearWatch(id) {
+        watches[id - 1].live = false;
+      }
+    }
+  };
+  const first = await getPosition({ timeout: 500 }, nav);
+  assert.equal(first.lon, 122);
+  // Older than the ask allows, unforced: waits on a watch that has nothing new, until the timeout.
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal((await getPosition({ timeout: 50, maximumAge: 10 }, nav)).error, 'timeout');
+  // Forced (the tap): a new watch, its fix back at once.
+  const t = Date.now();
+  const again = await getPosition({ timeout: 2000, maximumAge: 10, kick: true }, nav);
+  assert.equal(again.lon, 123);
+  assert.ok(Date.now() - t < 500);
+  assert.equal(watches[0].live, false);
+});

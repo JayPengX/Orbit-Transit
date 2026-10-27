@@ -116,7 +116,7 @@ let locating = null;
 async function locateNow(force) {
   // (Always asked, never skipped by a note that it was asked before: the session's one watch, api.mjs, answers it.)
   const towns = townships().catch(() => null);
-  const pos = await getPosition({ timeout: 10_000, maximumAge: force ? 10_000 : 60_000 });
+  const pos = await getPosition({ timeout: 10_000, maximumAge: force ? 10_000 : 60_000, kick: force });
   if (pos.error) return ctx.here;
   ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: Date.now() };
   local.here = ctx.here;
