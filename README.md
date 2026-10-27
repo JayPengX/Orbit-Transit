@@ -38,7 +38,7 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 | --- | --- |
 | App | Plain JavaScript (ES modules), HTML and CSS; no framework, no build step, no dependencies |
 | Platform | Installable web app with a service worker; location and vibration for navigation, lock-screen notices while it runs |
-| Shared | Look, Orbit Pass, notices and data reads from the kit in [Shared-Proxy](https://github.com/JayPengX/Shared-Proxy) |
+| Shared | Look, Orbit Pass, notices and data reads from the kit in [Orbit-Core](https://github.com/JayPengX/Orbit-Core) |
 | Data | TDX (Taiwan's transport data exchange) through the Orbit proxy on Cloudflare Workers; weekly bus packs and line shapes in Cloudflare R2 |
 | Maps | Google Maps under the month's cap, else Leaflet with NLSC's tiles; walks on Google's streets, else OpenStreetMap |
 | Routing | Our own 台鐵/高鐵 router (Connection Scan) and metro router, beside Google's and TDX's planners |
@@ -87,10 +87,10 @@ MAP.md                     how it works, file by file
 
 ## Getting started
 
-The app loads the shared kit from a sibling folder, so clone this repo next to [Shared-Proxy](https://github.com/JayPengX/Shared-Proxy):
+The app loads the shared kit from a sibling folder, so clone this repo next to [Orbit-Core](https://github.com/JayPengX/Orbit-Core):
 
 ```bash
-git clone https://github.com/JayPengX/Shared-Proxy.git
+git clone https://github.com/JayPengX/Orbit-Core.git
 git clone https://github.com/JayPengX/Orbit-Transit.git
 cd Orbit-Transit
 ```
@@ -98,19 +98,19 @@ cd Orbit-Transit
 Requirements: Node.js 22 or newer. There is nothing to install: no framework, no `node_modules`.
 
 ```bash
-npm test   # links ../Shared-Proxy/kit as .kit, then runs node --test
+npm test   # links ../Orbit-Core/kit as .kit, then runs node --test
 ```
 
 See it on a phone-sized screen, signed in with a made-up wallet and real data (needs Playwright):
 
 ```bash
 # a screenshot, saved in /tmp/orbit-preview
-node ../Shared-Proxy/tools/preview.mjs transit --live --width 375
+node ../Orbit-Core/tools/preview.mjs transit --live --width 375
 # serve it, then open http://localhost:8123/Orbit-Transit/
-node ../Shared-Proxy/tools/preview.mjs transit --live --serve --port 8123
+node ../Orbit-Core/tools/preview.mjs transit --live --serve --port 8123
 ```
 
-`--dark`, `--lang en`, `--webkit` (Safari's engine) and the other flags are listed in [Shared-Proxy/tools/README.md](https://github.com/JayPengX/Shared-Proxy/blob/main/tools/README.md).
+`--dark`, `--lang en`, `--webkit` (Safari's engine) and the other flags are listed in [Orbit-Core/tools/README.md](https://github.com/JayPengX/Orbit-Core/blob/main/tools/README.md).
 
 Run a trip on today's real data, and compare the ranking before and after a change:
 
@@ -138,6 +138,6 @@ Push to `main`. GitHub Actions runs the tests, stamps every file with its conten
 | [Orbit Beats](https://github.com/JayPengX/Orbit-Beats) | Endless music and your own beats |
 | [Orbit Law](https://github.com/JayPengX/Orbit-Law) | Laws, rulings and bills, linked |
 | [Orbit Money](https://github.com/JayPengX/Orbit-Money) | Your own books |
-| [Shared-Proxy](https://github.com/JayPengX/Shared-Proxy) | The kit, the Orbit Pass and the Workers behind them all |
+| [Orbit-Core](https://github.com/JayPengX/Orbit-Core) | The kit, the Orbit Pass and the Workers behind them all |
 
 How it was all built, in pictures and numbers: [jaypengx.com/showcase](https://jaypengx.com/showcase/).

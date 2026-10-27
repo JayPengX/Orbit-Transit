@@ -1400,7 +1400,7 @@ body.tab-map {
 .ot-mk > * {
   pointer-events: auto;
 }
-/* YouBike (Shared-Proxy docs/DESIGN.md §7): the stations that matter a
+/* YouBike (Orbit-Core docs/DESIGN.md §7): the stations that matter a
    white pill, a yellow edge and bike, the bikes there in dark type, a point
    under it; few bikes in orange type; none grey. The rest (.dot) a small
    yellow dot ringed in white, a 28px target round it. A trip's own station

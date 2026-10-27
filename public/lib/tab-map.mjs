@@ -381,7 +381,7 @@ async function drawLayersNow() {
     return;
   }
   // YouBike: the city's stations, the 200 nearest the middle. Weighed by
-  // what matters (Shared-Proxy docs/DESIGN.md §7): the few nearest you (the
+  // what matters (Orbit-Core docs/DESIGN.md §7): the few nearest you (the
   // middle when you're off the map) and every one at street level show their
   // bikes; the rest are quiet dots, still there and still tappable.
   if (L.bike && z >= 15 && city) {

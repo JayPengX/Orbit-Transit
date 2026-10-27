@@ -1,4 +1,4 @@
-// Everything from the proxy (Shared-Proxy/transit.js), signed in with the
+// Everything from the proxy (Orbit-Core/transit.js), signed in with the
 // Orbit Pass session: TDX's data, Google's map, places and routes. Answers
 // are kept here too: in memory, and what lasts (stations, routes, a day's
 // timetable) in this device's cache, so a second look costs nothing.
