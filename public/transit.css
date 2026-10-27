@@ -2288,6 +2288,8 @@ body.tab-map {
 .ot-plan {
   display: block;
   width: 100%;
+  /* (A grid item: never as wide as its one-line legs or its departures row; they fit inside.) */
+  min-width: 0;
   padding: 12px 14px;
   border: 0;
   border-radius: 18px;
