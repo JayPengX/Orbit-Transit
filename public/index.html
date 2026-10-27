@@ -6,7 +6,7 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f7" />
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
 <meta name="build-version" content="dev" />
-<!-- brand: Shared-Proxy/brand/generate.mjs writes this block -->
+<!-- brand: Orbit-Core/brand/generate.mjs writes this block -->
 <title>Orbit Transit</title>
 <meta name="description" content="台灣大眾運輸：地圖與路線導航、公車到站、火車與高鐵轉乘、捷運路網，加上 YouBike。" />
 <meta name="application-name" content="Orbit Transit" />
@@ -43,15 +43,15 @@
 <link rel="manifest" href="./manifest.webmanifest" />
 <link rel="preconnect" href="https://orbit-workers-proxy.pengzjay.workers.dev" crossorigin />
 <!-- kit:head: where the app's stylesheets end, before any module. The kit
-     comes from one place for every app (Shared-Proxy's GitHub Pages, same
+     comes from one place for every app (Orbit-Core's GitHub Pages, same
      site as the apps), each file at the hash this device last saw (orbit.kit
      and orbit.kitFiles, noted from the kit's version.json by boot.js and
      orbit.mjs kitLatest; on a first visit the hashes the app's deploy
      baked in, the `null` at the end), so a change to the kit is one push
-     to Shared-Proxy and a phone downloads only the files it changed. A kit
+     to Orbit-Core and a phone downloads only the files it changed. A kit
      file newer than the app's deploy (not in its list) is mapped from those
      hashes too, never left at a bare address the browser keeps 10 minutes. -->
-<script>!function(b,d,v,h,n,m,f,i,u){try{v=localStorage.getItem('orbit.kit')||'';h=JSON.parse(localStorage.getItem('orbit.kitFiles')||'null')}catch(e){v=''}n=!!v;if(!n&&d){v=d.version;h=d}h=h&&h.version===v?h.files:null;u=function(x){var k=h&&h[x];return b+x+(k?'?v='+k:v?'?v='+encodeURIComponent(v):'')};m={'#kit/':b};f=['brand.mjs','catalog.mjs','dayoff.mjs','devconfig.mjs','f1live.mjs','format.mjs','gov.mjs','help.mjs','holidays.mjs','lang.mjs','loan.mjs','logos.mjs','mirror.mjs','names.mjs','orbit.mjs','pass-sync.mjs','pass.mjs','photo-urls.mjs','photos.mjs','postseason.mjs','sports-broadcast.mjs','sports-espn.mjs','sports-highlights.mjs','sports-winprob.mjs','stock-access.mjs','stock-account.mjs','stock-bonds.mjs','stock-codec.mjs','stock-credit.mjs','stock-hk-lots.mjs','stock-holidays.mjs','stock-ipo.mjs','stock-jp-lists.mjs','stock-markets.mjs','stock-quotes.mjs','stock-savings.mjs','ui.mjs'];for(i=0;i<f.length;i++)m['#kit/'+f[i]]=u(f[i]);if(h)for(i in h)/\.mjs$/.test(i)&&(m['#kit/'+i]=u(i));window.ORBIT_KIT={base:b,version:v,noted:n,url:u};document.write('<script type="import'+'map">'+JSON.stringify({imports:m})+'<\/script><link rel="stylesheet" href="'+u('orbit.css')+'"><link rel="modulepreload" href="'+u('orbit.mjs')+'"><link rel="modulepreload" href="'+u('brand.mjs')+'">')}('../Shared-Proxy/kit/',null)</script>
+<script>!function(b,d,v,h,n,m,f,i,u){try{v=localStorage.getItem('orbit.kit')||'';h=JSON.parse(localStorage.getItem('orbit.kitFiles')||'null')}catch(e){v=''}n=!!v;if(!n&&d){v=d.version;h=d}h=h&&h.version===v?h.files:null;u=function(x){var k=h&&h[x];return b+x+(k?'?v='+k:v?'?v='+encodeURIComponent(v):'')};m={'#kit/':b};f=['brand.mjs','catalog.mjs','dayoff.mjs','devconfig.mjs','f1live.mjs','format.mjs','gov.mjs','help.mjs','holidays.mjs','lang.mjs','loan.mjs','logos.mjs','mirror.mjs','names.mjs','orbit.mjs','pass-sync.mjs','pass.mjs','photo-urls.mjs','photos.mjs','postseason.mjs','sports-broadcast.mjs','sports-espn.mjs','sports-highlights.mjs','sports-winprob.mjs','stock-access.mjs','stock-account.mjs','stock-bonds.mjs','stock-codec.mjs','stock-credit.mjs','stock-hk-lots.mjs','stock-holidays.mjs','stock-ipo.mjs','stock-jp-lists.mjs','stock-markets.mjs','stock-quotes.mjs','stock-savings.mjs','ui.mjs'];for(i=0;i<f.length;i++)m['#kit/'+f[i]]=u(f[i]);if(h)for(i in h)/\.mjs$/.test(i)&&(m['#kit/'+i]=u(i));window.ORBIT_KIT={base:b,version:v,noted:n,url:u};document.write('<script type="import'+'map">'+JSON.stringify({imports:m})+'<\/script><link rel="stylesheet" href="'+u('orbit.css')+'"><link rel="modulepreload" href="'+u('orbit.mjs')+'"><link rel="modulepreload" href="'+u('brand.mjs')+'">')}('../Orbit-Core/kit/',null)</script>
 <!-- /kit:head -->
 <link rel="stylesheet" href="./transit.css" />
 <!-- The map's library, asked as the page opens (the provider kept from the

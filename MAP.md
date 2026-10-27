@@ -139,7 +139,7 @@ node scripts/live.mjs 竹東站 縣體育場
 ```
 
 ```bash
-node ../Shared-Proxy/tools/preview.mjs transit --live --width 375
+node ../Orbit-Core/tools/preview.mjs transit --live --width 375
 ```
 
 - `npm test` includes navigation driven fix by fix (`tests/nav-drive.test.mjs`)
@@ -157,6 +157,6 @@ A push to `main` tests, stamps versions and deploys to Pages.
 | This | Also check |
 | --- | --- |
 | The score or ranking | The verdicts, `live.mjs --against`, `replay.mjs` |
-| A TDX path | Shared-Proxy's `TDX_RULES` and cache times, the `bus` push check |
-| Pack formats | Shared-Proxy's `builders/buses.js` |
+| A TDX path | Orbit-Core's `TDX_RULES` and cache times, the `bus` push check |
+| Pack formats | Orbit-Core's `builders/buses.js` |
 | Navigation steps | `ot.nav.v1` resuming, lock-screen notices (`kind: nav`) |
