@@ -314,8 +314,9 @@ function drawMe(h) {
   map?.layer('me').set([{ id: 'me', lat: h.lat, lon: h.lon, cls: 'me', z: 50, html: '<i class="ot-me"></i>' }]);
 }
 async function locateMe() {
-  // (Where you were seen a moment ago, at once (navigation's own watch keeps it fresh); then the fresh fix.)
-  const was = ctx.here && Date.now() - (ctx.here.at || 0) < 15_000 ? ctx.here : null;
+  // (Where you were last seen, at once, however long ago: standing still, the watch has nothing new
+  // to say and the fresh fix can take seconds, and a tap that waited on it looked like a dead button.)
+  const was = ctx.here;
   if (was) {
     map.setView(was.lat, was.lon, Math.max(map.zoom(), 16), aboveDy(), aboveDx());
     follow();

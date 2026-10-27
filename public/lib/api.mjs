@@ -269,9 +269,15 @@ globalThis.document?.addEventListener('visibilitychange', () => {
   }, 15_000);
 });
 // Where the device is: a fix no older than `maximumAge`, else the watch's next (within `timeout`).
-export function getPosition({ timeout = 8000, maximumAge = 60_000 } = {}, nav = globalThis.navigator) {
+// `kick` (a tap on 我的位置): the watch started again, as a phone standing still (or an iPhone's
+// watch gone silent) sends nothing new until it moves, and a new watch answers at once.
+export function getPosition({ timeout = 8000, maximumAge = 60_000, kick = false } = {}, nav = globalThis.navigator) {
   if (!nav?.geolocation) return Promise.resolve({ error: 'unsupported' });
   if (geo.last && Date.now() - geo.last.t <= maximumAge) return Promise.resolve({ ...geo.last.fix });
+  if (kick && geo.id != null) {
+    nav.geolocation.clearWatch?.(geo.id);
+    geo.id = null;
+  }
   watchDevice(nav);
   return new Promise(resolve => {
     const done = x => {
