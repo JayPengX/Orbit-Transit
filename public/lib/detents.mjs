@@ -46,10 +46,11 @@ export function axis(dx, dy, slop = SLOP) {
 }
 
 // A finger down on the sheet's body, going `dy` (down is positive): does the
-// sheet move, or does what's in it scroll? Only the large sheet scrolls, and
+// sheet move, or does what's in it scroll? Only the large sheet scrolls (and the
+// half one when it holds a trip's steps, `scrolls`: the map above stays in view), and
 // only until its top: pulled down from there, the sheet comes with the finger.
-export function bodyGesture({ detent, scrollTop = 0, dy = 0 }) {
-  if (detent !== 'large') return 'sheet';
+export function bodyGesture({ detent, scrollTop = 0, dy = 0, scrolls = detent === 'large' }) {
+  if (!scrolls || detent === 'peek') return 'sheet';
   return scrollTop <= 0 && dy > 0 ? 'sheet' : 'scroll';
 }
 

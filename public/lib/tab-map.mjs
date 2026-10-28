@@ -211,6 +211,7 @@ function showPlan(p, from, to, resume = null) {
     return navigate(card.plans[0], resume);
   }
   card.sel = 0;
+  if (msheet && msheet.detent !== 'medium') msheet.set('medium');
   renderCard();
   drawPlan(p, { fit: true });
 }
@@ -565,6 +566,7 @@ function closeCard() {
   clearInterval(cardTimer);
   $('card').hidden = true;
   $('card').className = 'ot-card';
+  tripOpen();
   map.layer('sel').set([]);
   map.select(null);
   map.lines('plan', []);
@@ -792,6 +794,7 @@ function renderCard() {
   fitLegs(box);
   // The plans keep most of the map in view: the sheet stays at its half.
   box.classList.toggle('plans', c.kind === 'plans');
+  tripOpen();
 }
 
 async function cardClick(ev) {
@@ -827,7 +830,11 @@ async function cardClick(ev) {
     card.sel = -1;
     return selectPlan(j);
   }
+  // A step of the trip opened: the map on that step (again: the whole way); its summary: the whole way.
+  const stepLi = ev.target.closest('.ot-steps li[data-leg]');
+  if (stepLi && card?.kind === 'plans' && card.sel >= 0) return frameStep(Number(stepLi.dataset.leg));
   const planBtn = ev.target.closest('[data-plan]');
+  if (planBtn && card?.kind === 'plans' && Number(planBtn.dataset.plan) === card.sel) return frameStep(-1);
   if (planBtn) return selectPlan(Number(planBtn.dataset.plan));
   // A way of moving on or off for this search (never all of them), and plan again.
   // (The mode toggles themselves: the sheet's own data-mode once matched here, so every tap on a trip's card planned it again and did nothing else.)
@@ -862,6 +869,8 @@ async function cardClick(ev) {
   }
   if (act === 'walk-there' || act === 'bike-there') return directTo(card, act === 'walk-there' ? 'walk' : 'bike');
   if (act === 'edit-pin') return ctx.editPlace?.(ev.target.closest('[data-id]').dataset.id);
+  // (A trip opened from a list of ways: back to the list.)
+  if (act === 'back' && card.kind === 'plans' && card.sel >= 0 && card.plans.length > 1) return selectPlan(card.sel);
   if (act === 'back') return card.back ? openCard(card.back) : closeCard();
   // (With stops: the trip backwards, the last place first.)
   if (act === 'swap') {
@@ -1014,6 +1023,36 @@ const fabGutter = () => {
 };
 const aboveDx = () => Math.round(fabGutter() / 2);
 let liftedFor = false;
+// The stop the list of ways was at before one was opened (to go back to it when it's closed).
+let listDetent = null;
+// The sheet holds a trip opened: only it (the fields, the other ways and the options wait behind ‹).
+function tripOpen() {
+  const on = card?.kind === 'plans' && card.sel >= 0 && Boolean(card.plans?.[card.sel]);
+  $('msheet')?.classList.toggle('ot-trip', on);
+  if (!on && card?.kind !== 'plans') listDetent = null;
+}
+// A step of the trip opened, on the map above the sheet (its line, or its two ends); -1 the whole way,
+// the end (not a number) where it ends. The step tapped stays lit; tapped again, the whole way.
+function frameStep(k) {
+  const p = card?.plans?.[card.sel];
+  if (!p || !map) return;
+  const later = restOf(card, p) || [];
+  const legs = [p, ...later].flatMap(q => q.legs);
+  const box = $('card');
+  const was = box.querySelector('.ot-steps li.lit');
+  const li = Number.isFinite(k) && k >= 0 ? box.querySelector(`.ot-steps li[data-leg="${k}"]`) : Number.isNaN(k) ? box.querySelector('.ot-steps li.end') : null;
+  was?.classList.remove('lit');
+  if (msheet.detent !== 'medium') msheet.set('medium');
+  const end = (later.at(-1) || p).legs.at(-1)?.to;
+  const whole = () => legs.flatMap(l => legPath(l).map(([lat, lon]) => ({ lat, lon })));
+  if (!li || li === was) return void map.fit(whole(), fitPad(30, 0.5));
+  li.classList.add('lit');
+  if (Number.isNaN(k)) return end?.lat != null && map.setView(end.lat, end.lon, 17, aboveDy(), aboveDx());
+  const l = legs[k];
+  const pts = legPath(l).map(([lat, lon]) => ({ lat, lon }));
+  for (const x of [l.from, l.to]) if (x?.lat != null) pts.push({ lat: x.lat, lon: x.lon });
+  if (pts.length) map.fit(pts, fitPad(40, 0.5));
+}
 let backToPeek = false;
 function buildSheet() {
   msheet = persistentSheet($('msheet'), {
@@ -1022,6 +1061,8 @@ function buildSheet() {
     grab: $('ms-grab'),
     room: sheetRoom,
     top: sheetTop,
+    // (A trip opened sits at half, its steps scrolling there, the map above showing its route.)
+    scrolls: d => d === 'large' || (d === 'medium' && $('msheet').classList.contains('ot-trip')),
     onChange: d => {
       // (Down from large, the keyboard goes: the field is no longer the thing.)
       if (d !== 'large' && document.activeElement === $('q')) $('q').blur();
@@ -1838,12 +1879,14 @@ function stepsHtml(p, c = card) {
   // With stops: each stretch's steps, 抵達 each stop between them.
   const later = restOf(c, p) || [];
   const stopAt = (q, k) => `<li class="stop"><span class="ot-step-time">${e(hm(q.arr))}</span><span class="ot-step-i">${k + 1}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e([c.to, ...c.then][k]?.name || '')}</b></span></li>`;
-  return `<ol class="ot-steps">${[p, ...later].map((q, k) => `${k ? stopAt([p, ...later][k - 1], k - 1) : ''}${stepItems(q.legs)}`).join('')}<li class="end"><span class="ot-step-time">${e(hm((later.at(-1) || p).arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')}${c.then?.length ? ` ${e([c.to, ...c.then][later.length].name || '')}` : ''}</b></span></li></ol>
+  // (Each step its place in the whole way, as drawPlan draws it: a tap frames it.)
+  const at = [p, ...later].map((q, k, all) => all.slice(0, k).reduce((a, x) => a + x.legs.length, 0));
+  return `<ol class="ot-steps">${[p, ...later].map((q, k) => `${k ? stopAt([p, ...later][k - 1], k - 1) : ''}${stepItems(q.legs, at[k])}`).join('')}<li class="end" data-leg="end"><span class="ot-step-time">${e(hm((later.at(-1) || p).arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')}${c.then?.length ? ` ${e([c.to, ...c.then][later.length].name || '')}` : ''}</b></span></li></ol>
     <span class="ot-plan-acts">${canNav(p) ? `<span class="q-btn primary" role="button" data-card="nav">${icon('route')} ${W('開始導航', 'Start')}</span>` : `<span class="ot-nav-later">${W(`${e(hm(p.dep - NAV_LEAD))} 起可以開始導航`, `Directions from ${e(hm(p.dep - NAV_LEAD))}`)}</span>`}<span class="q-btn${picked(c, p) ? ' on' : ''}" role="button" data-card="pick">${icon('star')} ${picked(c, p) ? W('已釘選', 'Pinned') : W('釘選這個方案', 'Pin route')}</span></span>`;
 }
-function stepItems(legs) {
+function stepItems(legs, from = 0) {
   return legs
-    .map(l => {
+    .map((l, k) => {
       const c = legColor(l);
       const what =
         l.mode === 'walk'
@@ -1851,7 +1894,7 @@ function stepItems(legs) {
           : l.mode === 'bike'
             ? `<b>${l.swap ? W('換一台，', 'Swap, ') : ''}${W('騎', 'ride')} ${l.ebike ? W('YouBike 電輔車', 'YouBike e-bike') : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-maps="${e(mapsLink(l.to, 'bicycling', l.from))}">${icon('route')}${mapsName()}</span>` : ''}${bikeEnd(l.kept ? W('騎', 'On') : W('借', 'Rent'), l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike]] : [[`${icon('bike')}${W('一般', 'bikes')}`, l.rent.bikes], [`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike || 0]]) : [])}${bikeEnd(l.park ? W('停', 'Park') : W('還', 'Return'), l.to.name, l.ret ? [[W('空位', 'docks'), l.ret.ret]] : [])}`
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.mode === 'tra' ? trainKind(l.short || l.name) : l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(shown(l.from.name))} → ${e(shown(l.to.name))}${l.stops ? ` · ${W(`${l.stops} 站`, `${l.stops} stops`)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
-      return `<li style="--c:${e(c)}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="${W('即時', 'Live')}"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
+      return `<li style="--c:${e(c)}" data-leg="${from + k}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="${W('即時', 'Live')}"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
     .join('');
 }
@@ -1859,6 +1902,15 @@ function stepItems(legs) {
 function selectPlan(i) {
   if (!card?.plans?.[i]) return;
   card.sel = card.sel === i ? -1 : i;
+  // A trip opened sits at half: its steps below, its route on the map above (the owner, 2026-10-28: at
+  // the lowest stop it showed nothing, pulled up it hid the map). Closed, the list goes back where it was.
+  if (card.sel >= 0) {
+    if (listDetent == null) listDetent = msheet.detent;
+    if (msheet.detent !== 'medium') msheet.set('medium');
+  } else if (listDetent != null) {
+    if (msheet.detent === 'medium' && listDetent !== 'peek') msheet.set(listDetent);
+    listDetent = null;
+  }
   renderCard();
   // (The time picked in view in its row of the day's times.)
   const pill = $('card').querySelector('.ot-plan.on .ot-dep.on');
