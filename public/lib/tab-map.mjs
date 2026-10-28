@@ -2227,7 +2227,8 @@ function navView(plan, i, tries = 0) {
   if (document.visibilityState !== 'visible') return;
   viewAt = Date.now();
   const n = navNow();
-  const pts = stageView(plan, i, n?.phase, n?.pos || ctx.here, legPath, n?.ride ? { ...n.ride, next: n.next } : null);
+  // (A step ahead looked at: that step alone, not you far off on another; the owner, 2026-10-28.)
+  const pts = stageView(plan, i, n?.phase, n?.ahead ? null : n?.pos || ctx.here, legPath, n?.ride ? { ...n.ride, next: n.next } : null);
   if (!pts.length) return;
   const box = $('map').getBoundingClientRect();
   const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;

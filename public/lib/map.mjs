@@ -117,6 +117,11 @@ function domItems(make, selected = () => null) {
 
 // onDrag: the map moved by a finger (not by the app), e.g. to stop following you.
 export async function createMap(el, { provider = 'nlsc', key = '', center, zoom = 15, onPick = () => {}, onTap = () => {}, onIdle = () => {}, onPlace = () => {}, onDrag = () => {} } = {}) {
+  // A pinch (two fingers) or a wheel is the person's, however soon after one
+  // of the app's own fits (a zoom within 1.5 s of one counts as the app's:
+  // the owner, 2026-10-28, a pinch just after tapping a step snapped back).
+  el.addEventListener('touchstart', ev => ev.touches.length > 1 && onDrag(), { passive: true });
+  el.addEventListener('wheel', () => onDrag(), { passive: true });
   if (provider === 'google' && key) {
     try {
       await loadGoogle(key);

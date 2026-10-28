@@ -1705,7 +1705,7 @@ export function stageView(plan, i, phase, me, path, ride = null) {
 export function navNow() {
   if (!nav) return null;
   const on = isRide(nav.plan.legs[nav.i]) && nav.phase === 'on';
-  return { plan: nav.plan, i: nav.i, phase: nav.phase, pos: nav.pos, ride: nav.ride.get(nav.i) || null, next: nav.next, aboard: on, offSoon: on && offSoon(nav), min: nav.min, offer: nav.offer || null };
+  return { plan: nav.plan, i: nav.i, phase: nav.phase, pos: nav.pos, ahead: nav.i > nav.reached, ride: nav.ride.get(nav.i) || null, next: nav.next, aboard: on, offSoon: on && offSoon(nav), min: nav.min, offer: nav.offer || null };
 }
 // Said on the card (to be there by a time, late): { title, sub, plan } or null.
 export function navOffer(o) {
