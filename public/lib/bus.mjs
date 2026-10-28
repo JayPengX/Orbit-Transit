@@ -109,11 +109,11 @@ export function stopTimes(sched, { stopUID, name, dir }, date, dow) {
 
 const ETA_FIELDS = '$select=StopUID,RouteUID,RouteName,SubRouteUID,Direction,EstimateTime,StopStatus,NextBusTime,PlateNumb,IsLastBus,Estimates,StopCountDown,DataTime';
 
-// Every stop of one route (the route sheet), keyed by StopUID.
+// Every stop of one route (the route sheet), keyed by StopUID; `dir`: one way's.
 export const routeEtaPath = route => `basic/v2/Bus/EstimatedTimeOfArrival/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&${ETA_FIELDS}`;
-export async function routeEta(route) {
+export async function routeEta(route, dir = null) {
   const j = await tdx(routeEtaPath(route), { fresh: 'live' });
-  return etaMap(j);
+  return etaMap(j, dir);
 }
 // A bus's place in a list: due soonest first, not out yet after, not running last.
 export function etaRank(v) {
@@ -172,13 +172,26 @@ export function said(v, now = Date.now()) {
   if (flag && (flag.effect === 'off' || flag.effect === 'likely') && !onRoad) return { ...raw, raw, sec: null, status: 4, next: null, more: [], flag };
   return { ...raw, raw, flag };
 }
-export function etaMap(j) {
+// Keyed by StopUID (the sooner of what's there), and by stop, route and way
+// (etaKey): a stop is often on both ways of a route (高鐵新竹站 on 快捷8號
+// each way; a line's ends) and on several routes (快捷8號 and 快捷8號支), and
+// the bus going the other way, or the other route's, is not yours.
+// `dir`: that way's rows only (a route sheet's way, a ride's).
+export const etaKey = (stopUID, routeUID = '', dir = null) => `${stopUID}@${routeUID}${dir == null ? '' : `/${Number(dir)}`}`;
+// A pinned stop's own time: its route and way's, never another's at the stop.
+export const etaFor = (map, { stopUID, routeUID = '', dir = null }) => map?.get(routeUID ? etaKey(stopUID, routeUID, dir) : stopUID);
+export function etaMap(j, dir = null) {
   const out = new Map();
+  const put = (k, v) => {
+    const old = out.get(k);
+    if (!old || (v.sec != null && (old.sec == null || v.sec < old.sec))) out.set(k, v);
+  };
   for (const r of rows(j)) {
+    if (dir != null && Number(r.Direction) !== Number(dir)) continue;
     const v = etaOf(r);
-    const old = out.get(r.StopUID);
-    // A stop listed twice (a bus each way through it): the sooner one.
-    if (!old || (v.sec != null && (old.sec == null || v.sec < old.sec))) out.set(r.StopUID, v);
+    put(r.StopUID, v);
+    put(etaKey(r.StopUID, r.RouteUID), v);
+    put(etaKey(r.StopUID, r.RouteUID, Number(r.Direction) || 0), v);
   }
   return out;
 }

@@ -5,14 +5,14 @@
 // every bus due.
 
 import { emptyNote, saidRows } from './look.mjs';
-import { routeStops, routeEta, routeEtaPath, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
+import { routeStops, routeEta, routeEtaPath, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
 import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson, shown } from './util.mjs';
-import { nextRun, liveTrusted } from './live.mjs';
+import { nextRun, nextUnseen, liveTrusted } from './live.mjs';
 import { routeStatus, effectLabel } from './service.mjs';
 
 import { W, en } from '#kit/lang.mjs';
@@ -177,7 +177,7 @@ export async function nextNear(route, here) {
       .slice(0, -1)
       .map((x, k) => [Number.isFinite(x.lat) ? meters(here.lat, here.lon, x.lat, x.lon) : Infinity, k])
       .sort((a, b) => a[0] - b[0])[0] || [Infinity, -1];
-    if (i >= 0 && d < Infinity) near.push({ d, w, i, stop: w.stops[i].name, stopUID: w.stops[i].uid, dir, headsign: w.headsign, v: live.get(w.stops[i].uid) || null });
+    if (i >= 0 && d < Infinity) near.push({ d, w, i, stop: w.stops[i].name, stopUID: w.stops[i].uid, dir, headsign: w.headsign, v: live.get(etaKey(w.stops[i].uid, route.uid, dir)) || null });
   }
   if (!near.length) return null;
   const nearest = Math.min(...near.map(x => x.d));
@@ -308,7 +308,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // nowhere near (resting with its tracker on) isn't taken (the
     // timetable's time instead).
     const lives = (w?.stops || []).map((s, k) => {
-      const v = live.get(s.uid);
+      const v = live.get(etaKey(s.uid, route.uid, w.dir));
       return v?.status === 0 && v.sec != null && !liveTrusted(sched, w, k, Date.now() + v.sec * 1000) ? null : v;
     });
     const between = k => busBetween(lives, k);
@@ -324,7 +324,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
               const v = lives[k];
               let t = etaText(v);
               // No bus on its way to it (尚未發車, 末班已過 the other way…): the timetable's next.
-              const p = !stopped && (!v || v.status !== 0 || v.sec == null) ? planned(w, k) : null;
+              // (Not the bus already seen further on: nextUnseen.)
+              const p = !stopped && (!v || v.status !== 0 || v.sec == null) && sched?.length ? nextUnseen(sched, w, k, lives, Date.now()) : null;
               // (Said once at the top: each stop only a dash.)
               if (stopped && !(v?.status === 0 && v.sec != null)) t = { main: '—', sub: '', tone: 'off' };
               // (Another day's said once above the stops, when it's every stop's.)

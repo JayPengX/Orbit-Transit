@@ -14,7 +14,7 @@
 import * as kitUI from '#kit/ui.mjs';
 import { suggest } from './suggest.mjs';
 import { tripNow, keptLead, pinnedTrainsNext, rideNow } from './tab-go.mjs';
-import { stopsEta } from './bus.mjs';
+import { stopsEta, etaFor } from './bus.mjs';
 import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, fitStrips } from './bus-ui.mjs';
 import { stationLabel, icon, legChips, fitLegs } from './ui.mjs';
@@ -77,7 +77,7 @@ export function createHome(box, ctx, act) {
       .flatMap(g => g.items)
       .map(it => {
         const r = { ...it, ...rideNow(it, here) };
-        const v = S.pinned.get(r.stopUID);
+        const v = etaFor(S.pinned, r);
         const live = v?.status === 0 && v.sec != null;
         return { id: it.id, route: it.route, stop: r.stop, toward: r.off ? r.off.stop : r.headsign, at: live ? (v.t ?? S.pinnedAt) + v.sec * 1000 : null, live, last: Boolean(v?.last), d: here && r.lat != null ? meters(here.lat, here.lon, r.lat, r.lon) : null, it, r };
       });
