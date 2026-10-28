@@ -281,3 +281,28 @@ test('waiting at the station with a sooner train still to come: that one, the ar
   assert.equal(s.plan.arr, T(16, 54));
   useRail({});
 });
+
+// The owner's case (2026-10-28, 17:15): opened again at the trip's end (the
+// last walk's line a block off), the trip was back on its first walk to the
+// YouBike at 臺鐵六家車站, 2.0 km away.
+test('opened again at the end, or where a later walk starts, off its line: that step, not the first', async () => {
+  const A = { lat: 24.808, lon: 121.04 };
+  const st = { name: '臺鐵六家車站', ...A };
+  const yb = { name: 'YouBike 六家站', ...off(A, 20, 30) };
+  const yb2 = { name: 'YouBike 2', ...off(A, 1200, -1500) };
+  const dest = { name: 'Home', ...off(yb2, 50, -250) };
+  const line = (a, b) => [[a.lat, a.lon], [b.lat, b.lon]];
+  const t0 = T(17, 40);
+  const legs = [
+    { mode: 'walk', from: st, to: yb, dep: t0, arr: t0 + 60e3, dur: 60, path: line(st, yb) },
+    { mode: 'bike', ebike: true, from: yb, to: yb2, rent: yb, dep: t0 + 60e3, arr: t0 + 600e3, dur: 540, path: line(yb, yb2) },
+    { mode: 'walk', from: yb2, to: dest, dep: t0 + 600e3, arr: t0 + 900e3, dur: 300, path: line(yb2, off(dest, 0, 120)) }
+  ];
+  for (const [here, i] of [[off(dest, 80, 0), 2], [off(yb2, 80, 60), 2]]) {
+    clock.set(T(17, 15));
+    const plan = JSON.parse(JSON.stringify({ legs, dep: t0, arr: legs.at(-1).arr, tags: [], dest }));
+    const { st: s } = start(plan, { here: { ...here, at: T(17, 15) }, resume: { i: 0, phase: 'before', reached: 0 } });
+    await settle();
+    assert.equal(s.i, i);
+  }
+});
