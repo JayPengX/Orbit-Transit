@@ -1314,7 +1314,18 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.settled = true;
     const now = Date.now();
     // (Or standing at a later ride's stop: the steps to it are behind you.)
-    const stopAt = plan.legs.findIndex((l, m) => m > state.reached && isRide(l) && l.from?.lat != null && meters(p.lat, p.lon, l.from.lat, l.from.lon) < 150);
+    const near = (pt, m) => pt?.lat != null && meters(p.lat, p.lon, pt.lat, pt.lon) < m;
+    // (Or where a later walk starts, off its line and away from where this step starts; or at the
+    // trip's end already, away from where it starts: its last step, where
+    // being there ends it. The owner, 2026-10-28: opened again at the end
+    // at 17:15, the trip was back on its first walk, 2.0 km away.)
+    const last = plan.legs.length - 1;
+    const there = last > state.reached && near(plan.legs[last].to || plan.dest, 250) && !near(plan.legs[state.reached].from, 500) ? last : -1;
+    const stopAt = Math.max(
+      plan.legs.findIndex((l, m) => m > state.reached && isRide(l) && near(l.from, 150)),
+      plan.legs.findLastIndex((l, m) => m > state.reached && l.mode === 'walk' && near(l.from, 150) && !near(plan.legs[state.reached].from, 300)),
+      there
+    );
     const by = tripAt(plan, p, state.reached, now, { anyTime: true });
     const at = stopAt > (by?.i ?? 0) ? { i: stopAt, phase: 'before' } : by;
     const k = at?.i ?? state.i;
