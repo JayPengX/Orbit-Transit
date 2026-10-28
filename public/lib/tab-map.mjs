@@ -17,7 +17,8 @@ import { OPERATORS, stationTitle } from './metro.mjs';
 import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
 import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { stationEta } from './near.mjs';
+import { stationEta, bikesAround } from './near.mjs';
+import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
 import { startNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
@@ -29,7 +30,7 @@ import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLA
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
-import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
+import { openRoute, strip, fitStrips, busWhen, plannedAt, nearStops } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
 import { createHome } from './home.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
@@ -597,6 +598,7 @@ function refreshCard() {
         for (const r of todo) c.planned.set(plannedKey(r), null);
         if (todo.length) Promise.all(todo.map(r => plannedAt(r, c.item).then(p => c.planned.set(plannedKey(r), p), () => {}))).then(() => card === c && renderCard());
       }
+      else if (c.kind === 'place' || c.kind === 'point') c.live = await aroundPlace(c);
       else if (c.kind === 'tra') c.live = await traBoard(c.item.id);
       else if (c.kind === 'hsr') c.live = await hsrBoard(c.item.id);
       else if (c.kind === 'metro') {
@@ -612,7 +614,31 @@ function refreshCard() {
     if (card === c) renderCard();
   };
   load();
-  if (card && card.kind !== 'plans' && card.kind !== 'place' && card.kind !== 'point') cardTimer = setInterval(load, liveMs());
+  if (card && card.kind !== 'plans') cardTimer = setInterval(load, liveMs());
+}
+// A place's or a spot's card: the buses due at the stops by it and the YouBike
+// stations beside it (Jay, 2026-10-28: the card was its name, 路線 and ☆ over
+// half a sheet of nothing). Distances are from the place, not from you.
+const AROUND_M = 450;
+async function aroundPlace(c) {
+  const lat = c.item.lat ?? c.lat;
+  const lon = c.item.lon ?? c.lon;
+  const [stops, bikes] = await Promise.all([nearStops({ lat, lon }, { n: 3, r: 400 }).catch(() => []), bikesAround(lat, lon).catch(() => [])]);
+  return {
+    stops: stops.filter(s => s.dist <= AROUND_M),
+    bikes: bikes
+      .map(s => ({ ...s, d: meters(lat, lon, s.lat, s.lon) }))
+      .filter(s => s.d <= AROUND_M)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 5)
+  };
+}
+function aroundHtml(c) {
+  const n = c.live;
+  const rows = nearBusRows(n ? n.stops : null, { max: 4 });
+  const bikes = n ? nearBikeCards(n.bikes) : '';
+  const body = rows || bikes ? `${rows ? `<div class="q-rowcard">${rows}</div>` : ''}${bikes}` : `<p class="ot-note">${W('附近沒有公車站或 YouBike', 'No bus stop or YouBike nearby')}</p>`;
+  return `<section class="ot-shelf ot-card-around">${kitUI.sectionHeadHtml(W('這裡附近', 'Around here'))}${body}</section>`;
 }
 
 // A card's place as a trip's end; one of Google's carries its id (Google Maps' own navigation goes to the place itself).
@@ -757,7 +783,7 @@ function renderCard() {
       ${actions(c, { more: `<button class="q-btn" type="button" data-card="metro">${icon('metro')} ${W('路網圖', 'Map')}</button>` })}`;
   } else if (c.kind === 'place' || c.kind === 'point') {
     const s = c.item;
-    html = `${head(s.name || W('載入中…', 'Loading…'), s.sub || '', 'place')}${err}${actions(c)}`;
+    html = `${head(s.name || W('載入中…', 'Loading…'), s.sub || '', 'place')}${err}${actions(c)}${aroundHtml(c)}`;
   } else if (c.kind === 'plans') html = plansHtml(c);
   box.innerHTML = html;
   // A long station name shrinks to its row (never a second row, never cut).
@@ -775,7 +801,17 @@ async function cardClick(ev) {
   const act = ev.target.closest('[data-card]')?.dataset.card;
   const bell = ev.target.closest('[data-alert]');
   if (bell && card?.kind === 'bus') return alertSheet(card, JSON.parse(bell.dataset.alert));
+  // A place's 這裡附近: a YouBike station opens its card, a bus its route (near-ui's rows carry the route as JSON).
+  const bk = ev.target.closest('[data-bk]');
+  if (bk && card?.live?.bikes) {
+    const s = card.live.bikes.find(b => b.uid === bk.dataset.bk);
+    return s && arrive({ kind: 'bike', item: s, lat: s.lat, lon: s.lon });
+  }
   const routeBtn = ev.target.closest('[data-route]');
+  if (routeBtn?.dataset.route.startsWith('{')) {
+    const x = JSON.parse(routeBtn.dataset.route);
+    return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
+  }
   if (routeBtn) {
     const d = routeBtn.dataset;
     return openRoute(ctx, { uid: d.routeUid, name: d.route, city: d.city }, { stopUID: d.stop, dir: Number(d.dir) });
