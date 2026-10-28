@@ -13,7 +13,7 @@
 
 import * as kitUI from '#kit/ui.mjs';
 import { errorText, liveMs } from './api.mjs';
-import { stopsEta, etaRank } from './bus.mjs';
+import { stopsEta, etaRank, etaFor } from './bus.mjs';
 import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
@@ -206,7 +206,7 @@ function trips(now = Date.now()) {
 // and times from the bus packs, no proxy read), not 「尚未發車」.
 async function plannedTimes(items) {
   const todo = items.filter(r => {
-    const v = S.pinned.get(r.stopUID);
+    const v = etaFor(S.pinned, r);
     return !(v?.status === 0 && v.sec != null) && r.routeUID;
   });
   await Promise.all(
@@ -567,7 +567,7 @@ function pinnedBuses() {
     .flatMap(g => g.items)
     .map(it => {
       const r = sideOf(it);
-      const v = S.pinned.get(r.stopUID);
+      const v = etaFor(S.pinned, r);
       const live = v?.status === 0 && v.sec != null;
       const planned = live ? null : S.planned.get(r.stopUID);
       const at = live ? (v.t ?? S.pinnedAt) + v.sec * 1000 : planned?.at || null;

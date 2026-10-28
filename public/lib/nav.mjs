@@ -937,7 +937,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       if (on && rs && state.next == null && state.pos && state.i === at) state.next = nextStop(rs.stops, rs.i, rs.j, state.pos);
       if (l?.mode === 'bus' && l.from?.lat) {
         const x = state.info.get(ri);
-        const eta = x?.route ? await routeEta(x.route).catch(() => null) : null;
+        const eta = x?.route ? await routeEta(x.route, x.way?.w.dir ?? x.leg?.route?.dir ?? null).catch(() => null) : null;
         if (on) {
           // On it: when it's at each stop to go, yours too.
           const ahead = rs && eta && state.next != null ? busAhead(rs.stops, state.next, rs.j, eta) : null;

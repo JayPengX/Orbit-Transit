@@ -77,7 +77,11 @@ export async function officialLeg(l, { near = stationsAround, stops = routeStops
       const off = meters(way.w.stops[way.j].lat, way.w.stops[way.j].lon, l.to.lat, l.to.lon);
       const on = meters(way.w.stops[way.i].lat, way.w.stops[way.i].lon, l.from.lat, l.from.lon);
       // Gets off where the leg does (a route that turns off before it doesn't).
-      if (off > 300 || on > 250) return;
+      // (Or its very name, as many stops on, a little further: Google has
+      // 快捷8號支 to 竹東火車站, its 竹東 stop 900 m off, at a 07:30 the
+      // timetable doesn't have; unmatched, that time stood. 2026-10-29)
+      const same = routeNorm(route) === routeNorm(name) && Number(l.stops) > 0 && Math.abs(way.j - way.i - Number(l.stops)) <= 1;
+      if (off > (same ? 1200 : 300) || on > 250) return;
       // The same name first (快捷8號 over 快捷8號支 for 快捷八號), then the closest stops.
       // And as many stops between as the planner said (the branch that crosses
       // the other bridge has its own count).
@@ -89,9 +93,9 @@ export async function officialLeg(l, { near = stationsAround, stops = routeStops
   const bs = best.way.w.stops[best.way.i];
   return { ...l, name: best.route, short: best.route, said: name !== best.route ? name : undefined, headsign: l.headsign || best.way.w.headsign, route: { uid: best.uid, city: routeCity(best.uid), dir: best.way.w.dir, stopUID: bs.uid } };
 }
-// Every bus of a planner's plan as its official route, and when it isn't
-// due within the hour and a half live times cover, the timetable's bus at
-// that stop instead of the planner's guess (the rest of the trip moved with it).
+// Every bus of a planner's plan as its official route, and the timetable's
+// bus at that stop instead of the planner's guess (the rest of the trip
+// moved with it); what the buses are doing now comes after (adjustPlan).
 export async function officialPlan(plan, now = Date.now(), opts = {}) {
   if (!plan.legs.some(l => l.mode === 'bus' && !l.route?.uid)) return plan;
   const legs = await Promise.all(plan.legs.map(l => officialLeg(l, opts).catch(() => l)));
@@ -99,7 +103,10 @@ export async function officialPlan(plan, now = Date.now(), opts = {}) {
   const schedule = opts.schedule || routeSchedule;
   for (let i = 0; i < legs.length; i++) {
     const l = legs[i];
-    if (l.mode !== 'bus' || !l.route?.uid || l === plan.legs[i] || l.dep <= now + 90 * MIN) continue;
+    // (Soon ones too: a planner's 07:28 for 快捷8號 at 文興嘉興路口, whose
+    // timetable has 07:55 and no bus on the road for it, stood as 時刻表 07:28;
+    // a bus really coming is put on after, adjustPlan.)
+    if (l.mode !== 'bus' || !l.route?.uid || l === plan.legs[i]) continue;
     const sched = await schedule({ uid: l.route.uid, name: l.short, city: l.route.city }, l.from).catch(() => []);
     const ways = await (opts.stops || routeStops)({ uid: l.route.uid, name: l.short, city: l.route.city }, l.from).catch(() => []);
     const w = ways.find(x => x.dir === l.route.dir);
@@ -107,7 +114,8 @@ export async function officialPlan(plan, now = Date.now(), opts = {}) {
     if (k < 0) continue;
     const ready = (legs[i - 1]?.arr ?? l.dep) - 30_000;
     const t = departuresAt(sched, w, k, ready, 1)[0];
-    if (t == null || Math.abs(t - l.dep) < MIN || t - l.dep > 45 * MIN) continue;
+    // (However far off: a planner's 07:27 for 快捷8號支 there, whose timetable says 08:27, is no bus at all.)
+    if (t == null || Math.abs(t - l.dep) < MIN) continue;
     const delta = t - l.dep;
     for (let a = i; a < legs.length; a++) {
       if (a > i && RAIL.has(legs[a].mode)) break;
@@ -160,6 +168,24 @@ export function nextRun(sched, w, i, after, days = 7) {
     if (t != null) return { at: t, day: k };
   }
   return null;
+}
+// The timetable's next bus at stop i of a way that isn't a bus already seen
+// further on (`lives`: each stop's live time): a bus at 上員 early, its
+// timetable time at 員山路口 just behind it still to come, said 06:57 there
+// between 08:40 and 進站中. A run whose time at the next stop with a bus
+// coming is that bus's (25 minutes late to 10 early, as liveTrusted) is it,
+// gone by: the run after it.
+export function nextUnseen(sched, w, i, lives, now = Date.now()) {
+  let p = nextRun(sched, w, i, now);
+  const j = lives.findIndex((v, k) => k > i && v?.status === 0 && v.sec != null);
+  if (j < 0) return p;
+  const seen = now + lives[j].sec * 1000;
+  for (let n = 0; p && p.day === 0 && n < 3; n++) {
+    const there = nextRun(sched, w, j, p.at, 0);
+    if (!there || there.at < seen - 25 * MIN || there.at > seen + 10 * MIN) break;
+    p = nextRun(sched, w, i, p.at + MIN);
+  }
+  return p;
 }
 // Whether a live estimate (a bus due at the stop at `at`) is a bus in
 // service: one the timetable has due about then (25 minutes late at most, 10
