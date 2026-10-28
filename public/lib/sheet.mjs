@@ -9,8 +9,9 @@ import { DETENTS, detentHeights, follow, settle, axis, bodyGesture, stepped } fr
 const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // el: the sheet; parts: { head (its top: grabber and search), body (what scrolls), grab (the grabber button) };
-// room() the panel's height, top() the space kept above the large sheet.
-export function persistentSheet(el, { head, body, grab, room, top = () => 64, detent = 'peek', onChange = () => {} }) {
+// room() the panel's height, top() the space kept above the large sheet; scrolls(detent) whether its body
+// scrolls at that stop (the large one, unless said otherwise).
+export function persistentSheet(el, { head, body, grab, room, top = () => 64, detent = 'peek', scrolls = d => d === 'large', onChange = () => {} }) {
   let cur = DETENTS.includes(detent) ? detent : 'peek';
   const heights = () => detentHeights(room(), { top: top() });
   let hs = heights();
@@ -32,6 +33,8 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   };
   const paint = (animate = true) => {
     el.dataset.detent = cur;
+    // (What's under the panel's foot at this stop: a body that scrolls here can still bring its end into view.)
+    el.style.setProperty('--ms-under', `${Math.max(0, hs.large - hs[cur])}px`);
     el.parentElement?.setAttribute('data-sheet', cur);
     grab?.setAttribute('aria-valuenow', String(DETENTS.indexOf(cur)));
     grab?.setAttribute('aria-valuetext', cur);
@@ -74,7 +77,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
         if (!a) return;
         if (a === 'h') return void (g.mode = 'ignore');
       }
-      const m = g.head ? 'sheet' : bodyGesture({ detent: cur, scrollTop: body.scrollTop, dy });
+      const m = g.head ? 'sheet' : bodyGesture({ detent: cur, scrollTop: body.scrollTop, dy, scrolls: scrolls(cur) });
       if (m === 'scroll') return void (g.mode = 'scroll');
       // (Scrolled up to the top and still pulling: the sheet takes the finger from here. Otherwise it
       // follows from where the finger went down, so the first move, however far, is not lost.)

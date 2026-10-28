@@ -58,3 +58,10 @@ test('detents: a tap on the grabber steps up, large goes back down', () => {
   assert.equal(stepped('medium'), 'large');
   assert.equal(stepped('large'), 'medium');
 });
+
+test('detents: a trip open at half scrolls its steps there, the map kept above', () => {
+  assert.equal(bodyGesture({ detent: 'medium', scrollTop: 0, dy: -20, scrolls: true }), 'scroll', 'pushed up: its steps scroll');
+  assert.equal(bodyGesture({ detent: 'medium', scrollTop: 120, dy: 20, scrolls: true }), 'scroll');
+  assert.equal(bodyGesture({ detent: 'medium', scrollTop: 0, dy: 20, scrolls: true }), 'sheet', 'at its top, pulled down: the sheet');
+  assert.equal(bodyGesture({ detent: 'peek', scrollTop: 0, dy: -20, scrolls: true }), 'sheet', 'peek never scrolls');
+});

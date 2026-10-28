@@ -5341,3 +5341,36 @@ button.ot-trip-foot {
   white-space: normal;
   overflow: visible;
 }
+
+/* ---- A trip opened: only it in the sheet, at half, its steps scrolling there and its route on the map
+   above (the owner, 2026-10-28: the lowest stop showed nothing, pulled up it hid the map). The fields,
+   the options and the other ways wait behind ‹. ---- */
+.ot-msheet.ot-trip .ot-plans-head {
+  grid-template-areas: 'back title star close';
+}
+.ot-msheet.ot-trip .ot-plans-head > .ot-od,
+.ot-msheet.ot-trip .ot-ph-swap,
+.ot-msheet.ot-trip .ot-opts,
+.ot-msheet.ot-trip .ot-plans-more,
+.ot-msheet.ot-trip .ot-plans-rest,
+.ot-msheet.ot-trip .ot-plan:not(.on) {
+  display: none;
+}
+.ot-msheet.ot-trip .ot-plans {
+  margin-top: 10px;
+}
+.ot-msheet.ot-trip[data-detent='medium'] {
+  touch-action: pan-x pan-y;
+}
+.ot-msheet.ot-trip[data-detent='medium'] .ot-ms-body {
+  padding-bottom: calc(64px + var(--ms-under, 0px) + var(--ot-kb, 0px));
+}
+/* A step tapped: lit, the map on it. */
+.ot-msheet.ot-trip .ot-steps li[data-leg] {
+  cursor: pointer;
+  border-radius: 12px;
+}
+.ot-steps li.lit {
+  background: color-mix(in srgb, var(--c, var(--q-accent)) 16%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--c, var(--q-accent)) 16%, transparent);
+}
