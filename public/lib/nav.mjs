@@ -1234,6 +1234,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   const takeOther = (k, opt, text) => {
     const late = retimeRide(plan, k, opt);
     state.gen++;
+    state.delay = 0;
     for (const m of [state.ride, state.info, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
     state.swap = { at: Date.now(), text: late ? `${text}・${W(`可能趕不上 ${late}，按「換一條路」`, `may miss ${late}; tap Another way`)}` : text };
     go(state.i, state.phase);
@@ -1270,13 +1271,34 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (!isRide(l) || state.phase === 'on' || state.done || !state.pos || Date.now() - (state.posAt || 0) > 2 * 60_000) return;
     if (meters(state.pos.lat, state.pos.lon, l.from.lat, l.from.lon) > 300) return;
     const gone = l.mode === 'bus' ? !state.liveAt.has(k) && Date.now() > l.dep + 2 * 60_000 : Date.now() > l.dep + state.delay * 60_000 + 90_000;
-    if (!gone || state.missing === k) return;
+    if (state.missing === k) return;
+    if (!gone) return sooner(k);
     state.missing = k;
     const next = (await rideOptions(l, state.info.get(k)).catch(() => [])).find(o => o.dep + (o.delay || 0) * 60_000 > Date.now() + 30_000);
     state.missing = null;
     if (!next || nav !== state || state.i !== k || state.phase === 'on') return;
     buzz();
     takeOther(k, next, W(`沒趕上 ${rideName(l)}，改搭 ${optText(next, l)}`, `Missed ${rideName(l)}; next: ${optText(next, l)}`));
+  };
+  // Waiting at the station for a train with one there sooner still to come
+  // (there early, or an earlier one running late): that one, said and
+  // buzzed, and the changes after it moved sooner too (the owner,
+  // 2026-10-28: at 竹中 at 16:30, 1754 at 16:43 still to come, the trip
+  // waiting for 1758 at 17:41). Looked at once a minute.
+  const sooner = async k => {
+    const l = plan.legs[k];
+    if ((l.mode !== 'tra' && l.mode !== 'hsr') || Date.now() - (state.soonerAt || 0) < 60_000) return;
+    state.soonerAt = Date.now();
+    state.missing = k;
+    const opts = await rideOptions(l, null).catch(() => []);
+    state.missing = null;
+    if (nav !== state || state.i !== k || state.phase === 'on') return;
+    const late = o => (o.delay || 0) * 60_000;
+    const best = opts.filter(o => o.dep + late(o) > Date.now() + 60_000).sort((a, b) => a.arr + late(a) - (b.arr + late(b)))[0];
+    if (!best || best.arr + late(best) >= l.arr + (state.delay || 0) * 60_000 - 60_000) return;
+    buzz();
+    takeOther(k, best, W(`${optText(best, l)} 比較早到，改搭這班`, `${optText(best, l)} gets there sooner: switched`));
+    cascade(k);
   };
   // ---- Started (or opened again) half way ----
   // Where you are on the trip, by where you are alone, with the first good
@@ -1373,12 +1395,12 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   };
   // Each ride ahead that can't be caught as timed now (you'll be at its stop
   // after it's gone; or it's another day's): the first one after you're there,
-  // today; none, the rest of the trip planned again from there. On board,
-  // each one after the ride you're on that a sooner one now beats (on an
+  // today; none, the rest of the trip planned again from there. On board
+  // (or `from`, a ride just moved sooner), each one after it that a sooner one now beats (on an
   // earlier train than planned, the change it makes: the owner, 2026-10-28,
   // on 1825 at 16:15, the trip still changed to 17:41 and said 18:02): the
   // one there first, two minutes and more after you're at its stop.
-  const cascade = async () => {
+  const cascade = async (from = state.phase === 'on' ? state.i : Infinity) => {
     let changed = false;
     for (let m = state.i; m < plan.legs.length; m++) {
       const l = plan.legs[m];
@@ -1389,8 +1411,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       const ready = m === state.i ? now : navTimes(plan, state.i, state.phase, state.pos, new Map(), now, state.phase === 'on' ? (state.arrAt ?? null) : null).ready.get(m);
       if (ready == null) continue;
       const fits = l.dep >= ready - 60_000 && l.dep - ready < 3 * 3_600_000;
-      const sooner = state.phase === 'on' && m > state.i;
-      if (fits && !sooner) continue;
+      if (fits && m <= from) continue;
       const opts = await rideOptions(l, state.info.get(m), ready).catch(() => []);
       if (nav !== state) return;
       const late = o => (o.delay || 0) * 60_000;
