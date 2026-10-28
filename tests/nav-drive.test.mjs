@@ -2,7 +2,7 @@
 // clock, the position watch and the page): the step machine's own rules.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clock, pos, tick, off, T, rental, tripAt, start, busTrip, show, log, box } from './navsim.mjs';
+import { clock, pos, tick, off, T, rental, tripAt, start, busTrip, show, log, box, ls } from './navsim.mjs';
 
 test('navigation ends 90 minutes past the planned arrival with the app kept open (the screen kept on)', () => {
   const { plan, O } = busTrip();
@@ -210,4 +210,23 @@ test('the YouBike step looked at while walking to its station: only shown (its r
   assert.equal(rental.rental(), null, 'no timer before the bike');
   pos(off(dock, 10, 0));
   assert.equal(s.reached, 1, 'at the station: on the bike step');
+});
+
+test('opened again after Google or Apple 地圖 with a step ahead looked at: back on the step you were at, its ride as planned', () => {
+  const O = { name: '', lat: 24.8, lon: 120.97 };
+  const dock = { name: '綠41公園', ...off(O, -150, 150) };
+  const end = { name: 'End', ...off(dock, -1500, 1500) };
+  const D = { name: 'Dest', ...off(end, 0, 60) };
+  const t0 = T(8);
+  const legs = [
+    { mode: 'walk', from: O, to: dock, dep: t0, arr: t0 + 3 * 60e3, dur: 180, path: [[O.lat, O.lon], [dock.lat, dock.lon]] },
+    { mode: 'bike', name: 'YouBike', from: dock, to: end, dep: t0 + 3 * 60e3, arr: t0 + 18 * 60e3, dur: 900, rent: dock, ret: end, path: [[dock.lat, dock.lon], [end.lat, end.lon]] },
+    { mode: 'walk', from: end, to: D, dep: t0 + 18 * 60e3, arr: t0 + 19 * 60e3, dur: 60 }
+  ];
+  clock.set(t0);
+  start({ legs, dep: t0, arr: legs[2].arr, dest: D });
+  pos(off(O, -20, 20));
+  box.onclick({ target: { closest: q => (q === '[data-nav-go]' ? { dataset: { navGo: '1' } } : null) } });
+  const kept = JSON.parse(ls.get('ot.nav.v1'));
+  assert.equal(kept.i, 0, 'kept at the walk, not the step looked at');
 });
