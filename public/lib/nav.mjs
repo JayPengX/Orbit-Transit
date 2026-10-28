@@ -39,7 +39,10 @@ const NAV_KEY = 'ot.nav.v1';
 const NAV_KEEP = 90 * 60_000;
 // (Promises, the later buses on their way, aren't kept.)
 const noPromises = (k, v) => (v instanceof Promise ? undefined : v);
-const saveNav = state => writeJson(NAV_KEY, { plan: state.plan, i: state.i, reached: state.reached, phase: state.phase, min: Boolean(state.min), at: Date.now() }, noPromises);
+// (Kept at the step you're at, not one looked at ahead: opened again after
+// Google or Apple 地圖, a look at the YouBike step was taken as begun, its
+// ride redrawn from you; the owner, 2026-10-28.)
+const saveNav = state => writeJson(NAV_KEY, { plan: state.plan, i: state.reached, reached: state.reached, phase: state.i === state.reached ? state.phase : state.reachedPhase || 'before', min: Boolean(state.min), at: Date.now() }, noPromises);
 export function savedNav(now = Date.now()) {
   const x = readSaved(NAV_KEY);
   if (x === UNREAD) return null; // (kept, not dropped)
