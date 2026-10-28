@@ -256,3 +256,28 @@ test('on an earlier train than planned (1825 running late at 竹東): the change
   assert.equal(p.arr, T(16, 52), 'there at 16:52, not 17:50');
   useRail({});
 });
+
+// Then off at 竹中 at 16:30 with the trip still waiting for 1758 at 17:41
+// (the owner, 2026-10-28): 1754 at 16:43 is still to come, so that one.
+test('waiting at the station with a sooner train still to come: that one, the arrival moved with it', async () => {
+  const { useRail } = await import('../public/lib/nav.mjs');
+  const A = { lat: 24.7382, lon: 121.0947 };
+  const sts = ['竹中', '新竹'].map((name, n) => ({ key: `tra:${n}`, sys: 'tra', name, ...off(A, n * 3000, -n * 3000) }));
+  const S = n => ({ name: sts[n].name, lat: sts[n].lat, lon: sts[n].lon });
+  const run = (no, t0) => ({ sys: 'tra', no, type: '區間', stops: sts.map((s, n) => ({ st: s.key, arr: t0 + n * 6 * 60e3 - 30e3, dep: t0 + n * 6 * 60e3 })) });
+  useRail({ dayTrips: async () => [run('1754', T(16, 43)), run('1758', T(17, 41))], railStations: async () => sts, traLive: async () => new Map() });
+  const dest = { name: '巨城', ...off(sts[1], 300, 0) };
+  const legs = [
+    { mode: 'tra', name: '區間', short: '區間 1758', train: { no: '1758', type: '區間' }, from: S(0), to: S(1), dep: T(17, 41), arr: T(17, 47) - 30e3, dur: 330, path: sts.map(s => [s.lat, s.lon]) },
+    { mode: 'walk', from: S(1), to: dest, dep: T(17, 47), arr: T(17, 52), dur: 300 }
+  ];
+  const plan = { legs, dep: legs[0].dep, arr: legs.at(-1).arr, tags: [], dest };
+  clock.set(T(16, 30));
+  const { st: s } = start(plan, { here: { ...off(A, 30, 0), at: T(16, 30) } });
+  await settle();
+  pos(off(A, 25, 5));
+  await settle();
+  assert.equal(String(s.plan.legs[0].train.no), '1754');
+  assert.equal(s.plan.arr, T(16, 54));
+  useRail({});
+});
