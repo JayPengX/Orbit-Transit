@@ -1087,6 +1087,16 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         boarded();
       } else return reach(on.i, on.phase, isRide(plan.legs[on.i - 1]) && state.i === on.i - 1);
     }
+    // Looked ahead from a walk, a bike ride or a stop: that step is only
+    // shown, never redrawn from where you are nor taken as begun; there at
+    // the end of the one you're at, on to the next (the owner, 2026-10-28:
+    // the YouBike step looked at while walking to it, its ride was redrawn
+    // from him and its station said 這站沒車).
+    if (state.i > state.reached) {
+      const l0 = plan.legs[state.reached];
+      if (!isRide(l0) && l0.to?.lat != null && meters(p.lat, p.lon, l0.to.lat, l0.to.lon) < ARRIVED[l0.mode]) return reach(state.reached + 1);
+      return render();
+    }
     const l = plan.legs[state.i];
     if (l.to?.lat) {
       const left = meters(p.lat, p.lon, l.to.lat, l.to.lon);
