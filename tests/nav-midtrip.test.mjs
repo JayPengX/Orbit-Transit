@@ -216,3 +216,43 @@ test('on board the map is the rest of the ride by its stops (not the part behind
   assert.ok(span < 600, `close up at your stop: ${Math.round(span)} m`);
   assert.ok(near.some(p => p.lat === plan.legs[2].to.lat), 'and where you go from it');
 });
+
+// The owner's case (2026-10-28): started at 竹東 at 16:13 with 16:12's 1825
+// gone by the timetable, so planned on 1831 at 17:12 and 1758 at 17:41 from
+// 竹中; 1825 was 3 minutes late and he got on it. On board it's 1825, and
+// the change at 竹中 the one it now makes (1754 at 16:43), there an hour sooner.
+test('on an earlier train than planned (1825 running late at 竹東): the change after it moved sooner, the arrival with it', async () => {
+  const { useRail } = await import('../public/lib/nav.mjs');
+  const A = { lat: 24.7382, lon: 121.0947 };
+  const sts = ['竹東', '榮華', '上員', '竹中', '新竹'].map((name, n) => ({ key: `tra:${n}`, sys: 'tra', name, ...off(A, n * 1400, -n * 1400) }));
+  const S = n => ({ name: sts[n].name, lat: sts[n].lat, lon: sts[n].lon });
+  const run = (no, a, b, t0) => ({ sys: 'tra', no, type: '區間', stops: sts.slice(a, b + 1).map((s, n) => ({ st: s.key, arr: t0 + n * 4 * 60e3 - 30e3, dep: t0 + n * 4 * 60e3 })) });
+  const trips = [run('1825', 0, 3, T(16, 12)), run('1831', 0, 3, T(17, 12)), run('1754', 3, 4, T(16, 43)), run('1758', 3, 4, T(17, 41))];
+  useRail({ dayTrips: async () => trips, railStations: async () => sts, traLive: async () => new Map([['1825', { delay: 3, st: 'tra:0', status: 2 }]]) });
+  const dest = { name: '巨城', ...off(sts[4], 300, 0) };
+  const path = (a, b) => sts.slice(a, b + 1).map(s => [s.lat, s.lon]);
+  const legs = [
+    { mode: 'walk', from: { name: 'Home', ...off(A, -300, 0) }, to: S(0), dep: T(17, 5), arr: T(17, 9), dur: 240 },
+    { mode: 'tra', name: '區間', short: '區間 1831', train: { no: '1831', type: '區間' }, from: S(0), to: S(3), dep: T(17, 12), arr: T(17, 24) - 30e3, dur: 690, path: path(0, 3) },
+    { mode: 'tra', name: '區間', short: '區間 1758', train: { no: '1758', type: '區間' }, from: S(3), to: S(4), dep: T(17, 41), arr: T(17, 45) - 30e3, dur: 210, path: path(3, 4) },
+    { mode: 'walk', from: S(4), to: dest, dep: T(17, 45), arr: T(17, 50), dur: 300 }
+  ];
+  const plan = { legs, dep: legs[0].dep, arr: legs.at(-1).arr, tags: [], dest };
+  clock.set(T(16, 13));
+  const { st: s } = start(plan, { here: { ...off(A, -60, 0), at: T(16, 13) } });
+  await settle();
+  // 1825 leaves at 16:15, a fix every 20 s along the line towards 榮華.
+  for (let k = 0; k <= 8; k++) {
+    clock.set(T(16, 15) + k * 20_000);
+    const f = (k / 8) * 0.6;
+    pos({ lat: sts[0].lat + (sts[1].lat - sts[0].lat) * f, lon: sts[0].lon + (sts[1].lon - sts[0].lon) * f });
+    await settle();
+  }
+  assert.deepEqual(show(s), { i: 1, phase: 'on', reached: 1 });
+  const p = s.plan;
+  assert.equal(String(p.legs[1].train.no), '1825', 'the train you’re really on');
+  assert.equal(String(p.legs[2].train.no), '1754', 'the change at 竹中: the sooner train it now makes');
+  assert.equal(p.legs[2].dep, T(16, 43));
+  assert.equal(p.arr, T(16, 52), 'there at 16:52, not 17:50');
+  useRail({});
+});

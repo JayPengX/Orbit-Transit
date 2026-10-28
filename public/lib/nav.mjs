@@ -1373,7 +1373,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   };
   // Each ride ahead that can't be caught as timed now (you'll be at its stop
   // after it's gone; or it's another day's): the first one after you're there,
-  // today; none, the rest of the trip planned again from there.
+  // today; none, the rest of the trip planned again from there. On board,
+  // each one after the ride you're on that a sooner one now beats (on an
+  // earlier train than planned, the change it makes: the owner, 2026-10-28,
+  // on 1825 at 16:15, the trip still changed to 17:41 and said 18:02): the
+  // one there first, two minutes and more after you're at its stop.
   const cascade = async () => {
     let changed = false;
     for (let m = state.i; m < plan.legs.length; m++) {
@@ -1383,10 +1387,17 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       // (The step you're at, waiting at its stop: missed() takes the next once it's gone.)
       if (m === state.i && l.dep < now + 3 * 3_600_000) continue;
       const ready = m === state.i ? now : navTimes(plan, state.i, state.phase, state.pos, new Map(), now, state.phase === 'on' ? (state.arrAt ?? null) : null).ready.get(m);
-      if (ready == null || (l.dep >= ready - 60_000 && l.dep - ready < 3 * 3_600_000)) continue;
+      if (ready == null) continue;
+      const fits = l.dep >= ready - 60_000 && l.dep - ready < 3 * 3_600_000;
+      const sooner = state.phase === 'on' && m > state.i;
+      if (fits && !sooner) continue;
       const opts = await rideOptions(l, state.info.get(m), ready).catch(() => []);
       if (nav !== state) return;
-      const opt = opts.find(o => o.dep + (o.delay || 0) * 60_000 >= ready - 30_000);
+      const late = o => (o.delay || 0) * 60_000;
+      const opt = fits
+        ? opts.filter(o => o.dep + late(o) >= ready + 2 * 60_000).sort((a, b) => a.arr + late(a) - (b.arr + late(b)))[0]
+        : opts.find(o => o.dep + late(o) >= ready - 30_000);
+      if (fits && !(opt && opt.arr + late(opt) < l.arr - 60_000)) continue;
       if (!opt) {
         if (changed) saveNav(state);
         return onAction?.('rest', { k: m - 1, at: ready });
