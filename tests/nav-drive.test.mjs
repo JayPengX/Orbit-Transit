@@ -2,7 +2,7 @@
 // clock, the position watch and the page): the step machine's own rules.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clock, pos, tick, off, T, rental, tripAt, start, busTrip, show, log } from './navsim.mjs';
+import { clock, pos, tick, off, T, rental, tripAt, start, busTrip, show, log, box } from './navsim.mjs';
 
 test('navigation ends 90 minutes past the planned arrival with the app kept open (the screen kept on)', () => {
   const { plan, O } = busTrip();
@@ -182,4 +182,32 @@ test('tripAt says how far along a ride you are', () => {
   const a = tripAt(plan, off(st[1], 0, 600), 0, plan.legs[1].dep);
   assert.equal(a.phase, 'on');
   assert.ok(Math.abs(a.d - 600) < 20);
+});
+
+test('the YouBike step looked at while walking to its station: only shown (its ride not redrawn from you, not begun); at the station, on to it', () => {
+  const O = { name: '', lat: 24.8, lon: 120.97 };
+  const dock = { name: '綠41公園', ...off(O, -150, 150) };
+  const end = { name: 'End', ...off(dock, -1500, 1500) };
+  const D = { name: 'Dest', ...off(end, 0, 60) };
+  const t0 = T(8);
+  const legs = [
+    { mode: 'walk', from: O, to: dock, dep: t0, arr: t0 + 3 * 60e3, dur: 180, path: [[O.lat, O.lon], [dock.lat, dock.lon]] },
+    { mode: 'bike', name: 'YouBike', from: dock, to: end, dep: t0 + 3 * 60e3, arr: t0 + 18 * 60e3, dur: 900, rent: dock, ret: end, path: [[dock.lat, dock.lon], [end.lat, end.lon]] },
+    { mode: 'walk', from: end, to: D, dep: t0 + 18 * 60e3, arr: t0 + 19 * 60e3, dur: 60 }
+  ];
+  clock.set(t0);
+  const { st: s } = start({ legs, dep: t0, arr: legs[2].arr, dest: D });
+  pos(off(O, -20, 20));
+  box.onclick({ target: { closest: q => (q === '[data-nav-go]' ? { dataset: { navGo: '1' } } : null) } });
+  assert.equal(s.i, 1);
+  for (const k of [40, 60, 80]) {
+    clock.add(10e3);
+    pos(off(O, -k, k));
+  }
+  assert.equal(s.reached, 0, 'still walking to it');
+  assert.ok(!s.offWay, 'its ride not taken as yours, nor redrawn from you');
+  assert.equal(s.plan.legs[1].from.name, '綠41公園');
+  assert.equal(rental.rental(), null, 'no timer before the bike');
+  pos(off(dock, 10, 0));
+  assert.equal(s.reached, 1, 'at the station: on the bike step');
 });
