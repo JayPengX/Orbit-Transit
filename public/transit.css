@@ -2303,6 +2303,24 @@ body.tab-map {
   background: none;
   color: var(--q-label-3);
 }
+/* 320 px: the time chip tighter (no caret), so the six toggles keep a finger's width. */
+@media (max-width: 359px) {
+  .ot-opts {
+    gap: 6px;
+  }
+  .ot-when-pick {
+    padding-inline: 10px;
+  }
+  .ot-when-pick .ot-caret {
+    display: none;
+  }
+  .ot-mtogs {
+    gap: 2px;
+  }
+  .ot-mtog {
+    width: 29px;
+  }
+}
 .ot-plans {
   display: grid;
   gap: 8px;
@@ -2832,6 +2850,20 @@ body.tab-map {
 }
 .ot-nav-bikes .ot-nav-gm {
   margin-left: 0;
+}
+/* The count is the quiet way to another station (asked out loud only when low). */
+.ot-nav-bk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  text-decoration: underline dotted var(--q-label-3);
+  text-underline-offset: 3px;
 }
 /* The YouBike timer on a bike's step. */
 .ot-nav-rent {

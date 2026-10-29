@@ -440,25 +440,36 @@ export function paceOf(plan, i, phase, times, liveAt = new Map(), now = Date.now
 const chipText = l => (l.mode === 'walk' ? `${Math.max(1, Math.round((l.dur || 0) / 60))}′` : l.mode === 'bike' ? `${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${Math.max(1, Math.round((l.dur || 0) / 60))}′` : `${legLabel(l)} ${hm(l.dep)}`);
 
 // The YouBike ride coming up, now: bikes where you take one (until you've
-// left with it) and docks where you leave it, as they are there now; and,
-// for when you find it empty (or full), one tap to move the ride to the
-// nearest station that has some (never by itself: the counts are too live
-// to act on before you're there).
+// left with it) and docks where you leave it, as they are there now; and
+// a tap to move the ride to the nearest station that has some (never by
+// itself: the counts are too live to act on before you're there). Asked
+// out loud only when it's running low (LOW or fewer: the bikes the ride
+// needs, a 電輔車's its own); else the count itself is the tap (the owner,
+// 2026-10-29: 這站沒車 beside 可借 12 read as a joke).
+const LOW = 2;
 function bikesText(bk, plan, i, pos) {
   if (!bk || bk.k < i) return '';
-  const from = plan.legs[bk.k].from;
-  const kept = plan.legs[bk.k].kept, park = plan.legs[bk.k].park;
+  const leg = plan.legs[bk.k];
+  const from = leg.from;
+  const kept = leg.kept, park = leg.park;
   if (kept && park) return '';
   const out = [];
   if (bk.moved) out.push(`<span class="note warn">${icon('bike')}${e(bk.moved)}</span>`);
   if (bk.none) out.push(`<span class="note bad">${icon('bike')}${e(bk.none)}${W('，按「換一條路」重新規劃', '. Tap Another way to replan')}</span>`);
   const taking = !kept && (park || bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150);
-  // (None there now, said before you're off the bus: the swap below finds the nearest that has some.)
-  if (bk.rent && taking && !canRent(bk.rent, plan.legs[bk.k].ebike) && !bk.none) out.push(`<span class="note bad">${icon('bike')}${W('這站現在沒車', 'No bikes there now')}</span>`);
-  if (bk.rent && taking) out.push(`<span>${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・${icon('bolt')}${bk.rent.ebike}` : ''}</span>`);
-  if (bk.ret) out.push(`<span>${W('還車空位', 'Docks')} ${bk.ret.ret}</span>`);
-  const btn = (end, text) => `<button class="ot-nav-gm" type="button" data-nav-bike="${end}">${icon('route')}${text}</button>`;
-  out.push(taking ? btn('rent', W('這站沒車，換附近的站', 'No bikes: nearby dock')) : btn('return', W('還車站沒位，換附近的站', 'Full: nearby dock')));
+  const end = taking ? 'rent' : 'return';
+  // (What's left for this ride where it ends now: null without counts.)
+  const left = taking ? (bk.rent ? (leg.ebike ? bk.rent.ebike || 0 : (bk.rent.bikes || 0) + (bk.rent.ebike || 0)) : null) : bk.ret ? bk.ret.ret : null;
+  // (A station out of service with bikes in it: no bikes for you either.)
+  const off = !!bk.rent && taking && !canRent(bk.rent, leg.ebike) && left > 0;
+  const low = left != null && (left <= LOW || off);
+  const quiet = (html, label) => (!low && left != null ? `<button class="ot-nav-bk" type="button" data-nav-bike="${end}" aria-label="${e(label)}">${html}</button>` : `<span>${html}</span>`);
+  const swapLabel = W('換附近的站', 'Nearby dock');
+  if (bk.rent && taking) out.push(quiet(`${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・${icon('bolt')}${bk.rent.ebike}` : ''}`, swapLabel));
+  if (bk.ret) out.push(taking ? `<span>${W('還車空位', 'Docks')} ${bk.ret.ret}</span>` : quiet(`${W('還車空位', 'Docks')} ${bk.ret.ret}`, swapLabel));
+  const btn = text => `<button class="ot-nav-gm" type="button" data-nav-bike="${end}">${icon('route')}${text}</button>`;
+  if (left == null) out.push(btn(swapLabel));
+  else if (low) out.push(btn(taking ? (left && !off ? W(`只剩 ${left} 台${leg.ebike ? '電輔車' : ''}，換附近的站？`, `${left} ${leg.ebike ? 'e-bike' : 'bike'}${left > 1 ? 's' : ''} left: nearby dock?`) : leg.ebike ? W('沒有電輔車了，換附近的站？', 'No e-bikes: nearby dock?') : W('沒車了，換附近的站？', 'No bikes: nearby dock?')) : left ? W(`只剩 ${left} 位，換附近的站？`, `${left} left: nearby dock?`) : W('沒空位了，換附近的站？', 'Full: nearby dock?')));
   return out.join('');
 }
 

@@ -9,6 +9,7 @@
 //   --times           each card's departures to pick (its 下一班 row)
 //   --at <ms>         leaving then (default: in 5 minutes)
 //   --by arrive       getting there by --at (a trip's 抵達 time; with --at HH:MM, today's)
+//   --ebike           偏好電輔車 (the plans card's ⚡ toggle)
 // Only public places here: a trip from home stays in captures/ (git-ignored).
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, symlinkSync, rmSync } from 'node:fs';
@@ -40,6 +41,7 @@ const by = opt('--by') || 'depart';
 const atOpt = opt('--at');
 const at = /^\d\d?:\d\d$/.test(atOpt || '') ? (() => { const d = new Date(Date.now() + 8 * 3600_000); const [h, m] = atOpt.split(':').map(Number); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h - 8, m); })() : Number(atOpt) || Date.now() + 5 * 60_000;
 const all = args.includes('--all');
+const ebike = args.includes('--ebike');
 const showTimes = args.includes('--times');
 const named = args.filter((a, i) => !a.startsWith('--') && !['--against', '--at', '--by'].includes(args[i - 1]));
 const point = s => {
@@ -56,7 +58,7 @@ if (against) {
   execFileSync('git', ['-C', here, 'worktree', 'add', '--detach', dir, against], { stdio: 'ignore' });
   try {
     symlinkSync(resolve(here, '.kit'), join(dir, '.kit'));
-    const run = cwd => execFileSync('node', [join(cwd, 'scripts/live.mjs'), ...named, '--at', String(at), '--by', by, ...(all ? ['--all'] : [])], { cwd, encoding: 'utf8', maxBuffer: 1 << 26 });
+    const run = cwd => execFileSync('node', [join(cwd, 'scripts/live.mjs'), ...named, '--at', String(at), '--by', by, ...(all ? ['--all'] : []), ...(ebike ? ['--ebike'] : [])], { cwd, encoding: 'utf8', maxBuffer: 1 << 26 });
     // (The script itself from here: a ref from before it existed runs it too.)
     execFileSync('cp', [fileURLToPath(import.meta.url), join(dir, 'scripts/live.mjs')]);
     const [old, now] = [run(dir), run(here)];
@@ -91,7 +93,7 @@ const { hm } = await import('../public/lib/util.mjs');
 const leg = x =>
   x.mode === 'walk' ? `走${Math.round(x.dur / 60)}′` : x.mode === 'bike' ? `🚲${Math.round(x.dur / 60)}′→${x.to?.name || ''}` : `${x.mode}:${x.short || x.name || ''} ${x.from?.name || ''}→${x.to?.name || ''}`;
 for (const [a, b] of trips) {
-  const r = await planTrip(emptyData(), point(a), point(b), { at, by });
+  const r = await planTrip(emptyData(), point(a), point(b), { at, by, ebike });
   const res = (await r.later) || r;
   const shown = res.plans.filter(p => (all ? p.lead : p.top));
   console.log(`${a} → ${b}`);

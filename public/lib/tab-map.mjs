@@ -838,6 +838,11 @@ async function cardClick(ev) {
   if (planBtn) return selectPlan(Number(planBtn.dataset.plan));
   // A way of moving on or off for this search (never all of them), and plan again.
   // (The mode toggles themselves: the sheet's own data-mode once matched here, so every tap on a trip's card planned it again and did nothing else.)
+  // 偏好電輔車 on or off for this search, and plan again.
+  if (ev.target.closest('.ot-mtog[data-ebike]') && card?.kind === 'plans') {
+    tripEbike = !tripEbike;
+    return plan(card.fromHere ? null : card.from, card.to);
+  }
   const mode = ev.target.closest('.ot-mtog[data-mode]');
   if (mode && card?.kind === 'plans') {
     const next = { ...modesNow(), [mode.dataset.mode]: modesNow()[mode.dataset.mode] === false };
@@ -1561,6 +1566,9 @@ let when = { by: 'now', at: null };
 // only where they start): null until one is changed, kept for the next search.
 let tripModes = null;
 const modesNow = () => ({ ...ctx.data.prefs.modes, ...(tripModes || {}) });
+// 偏好電輔車: this search's too (the ⚡ after the ways of moving), kept for the next.
+let tripEbike = false;
+const ebikeNow = () => tripEbike && modesNow().bike !== false;
 // A trip from `from` (null: where you are) to `to`. `opts.swapHere`: the
 // trip turned round, ending where you are.
 async function plan(from, to, opts = {}) {
@@ -1596,7 +1604,7 @@ async function plan(from, to, opts = {}) {
   try {
     const at = when.by === 'now' ? null : when.at;
     // (A saved trip's ways from 交通, as its card ranked them: not found again.)
-    out = opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes });
+    out = opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() });
     c.plans = await walkHere(out.plans);
     c.choice = {};
     c.sources = out.sources;
@@ -1651,7 +1659,7 @@ async function planRest(c) {
     const at = chainOn(rec, c.rest)?.at(-1)?.arr || rec.arr;
     let plans = [];
     try {
-      const o = await planTrip(ctx.data, prev, x, { at: Math.max(at, Date.now()), by: 'depart', modes: tripModes });
+      const o = await planTrip(ctx.data, prev, x, { at: Math.max(at, Date.now()), by: 'depart', modes: tripModes, ebike: ebikeNow() });
       const later = await o.later?.catch(() => null);
       plans = later?.plans?.length ? later.plans : o.plans;
     } catch {}
@@ -1675,7 +1683,7 @@ async function planRest(c) {
     const cities = [...new Set(await Promise.all(pts.map(x => ctx.cityOf(x.lat, x.lon))))].filter(Boolean);
     const bikes = (await Promise.all(cities.map(x => cityBikes(x).catch(() => [])))).flat();
     const first = c.plans.find(p => p.tags?.includes('推薦')) || c.plans[0];
-    const k = card === c && keepBike(c.from, [c.to, ...c.then], bikes, c.have ? Date.now() : first.dep, { have: c.have, swap: bikeSwap(ctx.data.prefs), since: c.since ?? Date.now() });
+    const k = card === c && keepBike(c.from, [c.to, ...c.then], bikes, c.have ? Date.now() : first.dep, { have: c.have, swap: bikeSwap(ctx.data.prefs), since: c.since ?? Date.now(), prefer: ebikeNow() });
     if (k) {
       const whole = restOf(c, first);
       // (The recommendation unless a stop is far or it's all a short walk: keepWins.)
@@ -1764,7 +1772,7 @@ function plansHtml(c) {
         .join('')}${(c.then?.length || 0) < MAX_STOPS ? `<button class="ot-od-add" type="button" data-card="stop-add">${icon('plus')}<span>${W('加一站', 'Add stop')}</span></button>` : ''}</div>
       <button class="q-icon-btn ot-ph-swap" type="button" data-card="swap" aria-label="${W('對調起訖', 'Swap ends')}">${icon('swap')}</button></div>
     <div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}${icon('down', 'ot-caret')}</button>
-      <div class="ot-mtogs" role="group" aria-label="${W('這次搭什麼', 'Modes')}">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}</div></div>`;
+      <div class="ot-mtogs" role="group" aria-label="${W('這次搭什麼', 'Modes')}">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}${modesNow().bike !== false ? `<button class="ot-mtog" type="button" data-ebike aria-pressed="${tripEbike}" aria-label="${W('偏好電輔車', 'Prefer e-bikes')}" title="${W('偏好電輔車', 'Prefer e-bikes')}">${icon('bolt')}</button>` : ''}</div></div>`;
   if (!c.plans) return `${top}<div class="ot-plans">${'<div class="ot-plan ot-plan-wait" aria-hidden="true"><i class="ot-skel" style="width:40%"></i><i class="ot-skel" style="width:70%"></i></div>'.repeat(3)}</div><span class="ot-sr">${e(whenText)}</span>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : `<p class="ot-note">${W('找不到大眾運輸方案。', 'No transit route found.')}</p>`}${sourcesNote(c.sources)}`;
   // One row per route: the departure chosen (its best at first), the route's other departures as times to pick.
@@ -2401,7 +2409,7 @@ async function navLate({ eta = null, k = -1, ride = '' } = {}) {
   lateBusy = true;
   try {
     const from = { name: HERE, lat: here.lat, lon: here.lon };
-    const r = await planTrip(ctx.data, from, navDest(n), { at: n.plan.deadline, by: 'arrive', modes: tripModes });
+    const r = await planTrip(ctx.data, from, navDest(n), { at: n.plan.deadline, by: 'arrive', modes: tripModes, ebike: ebikeNow() });
     let best = onTimeWay(r.plans, n.plan, k, Date.now());
     if (!best && r.later) best = onTimeWay((await r.later)?.plans, n.plan, k, Date.now());
     if (navNow()?.plan !== n.plan) return;
