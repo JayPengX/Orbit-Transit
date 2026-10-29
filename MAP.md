@@ -33,6 +33,9 @@ Live: https://orbit.jaypengx.com/transit/
   (never a made-up 附近的 YouBike 站). Buses are re-timed by TDX's live estimates (`adjustPlan`).
   YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
   the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
+  偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
+  own): of stations about as near, one with 電輔車 there now, ridden at
+  their pace (`plan.mjs` `PREFER_SEC`).
 - **Planned once:** a saved trip's ways are kept and re-timed live. The
   billed planners are asked again only when the ways could differ.
 - **Ranking** (`plan.mjs rank`), in two steps:
@@ -53,6 +56,9 @@ Live: https://orbit.jaypengx.com/transit/
   far from the stop you were waiting at counts; a silent watch is started over. Late for an
   arrival time → an on-time alternative offered. It resumes after the app
   is swiped away and tells the lock screen.
+- **Bikes at the next station** (`nav.mjs` `bikesText`): its counts;
+  換附近的站 asked only when 2 or fewer are left (a 電輔車 ride: its own),
+  else the count itself is the tap.
 - **YouBike rental timer** (`rental.mjs`): starts by itself while
   navigating. With TPASS's free half hour, it warns at 25 minutes and
   offers nearby docks to swap.
