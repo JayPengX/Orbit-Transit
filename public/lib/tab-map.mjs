@@ -1625,7 +1625,8 @@ async function plan(from, to, opts = {}) {
       roadLegs(best, { roads: 'bike' });
     }
     if (opts.nav && c.plans[opts.index || 0]) navigate(c.plans[opts.index || 0]);
-    if ((c.then.length || c.have) && c.plans.length) planRest(c);
+    const rest = (c.then.length || c.have) && c.plans.length ? planRest(c) : null;
+    if (opts.go) goBest(c, rest, opts.go);
   }
   // The direct buses and every bus's times come a moment later: the list
   // ranked again, the plan open (if one is) kept open, unless a time was picked.
@@ -1645,6 +1646,20 @@ async function plan(from, to, opts = {}) {
       roadLegs(c.plans[0], { roads: 'bike' });
     }
   });
+}
+
+// 編輯行程 while navigating: the recommended way of the new plans (on a
+// YouBike already, the one riding it on, once that's worked out) navigated at
+// once, the trip it replaces ended; the card left open when nothing came
+// (the owner, 2026-10-29: a stop added, and nothing changed).
+async function goBest(c, rest, said) {
+  if (c.have) await rest?.catch(() => {});
+  if (card !== c) return;
+  const ok = (c.plans || []).filter(p => !p.gone && canNav(p));
+  const best = ok.find(p => p.tags?.includes('推薦')) || ok[0];
+  if (!best) return ctx.status(W('找不到新的走法，原本的導航還在', 'No new way found; the old directions go on'));
+  await navigate(best);
+  ctx.status(said);
 }
 
 // A trip with stops: each later stretch planned too, from when the
@@ -2428,7 +2443,7 @@ const MAX_STOPS = 3;
 // From where you are now to the same place: the ways now, to look at while
 // this one goes on; 開始導航 on one replaces it.
 let replanTo = null;
-function replanFromHere(to = null, then = null) {
+function replanFromHere(to = null, then = null, go = '') {
   const n = navNow();
   if (!n) return;
   replanTo = to || navDest(n);
@@ -2436,7 +2451,7 @@ function replanFromHere(to = null, then = null) {
   ctx.goTab('map');
   // (To be there by a time: still by it, from here.)
   when = n.plan.deadline > Date.now() ? { by: 'arrive', at: n.plan.deadline } : { by: 'now', at: null };
-  plan(null, replanTo, { then: then ?? n.plan.then ?? [] });
+  plan(null, replanTo, { then: then ?? n.plan.then ?? [], go });
 }
 // A row of a navigation sheet: a colour tile and what it does.
 const menuRow = (m, g, c, text) => `<button class="q-ritem chevron" type="button" data-m="${m}">${tile(g, c, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${text}</span></span></button>`;
@@ -2466,23 +2481,25 @@ function navMore() {
 }
 
 // 編輯行程, navigating: the places still to go (where you're heading first,
-// then the rest), each changed with a tap or taken off with ×, a stop added
-// first or last (the owner, 2026-10-13: one place to add a stop and take it
-// off again). A change to where you're heading first re-routes (on a bus or
-// train, staying on it: onBoardTo); one to the places after it only changes
-// the list.
+// then the rest) as one card of numbered rows, each changed with a tap or
+// taken off with its ×, and a stop added first or last under it (the owner,
+// 2026-10-13: one place to add a stop and take it off again). A change to
+// where you're heading first is navigated at once (on a bus or train,
+// staying on it: onBoardTo); one to the places after it changes the list,
+// and each is planned once you're at the one before (the owner, 2026-10-29:
+// ugly, and a stop added changed nothing).
 function editTripSheet() {
   const n = navNow();
   if (!n) return;
   const places = [navDest(n), ...(n.plan.then || [])];
+  const name = p => e(p.name || W('地點', 'Place'));
   const rows = places
-    .map((p, k) => `<div class="ot-edit-row"><button class="ot-row-btn" type="button" data-ed="${k}">${icon('pin')}<span><b>${e(p.name || W('地點', 'Place'))}</b><small>${k === 0 ? W('現在要去', 'Heading now') : W(`接著第 ${k + 1} 站`, `Stop ${k + 1}`)}${k === places.length - 1 ? W('・終點', '・last') : ''}</small></span></button>${places.length > 1 ? `<button class="q-icon-btn" type="button" data-ed-x="${k}" aria-label="${W('拿掉', 'Remove')} ${e(p.name || W('這一站', 'this stop'))}">${icon('x')}</button>` : ''}</div>`)
+    .map((p, k) => `<div class="q-ritem ot-stop"><button class="ot-stop-pick" type="button" data-ed="${k}" aria-label="${W('換掉', 'Change')} ${name(p)}"><b class="ot-stop-n${k ? '' : ' now'}">${k + 1}</b><span class="q-ritem-text"><span class="q-ritem-title">${name(p)}</span><small>${k === 0 ? W('現在要去', 'Heading now') : k === places.length - 1 ? W('終點', 'Last stop') : W('接著去', 'Then')}</small></span></button>${places.length > 1 ? `<button class="ot-stop-x" type="button" data-ed-x="${k}" aria-label="${W('拿掉', 'Remove')} ${name(p)}">${icon('x')}</button>` : ''}</div>`)
     .join('');
-  const d = sheet(`${sheetHead(W('編輯行程', 'Edit trip'))}
-    <div class="ot-nav-menu">${rows}
-      <button class="ot-row-btn" type="button" data-ed-add="first">${icon('plus')}<span><b>${W('先去別的地方', 'Somewhere first')}</b><small>${W(`插在 ${e(places[0].name || '目的地')} 之前`, `Before ${e(places[0].name || 'destination')}`)}</small></span></button>
-      ${places.length <= MAX_STOPS ? `<button class="ot-row-btn" type="button" data-ed-add="last">${icon('plus')}<span><b>${W('最後再去一個地方', 'One more at the end')}</b><small>${W(`${e(places.at(-1).name || '終點')} 之後`, `After ${e(places.at(-1).name || 'the end')}`)}</small></span></button>` : ''}
-    </div>`);
+  const more = places.length <= MAX_STOPS;
+  const d = sheet(`${sheetHead(W('編輯行程', 'Edit trip'), W('點一站可以換地點', 'Tap a stop to change it'))}
+    <div class="q-rowcard ot-stops">${rows}</div>
+    ${more ? `<div class="ot-stop-adds"><button class="q-chip" type="button" data-ed-add="first">${icon('plus')}${W('先去別處', 'Somewhere first')}</button><button class="q-chip" type="button" data-ed-add="last">${icon('plus')}${W('最後再去', 'One more last')}</button></div>` : ''}`);
   d.addEventListener('click', async ev => {
     const x = ev.target.closest('[data-ed-x]')?.dataset.edX;
     const k = ev.target.closest('[data-ed]')?.dataset.ed;
@@ -2490,25 +2507,29 @@ function editTripSheet() {
     if (x == null && k == null && !add) return;
     d.shut();
     let list = places.slice();
-    if (x != null) list.splice(Number(x), 1);
-    else {
+    let said;
+    if (x != null) {
+      const [gone] = list.splice(Number(x), 1);
+      said = Number(x) === 0 ? W(`已拿掉 ${gone.name}，改去 ${list[0].name}`, `Removed ${gone.name}; now to ${list[0].name}`) : W(`已拿掉 ${gone.name}`, `Removed ${gone.name}`);
+    } else {
       const pt = await pickPoint(add === 'first' ? W('先去哪裡', 'Where first?') : add === 'last' ? W('最後再去哪裡', 'Where last?') : W('改去哪裡', 'Where instead?'), { onMap: false });
       if (!pt || pt.here) return;
       const p = { name: pt.name, lat: pt.lat, lon: pt.lon, ...(pt.gid ? { gid: pt.gid } : {}) };
       if (add === 'first') list = [p, ...list];
       else if (add === 'last') list = [...list, p];
       else list[Number(k)] = p;
+      said = add === 'first' ? W(`先去 ${p.name}`, `${p.name} first`) : add === 'last' ? W(`已加入：最後去 ${p.name}`, `Added: ${p.name} at the end`) : Number(k) === 0 ? W(`改去 ${p.name}`, `Now to ${p.name}`) : W(`第 ${Number(k) + 1} 站改成 ${p.name}`, `Stop ${Number(k) + 1} is now ${p.name}`);
     }
     if (navNow()?.plan !== n.plan || !list.length) return;
     // Where you're heading first unchanged: only the places after it.
     const first = list[0];
     if (first.lat === places[0].lat && first.lon === places[0].lon) {
       navRetarget(first, list.slice(1));
-      return ctx.status(W('已更新行程', 'Trip updated'));
+      return ctx.status(said);
     }
     const now = navNow();
     if (now.phase === 'on' && !['walk', 'bike'].includes(now.plan.legs[now.i]?.mode)) return onBoardTo(first, list.slice(1));
-    replanFromHere(first, list.slice(1));
+    replanFromHere(first, list.slice(1), said);
   });
 }
 

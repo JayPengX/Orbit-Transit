@@ -4539,17 +4539,79 @@ button.ot-trip-foot {
   font: 600 15px/20px var(--q-font);
   font-variant-numeric: tabular-nums;
 }
-.ot-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.ot-edit-row + .ot-edit-row {
+/* 編輯行程: the places to go as one card, numbered (the one you're heading
+   to now lit), a quiet × at each row's end; adding a stop is a chip under it. */
+.ot-stops {
   margin-top: 8px;
 }
-.ot-edit-row .ot-row-btn {
+.ot-stop {
+  --q-ritem-sep: 52px;
+  gap: 0;
+  padding: 0;
+}
+.ot-stop-pick {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
+  min-height: 60px;
+  padding: 8px 4px 8px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ot-stop-pick .q-ritem-title {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-stop-pick:active,
+.ot-stop-x:active {
+  background: var(--q-fill-4);
+}
+.ot-stop-n {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--q-fill-3);
+  color: var(--q-label-2);
+  font: 700 13px/1 var(--q-font);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.ot-stop-n.now {
+  background: var(--q-accent);
+  color: #fff;
+}
+.ot-stop-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: stretch;
+  width: 48px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--q-label-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ot-stop-x .ot-i {
+  width: 18px;
+  height: 18px;
+}
+.ot-stop-adds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 /* Ordering: a group's name to edit, its stops with up, down, remove. */
 .ot-manage {
