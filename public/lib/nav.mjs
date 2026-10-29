@@ -275,6 +275,53 @@ export function tripAt(plan, pos, i = 0, now = Date.now(), { anyTime = false } =
 // Off a bus or train (where its last stop is, more or less): a train's station is wide.
 const OFF_M = { tra: 250, hsr: 300, metro: 200 };
 
+// Gone your own way on foot or on a bike (the owner, 2026-10-28: an e-bike
+// taken at another station, ridden another way; or the bike given up and
+// walked straight to the train station, the trip still back at the first
+// walk): the step you're really on, from the last two and a half minutes
+// of fixes, while off the way of the step you're at.
+//   - Going at a bike's pace (12 to 32 km/h) on a walk with a YouBike ride
+//     ahead before the next bus or train: on the bike.
+//   - Going away from where this step ends and toward where a later walk
+//     ends (or the next bus's or train's stop): on that walk, the steps
+//     between skipped.
+//   - Going away from this step's end and toward none: `lost` (asked to
+//     plan again from there).
+// → { i, phase: 'before', why: 'bike' | 'walk' } | { lost: true } | null
+const BIKE_MS = [3.3, 9];
+export function offPlan(plan, i, fixes, now = Date.now()) {
+  const l = plan.legs[i];
+  if (!l || isRide(l) || l.to?.lat == null) return null;
+  const f = (fixes || []).filter(x => x.t >= now - 150_000);
+  if (f.length < 3) return null;
+  const a = f[0], b = f.at(-1);
+  const secs = (b.t - a.t) / 1000;
+  const moved = meters(a.lat, a.lon, b.lat, b.lon);
+  if (secs < 40 || moved < 120) return null;
+  // (On this step's own way and along it, it's this step: a road that turns
+  // away first. At its start only, it's the way just redrawn from you.)
+  const pts = legPts(l);
+  const on = pts && alongRoute(pts, b, routeCum(pts));
+  if (on && on.off < (ON_WAY[l.mode] || 80) && on.d > 60) return null;
+  const gain = pt => meters(a.lat, a.lon, pt.lat, pt.lon) - meters(b.lat, b.lon, pt.lat, pt.lon);
+  const r = plan.legs.findIndex((x, k) => k > i && isRide(x));
+  const end = r < 0 ? plan.legs.length : r;
+  const speed = moved / secs;
+  if (l.mode === 'walk' && speed >= BIKE_MS[0] && speed <= BIKE_MS[1]) {
+    const k = plan.legs.findIndex((x, n) => n > i && n < end && x.mode === 'bike');
+    if (k > 0) return { i: k, phase: 'before', why: 'bike' };
+  }
+  if (gain(l.to) > -0.3 * moved) return null;
+  // (Where a later walk ends, or the next ride's stop: the furthest you're headed for.)
+  for (let k = end - 1; k > i; k--) {
+    const x = plan.legs[k];
+    const to = k === end - 1 && r >= 0 ? plan.legs[r].from : x.to;
+    if (x.mode === 'walk' && to?.lat != null && gain(to) >= 0.6 * moved) return { i: k, phase: 'before', why: 'walk' };
+  }
+  if (r >= 0 && plan.legs[end - 1] !== l && plan.legs[r].from?.lat != null && gain(plan.legs[r].from) >= 0.6 * moved && plan.legs[end - 1].mode !== 'walk') return { i: r, phase: 'before', why: 'walk' };
+  return { lost: true };
+}
+
 // The ride itself, said the way its sign says it: 公車 5608 往 竹東, 區間 1234 次 往 新竹.
 export function rideName(l) {
   let s = String(l.short || l.name || '').trim();
@@ -756,7 +803,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     }
     const of = !state.done && state.offer;
     const offer = of ? `<div class="ot-nav-ask ot-nav-late"><span><b>${e(of.title)}</b>${of.sub ? `<small>${e(of.sub)}</small>` : ''}</span>${of.plan ? `<button type="button" data-nav="offer">${W('改走這條', 'Take it')}</button>` : ''}<button class="x" type="button" data-nav="offer-x" aria-label="${W('不用', 'No thanks')}">${icon('x')}</button></div>` : '';
-    const strayed = on && !state.done && state.away >= 2 && now - state.awayAt >= AWAY_MS ? `<div class="ot-nav-ask"><span>${W('好像已經下車了？', 'Got off already?')}</span><button type="button" data-nav="replan">${W('從這裡重新規劃', 'Replan from here')}</button></div>` : '';
+    const strayed = on && !state.done && state.away >= 2 && now - state.awayAt >= AWAY_MS ? `<div class="ot-nav-ask"><span>${W('好像已經下車了？', 'Got off already?')}</span><button type="button" data-nav="replan">${W('從這裡重新規劃', 'Replan from here')}</button></div>` : !on && !state.done && state.lost && state.i === state.reached ? `<div class="ot-nav-ask"><span>${W('不照這條路走了？', 'Going another way?')}</span><button type="button" data-nav="replan">${W('從這裡重新規劃', 'Replan from here')}</button></div>` : '';
     const ri = rideOf(plan, state.i);
     const liveNow = !state.done && ri >= state.i && state.fresh && now - state.fresh < 75_000;
     // Off a bus or train a moment ago: said, with what's next.
@@ -1034,11 +1081,20 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     onEnd?.({ arrived: plan.dest?.name || l.to?.name || W('目的地', 'destination'), plan });
   };
   const moved = p => {
-    // A rough fix (a cell tower's, 100 m and more out) moves the dot, never the trip.
-    if (p.acc > 100) return follow?.(p);
+    // A rough fix (a cell tower's, 100 m and more out) moves the dot, never
+    // the trip; but for a bus or train you were waiting for, one further from
+    // its stop than its own error could put you counts: pulled out (the
+    // owner, 2026-10-29: on a train that left a little late, the trip said
+    // missed and stayed there; in a train a phone's fixes are often rough).
+    const w = plan.legs[state.i];
+    const pulled = isRide(w) && state.phase === 'before' && state.i === state.reached && p.acc <= 500 && w.from?.lat != null && meters(p.lat, p.lon, w.from.lat, w.from.lon) > p.acc + 200;
+    // (Rough fixes still say the watch is alive: never started over for them.)
+    if (p.acc > 100) state.roughAt = Date.now();
+    if (p.acc > 100 && !pulled) return follow?.(p);
     state.pos = p;
     state.posAt = Date.now();
     follow?.(p);
+    if (p.acc <= 100) state.fixes = [...(state.fixes || []).filter(x => x.t > state.posAt - 150_000), { lat: p.lat, lon: p.lon, t: state.posAt }];
     // (No fix when it started: where you are on the trip found with the first.)
     if (!state.settled) settle(p);
     // Looked ahead while on a ride: it's still followed; your stop next, back
@@ -1089,6 +1145,28 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         refreshLive();
         boarded();
       } else return reach(on.i, on.phase, isRide(plan.legs[on.i - 1]) && state.i === on.i - 1);
+    }
+    // Gone your own way (another station's bike, straight on to the
+    // station): on the step you're really on, said; going away from all of
+    // it, asked to plan again from here.
+    if (state.i === state.reached && !state.done) {
+      const op = offPlan(plan, state.i, state.fixes, state.posAt);
+      state.lost = Boolean(op?.lost);
+      if (op?.i != null) {
+        state.fixes = [];
+        const to = op.why === 'bike' ? plan.legs[op.i].to : plan.legs[op.i + 1] && isRide(plan.legs[op.i + 1]) ? plan.legs[op.i + 1].from : plan.legs[op.i].to;
+        const name = shortPlace(to?.name || '') || W('下一站', 'the next stop');
+        state.swap = { at: Date.now(), text: op.why === 'bike' ? W(`已騎上 YouBike，往 ${name}`, `On a YouBike, to ${name}`) : W(`改走去 ${name}`, `Walking to ${name} instead`) };
+        return reach(op.i, op.phase);
+      }
+    }
+    // Checked again now and then by where you are alone, as when the app is
+    // opened half way (a train boarded that left late, already at a later
+    // stop): never stuck where the trip thought you were till it's opened again.
+    if (state.settled && !state.syncing && state.i === state.reached && !(isRide(w) && state.phase === 'on') && state.posAt - (state.syncAt || 0) >= 20_000) {
+      state.syncAt = state.posAt;
+      state.syncing = true;
+      locate(p, true).finally(() => (state.syncing = false));
     }
     // Looked ahead from a walk, a bike ride or a stop: that step is only
     // shown, never redrawn from where you are nor taken as begun; there at
@@ -1283,7 +1361,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const l = plan.legs[k];
     if (!isRide(l) || state.phase === 'on' || state.done || !state.pos || Date.now() - (state.posAt || 0) > 2 * 60_000) return;
     if (meters(state.pos.lat, state.pos.lon, l.from.lat, l.from.lon) > 300) return;
-    const gone = l.mode === 'bus' ? !state.liveAt.has(k) && Date.now() > l.dep + 2 * 60_000 : Date.now() > l.dep + state.delay * 60_000 + 90_000;
+    const gone = l.mode === 'bus' ? !state.liveAt.has(k) && Date.now() > l.dep + 2 * 60_000 : Date.now() > l.dep + state.delay * 60_000 + 150_000;
     if (state.missing === k) return;
     if (!gone) return sooner(k);
     state.missing = k;
@@ -1325,6 +1403,10 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   const settle = async p => {
     if (state.settled || !p || p.lat == null) return;
     state.settled = true;
+    return locate(p);
+  };
+  // `again`: on the way (not opened), a ride found on its way needs two fixes going along it.
+  const locate = async (p, again = false) => {
     const now = Date.now();
     // (Or standing at a later ride's stop: the steps to it are behind you.)
     const near = (pt, m) => pt?.lat != null && meters(p.lat, p.lon, pt.lat, pt.lon) < m;
@@ -1350,6 +1432,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       state.ride.clear();
       state.liveAt.clear();
     }
+    if (again && (!at || (at.phase === 'on' && !aboard(at.i, at.d ?? 0)))) return;
     let phase = at?.phase ?? state.phase;
     if (at?.phase === 'on' && !(await boardFix(k, p))) phase = at.i === state.i ? state.phase : null;
     if (nav !== state) return;
@@ -1378,6 +1461,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       if (!t) return false;
       if (String(t.train.no) !== String(l.train?.no ?? '') || Math.abs(t.dep - l.dep) > 60_000) {
         retimeRide(plan, k, t);
+        // (Taken as missed, the next one said, and on it after all: that's no longer so.)
+        if (/沒趕上|Missed/.test(state.swap?.text || '')) state.swap = null;
         state.gen++;
         for (const m of [state.ride, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
       }
@@ -1465,11 +1550,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // after 30 s with no position while it's seen: iOS's watch can stay
   // silent after the app was away (the owner, 2026-10-16: back in the app,
   // the dot where it was left). Each start asks for a fix at once too.
-  const watch = () => {
+  // (`kick`: the device's own watch started over, the only thing that wakes
+  // a silent one: a new listener on it alone had waited on it still.)
+  const watch = (kick = false) => {
     state.stopWatch?.();
     state.stopWatch = watchPosition(moved);
     state.watchAt = Date.now();
-    getPosition({ high: false, timeout: 4000, maximumAge: 5000 }).then(p => !p.error && nav === state && moved(p));
+    getPosition({ high: false, timeout: 4000, maximumAge: 5000, kick }).then(p => !p.error && nav === state && moved(p));
   };
   watch();
   state.timer = setInterval(refreshLive, liveMs());
@@ -1481,7 +1568,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       stopNav();
       return onEnd?.();
     }
-    if (document.visibilityState === 'visible' && Date.now() - Math.max(state.posAt || 0, state.watchAt || 0) > 30_000) watch();
+    if (document.visibilityState === 'visible' && Date.now() - Math.max(state.posAt || 0, state.watchAt || 0, state.roughAt || 0) > 30_000) watch(Date.now() - (state.kickAt || 0) >= 60_000 && (state.kickAt = Date.now()));
+    // (Back in the app: 5 s with no fix, started over then, not 30 s on.)
+    else if (state.shownAt && Date.now() - state.shownAt > 5000 && (state.posAt || 0) < state.shownAt && (state.roughAt || 0) < state.shownAt) {
+      state.shownAt = 0;
+      state.kickAt = Date.now();
+      watch(true);
+    }
     // Looked ahead and left there: after 20 s the card, the chips and the map are on the step you're at again (the owner, 2026-10-22).
     if (state.lookAt && Date.now() - state.lookAt > LOOK_MS && state.i !== state.reached) {
       state.lookAt = 0;
@@ -1552,6 +1645,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (document.visibilityState !== 'visible' || nav !== state) return;
     if (state.done && Date.now() - state.doneAt >= END_MS) return finish();
     watch();
+    state.shownAt = Date.now();
     if (plan.arr < Date.now() - NAV_KEEP) {
       stopNav();
       return onEnd?.();

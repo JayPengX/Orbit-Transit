@@ -45,7 +45,12 @@ Live: https://orbit.jaypengx.com/transit/
   each step moving on by itself (on board only once two fixes say so; a
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
   chime on iPhone) before yours. Missed bus → the next; on an earlier
-  train than planned → the changes after it moved sooner. Late for an
+  train than planned → the changes after it moved sooner. Off the plan your
+  own way (`offPlan`): a bike's pace on a walk → on the YouBike step; heading
+  for a later walk's end or the next stop → that step; heading nowhere on it →
+  從這裡重新規劃 asked. Where you are is checked again every 20 s as on opening
+  half way (a late train boarded after it was taken as missed); a rough fix
+  far from the stop you were waiting at counts; a silent watch is started over. Late for an
   arrival time → an on-time alternative offered. It resumes after the app
   is swiped away and tells the lock screen.
 - **YouBike rental timer** (`rental.mjs`): starts by itself while
