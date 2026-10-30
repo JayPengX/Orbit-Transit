@@ -6,3 +6,4 @@ MAP.md is this repo's map (README.md is the short public front page).
 - `npm test`, then `git push origin HEAD:main`.
 - `node scripts/live.mjs <from> <to>` runs a trip on today's real data; `--against HEAD` compares a batch old vs new when changing how plans rank.
 - See it on a phone: `node ../Orbit-Core/tools/preview.mjs transit --live --width 375`.
+- Screenshots for a change: `node ../Orbit-Core/tools/shots.mjs transit --before main` (320/390, light/dark, live data, a diff against what's live; `../Orbit-Core/tools/README.md`).
