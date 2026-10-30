@@ -18,7 +18,7 @@ import { stopsEta, etaFor } from './bus.mjs';
 import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, fitStrips } from './bus-ui.mjs';
 import { stationLabel, icon, legChips, fitLegs } from './ui.mjs';
-import { COLOR, tile, countHtml, tick, focus } from './look.mjs';
+import { COLOR, tile, bikeTile, countHtml, tick, focus } from './look.mjs';
 import { tripKey } from './store.mjs';
 import { e, hm, distText, meters, shown } from './util.mjs';
 
@@ -137,7 +137,7 @@ export function createHome(box, ctx, act) {
         big: `<strong class="q-focus-value ot-count">${n}<small>${W('台可借', 'bikes')}</small></strong>`,
         num: n,
         facts: [x.d != null ? distText(x.d) : '', x.ebike ? W(`電輔車 ${x.ebike}`, `E-bikes ${x.ebike}`) : '', W(`空位 ${x.ret}`, `Docks ${x.ret}`)],
-        tile: tile('bike', COLOR.bike)
+        tile: bikeTile()
       };
     }
     return {

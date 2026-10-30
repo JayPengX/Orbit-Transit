@@ -13,7 +13,7 @@ import { MODES, PLACE_ICONS, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf, passModes } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters, dayLabel, shown } from './util.mjs';
-import { COLOR, PLACE_COLOR, tile, tpassTile, section, rowCard } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, tpassTile, bikeTile, section, rowCard } from './look.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
@@ -87,7 +87,7 @@ function render() {
     ${section(
       W('設定', 'Settings'),
       rowCard(`${passRow}<button class="q-ritem chevron" type="button" data-act="modes">${tile('route', COLOR.route)}<span class="q-ritem-text"><span class="q-ritem-title">${W('規劃使用', 'Routes use')}</span><small>${e(modesText(P.modes))}</small></span></button>
-        ${pass?.bike ? '' : `<div class="q-ritem">${tile('bike', COLOR.bike)}<span class="q-ritem-text"><span class="q-ritem-title">${W('每 30 分換車', 'Swap at 30 min')}</span></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${P.bike30}" aria-label="${W('每 30 分鐘換 YouBike', 'Swap YouBikes every 30 min')}"><i></i></button></div>`}
+        ${pass?.bike ? '' : `<div class="q-ritem">${bikeTile()}<span class="q-ritem-text"><span class="q-ritem-title">${W('每 30 分換車', 'Swap at 30 min')}</span></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${P.bike30}" aria-label="${W('每 30 分鐘換 YouBike', 'Swap YouBikes every 30 min')}"><i></i></button></div>`}
         <label class="q-ritem chevron ot-pick-row">${tile('pin', COLOR.place)}<span class="q-ritem-text"><span class="q-ritem-title">${W('導航 App', 'Maps app')}</span></span><span class="q-ritem-value">${P.maps === 'apple' ? W('Apple 地圖', 'Apple Maps') : W('Google 地圖', 'Google Maps')}</span><select id="me-maps" class="ot-cover" aria-label="${W('導航 App', 'Maps app')}"><option value="google" ${P.maps !== 'apple' ? 'selected' : ''}>${W('Google 地圖', 'Google Maps')}</option><option value="apple" ${P.maps === 'apple' ? 'selected' : ''}>${W('Apple 地圖', 'Apple Maps')}</option></select></label>`)
     )}
   </div>`;
