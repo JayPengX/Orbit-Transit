@@ -54,7 +54,8 @@ Live: https://orbit.jaypengx.com/transit/
   從這裡重新規劃 asked. Where you are is checked again every 20 s as on opening
   half way (a late train boarded after it was taken as missed); a rough fix
   far from the stop you were waiting at counts; fresh fixes only, and a watch
-  silent 10 s is started over (twice as long each time it stays silent, up to a minute). Late for an
+  silent 10 s is started over (twice as long each time it stays silent, up to a minute);
+  one that hasn't answered yet (the location ask may be up) is left a minute, never a second ask over the first. Late for an
   arrival time → an on-time alternative offered. It resumes after the app
   is swiped away and tells the lock screen.
 - **Bikes at the next station** (`nav.mjs` `bikesText`): its counts;

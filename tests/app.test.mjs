@@ -2820,3 +2820,17 @@ test('我的位置 standing still: a forced ask starts the watch again, which an
   assert.ok(Date.now() - t < 500);
   assert.equal(watches[0].live, false);
 });
+
+test('the location ask still up: never started over, one 「允許取用位置？」 at a time', async () => {
+  const { getPosition } = await import('../public/lib/api.mjs');
+  // A watch waiting on the person's answer: says nothing.
+  let starts = 0;
+  const nav = { geolocation: { watchPosition: () => ++starts, clearWatch() {} } };
+  // (The session's watch from before answered: a forced ask starts a new one, which then waits on the ask.)
+  await getPosition({ timeout: 20, maximumAge: 0, kick: true }, nav);
+  assert.equal(starts, 1);
+  // Navigation's restart, the tap on 我的位置: the unanswered watch left alone, no second ask over the first.
+  await getPosition({ timeout: 20, maximumAge: 0, kick: true }, nav);
+  await getPosition({ timeout: 20, maximumAge: 0, kick: true }, nav);
+  assert.equal(starts, 1);
+});

@@ -235,18 +235,29 @@ async function readTownships() {
 // launch, and is never skipped (an ask suppressed once had left the app with
 // no location at all; the owner, 2026-10-21). Refused, it stops; the next
 // ask (a tap on 我的位置) starts it again.
-const geo = { id: null, last: null, fns: new Set(), waiting: new Set() };
+// `answered`: the watch running now has said anything (a fix or an error). One
+// that hasn't may be waiting on 「允許取用位置？」: never started over then, or
+// a second ask went up over the first (Jay 2026-10-30, asked twice on opening:
+// navigation's 5 s restart on coming back fired while the first ask was up).
+// Silent a minute (no ask is left up that long; a dead watch is): started over then.
+const UNANSWERED_MS = 60_000;
+const geo = { id: null, last: null, fns: new Set(), waiting: new Set(), answered: false, at: 0 };
+const restartable = () => geo.answered || Date.now() - geo.at > UNANSWERED_MS;
 const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading });
 function watchDevice(nav) {
   if (geo.id != null || !nav?.geolocation?.watchPosition) return;
+  geo.answered = false;
+  geo.at = Date.now();
   geo.id = nav.geolocation.watchPosition(
     p => {
+      geo.answered = true;
       const fix = fixOf(p);
       geo.last = { fix, t: Date.now() };
       for (const f of [...geo.fns]) f(fix);
       for (const w of [...geo.waiting]) w(fix);
     },
     err => {
+      geo.answered = true;
       const error = err?.code === 1 ? 'denied' : err?.code === 3 ? 'timeout' : 'unavailable';
       if (err?.code === 1) {
         nav.geolocation.clearWatch?.(geo.id);
@@ -264,7 +275,7 @@ globalThis.document?.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || geo.id == null) return;
   const back = Date.now();
   setTimeout(() => {
-    if (geo.id == null || (geo.last && geo.last.t >= back) || document.visibilityState !== 'visible') return;
+    if (geo.id == null || !restartable() || (geo.last && geo.last.t >= back) || document.visibilityState !== 'visible') return;
     globalThis.navigator?.geolocation?.clearWatch?.(geo.id);
     geo.id = null;
     watchDevice(globalThis.navigator);
@@ -276,7 +287,7 @@ globalThis.document?.addEventListener('visibilitychange', () => {
 export function getPosition({ timeout = 8000, maximumAge = 60_000, kick = false } = {}, nav = globalThis.navigator) {
   if (!nav?.geolocation) return Promise.resolve({ error: 'unsupported' });
   if (geo.last && Date.now() - geo.last.t <= maximumAge) return Promise.resolve({ ...geo.last.fix });
-  if (kick && geo.id != null) {
+  if (kick && geo.id != null && restartable()) {
     nav.geolocation.clearWatch?.(geo.id);
     geo.id = null;
   }
