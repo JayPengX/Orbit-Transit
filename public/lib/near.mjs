@@ -15,7 +15,7 @@
 // can't be had.
 
 import * as kit from '#kit/orbit.mjs';
-import { tdx, rows, dataAt, liveMs } from './api.mjs';
+import { liveMs, busEta } from './api.mjs';
 import { pack } from './packs.mjs';
 import { stationsNear, etaOf, routeCity } from './bus.mjs';
 import { cityBikes, bikesNear } from './bike.mjs';
@@ -87,41 +87,37 @@ export async function stationsAround(lat, lon, opts) {
 
 // ---- When the buses come, a city's stops in one ask -----------------------------------------------
 
-const FIELDS = '$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,PlateNumb,DataTime';
 const ETA_FRESH = 20_000;
-const CHUNK = 40; // stops an ask (the address stays short)
-const etaKept = new Map(); // `${scope}|${uid}` → { at, rows }
+const CHUNK = 300; // stops an ask (the Worker takes 400)
+const etaKept = new Map(); // `${scope}|${uid}` → { at (the data's), got (when asked), rows }
 const pending = new Map(); // `${scope}|${uid}` → the batch asking for it
 let batch = null;
 
 // The asks made in the same moment (a trip's plans, side by side) go together.
-function queue(scope, uids, ask, fresh) {
+function queue(scope, uids, ask) {
   if (!batch) {
-    const b = (batch = { asks: new Map(), fresh });
+    const b = (batch = { asks: new Map() });
     b.done = new Promise(r => setTimeout(r, 25)).then(() => {
       batch = null;
-      return flush(b.asks, ask, b.fresh);
+      return flush(b.asks, ask);
     });
   }
-  batch.fresh = Math.min(batch.fresh, fresh);
   if (!batch.asks.has(scope)) batch.asks.set(scope, new Set());
   for (const u of uids) batch.asks.get(scope).add(u);
   return batch.done;
 }
-async function flush(asks, ask, fresh) {
+async function flush(asks, ask) {
   const jobs = [];
   for (const [scope, set] of asks) {
     const uids = [...set].sort();
     for (let i = 0; i < uids.length; i += CHUNK) {
       const part = uids.slice(i, i + CHUNK);
-      const path = `basic/v2/Bus/EstimatedTimeOfArrival/${scope === 'InterCity' ? 'InterCity' : `City/${scope}`}?$filter=${part.map(u => `StopUID eq '${u.replace(/'/g, "''")}'`).join(' or ')}&${FIELDS}`;
       jobs.push(
-        ask(path, { fresh }).then(j => {
-          // (When the data is from: the proxy's copy when TDX was slow.)
-          const at = Math.min(Date.now(), dataAt(path) || Date.now());
+        ask(scope, { stops: part }).then(({ rows: list, at }) => {
+          // (When the data is from: the Worker's copy can be older.)
           const by = new Map(part.map(u => [u, []]));
-          for (const r of rows(j)) by.get(r.StopUID)?.push(r);
-          for (const [u, list] of by) etaKept.set(`${scope}|${u}`, { at, rows: list });
+          for (const r of list) by.get(r.StopUID)?.push(r);
+          for (const [u, l] of by) etaKept.set(`${scope}|${u}`, { at: Math.min(Date.now(), at || Date.now()), got: Date.now(), rows: l });
         })
       );
     }
@@ -131,9 +127,13 @@ async function flush(asks, ask, fresh) {
 
 // N1 rows for these stops ([{ uid, scope }]); throws when any couldn't be read.
 // `fresh`: how old a copy may be (ms; a stop's card asks at the live speed).
-export async function etaStops(stops, { ask = tdx, fresh = ETA_FRESH } = {}) {
+export async function etaStops(stops, { ask = busEta, fresh = ETA_FRESH } = {}) {
   const key = s => `${s.scope}|${s.uid}`;
-  const young = s => Date.now() - (etaKept.get(key(s))?.at ?? -Infinity) < fresh;
+  // (Young by when it was asked: the Worker's copy, up to a minute old, asked again at each look was the same copy again.)
+  const young = s => {
+    const k = etaKept.get(key(s));
+    return !!k && Date.now() - k.got < fresh && Date.now() - k.at < fresh + 60_000;
+  };
   const waits = new Set();
   const by = new Map();
   for (const s of stops) {
@@ -142,7 +142,7 @@ export async function etaStops(stops, { ask = tdx, fresh = ETA_FRESH } = {}) {
     else by.set(s.scope, [...(by.get(s.scope) || []), s.uid]);
   }
   for (const [scope, uids] of by) {
-    const done = queue(scope, uids, ask, fresh);
+    const done = queue(scope, uids, ask);
     waits.add(done);
     for (const u of uids) pending.set(`${scope}|${u}`, done);
     done.finally(() => uids.forEach(u => pending.get(`${scope}|${u}`) === done && pending.delete(`${scope}|${u}`)));
@@ -155,7 +155,7 @@ export async function etaStops(stops, { ask = tdx, fresh = ETA_FRESH } = {}) {
 // A bus stop's card (the map's stations, `stops` each): every bus due at its
 // signs, one ask a city for all of them, as a trip's (TDX's advanced read a
 // station was an ask a sign), at the live speed. Each row with its sign (`st`).
-export async function stationEta(stations, { ask = tdx } = {}) {
+export async function stationEta(stations, { ask = busEta } = {}) {
   const of = new Map();
   for (const st of stations) for (const x of st.stops || []) if (x.stopUID && !of.has(x.stopUID)) of.set(x.stopUID, { uid: x.stopUID, scope: x.scope || routeCity(x.stopUID), st });
   if (!of.size) return [];
@@ -167,7 +167,7 @@ export async function stationEta(stations, { ask = tdx } = {}) {
 }
 
 // Every bus due at the stops within r metres (as live.mjs etaNear).
-export async function etaAround(lat, lon, r = 150, { ask = tdx, near = null } = {}) {
+export async function etaAround(lat, lon, r = 150, { ask = busEta, near = null } = {}) {
   const list = await stopsAround(lat, lon, r).catch(() => null);
   if (!list) return near ? near(lat, lon, r) : (await import('./live.mjs')).etaNear(lat, lon, r);
   return list.length ? etaStops(list, { ask }) : [];

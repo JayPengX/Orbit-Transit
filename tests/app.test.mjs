@@ -1390,10 +1390,10 @@ test('what’s near a point from the packs: the cells say which packs, a 公路�
   assert.deepEqual(list.map(s => `${s.uid}:${s.scope}`), ['S1:HsinchuCounty', 'T1:InterCity']);
   assert.equal(await stopsAround(24.8212, 121.0176, 900, { packFn: async n => (n === 'HsinchuCounty' ? null : packs[n]) }), null, 'a pack not had: TDX is asked instead');
   const asked = [];
-  const ask = async path => (asked.push(path), path.includes('InterCity') ? [{ StopUID: 'T1', RouteName: { Zh_tw: '1820' }, EstimateTime: 300 }] : [{ StopUID: 'S1', RouteName: { Zh_tw: '5615' }, EstimateTime: 120 }]);
+  const ask = async (city, { stops }) => (asked.push(`${city}:${stops}`), { at: Date.now(), rows: city === 'InterCity' ? [{ StopUID: 'T1', RouteName: { Zh_tw: '1820' }, EstimateTime: 300 }] : [{ StopUID: 'S1', RouteName: { Zh_tw: '5615' }, EstimateTime: 120 }] });
   const [a, b] = await Promise.all([etaStops([{ uid: 'S1', scope: 'HsinchuCounty' }], { ask }), etaStops([{ uid: 'T1', scope: 'InterCity' }, { uid: 'S1', scope: 'HsinchuCounty' }], { ask })]);
   assert.equal(asked.length, 2, 'one ask a city, both trips together');
-  assert.ok(asked.some(p => p.startsWith('basic/v2/Bus/EstimatedTimeOfArrival/City/HsinchuCounty?$filter=StopUID eq \'S1\'')));
+  assert.ok(asked.includes('HsinchuCounty:S1'));
   assert.equal(a.length, 1);
   assert.equal(b.length, 2);
   await etaStops([{ uid: 'S1', scope: 'HsinchuCounty' }], { ask });
@@ -1401,19 +1401,18 @@ test('what’s near a point from the packs: the cells say which packs, a 公路�
   await assert.rejects(etaStops([{ uid: 'X9', scope: 'Hsinchu' }], { ask: async () => { throw new Error('down'); } }), 'a failed read is a failure, not no buses');
 });
 
-test('a bus stop’s card reads its signs’ stops, one basic ask a city at the live speed (never TDX’s advanced read a station), each bus with its sign', async () => {
+test('a bus stop’s card reads its signs’ stops, one ask a city at the live speed (the Worker’s copy of the city’s estimates, never TDX’s advanced read a station), each bus with its sign', async () => {
   const { stationEta } = await import('../public/lib/near.mjs');
   const north = { uid: 'HSZ1', name: '火車站', stops: [{ stopUID: 'HSZ9001', routeUID: 'HSZ0007', route: '81' }, { stopUID: 'THB9001', routeUID: 'THB5608', route: '5608' }] };
   const south = { uid: 'HSZ2', name: '火車站', stops: [{ stopUID: 'HSZ9002', routeUID: 'HSZ0007', route: '81' }] };
   const asked = [];
-  const ask = async path => {
-    asked.push(path);
-    return path.includes('InterCity') ? [{ StopUID: 'THB9001', RouteUID: 'THB5608', RouteName: { Zh_tw: '5608' }, Direction: 1, EstimateTime: 300 }] : [{ StopUID: 'HSZ9001', RouteUID: 'HSZ0007', RouteName: { Zh_tw: '81' }, Direction: 0, EstimateTime: 60 }, { StopUID: 'HSZ9002', RouteUID: 'HSZ0007', RouteName: { Zh_tw: '81' }, Direction: 1, EstimateTime: 600 }];
+  const ask = async (city, { stops }) => {
+    asked.push(`${city}:${stops}`);
+    return { at: Date.now(), rows: city === 'InterCity' ? [{ StopUID: 'THB9001', RouteUID: 'THB5608', RouteName: { Zh_tw: '5608' }, Direction: 1, EstimateTime: 300 }] : [{ StopUID: 'HSZ9001', RouteUID: 'HSZ0007', RouteName: { Zh_tw: '81' }, Direction: 0, EstimateTime: 60 }, { StopUID: 'HSZ9002', RouteUID: 'HSZ0007', RouteName: { Zh_tw: '81' }, Direction: 1, EstimateTime: 600 }] };
   };
   const rows = await stationEta([north, south], { ask });
   assert.equal(asked.length, 2, 'one ask a city');
-  assert.ok(asked.every(p => p.startsWith('basic/v2/Bus/EstimatedTimeOfArrival/')));
-  assert.ok(asked.some(p => p.startsWith('basic/v2/Bus/EstimatedTimeOfArrival/City/Hsinchu?') && p.includes("StopUID eq 'HSZ9001' or StopUID eq 'HSZ9002'")));
+  assert.ok(asked.includes('Hsinchu:HSZ9001,HSZ9002'));
   assert.deepEqual(rows.map(r => `${r.route}|${r.dir}|${r.city}|${r.st.uid}`).sort(), ['5608|1|InterCity|HSZ1', '81|0|Hsinchu|HSZ1', '81|1|Hsinchu|HSZ2']);
   await stationEta([north, south], { ask });
   assert.equal(asked.length, 2, 'read again only at the live speed');

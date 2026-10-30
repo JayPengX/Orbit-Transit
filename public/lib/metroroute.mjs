@@ -7,7 +7,7 @@
 // timetable, the trains come every few minutes.
 
 import { tdx, rows } from './api.mjs';
-import { MAPS, OPERATORS, loadSystem, lineRuns } from './metro.mjs';
+import { MAPS, OPERATORS, loadSystem, lineRuns, frequencies, S2S } from './metro.mjs';
 import { meters, walkSec, walkGuess, tw, TDX_DAYS } from './util.mjs';
 import { finish } from './plan.mjs';
 
@@ -24,12 +24,16 @@ async function metroNet(map) {
       map.id,
       (async () => {
         const systems = await Promise.all(map.systems.map(sys => loadSystem(sys).catch(() => null)));
+        // (Only the systems TDX has them for, side by side: the rest answer an
+        // error, never kept, so each launch asked again, one after another: 6 s of a 台北 trip.)
         const extra = await Promise.all(
-          map.systems.map(async sys => ({
-            sys,
-            s2s: rows(await tdx(`basic/v2/Rail/Metro/S2STravelTime/${sys}`, { fresh: 7 * DAY, persist: true }).catch(() => [])),
-            freq: rows(await tdx(`basic/v2/Rail/Metro/Frequency/${sys}`, { fresh: 7 * DAY, persist: true }).catch(() => []))
-          }))
+          map.systems.map(async sys => {
+            const [s2s, freq] = await Promise.all([
+              S2S.has(sys) ? tdx(`basic/v2/Rail/Metro/S2STravelTime/${sys}`, { fresh: 7 * DAY, persist: true }).then(rows, () => []) : [],
+              frequencies(sys).catch(() => [])
+            ]);
+            return { sys, s2s, freq };
+          })
         );
         return buildNet(systems.filter(Boolean), extra);
       })().catch(err => {
