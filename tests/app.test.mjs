@@ -2827,10 +2827,10 @@ test('the location ask still up: never started over, one 「允許取用位置�
   let starts = 0;
   const nav = { geolocation: { watchPosition: () => ++starts, clearWatch() {} } };
   // (The session's watch from before answered: a forced ask starts a new one, which then waits on the ask.)
-  await getPosition({ timeout: 20, maximumAge: 0, kick: true }, nav);
+  await getPosition({ timeout: 20, maximumAge: -1, kick: true }, nav);
   assert.equal(starts, 1);
   // Navigation's restart, the tap on 我的位置: the unanswered watch left alone, no second ask over the first.
-  await getPosition({ timeout: 20, maximumAge: 0, kick: true }, nav);
-  await getPosition({ timeout: 20, maximumAge: 0, kick: true }, nav);
+  await getPosition({ timeout: 20, maximumAge: -1, kick: true }, nav);
+  await getPosition({ timeout: 20, maximumAge: -1, kick: true }, nav);
   assert.equal(starts, 1);
 });
