@@ -1,51 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TRA_MAP } from '../public/lib/tra-map.mjs';
-import { lineMapHtml, hsrLineHtml } from '../public/lib/linemap.mjs';
+import { lineMapHtml, mapCities } from '../public/lib/linemap.mjs';
 
-// Every station the map names, with a made-up class: the ones listed big.
-const BIG = new Set(['0900', '0920', '1000', '1210', '1250']);
-const stations = new Map(
-  Object.values(TRA_MAP)
-    .flat()
-    .flatMap(p => [...p.ids, ...(p.at ? [p.at] : [])])
-    .map(id => [`tra:${id}`, { key: `tra:${id}`, sys: 'tra', id, name: id, cls: BIG.has(id) ? '1' : '4', city: 'Taipei' }])
-);
-const shownIds = html => [...html.matchAll(/data-st="tra:(\d+)"/g)].map(m => m[1]);
-const folds = html => [...html.matchAll(/data-fold="tra:(\d+)"/g)].map(m => m[1]);
+// Every station the map names, each in the county the map has it in.
+const stations = new Map();
+for (const [city, parts] of Object.entries(TRA_MAP))
+  for (const p of parts) for (const id of p.ids) stations.set(`tra:${id}`, { key: `tra:${id}`, sys: 'tra', id, name: id, cls: id === '1000' ? '0' : '4', city });
+const hsr = { key: 'hsr:1000', sys: 'hsr', id: '1000', name: '台北', city: 'Taipei' };
+stations.set(hsr.key, hsr);
+const ids = html => [...html.matchAll(/data-st="(\w+:\d+)"/g)].map(m => m[1]);
 
-test('every region draws its lines, and each branch leaves from a station on the map', () => {
-  for (const [region, parts] of Object.entries(TRA_MAP)) {
-    assert.ok(parts.length, region);
+test('every county draws its lines; each branch leaves from a station on its map', () => {
+  for (const [city, parts] of Object.entries(TRA_MAP)) {
     const all = new Set(parts.flatMap(p => p.ids));
-    for (const p of parts.filter(p => p.branch)) assert.ok(all.has(p.at), `${region} ${p.zh} leaves from ${p.at}`);
+    for (const p of parts.filter(p => p.branch && p.at)) assert.ok(all.has(p.at), `${city} ${p.zh} leaves from ${p.at}`);
   }
+  // North to south, only counties with a station.
+  assert.deepEqual(mapCities([...stations.values()]).slice(0, 3), ['Keelung', 'Taipei', 'NewTaipei']);
+  assert.ok(!mapCities([...stations.values()]).includes('PenghuCounty'));
 });
 
-test('the big stations, the ends and the junctions show; small ones in a row fold into one row, opened in place', () => {
-  const html = lineMapHtml('north', stations);
-  const ids = shownIds(html);
-  // 基隆 (the line's start), 臺北 (big), 北新竹 (內灣線 leaves from it).
-  for (const id of ['0900', '1000', '1190']) assert.ok(ids.includes(id), id);
-  // A small station between big ones is folded…
-  assert.ok(!ids.includes('0940'));
-  const f = folds(html).find(x => html.includes(`data-fold="tra:${x}"`) && Number(x) > 920 && Number(x) < 1000);
-  assert.ok(f);
-  // …and shows once its row is opened, nothing else changing.
-  const opened = shownIds(lineMapHtml('north', stations, { open: new Set([`tra:${f}`]) }));
-  assert.ok(opened.includes('0940'));
-  assert.ok(ids.every(id => opened.includes(id)));
+test("a county's map: 高鐵 first, then every 台鐵 station of the county in order, the next county's station at each edge", () => {
+  const html = lineMapHtml('Taipei', stations);
+  assert.deepEqual(ids(html), ['hsr:1000', ...TRA_MAP.Taipei.flatMap(p => p.ids).map(id => `tra:${id}`)]);
+  // 汐科 before 南港 and 板橋 after 萬華: over the edge into 新北, a tap moves the map there.
+  assert.equal([...html.matchAll(/class="ot-lm-edge \w+" type="button" data-city="NewTaipei"/g)].length, 2);
 });
 
-test('the station picked, the other end and the quick picks are never folded away; the other end cannot be picked', () => {
-  const html = lineMapHtml('north', stations, { current: 'tra:0940', other: 'tra:0950', keep: new Set(['tra:0960']) });
-  assert.ok(['0940', '0950', '0960'].every(id => shownIds(html).includes(id)));
-  assert.match(html, /data-st="tra:0940"[^>]*aria-current="true"/);
-  assert.match(html, /data-st="tra:0950" disabled/);
-});
-
-test('高鐵 across the top: the region’s stations, north to south; none in the east', () => {
-  const hsr = [['1000', '台北', 'Taipei'], ['0990', '南港', 'Taipei'], ['1040', '台中', 'Taichung']].map(([id, name, city]) => ({ key: `hsr:${id}`, sys: 'hsr', id, name, city }));
-  assert.deepEqual([...hsrLineHtml('north', hsr).matchAll(/data-st="hsr:(\d+)"/g)].map(m => m[1]), ['0990', '1000']);
-  assert.equal(hsrLineHtml('east', hsr), '');
+test('the station picked is lit; the other end cannot be picked', () => {
+  const html = lineMapHtml('Taipei', stations, { current: 'tra:1000', other: 'tra:0990' });
+  assert.match(html, /data-st="tra:1000"[^>]*aria-current="true"/);
+  assert.match(html, /data-st="tra:0990" disabled/);
 });

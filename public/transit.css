@@ -4693,58 +4693,99 @@ button.ot-trip-foot {
   border-bottom: 0;
   background: var(--q-sheet-cell, var(--q-surface));
 }
-/* 火車's station picker: one row of quick picks, the regions, then the region's
-   lines as a route map (linemap.mjs). */
+/* 火車's station picker: one row of quick picks, the counties, then the
+   county's lines as a route map (linemap.mjs), each line on its own card. */
 .ot-pick-quick {
   margin-top: 4px;
+}
+.ot-pick-quick + .ot-pick-quick {
+  margin-top: 8px;
+}
+.ot-pick-label {
+  flex: none;
+  align-self: center;
+  min-width: 32px;
+  color: var(--q-label-2);
+  font: 600 13px/18px var(--q-font);
 }
 .ot-pick-quick small {
   margin-left: 4px;
   color: var(--q-label-2);
   font: var(--q-t-caption);
 }
-.ot-pick-regions {
-  margin: 16px 0 4px;
+/* The counties stay in reach while the map scrolls; a tap changes only the map below. */
+.ot-pick-cities {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  margin-top: 8px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  background: var(--q-sheet);
 }
 .ot-pick-map {
   --lm: #0ea5e9;
-  padding-bottom: 16px;
+  padding-bottom: 24px;
+}
+.ot-pick-map.fresh {
+  animation: ot-lm-in 0.22s var(--q-spring-snappy, ease-out);
+}
+@keyframes ot-lm-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.ot-lm {
+  margin-top: 12px;
+  padding: 4px 8px 8px;
+  border-radius: var(--q-radius-sm);
+  background: var(--q-sheet-cell, var(--q-surface));
 }
 .ot-lm-h {
   display: flex;
   gap: 6px;
   align-items: baseline;
-  margin: 20px 0 6px;
+  margin: 0;
+  padding: 10px 8px 4px;
   color: var(--q-label-2);
   font: 600 13px/18px var(--q-font);
 }
 .ot-lm-h span {
   font-weight: 400;
 }
-/* A station: the line through it, its dot, its name, the county where one begins. */
+/* A station: the line through it, its dot, its name. */
 .ot-lm-row,
-.ot-lm-fold {
+.ot-lm-edge {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   min-height: 44px;
-  padding: 0 4px 0 32px;
+  padding: 0 12px 0 40px;
   border: 0;
+  border-radius: 12px;
   background: none;
   color: var(--q-label);
-  font: var(--q-t-subhead);
+  font: var(--q-t-body);
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.25s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ot-lm-row:is(:active, [data-q-press]):not(:disabled),
+.ot-lm-edge:is(:active, [data-q-press]) {
+  background: var(--q-fill-4);
+  transition-duration: 0s;
 }
 .ot-lm-row::before,
-.ot-lm-fold::before {
+.ot-lm-edge::before {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 12px;
+  left: 18px;
   width: 4px;
   background: var(--lm);
 }
@@ -4754,43 +4795,45 @@ button.ot-trip-foot {
 .ot-lm-row.last::before {
   bottom: 50%;
 }
+.ot-lm-row.first.last::before {
+  display: none;
+}
 .ot-lm-dot {
   position: absolute;
   top: 50%;
-  left: 14px;
+  left: 20px;
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: var(--lm);
   transform: translate(-50%, -50%);
+  transition: transform 0.2s var(--q-spring-snappy, ease-out), border-color 0.2s;
 }
 .ot-lm-row.big {
-  font: 600 17px/22px var(--q-font);
+  font-weight: 600;
 }
 .ot-lm-row.big .ot-lm-dot {
   width: 16px;
   height: 16px;
   border: 4px solid var(--lm);
-  background: var(--q-sheet, var(--q-elevated));
+  background: var(--q-sheet-cell, var(--q-surface));
 }
-.ot-lm-row.on {
+.ot-lm-row:is(.on, .picked) {
   color: var(--q-accent);
 }
-.ot-lm-row.on .ot-lm-dot,
-.ot-hsr-st.on .ot-lm-dot {
+.ot-lm-row:is(.on, .picked) .ot-lm-dot {
   width: 18px;
   height: 18px;
-  border: 4px solid var(--q-accent);
-  background: var(--q-sheet, var(--q-elevated));
+  border: 5px solid var(--q-accent);
+  background: var(--q-sheet-cell, var(--q-surface));
 }
-.ot-lm-row:disabled,
-.ot-hsr-st:disabled {
+/* (Picked: the dot gives a beat before the sheet closes.) */
+.ot-lm-row.picked .ot-lm-dot {
+  transform: translate(-50%, -50%) scale(1.25);
+}
+.ot-lm-row:disabled {
   color: var(--q-label-3);
   cursor: default;
-}
-.ot-lm-row:active:not(:disabled),
-.ot-lm-fold:active {
-  background: var(--q-fill-3);
 }
 .ot-lm-name {
   flex: 1;
@@ -4799,53 +4842,50 @@ button.ot-trip-foot {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ot-lm-city {
-  flex: none;
+/* Over the county's edge: the line going on, dotted; the next station and its county. */
+.ot-lm-edge {
+  min-height: 40px;
   color: var(--q-label-2);
-  font: var(--q-t-footnote);
+  font: var(--q-t-subhead);
 }
-/* Small stations in a row, folded: the line dotted, their names on one line, a tap opens them. */
-.ot-lm-fold {
-  min-height: 36px;
-  color: var(--q-label-2);
-  font: var(--q-t-footnote);
-}
-.ot-lm-fold::before {
+.ot-lm-edge::before {
   background: repeating-linear-gradient(var(--lm) 0 4px, transparent 4px 8px);
 }
-.ot-lm-names {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ot-lm-edge.prev::before {
+  bottom: 50%;
 }
-.ot-lm-more {
+.ot-lm-edge.next::before {
+  top: 50%;
+}
+.ot-lm-city {
   flex: none;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--q-fill-3);
-  color: var(--q-label);
-  font: 600 12px/16px var(--q-font);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--q-label-2);
+  font: var(--q-t-footnote);
+}
+.ot-lm-city .ot-i {
+  width: 14px;
+  height: 14px;
 }
 /* A branch line: hangs off its station, the main line running on beside it. */
 .ot-lm-sub {
   position: relative;
-  padding-left: 18px;
+  padding-left: 22px;
 }
 .ot-lm-sub::before {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 12px;
+  left: 18px;
   width: 4px;
   background: var(--lm);
 }
 .ot-lm-sub > .ot-lm-h {
   position: relative;
-  margin: 0;
-  padding: 8px 0 4px 32px;
+  padding: 8px 0 4px 40px;
 }
 /* (Its first stretch: off the main line, across and down.) */
 .ot-lm-sub > .ot-lm-h::before {
@@ -4853,7 +4893,7 @@ button.ot-trip-foot {
   position: absolute;
   top: 0;
   left: -2px;
-  width: 18px;
+  width: 22px;
   height: 16px;
   border: solid var(--lm);
   border-width: 4px 4px 0 0;
@@ -4864,61 +4904,12 @@ button.ot-trip-foot {
   position: absolute;
   top: 16px;
   bottom: 0;
-  left: 12px;
+  left: 18px;
   width: 4px;
   background: var(--lm);
 }
-.ot-lm-sub .ot-lm-row.big {
-  font: var(--q-t-subhead);
-  font-weight: 600;
-}
-/* 高鐵: the region's stations on one line across. */
 .ot-lm-hsr {
   --lm: #f97316;
-}
-.ot-hsr-line {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-}
-.ot-hsr-line::before {
-  content: '';
-  position: absolute;
-  top: 16px;
-  left: calc(50% / var(--n));
-  right: calc(50% / var(--n));
-  height: 4px;
-  background: var(--lm);
-}
-.ot-hsr-st {
-  position: relative;
-  min-height: 56px;
-  padding: 30px 2px 4px;
-  border: 0;
-  background: none;
-  color: var(--q-label);
-  font: 600 15px/20px var(--q-font);
-  cursor: pointer;
-}
-:lang(en) .ot-hsr-st {
-  font: 600 11px/16px var(--q-font);
-}
-.ot-hsr-st span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ot-hsr-st .ot-lm-dot {
-  top: 18px;
-  left: 50%;
-  width: 16px;
-  height: 16px;
-  border: 4px solid var(--lm);
-  background: var(--q-sheet, var(--q-elevated));
-}
-.ot-hsr-st.on {
-  color: var(--q-accent);
 }
 
 /* A bus route: its number and direction stay on top while its stops scroll. */

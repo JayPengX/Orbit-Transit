@@ -17,7 +17,7 @@ Live: https://orbit.jaypengx.com/transit/
   - **交通:** saved trips' next departures with real bus times, pinned
     rides, and the places rail (家, 學校 and your pins).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
-    station picked by search, a nearby or recent one, or on a region's line
+    station picked by search, a nearby or recent one, or on a county's line
     map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), bus
     routes by number or stop, stop timetables, and 捷運: each city's metro
     as a metro map (`metromap.mjs`: the lines straightened to the eight
@@ -140,7 +140,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/api.mjs` | The proxy: TDX, places, plans, walks; caches |
 | `lib/planner.mjs`, `plan.mjs`, `live.mjs` | Planning; YouBike ideas, score and ranking; live re-timing |
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |
-| `lib/linemap.mjs`, `tra-map.mjs`, `tra-regions.mjs` | The station picker's line map (rerun `node scripts/tra-map.mjs` when 台鐵 opens a station) |
+| `lib/linemap.mjs`, `tra-map.mjs` | The station picker's line map (rerun `node scripts/tra-map.mjs` when 台鐵 opens a station) |
 | `lib/bus.mjs`, `bus-ui.mjs` | Routes, stops, arrivals; the route strip |
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |
