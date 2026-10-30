@@ -14,6 +14,8 @@ export const COLOR = { bus: '#22c55e', tra: '#0ea5e9', hsr: '#f97316', metro: '#
 
 // A colour tile holding one of the app's glyphs (ui.mjs icon names), or a word (`word`).
 export const tile = (glyph, color = '', size = '', word = false) => `<span class="q-tile${size ? ` ${size}` : ''}"${color ? ` style="--t:${color}"` : ''} aria-hidden="true">${word ? e(glyph) : icon(glyph)}</span>`;
+// TPASS 行政院通勤月票's own logo as a tile (its wordmark from tpass.tw, on a white plate).
+export const tpassTile = () => `<span class="q-tile ot-logo" aria-hidden="true"><img src="./img/tpass.png" alt="" width="40" height="40" decoding="async"></span>`;
 export const tag = (text, tone = '') => `<span class="q-tag${tone ? ` ${tone}` : ''}">${e(text)}</span>`;
 // A section: its 20px title, an optional button on the right (`more`: html), its body.
 export const section = (title, body, more = '') => `<section class="q-section ot-sec"><div class="q-section-head"><h2>${e(title)}</h2>${more}</div>${body}</section>`;
