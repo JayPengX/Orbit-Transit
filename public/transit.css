@@ -5468,3 +5468,7 @@ button.ot-trip-foot {
   background: color-mix(in srgb, var(--c, var(--q-accent)) 16%, transparent);
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--c, var(--q-accent)) 16%, transparent);
 }
+
+/* A brand's own logo as a tile (TPASS): its picture on a white plate, filling the tile. */
+.q-tile.ot-logo { overflow: hidden; background: #fff; box-shadow: inset 0 0 0 0.5px var(--q-sep); }
+.q-tile.ot-logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
