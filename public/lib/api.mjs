@@ -197,6 +197,14 @@ export const rows = j => (Array.isArray(j) ? j : j && typeof j === 'object' ? Ob
 // ---- The rest of the proxy -------------------------------------------------------------------
 
 export const config = () => get('/transit/config');
+// The buses due at these stops (or on one route) from the Worker's copy of
+// the whole city's estimates (transit.js etaRows: one TDX call a city for
+// everyone): → { rows, at } (when the copy is from).
+export async function busEta(city, { stops = [], route = '' } = {}) {
+  const meta = {};
+  const got = await get(`/transit/eta?city=${encodeURIComponent(city)}&${stops.length ? `stops=${stops.map(encodeURIComponent).join(',')}` : `route=${encodeURIComponent(route)}`}`, { meta, wait: 8000 });
+  return { rows: Array.isArray(got) ? got : [], at: Date.now() - (meta.age || 0) * 1000 };
+}
 // Which of a city's bus routes have a bus on the road now: { at, routes: { RouteUID: n } } (transit.js running).
 export const busesRunning = city => get(`/transit/running?city=${encodeURIComponent(city)}`);
 export const searchPlaces = (q, { lat, lon, session: s } = {}, opts) => get(`/transit/search?q=${encodeURIComponent(q)}${lat != null ? `&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}` : ''}${s ? `&s=${s}` : ''}`, opts);

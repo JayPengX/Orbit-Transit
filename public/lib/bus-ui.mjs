@@ -5,7 +5,7 @@
 // every bus due.
 
 import { emptyNote, saidRows } from './look.mjs';
-import { routeStops, routeEta, routeEtaPath, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
+import { routeStops, routeEta, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
@@ -403,7 +403,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   const refresh = async () => {
     try {
       live = await routeEta(route);
-      at = Math.min(Date.now(), dataAt(routeEtaPath(route)) || Date.now());
+      at = Math.min(Date.now(), routeEtaAt(route) || Date.now());
       err = '';
     } catch (x) {
       err = errorText(x);

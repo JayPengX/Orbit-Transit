@@ -228,7 +228,10 @@ export function frequency(list, line, now = Date.now()) {
   const op = r.OperationTime || {};
   return { min: h ? Number(h.MinHeadwayMins) : null, max: h ? Number(h.MaxHeadwayMins) : null, first: op.StartTime ? at(t, op.StartTime) : null, last: op.EndTime ? at(t, op.EndTime === '24:00' ? '00:00' : op.EndTime) : null };
 }
-const frequencies = op => tdx(`basic/v2/Rail/Metro/Frequency/${op}`, { fresh: DAY, persist: true }).then(rows);
+// (Which systems TDX has headways and station-to-station times for; it refuses the rest.)
+const FREQUENCY = new Set(['TRTC', 'KRTC', 'TYMC', 'TMRT', 'NTMC']);
+export const S2S = new Set(['TRTC', 'KRTC', 'TYMC', 'KLRT', 'TMRT', 'NTMC']);
+export const frequencies = op => (FREQUENCY.has(op) ? tdx(`basic/v2/Rail/Metro/Frequency/${op}`, { fresh: DAY, persist: true }).then(rows) : Promise.resolve([]));
 
 // A station's board, live and timetable together: for each line and way,
 // the next trains (live minutes first where the operator sends them),

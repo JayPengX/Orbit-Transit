@@ -2,7 +2,8 @@
 // comes to a stop (TDX's N1 estimates, refreshed by the proxy every 25 s).
 
 import { packRoute } from './packs.mjs';
-import { tdx, rows } from './api.mjs';
+import { tdx, rows, busEta, liveMs } from './api.mjs';
+import { etaStops } from './near.mjs';
 import { zh, hm, etaAge, meters, TDX_DAYS } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 import { routeStatus } from './service.mjs';
@@ -110,32 +111,33 @@ export function stopTimes(sched, { stopUID, name, dir }, date, dow) {
 const ETA_FIELDS = '$select=StopUID,RouteUID,RouteName,SubRouteUID,Direction,EstimateTime,StopStatus,NextBusTime,PlateNumb,IsLastBus,Estimates,StopCountDown,DataTime';
 
 // Every stop of one route (the route sheet), keyed by StopUID; `dir`: one way's.
-export const routeEtaPath = route => `basic/v2/Bus/EstimatedTimeOfArrival/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&${ETA_FIELDS}`;
+// (From the Worker's copy of the city's estimates; asked again at the live speed.)
+const routeLive = new Map(); // RouteUID → { got, ask: Promise<{ rows, at }> }
+const routeRows = route => {
+  const k = routeLive.get(route.uid);
+  if (k && Date.now() - k.got < liveMs() - 1000) return k.ask;
+  const ask = busEta(route.city, { route: route.uid });
+  routeLive.set(route.uid, { got: Date.now(), ask });
+  ask.catch(() => routeLive.get(route.uid)?.ask === ask && routeLive.delete(route.uid));
+  return ask;
+};
+// When that route's live times are from (ms), or 0.
+export const routeEtaAt = route => routeLive.get(route.uid)?.at || 0;
 export async function routeEta(route, dir = null) {
-  const j = await tdx(routeEtaPath(route), { fresh: 'live' });
-  return etaMap(j, dir);
+  const got = await routeRows(route);
+  const k = routeLive.get(route.uid);
+  if (k) k.at = got.at;
+  return etaMap(got.rows, dir);
 }
 // A bus's place in a list: due soonest first, not out yet after, not running last.
 export function etaRank(v) {
   v = v && said(v);
   return !v ? 3e6 : v.sec != null ? v.sec : v.status === 1 ? 1e6 + ((v.next || 0) - Date.now()) / 1000 : 2e6;
 }
-// The stops of a group, one ask per city.
+// The stops of a group, one ask per city (near.mjs etaStops: shared with every other look at them).
 export async function stopsEta(items) {
-  const byCity = new Map();
-  for (const it of items) {
-    if (!byCity.has(it.city)) byCity.set(it.city, new Set());
-    byCity.get(it.city).add(it.stopUID);
-  }
-  const out = new Map();
-  await Promise.all(
-    [...byCity].map(async ([city, uids]) => {
-      const filter = [...uids].sort().map(u => `StopUID eq ${q(u)}`).join(' or ');
-      const j = await tdx(`basic/v2/Bus/EstimatedTimeOfArrival/${scope(city)}?$filter=${filter}&${ETA_FIELDS}`, { fresh: 'live' });
-      for (const [k, v] of etaMap(j)) out.set(k, v);
-    })
-  );
-  return out;
+  const list = await etaStops([...new Map(items.map(it => [`${it.city}|${it.stopUID}`, { uid: it.stopUID, scope: it.city }])).values()], { fresh: liveMs() - 1000 });
+  return etaMap(list);
 }
 // A bus stop's arrivals as the Worker asks for them for a 到站提醒 (push.js;
 // the app's own card reads the stop's signs: near.mjs stationEta). Whose
