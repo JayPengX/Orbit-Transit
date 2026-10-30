@@ -134,9 +134,9 @@ export function createHome(box, ctx, act) {
         glyph: 'bike',
         eyebrow: W('附近的 YouBike', 'YouBike near you'),
         title: x.name,
-        big: `<strong class="q-focus-value ot-count">${n}<small>${W('台可借', 'bikes')}</small></strong>`,
+        big: `<strong class="q-focus-value ot-count">${x.bikes || 0}<small>${W('台一般', 'regular')}</small> ${x.ebike || 0}<small>${W('台電輔車', 'e-bikes')}</small></strong>`,
         num: n,
-        facts: [x.d != null ? distText(x.d) : '', x.ebike ? W(`電輔車 ${x.ebike}`, `E-bikes ${x.ebike}`) : '', W(`空位 ${x.ret}`, `Docks ${x.ret}`)],
+        facts: [x.d != null ? distText(x.d) : '', W(`空位 ${x.ret}`, `Docks ${x.ret}`)],
         tile: bikeTile()
       };
     }
