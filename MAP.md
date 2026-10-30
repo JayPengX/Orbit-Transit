@@ -36,6 +36,8 @@ Live: https://orbit.jaypengx.com/transit/
   偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
   own): of stations about as near, one with 電輔車 there now, ridden at
   their pace (`plan.mjs` `PREFER_SEC`).
+- **Speed:** the first plans wait at most 1.5 s on the buses' live times
+  (`planner.mjs FIRST_WAIT`), the rest come with the second round.
 - **Planned once:** a saved trip's ways are kept and re-timed live. The
   billed planners are asked again only when the ways could differ.
 - **Ranking** (`plan.mjs rank`), in two steps:
@@ -67,7 +69,9 @@ Live: https://orbit.jaypengx.com/transit/
 - **到站提醒** (`alerts.mjs`): "tell me when the 5608 is 5 minutes away";
   the Worker checks every 2 minutes while the phone is locked.
 - **Data:**
-  - live: TDX through `/transit/tdx`, cached on the Worker;
+  - live: TDX through `/transit/tdx`, cached on the Worker; buses due through
+    `/transit/eta` (`api.mjs busEta`): the Worker keeps each city's whole list
+    from one TDX call and answers any stops or route from it (公路客運 by its stops);
   - bus routes and timetables: weekly packs in R2 (`packs.mjs`);
   - what's near a point: worked out on the phone (`near.mjs`);
   - line shapes: `shapes.mjs` (packs and shapes read with the kit's
