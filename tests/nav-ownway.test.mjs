@@ -136,7 +136,7 @@ test('the position watch gone silent while navigating: the device watch started 
   }
 });
 
-test('the watch silent on a moving train: started over within seconds, then less often while it stays silent', async () => {
+test('the watch silent on a moving train: started over within seconds; one that then says nothing (maybe the location ask) left a minute', async () => {
   const geo = navigator.geolocation;
   const at = [];
   const was = geo.watchPosition;
@@ -150,11 +150,11 @@ test('the watch silent on a moving train: started over within seconds, then less
     const before = at.length;
     tick(12e3);
     assert.ok(at.length > before, 'started over by 12 s (it had waited 30 s, a minute for the device)');
-    // Still nothing: each start given longer (10, 20, 40 s, then a minute), never cut off every few seconds.
+    // Still nothing: never started over every few seconds (each start a possible second ask).
     tick(120e3);
     const gaps = at.filter(t => t > t0).map((t, k, a) => (k ? t - a[k - 1] : t - t0));
-    assert.ok(gaps.length >= 3 && gaps.length <= 6, `${gaps.length} starts`);
-    for (let k = 1; k < gaps.length; k++) assert.ok(gaps[k] >= gaps[k - 1], `${gaps}`);
+    assert.ok(gaps.length >= 2 && gaps.length <= 3, `${gaps.length} starts`);
+    for (let k = 1; k < gaps.length; k++) assert.ok(gaps[k] >= 60e3, `${gaps}`);
     // A fix again: back to restarting within seconds.
     pos(O);
     const n = at.length;
