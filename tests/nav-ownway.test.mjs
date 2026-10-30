@@ -135,3 +135,32 @@ test('the position watch gone silent while navigating: the device watch started 
     geo.watchPosition = was;
   }
 });
+
+test('the watch silent on a moving train: started over within seconds, then less often while it stays silent', async () => {
+  const geo = navigator.geolocation;
+  const at = [];
+  const was = geo.watchPosition;
+  geo.watchPosition = (...a) => (at.push(clock.get()), was(...a));
+  try {
+    const { plan, O } = ownTrip();
+    clock.set(T(8));
+    start(plan, { resume: { i: 0, phase: 'before', reached: 0 } });
+    pos(O);
+    const t0 = clock.get();
+    const before = at.length;
+    tick(12e3);
+    assert.ok(at.length > before, 'started over by 12 s (it had waited 30 s, a minute for the device)');
+    // Still nothing: each start given longer (10, 20, 40 s, then a minute), never cut off every few seconds.
+    tick(120e3);
+    const gaps = at.filter(t => t > t0).map((t, k, a) => (k ? t - a[k - 1] : t - t0));
+    assert.ok(gaps.length >= 3 && gaps.length <= 6, `${gaps.length} starts`);
+    for (let k = 1; k < gaps.length; k++) assert.ok(gaps[k] >= gaps[k - 1], `${gaps}`);
+    // A fix again: back to restarting within seconds.
+    pos(O);
+    const n = at.length;
+    tick(12e3);
+    assert.ok(at.length > n, 'quick again after a fix');
+  } finally {
+    geo.watchPosition = was;
+  }
+});

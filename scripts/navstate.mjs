@@ -1,4 +1,4 @@
-// node scripts/navstate.mjs <walk|wait|on|train|bike|long|late|wenxing> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
+// node scripts/navstate.mjs <walk|wait|on|train|bike|long|liujia|late|wenxing> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
 const now = Date.now(), m = x => now + x * 60_000;
 const here = { lat: 24.8026, lon: 120.9702 };
 const stop = { name: '新竹車站(中正路)', lat: 24.8026, lon: 120.9702 };
@@ -13,7 +13,7 @@ if (sc === 'bike') { legs = [{ mode: 'walk', from: { name: '', ...here }, to: { 
 // To be there by a time (竹東高中 in 70 minutes), the bus a minute away and the stop a 5-minute walk: late, the way that's on time offered.
 if (sc === 'late') legs = [{ mode: 'walk', from: { name: '', ...here }, to: far, dep: m(-4), arr: m(1), dur: 300, dist: 400 }, bus(far, 1), { mode: 'walk', from: { name: '竹東站', lat: 24.736, lon: 121.092 }, to: { name: '竹東高中', lat: 24.733, lon: 121.088 }, dep: m(31), arr: m(37), dur: 360, dist: 450 }];
 // The owner's kind of trip, eight steps: a walk, a bike to the train, a change to the 六家線, a bike home.
-if (sc === 'long') {
+if (sc === 'long' || sc === 'liujia') {
   const P = (name, lat, lon) => ({ name, lat, lon });
   const dock = P('新竹火車站(前站)', 24.803, 120.971), nh = P('北新竹', 24.809, 120.985), zz = P('竹中', 24.782, 121.031), lj = P('六家', 24.8078, 121.039), park = P('綠41公園', 24.8165, 121.0172);
   legs = [
@@ -40,5 +40,7 @@ if (sc === 'wenxing') {
   ];
   i = 1;
 }
+// (liujia: waiting at 竹中 for the 六家線, its ride along the track.)
+if (sc === 'liujia') i = 4;
 const plan = { tags: [], transfers: 0, walk: 400, legs, dep: legs[0].dep, arr: legs.at(-1).arr, dur: (legs.at(-1).arr - legs[0].dep) / 1000, dest: { name: legs.at(-1).to.name, lat: legs.at(-1).to.lat, lon: legs.at(-1).to.lon }, ...(sc === 'late' ? { deadline: m(70) } : {}) };
 process.stdout.write(JSON.stringify({ plan, i, phase, at: now }));

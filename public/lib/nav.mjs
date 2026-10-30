@@ -215,6 +215,11 @@ const saveFold = f => foldUnread || writeJson(FOLD_KEY, f);
 const grip = (which, folded) => `<button class="ot-nav-grip" type="button" data-nav="fold-${which}" aria-label="${folded ? W('展開', 'Expand') : W('收合', 'Collapse')}" aria-expanded="${!folded}"></button>`;
 // A step looked ahead to goes back to the one you're at after this long untouched.
 const LOOK_MS = 20_000;
+// No position for this long while seen: the device's watch started over;
+// each start that brings none waits twice as long (a train's weak sky can
+// take a while for a first fix, never cut off again and again), up to a minute.
+const SILENT_MS = 10_000;
+const SILENT_MAX = 60_000;
 // Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
 const AWAY_MS = 30_000;
 // …this far from its line and its road (a train's station is wide).
@@ -1101,6 +1106,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const pulled = isRide(w) && state.phase === 'before' && state.i === state.reached && p.acc <= 500 && w.from?.lat != null && meters(p.lat, p.lon, w.from.lat, w.from.lon) > p.acc + 200;
     // (Rough fixes still say the watch is alive: never started over for them.)
     if (p.acc > 100) state.roughAt = Date.now();
+    state.silentMs = SILENT_MS;
     if (p.acc > 100 && !pulled) return follow?.(p);
     state.pos = p;
     state.posAt = Date.now();
@@ -1558,7 +1564,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   state.go = go;
   state.render = render;
   // Followed where you are; started again on coming back to the app, and
-  // after 30 s with no position while it's seen: iOS's watch can stay
+  // after SILENT_MS with no position while it's seen: iOS's watch can stay
   // silent after the app was away (the owner, 2026-10-16: back in the app,
   // the dot where it was left). Each start asks for a fix at once too.
   // (`kick`: the device's own watch started over, the only thing that wakes
@@ -1579,11 +1585,16 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       stopNav();
       return onEnd?.();
     }
-    if (document.visibilityState === 'visible' && Date.now() - Math.max(state.posAt || 0, state.watchAt || 0, state.roughAt || 0) > 30_000) watch(Date.now() - (state.kickAt || 0) >= 60_000 && (state.kickAt = Date.now()));
+    // (Silent: the device's watch started over, the only thing that wakes it; 30 s
+    // and a kick once a minute had left the dot standing still on a moving train.)
+    const heard = Math.max(state.posAt || 0, state.roughAt || 0);
+    if (document.visibilityState === 'visible' && Date.now() - Math.max(heard, state.watchAt || 0) > (state.silentMs || SILENT_MS)) {
+      if (state.watchAt > heard) state.silentMs = Math.min(SILENT_MAX, 2 * (state.silentMs || SILENT_MS));
+      watch(true);
+    }
     // (Back in the app: 5 s with no fix, started over then, not 30 s on.)
     else if (state.shownAt && Date.now() - state.shownAt > 5000 && (state.posAt || 0) < state.shownAt && (state.roughAt || 0) < state.shownAt) {
       state.shownAt = 0;
-      state.kickAt = Date.now();
       watch(true);
     }
     // Looked ahead and left there: after 20 s the card, the chips and the map are on the step you're at again (the owner, 2026-10-22).

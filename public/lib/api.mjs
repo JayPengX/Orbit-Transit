@@ -254,7 +254,9 @@ function watchDevice(nav) {
       }
       for (const w of [...geo.waiting]) w({ error });
     },
-    { enableHighAccuracy: true, maximumAge: 10_000 }
+    // (Fresh fixes only: one the device kept up to 10 s had the dot that far
+    // behind, 160 m on a train; Jay 2026-10-30, 「slower than my grandma」.)
+    { enableHighAccuracy: true, maximumAge: 0 }
   );
 }
 // Back in the app and the watch silent (an iPhone can leave one stopped after the background): started again.
