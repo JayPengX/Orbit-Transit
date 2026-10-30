@@ -29,10 +29,11 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 
 ## Features
 
-- **Map:** every bus stop with live arrival times, YouBike stations with bikes and docks (the five nearest along the bottom), train and metro stations, search and your pins.
-- **Trip planning** across bus, 台鐵, 高鐵, the metros and YouBike, ranked by door-to-door minutes and how much bother each way is. There is always a recommendation.
+- **Map:** every bus stop with live arrival times, YouBike stations with regular bikes, e-bikes (電輔車) and docks counted apart (the five nearest along the bottom), train and metro stations, search and your pins.
+- **Trip planning** across bus, 台鐵, 高鐵, the metros and YouBike, ranked by door-to-door minutes and how much bother each way is, first plans in a second or two. There is always a recommendation.
+- **建議 learns where you go:** a place you often go at about this hour comes up first as 常在這時候去.
 - **Navigation** that follows the trip: every step moves on by itself, countdowns, the stops to go, a buzz before yours, the next bus if you miss one, and it survives the app being swiped away.
-- **Timetables:** 台鐵 and 高鐵 station to station, bus routes and stops, and each city's metro drawn as a metro map with the trains arriving now.
+- **Timetables:** 台鐵 and 高鐵 station to station, stations picked on a train map (北部, 中部, 南部, 東部) or from nearby and recent ones, bus routes and stops, and each city's metro drawn as a metro map with the trains arriving now.
 - **YouBike rental timer** that warns before TPASS's free half hour runs out and offers docks nearby.
 - **到站提醒:** "tell me when the 5608 is 5 minutes away", checked by the server while the phone is locked.
 - **Service notices** from the operators themselves: a stopped line or route is marked and never planned.
