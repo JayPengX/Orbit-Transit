@@ -127,3 +127,21 @@ test('suggest: a saved trip at 18:40 is news from about 18:20 to a few minutes a
   assert.equal(at('18:55').length, 0, 'gone more than 10 minutes');
   assert.equal(tripNow(t, here, T('18:45')).late, T('18:40'));
 });
+
+test('常去: a place planned to at this hour on days like this comes up; not when already there, nor with too few trips', async () => {
+  const { suggest, usualTrip } = await import('../public/lib/suggest.mjs');
+  const at = (d, hm) => Date.parse(`${d}T${hm}:00+08:00`);
+  const gym = { name: '健身房', lat: 24.81, lon: 120.97, ts: ['2026-10-20', '2026-10-22', '2026-10-27', '2026-10-29'].map(d => at(d, '18:40')) };
+  const shop = { name: '巨城', lat: 24.809, lon: 120.975, ts: [at('2026-10-25', '14:00'), at('2026-10-18', '15:00')] };
+  const now = at('2026-11-03', '18:30');
+  const u = usualTrip([gym, shop], now);
+  assert.equal(u.place.name, '健身房');
+  // Morning: nothing usual then.
+  assert.equal(usualTrip([gym, shop], at('2026-11-03', '09:00')), null);
+  // Already there: nothing.
+  assert.equal(usualTrip([gym], now, { lat: 24.8101, lon: 120.9701 }), null);
+  // Twice is not a habit.
+  assert.equal(usualTrip([{ ...gym, ts: gym.ts.slice(0, 2) }], now), null);
+  const list = suggest({ now, recents: [gym, shop] });
+  assert.equal(list[0].kind, 'usual');
+});

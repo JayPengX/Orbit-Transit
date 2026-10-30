@@ -88,7 +88,7 @@ export function createHome(box, ctx, act) {
       })
       .filter(Boolean);
     const bikes = (S.bikes || []).map(b => ({ ...b, d: b.walk?.dist ?? b.d }));
-    return suggest({ now, here, places: ctx.data.places, trips, buses, trains, bikes });
+    return suggest({ now, here, places: ctx.data.places, trips, buses, trains, bikes, recents: ctx.data.trips });
   };
 
   // One suggestion as { glyph, eyebrow, title, sub, tags, at, big, color, body }.
@@ -138,6 +138,17 @@ export function createHome(box, ctx, act) {
         num: n,
         facts: [x.d != null ? distText(x.d) : '', W(`空位 ${x.ret}`, `Docks ${x.ret}`)],
         tile: bikeTile()
+      };
+    }
+    if (x.kind === 'usual') {
+      const d = ctx.here ? meters(ctx.here.lat, ctx.here.lon, x.place.lat, x.place.lon) : null;
+      return {
+        glyph: 'route',
+        eyebrow: W('常在這時候去', 'You often go now'),
+        title: x.place.name || W('地圖上的位置', 'Spot on the map'),
+        ...(d != null ? { big: `<strong class="q-focus-value ot-count">${e(distText(d))}</strong>`, numText: distText(d) } : {}),
+        facts: [d != null ? W('從目前位置', 'From here') : ''],
+        tile: tile('route', COLOR.route)
       };
     }
     return {
@@ -271,6 +282,7 @@ export function createHome(box, ctx, act) {
       if (!x) return;
       // (A bike's own fields kept: the card opens the station itself.)
       if (x.kind === 'bike') return act.bike(S.bikes?.find(b => b.uid === x.uid));
+      if (x.kind === 'usual') return act.recent(x.place);
       return act[x.kind === 'home' ? 'place' : x.kind]?.(x.kind === 'home' ? x.place : x);
     }
     const del = t.closest('[data-del-recent]');
