@@ -4002,9 +4002,6 @@ button.ot-trip-foot {
   color: var(--q-accent);
   font-weight: 600;
 }
-.ot-sys {
-  margin: 4px 0 12px;
-}
 /* 公車: nearby stops, their routes as small green buttons. */
 .ot-stop-row {
   align-items: flex-start;
@@ -4686,35 +4683,232 @@ button.ot-trip-foot {
   border-bottom: 0;
   background: var(--q-sheet-cell, var(--q-surface));
 }
-/* Station grid (火車's picker). */
-.ot-st-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-  gap: 8px;
-  margin-top: 12px;
+/* 火車's station picker: one row of quick picks, the regions, then the region's
+   lines as a route map (linemap.mjs). */
+.ot-pick-quick {
+  margin-top: 4px;
 }
-.ot-st-btn {
+.ot-pick-quick small {
+  margin-left: 4px;
+  color: var(--q-label-2);
+  font: var(--q-t-caption);
+}
+.ot-pick-regions {
+  margin: 16px 0 4px;
+}
+.ot-pick-map {
+  --lm: #0ea5e9;
+  padding-bottom: 16px;
+}
+.ot-lm-h {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin: 20px 0 6px;
+  color: var(--q-label-2);
+  font: 600 13px/18px var(--q-font);
+}
+.ot-lm-h span {
+  font-weight: 400;
+}
+/* A station: the line through it, its dot, its name, the county where one begins. */
+.ot-lm-row,
+.ot-lm-fold {
   position: relative;
-  min-height: 46px;
-  padding: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 4px 0 32px;
   border: 0;
-  border-radius: 14px;
-  background: var(--q-sheet-cell, var(--q-surface));
+  background: none;
+  color: var(--q-label);
+  font: var(--q-t-subhead);
+  text-align: left;
+  cursor: pointer;
+}
+.ot-lm-row::before,
+.ot-lm-fold::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 12px;
+  width: 4px;
+  background: var(--lm);
+}
+.ot-lm-row.first::before {
+  top: 50%;
+}
+.ot-lm-row.last::before {
+  bottom: 50%;
+}
+.ot-lm-dot {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lm);
+  transform: translate(-50%, -50%);
+}
+.ot-lm-row.big {
+  font: 600 17px/22px var(--q-font);
+}
+.ot-lm-row.big .ot-lm-dot {
+  width: 16px;
+  height: 16px;
+  border: 4px solid var(--lm);
+  background: var(--q-sheet, var(--q-elevated));
+}
+.ot-lm-row.on {
+  color: var(--q-accent);
+}
+.ot-lm-row.on .ot-lm-dot,
+.ot-hsr-st.on .ot-lm-dot {
+  width: 18px;
+  height: 18px;
+  border: 4px solid var(--q-accent);
+  background: var(--q-sheet, var(--q-elevated));
+}
+.ot-lm-row:disabled,
+.ot-hsr-st:disabled {
+  color: var(--q-label-3);
+  cursor: default;
+}
+.ot-lm-row:active:not(:disabled),
+.ot-lm-fold:active {
+  background: var(--q-fill-3);
+}
+.ot-lm-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ot-lm-city {
+  flex: none;
+  color: var(--q-label-2);
+  font: var(--q-t-footnote);
+}
+/* Small stations in a row, folded: the line dotted, their names on one line, a tap opens them. */
+.ot-lm-fold {
+  min-height: 36px;
+  color: var(--q-label-2);
+  font: var(--q-t-footnote);
+}
+.ot-lm-fold::before {
+  background: repeating-linear-gradient(var(--lm) 0 4px, transparent 4px 8px);
+}
+.ot-lm-names {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ot-lm-more {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--q-fill-3);
+  color: var(--q-label);
+  font: 600 12px/16px var(--q-font);
+}
+/* A branch line: hangs off its station, the main line running on beside it. */
+.ot-lm-sub {
+  position: relative;
+  padding-left: 18px;
+}
+.ot-lm-sub::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 12px;
+  width: 4px;
+  background: var(--lm);
+}
+.ot-lm-sub > .ot-lm-h {
+  position: relative;
+  margin: 0;
+  padding: 8px 0 4px 32px;
+}
+/* (Its first stretch: off the main line, across and down.) */
+.ot-lm-sub > .ot-lm-h::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -2px;
+  width: 18px;
+  height: 16px;
+  border: solid var(--lm);
+  border-width: 4px 4px 0 0;
+  border-top-right-radius: 12px;
+}
+.ot-lm-sub > .ot-lm-h::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  bottom: 0;
+  left: 12px;
+  width: 4px;
+  background: var(--lm);
+}
+.ot-lm-sub .ot-lm-row.big {
+  font: var(--q-t-subhead);
+  font-weight: 600;
+}
+/* 高鐵: the region's stations on one line across. */
+.ot-lm-hsr {
+  --lm: #f97316;
+}
+.ot-hsr-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+}
+.ot-hsr-line::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: calc(50% / var(--n));
+  right: calc(50% / var(--n));
+  height: 4px;
+  background: var(--lm);
+}
+.ot-hsr-st {
+  position: relative;
+  min-height: 56px;
+  padding: 30px 2px 4px;
+  border: 0;
+  background: none;
   color: var(--q-label);
   font: 600 15px/20px var(--q-font);
   cursor: pointer;
 }
-.ot-st-btn.more {
-  color: var(--q-accent);
+:lang(en) .ot-hsr-st {
+  font: 600 11px/16px var(--q-font);
 }
-.ot-st-btn i {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--q-accent);
+.ot-hsr-st span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ot-hsr-st .ot-lm-dot {
+  top: 18px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border: 4px solid var(--lm);
+  background: var(--q-sheet, var(--q-elevated));
+}
+.ot-hsr-st.on {
+  color: var(--q-accent);
 }
 
 /* A bus route: its number and direction stay on top while its stops scroll. */

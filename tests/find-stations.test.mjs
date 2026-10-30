@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findStations, bigFirst } from '../public/lib/rail.mjs';
+import { findStations } from '../public/lib/rail.mjs';
 
 const st = (name, en, cls, sys = 'tra') => ({ key: `${sys}:${name}`, sys, id: name, name, en, cls });
 const list = [st('竹中', 'Zhuzhong', '3'), st('竹北', 'Zhubei', '1'), st('新竹', 'Hsinchu', '1'), st('北新竹', 'North Hsinchu', '3'), st('竹南', 'Zhunan', '1'), st('新竹', 'Hsinchu', '0', 'hsr'), st('臺北', 'Taipei', '0')];
@@ -14,8 +14,4 @@ test('a character or two finds the station: names starting with it first, the bi
   assert.deepEqual(findStations(list, 'zhub').map(s => s.name), ['竹北']);
   assert.deepEqual(findStations(list, 'hsinchu').map(s => s.key), ['hsr:新竹', 'tra:新竹', 'tra:北新竹']);
   assert.deepEqual(findStations(list, '  '), []);
-});
-
-test("a county's stations: the big ones first, the rest in their order", () => {
-  assert.deepEqual(bigFirst([st('竹中', '', '3'), st('竹北', '', '1'), st('上員', '', '4'), st('六家', '', '2')]).map(s => s.name), ['竹北', '六家', '竹中', '上員']);
 });
