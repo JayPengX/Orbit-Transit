@@ -57,8 +57,6 @@ export function hsrStations(list) {
 // containing it; within each, the bigger station (its class: 特等 0 … 簡易 4)
 // first. 台/臺 and a trailing 站 don't matter.
 const big = s => (/^\d$/.test(s.cls) ? Number(s.cls) : 9);
-// A county's stations, the big ones first (in the line's order within a class: as given).
-export const bigFirst = list => list.map((s, i) => [s, i]).sort((a, b) => big(a[0]) - big(b[0]) || a[1] - b[1]).map(([s]) => s);
 export function findStations(list, q) {
   const k = String(q || '').trim();
   if (!k) return [];

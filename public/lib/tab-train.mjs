@@ -5,9 +5,11 @@
 // where to change and how long you wait, the fare, and today's delays.
 
 import { railStations, railNetwork, railSpan, traDelays, legFare } from './raildata.mjs';
-import { journeys, findStations, bigFirst as findStationsBig } from './rail.mjs';
+import { journeys, findStations } from './rail.mjs';
 import { errorText } from './api.mjs';
-import { CITIES, cityShort } from './city.mjs';
+import { cityShort } from './city.mjs';
+import { REGIONS, regionOf } from './tra-regions.mjs';
+import { lineMapHtml, hsrLineHtml, REGION_NAMES } from './linemap.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
@@ -375,31 +377,45 @@ function onClick(ev) {
 
 // ---- Picking a station ---------------------------------------------------------------------------------
 // Search first (a character or two finds it, either railway); with nothing
-// typed: the stations you've asked about (常用), the nearest, then a county's,
-// its big stations first and the rest behind 更多 (the county remembered).
-// (The owner, 2026-10-23: every station of a county in a grid was too many to find one.)
+// typed: one row of quick picks (the nearest stations, then the ones you've
+// asked about), then a region's map of its lines (linemap.mjs): 高鐵 across
+// the top, 台鐵 down the page in the order the trains run (the region remembered).
+// (The owner, 2026-10-23: every station of a county in a grid was too many to
+// find one; 2026-10-30: 常用 and 附近 filled the sheet, the county pills jumped.)
 
-const CITY_KEY = 'orbit-transit.st-city';
-const MAJOR = 9;
+const REGION_KEY = 'orbit-transit.st-region';
 async function pickStation(which) {
-  let sys = state[which]?.sys === 'hsr' ? 'hsr' : 'tra';
-  let city = readJson(CITY_KEY) || ctx.city || 'Taipei';
-  let all = false;
+  let region = '';
   let list = [];
+  let byKey = new Map();
+  const open = new Set();
   const other = state[which === 'from' ? 'to' : 'from'];
   const d = sheet(`${sheetHead(which === 'from' ? W('出發車站', 'From station') : W('抵達車站', 'To station'))}
     <label class="q-search ot-search-in"><input id="s-q" type="search" placeholder="${W('站名', 'Station')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
-    <div id="s-body"></div>`, 'ot-tall-sheet');
+    <div id="s-body"></div>`, 'ot-tall-sheet ot-pick-sheet');
   const choose = s => {
     state[which] = { sys: s.sys, id: s.id, name: s.name };
     state.results = null;
+    writeJson(REGION_KEY, regionOf(s.city));
     d.shut();
     render();
     if (state.from && state.to) search();
   };
-  const isOther = s => other && other.sys === s.sys && other.id === s.id;
+  const keyOf = x => (x ? `${x.sys}:${x.id}` : '');
+  const isOther = s => s.key === keyOf(other);
   const row = (s, value = '') => `<button class="q-ritem" type="button" data-st="${e(s.key)}">${tile(s.sys, s.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(s))}</span></span>${value ? `<span class="q-ritem-value">${e(value)}</span>` : ''}</button>`;
-  const btn = s => `<button class="ot-st-btn" type="button" data-st="${e(s.key)}">${e(stationLabel(s))}</button>`;
+  // Quick picks: the nearest three, then both ends of what you've asked (most recent first).
+  const quick = () => {
+    const h = ctx.here;
+    const near = h ? list.filter(s => !isOther(s)).map(s => [meters(h.lat, h.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0]).slice(0, 3) : [];
+    const seen = new Set(near.map(([, s]) => s.key));
+    const usual = ctx.data.trains
+      .flatMap(x => [x.from, x.to])
+      .map(x => x && byKey.get(keyOf(x)))
+      .filter(s => s && !isOther(s) && !seen.has(s.key) && seen.add(s.key))
+      .slice(0, 6);
+    return { near, usual };
+  };
   const draw = () => {
     const q = d.querySelector('#s-q').value;
     const body = d.querySelector('#s-body');
@@ -408,57 +424,44 @@ async function pickStation(which) {
       body.innerHTML = found.length ? rowCard(found.map(s => row(s, cityShort(s.city))).join('')) : `<p class="ot-note">${W('沒有符合的車站', 'No matching station')}</p>`;
       return;
     }
-    // 常用: both ends of what you've asked, most recent first.
-    const seen = new Set();
-    const usual = ctx.data.trains
-      .flatMap(x => [x.from, x.to])
-      .map(x => x && list.find(s => s.sys === x.sys && s.id === x.id))
-      .filter(s => s && !isOther(s) && !seen.has(s.key) && seen.add(s.key))
-      .slice(0, 6);
-    const h = ctx.here;
-    const near = h ? list.filter(s => !isOther(s)).map(s => [meters(h.lat, h.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0]).slice(0, 3) : [];
-    const mine = list.filter(s => s.sys === sys);
-    const cities = CITIES.filter(([k]) => mine.some(s => s.city === k));
-    if (!cities.some(([k]) => k === city)) city = cities[0]?.[0] || city;
-    const inCity = findStationsBig(mine.filter(s => s.city === city));
-    const shown = all || sys === 'hsr' ? inCity : inCity.slice(0, MAJOR);
-    body.innerHTML = `${usual.length ? `<h3 class="q-sheet-h">${W('常用', 'Yours')}</h3><div class="ot-st-grid">${usual.map(btn).join('')}</div>` : ''}
-      ${near.length ? `<h3 class="q-sheet-h">${W('附近', 'Nearby')}</h3>${rowCard(near.map(([m, s]) => row(s, distText(m))).join(''))}` : ''}
-      <h3 class="q-sheet-h">${W('依縣市', 'By city')}</h3>
-      <div class="q-seg ot-sys" role="group"><button type="button" data-sys="tra" aria-pressed="${sys === 'tra'}">${W('台鐵', 'TRA')}</button><button type="button" data-sys="hsr" aria-pressed="${sys === 'hsr'}">${W('高鐵', 'HSR')}</button></div>
-      ${sys === 'hsr' ? '' : `<div class="q-chips ot-chip-rail" id="s-city">${cities.map(([k]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(cityShort(k))}</button>`).join('')}</div>`}
-      <div class="ot-st-grid">${(sys === 'hsr' ? mine : shown).map(btn).join('')}${sys !== 'hsr' && !all && inCity.length > MAJOR ? `<button class="ot-st-btn more" type="button" data-all>${W(`更多 ${inCity.length - MAJOR}`, `${inCity.length - MAJOR} more`)}</button>` : ''}</div>`;
-    // (The county picked in sight in its row.)
-    const on = d.querySelector('#s-city [aria-pressed="true"]');
-    if (on) on.parentElement.scrollLeft = on.offsetLeft - 16;
+    const { near, usual } = quick();
+    const chips = [
+      ...near.map(([m, s]) => `<button class="q-chip" type="button" data-st="${e(s.key)}">${icon('pin')}${e(stationLabel(s))}<small>${e(distText(m))}</small></button>`),
+      ...usual.map(s => `<button class="q-chip" type="button" data-st="${e(s.key)}">${e(stationLabel(s))}</button>`)
+    ];
+    const mark = { current: keyOf(state[which]), other: keyOf(other), open, keep: new Set([...near.map(([, s]) => s.key), ...usual.map(s => s.key)]) };
+    body.innerHTML = `${chips.length ? `<div class="q-chips ot-chip-rail ot-pick-quick">${chips.join('')}</div>` : ''}
+      <div class="q-seg ot-pick-regions" role="group" aria-label="${W('地區', 'Region')}">${Object.keys(REGIONS)
+        .map(r => `<button type="button" data-region="${r}" aria-pressed="${r === region}">${REGION_NAMES[r]()}</button>`)
+        .join('')}</div>
+      <div class="ot-pick-map">${hsrLineHtml(region, list, mark)}${lineMapHtml(region, byKey, mark)}</div>`;
   };
   d.querySelector('#s-body').innerHTML = `<p class="ot-note">${W('載入車站中…', 'Loading stations…')}</p>`;
   d.querySelector('#s-q').addEventListener('input', draw);
   d.addEventListener('click', ev => {
-    const s = ev.target.closest('[data-sys]');
-    if (s) {
-      sys = s.dataset.sys;
+    const r = ev.target.closest('[data-region]');
+    if (r) {
+      region = r.dataset.region;
+      writeJson(REGION_KEY, region);
       return draw();
     }
-    const c = ev.target.closest('[data-city]');
-    if (c) {
-      city = c.dataset.city;
-      all = false;
-      writeJson(CITY_KEY, city);
-      return draw();
-    }
-    if (ev.target.closest('[data-all]')) {
-      all = true;
+    const f = ev.target.closest('[data-fold]');
+    if (f) {
+      open.add(f.dataset.fold);
       return draw();
     }
     const st = ev.target.closest('[data-st]');
     if (st) {
-      const x = list.find(y => y.key === st.dataset.st);
+      const x = byKey.get(st.dataset.st);
       if (x) choose(x);
     }
   });
   try {
     list = await railStations();
+    byKey = new Map(list.map(s => [s.key, s]));
+    // The region of the station picked now, else of the nearest, else the last one looked at.
+    const now = byKey.get(keyOf(state[which])) || quick().near[0]?.[1];
+    region = now ? regionOf(now.city) : readJson(REGION_KEY) || regionOf(ctx.city);
     draw();
   } catch (err) {
     d.querySelector('#s-body').innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`;
