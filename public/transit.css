@@ -1448,6 +1448,16 @@ body.tab-map {
   stroke-width: 2.4;
   color: #b07d00;
 }
+.ot-mk.bike .ot-yb {
+  display: block;
+  width: 38px;
+  height: 12px;
+  margin-right: 2px;
+}
+.ot-mk.bike:is(.none, .off) .ot-yb {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
 .ot-mk.bike::after {
   content: '';
   position: absolute;
@@ -1515,6 +1525,9 @@ body.tab-map {
   :root:not([data-theme='light']) .ot-mk.bike:not(.plan, .dot) .ot-i {
     color: var(--ot-bike);
   }
+  :root:not([data-theme='light']) .ot-mk.bike:not(.none, .off) .ot-yb {
+    filter: brightness(1.5);
+  }
   :root:not([data-theme='light']) .ot-mk.bike.few:not(.plan) b {
     color: #ffb340;
   }
@@ -1528,6 +1541,9 @@ body.tab-map {
 }
 :root[data-theme='dark'] .ot-mk.bike:not(.plan, .dot) .ot-i {
   color: var(--ot-bike);
+}
+:root[data-theme='dark'] .ot-mk.bike:not(.none, .off) .ot-yb {
+  filter: brightness(1.5);
 }
 :root[data-theme='dark'] .ot-mk.bike.few:not(.plan) b {
   color: #ffb340;

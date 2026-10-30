@@ -28,7 +28,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { COLOR, tile, emptyNote } from './look.mjs';
+import { COLOR, tile, bikeTile, bikeMark, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt, nearStops } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
@@ -435,7 +435,7 @@ function seenBounds(b) {
 const bikeMarker = (s, dot = false) => {
   const lv = bikeLevel(s);
   if (dot) return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike dot ${lv}`, z: 2, kind: 'bike', data: s, html: '<i></i>' };
-  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: `${icon('bike')}<b>${s.ok === false ? W('停', '–') : s.bikes + (s.ebike || 0)}</b>` };
+  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: `${bikeMark()}<b>${s.ok === false ? W('停', '–') : s.bikes + (s.ebike || 0)}</b>` };
 };
 const busMarker = s => ({ id: `bus:${s.uid}`, lat: s.lat, lon: s.lon, cls: 'bus', z: 2, kind: 'bus', data: s, html: icon('bus') });
 // A stop with a side on each side of the street, close in (zoom 17 on): a
@@ -724,7 +724,7 @@ function head(title, sub, kind) {
   // (Walking, by the streets once known: what 走過去 and the strip say.)
   const d = ctx.here && card ? distText(walkKnown(ctx.here, card)?.dist ?? meters(ctx.here.lat, ctx.here.lon, card.lat, card.lon)) : '';
   const [g, c] = KIND_TILE[kind] || KIND_TILE.place;
-  return `<div class="ot-card-head">${tile(g, c)}<div class="ot-card-title"><h2>${e(title)}</h2><p>${[sub, d].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
+  return `<div class="ot-card-head">${kind === 'bike' ? bikeTile() : tile(g, c)}<div class="ot-card-title"><h2>${e(title)}</h2><p>${[sub, d].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
 }
 
 function renderCard() {
@@ -1545,7 +1545,7 @@ function layersSheet() {
   const TILE = { bike: ['bike', COLOR.bike], bus: ['bus', COLOR.bus], rail: ['tra', COLOR.tra], metro: ['metro', COLOR.metro] };
   const d = sheet(`${sheetHead(W('地圖圖層', 'Map layers'), '', tile('layers', COLOR.route))}
     <div class="q-rowcard">${Object.entries(LAYERS)
-      .map(([k, name]) => `<div class="q-ritem">${tile(...TILE[k])}<span class="q-ritem-text"><span class="q-ritem-title">${name}</span></span><button class="q-switch" type="button" role="switch" data-sw="${k}" aria-checked="${L[k]}" aria-label="${name}"><i></i></button></div>`)
+      .map(([k, name]) => `<div class="q-ritem">${k === 'bike' ? bikeTile() : tile(...TILE[k])}<span class="q-ritem-text"><span class="q-ritem-title">${name}</span></span><button class="q-switch" type="button" role="switch" data-sw="${k}" aria-checked="${L[k]}" aria-label="${name}"><i></i></button></div>`)
       .join('')}</div>`);
   d.addEventListener('click', ev => {
     const sw = ev.target.closest('[data-sw]');
