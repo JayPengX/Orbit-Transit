@@ -74,6 +74,9 @@ const I = {
   school: '<path d="m12 4.5 9 4.5-9 4.5L3 9zM7 11.5v4.2c0 1.2 2.2 2.3 5 2.3s5-1.1 5-2.3v-4.2M21 9v5"/>',
   live: '<circle cx="12" cy="12" r="2.3"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8"/>'
 };
+// YouBike's wordmark alone, inline where a bike glyph stood (a plan's bike leg, a station's card).
+// The map keeps its bike glyph (Jay 2026-10-30: YouBike is the only bike, the map needs no logo).
+export const bikeMark = () => '<img class="ot-yb" src="./img/youbike-word.png" alt="" width="38" height="12" decoding="async">';
 export const icon = (name, cls = '') => `<svg class="ot-i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[name] || I.rail}</svg>`;
 
 export const MODE_NAME = en
@@ -154,12 +157,14 @@ export function legChips(legs) {
   return legs
     // (A walk under 2 minutes anywhere, or under 3 between rides, is just getting on and off.)
     .filter((l, i) => !(l.mode === 'walk' && legs.length > 1 && (l.dur < 120 || (l.dur < 180 && i > 0 && i < legs.length - 1))))
-    .map(l => {
+    .map((l, _, all) => {
       const c = legColor(l);
-      // A walk or a ride of your own: its minutes (the plan's tags say YouBike); a bus or train: its line.
+      // A walk or a ride of your own: its minutes; a bus or train: its line. A YouBike ride its
+      // logo when it's the only one in three legs or fewer, else the bike glyph (the row never runs
+      // past a 320 screen).
       const mins = `${Math.max(1, Math.round((l.dur || 0) / 60))}′`;
       if (l.mode === 'walk') return `<span class="ot-leg walk" aria-label="${W('步行', 'Walk')} ${mins}">${icon('walk')}${mins}</span>`;
-      if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${mins}">${icon(l.ebike ? 'bolt' : 'bike')}<b>${mins}</b></span>`;
+      if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${mins}">${all.length < 4 && all.filter(x => x.mode === 'bike').length === 1 ? bikeMark() : icon('bike')}${l.ebike ? icon('bolt') : ''}<b>${mins}</b></span>`;
       // A train: its kind and number apart (a narrow row keeps the number, the colour says the kind).
       const label = l.mode === 'hsr' && l.train?.no ? `${MODE_NAME.hsr} ${l.train.no}` : legLabel(l);
       const [, kind, no] = (l.mode === 'tra' || l.mode === 'hsr') && /^(.*\S)\s+(\d{1,4}[A-Z]?)$/.exec(label) || [];

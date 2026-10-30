@@ -28,7 +28,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { COLOR, tile, bikeTile, bikeMark, emptyNote } from './look.mjs';
+import { COLOR, tile, bikeTile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt, nearStops } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
@@ -430,12 +430,12 @@ function seenBounds(b) {
   const lat = y => b.n - (b.n - b.s) * Math.min(1, Math.max(0, y / room));
   return { ...b, n: lat(top), s: lat(bottom) };
 }
-// A station: its bikes (both kinds as one number; the split is in its card),
+// A station: its regular bikes, then its 電輔車 after a ⚡ when it has any,
 // or, quiet, a dot in its level's colour.
 const bikeMarker = (s, dot = false) => {
   const lv = bikeLevel(s);
   if (dot) return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike dot ${lv}`, z: 2, kind: 'bike', data: s, html: '<i></i>' };
-  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: `${bikeMark()}<b>${s.ok === false ? W('停', '–') : s.bikes + (s.ebike || 0)}</b>` };
+  return { id: `bike:${s.uid}`, lat: s.lat, lon: s.lon, cls: `bike ${lv}`, z: 3, kind: 'bike', data: s, html: s.ok === false ? `${icon('bike')}<b>${W('停', '–')}</b>` : `${icon('bike')}<b>${s.bikes}</b>${s.ebike ? `<b class="ot-mk-e">${icon('bolt')}${s.ebike}</b>` : ''}` };
 };
 const busMarker = s => ({ id: `bus:${s.uid}`, lat: s.lat, lon: s.lon, cls: 'bus', z: 2, kind: 'bus', data: s, html: icon('bus') });
 // A stop with a side on each side of the street, close in (zoom 17 on): a
@@ -739,8 +739,9 @@ function renderCard() {
     html = `${head(s.name, s.kind, 'bike')}
       <section class="q-focus ot-bike-now">
         <span class="q-focus-label">${W('可借', 'Bikes to take')}</span>
-        <div class="ot-bike-row"><b class="q-focus-value${s.bikes ? '' : ' none'}">${s.bikes}</b>
-        <div class="q-focus-figs"><div><small>${W('電輔車', 'E-bikes')}</small><b>${s.ebike}</b></div><div><small>${W('空位', 'Docks')}</small><b>${s.ret}</b></div></div></div>
+        <div class="ot-bike-row"><div class="ot-bike-kind"><b class="q-focus-value${s.bikes ? '' : ' none'}">${s.bikes}</b><small>${W('一般', 'Regular')}</small></div>
+        <div class="ot-bike-kind"><b class="q-focus-value${s.ebike ? '' : ' none'}">${s.ebike || 0}</b><small>${icon('bolt')}${W('電輔車', 'E-bikes')}</small></div>
+        <div class="q-focus-figs"><div><small>${W('空位', 'Docks')}</small><b>${s.ret}</b></div></div></div>
         ${s.ok === false || s.cap || s.at ? `<span class="q-focus-sub ot-card-tags">${[s.cap ? W(`共 ${s.cap} 柱`, `${s.cap} docks`) : '', s.at ? ago(s.at) : ''].filter(Boolean).map(e).join(' · ')}${s.ok === false ? ` <span class="q-tag red">${W('暫停營運', 'Closed')}</span>` : ''}</span>` : ''}
       </section>
       ${err}${rentButtons(c)}${actions(c)}`;
@@ -1917,7 +1918,7 @@ function stepItems(legs, from = 0) {
           : l.mode === 'bike'
             ? `<b>${l.swap ? W('換一台，', 'Swap, ') : ''}${W('騎', 'ride')} ${l.ebike ? W('YouBike 電輔車', 'YouBike e-bike') : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-maps="${e(mapsLink(l.to, 'bicycling', l.from))}">${icon('route')}${mapsName()}</span>` : ''}${bikeEnd(l.kept ? W('騎', 'On') : W('借', 'Rent'), l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike]] : [[`${icon('bike')}${W('一般', 'bikes')}`, l.rent.bikes], [`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike || 0]]) : [])}${bikeEnd(l.park ? W('停', 'Park') : W('還', 'Return'), l.to.name, l.ret ? [[W('空位', 'docks'), l.ret.ret]] : [])}`
             : `<b>${e(MODE_NAME[l.mode])} ${e(l.mode === 'tra' ? trainKind(l.short || l.name) : l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(shown(l.from.name))} → ${e(shown(l.to.name))}${l.stops ? ` · ${W(`${l.stops} 站`, `${l.stops} stops`)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
-      return `<li style="--c:${e(c)}" data-leg="${from + k}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="${W('即時', 'Live')}"></i>` : ''}</span><span class="ot-step-i">${icon(l.mode)}</span><span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
+      return `<li style="--c:${e(c)}" data-leg="${from + k}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="${W('即時', 'Live')}"></i>` : ''}</span>${l.mode === 'bike' ? '<span class="ot-step-i ot-logo"><img src="./img/youbike.png" alt="" width="28" height="28" decoding="async"></span>' : `<span class="ot-step-i">${icon(l.mode)}</span>`}<span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
     })
     .join('');
 }

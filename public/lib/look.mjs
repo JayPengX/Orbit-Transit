@@ -3,7 +3,7 @@
 // the tabs draw their pages whole.
 
 import { e, hm, shown } from './util.mjs';
-import { icon } from './ui.mjs';
+import { icon, bikeMark } from './ui.mjs';
 import { effectLabel, oneEach } from './service.mjs';
 import { W } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';
@@ -19,8 +19,7 @@ export const tile = (glyph, color = '', size = '', word = false) => `<span class
 const logoTile = (name, size = '') => `<span class="q-tile ot-logo${size ? ` ${size}` : ''}" aria-hidden="true"><img src="./img/${name}.png" alt="" width="40" height="40" decoding="async"></span>`;
 export const tpassTile = () => logoTile('tpass');
 export const bikeTile = (size = '') => logoTile('youbike', size);
-// YouBike's wordmark alone, inline where a bike glyph stood (a station's pin, a bike leg).
-export const bikeMark = () => '<img class="ot-yb" src="./img/youbike-word.png" alt="" width="38" height="12" decoding="async">';
+export { bikeMark };
 export const tag = (text, tone = '') => `<span class="q-tag${tone ? ` ${tone}` : ''}">${e(text)}</span>`;
 // A section: its 20px title, an optional button on the right (`more`: html), its body.
 export const section = (title, body, more = '') => `<section class="q-section ot-sec"><div class="q-section-head"><h2>${e(title)}</h2>${more}</div>${body}</section>`;
@@ -74,7 +73,7 @@ export const noticesHtml = items =>
   items?.length
     ? `<div class="q-rowcard ot-notices">${items
         .map(
-          n => `<details class="ot-notice${n.stop ? ' stop' : ''}"><summary class="q-ritem">${tile(n.kind === 'metro' && n.sys === 'TRTCMG' ? 'gondola' : n.kind, COLOR[n.kind] || COLOR.route, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title"${/[\u3400-\u9fff]/.test(n.title) ? ' lang="zh-Hant"' : ''}>${e(n.title)}</span><small>${e(n.sum)}</small></span></summary>${n.said?.length ? `<div class="ot-notice-body">${saidRows(n.said)}</div>` : n.lines.length ? `<div class="ot-notice-body">${n.lines.map(t => `<p>${e(t)}</p>`).join('')}</div>` : ''}</details>`
+          n => `<details class="ot-notice${n.stop ? ' stop' : ''}"><summary class="q-ritem">${n.kind === 'bike' ? bikeTile('sm') : tile(n.kind === 'metro' && n.sys === 'TRTCMG' ? 'gondola' : n.kind, COLOR[n.kind] || COLOR.route, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title"${/[\u3400-\u9fff]/.test(n.title) ? ' lang="zh-Hant"' : ''}>${e(n.title)}</span><small>${e(n.sum)}</small></span></summary>${n.said?.length ? `<div class="ot-notice-body">${saidRows(n.said)}</div>` : n.lines.length ? `<div class="ot-notice-body">${n.lines.map(t => `<p>${e(t)}</p>`).join('')}</div>` : ''}</details>`
         )
         .join('')}</div>`
     : '';

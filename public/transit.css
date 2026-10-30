@@ -1448,15 +1448,16 @@ body.tab-map {
   stroke-width: 2.4;
   color: #b07d00;
 }
-.ot-mk.bike .ot-yb {
-  display: block;
-  width: 38px;
-  height: 12px;
-  margin-right: 2px;
+/* Its 電輔車 after the regular bikes: a ⚡ and the count, a hair apart. */
+.ot-mk.bike .ot-mk-e {
+  display: flex;
+  align-items: center;
+  margin-left: 3px;
 }
-.ot-mk.bike:is(.none, .off) .ot-yb {
-  filter: grayscale(1);
-  opacity: 0.6;
+.ot-mk.bike .ot-mk-e .ot-i {
+  width: 11px;
+  height: 11px;
+  margin-right: 1px;
 }
 .ot-mk.bike::after {
   content: '';
@@ -1525,9 +1526,6 @@ body.tab-map {
   :root:not([data-theme='light']) .ot-mk.bike:not(.plan, .dot) .ot-i {
     color: var(--ot-bike);
   }
-  :root:not([data-theme='light']) .ot-mk.bike:not(.none, .off) .ot-yb {
-    filter: brightness(1.5);
-  }
   :root:not([data-theme='light']) .ot-mk.bike.few:not(.plan) b {
     color: #ffb340;
   }
@@ -1541,9 +1539,6 @@ body.tab-map {
 }
 :root[data-theme='dark'] .ot-mk.bike:not(.plan, .dot) .ot-i {
   color: var(--ot-bike);
-}
-:root[data-theme='dark'] .ot-mk.bike:not(.none, .off) .ot-yb {
-  filter: brightness(1.5);
 }
 :root[data-theme='dark'] .ot-mk.bike.few:not(.plan) b {
   color: #ffb340;
@@ -2005,8 +2000,25 @@ body.tab-map {
   gap: var(--q-s-4);
 }
 .ot-bike-row .q-focus-figs {
-  margin: 0 0 6px;
+  margin: 0 0 6px auto;
   gap: var(--q-s-4);
+}
+/* Regular and 電輔車 side by side, each its own big number, its kind under it. */
+.ot-bike-kind {
+  display: grid;
+  gap: 2px;
+}
+.ot-bike-kind small {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.ot-bike-kind small .ot-i {
+  width: 13px;
+  height: 13px;
 }
 .ot-bike-now .q-focus-value.none {
   color: var(--q-red);
@@ -5488,3 +5500,44 @@ button.ot-trip-foot {
 /* A brand's own logo as a tile (TPASS): its picture on a white plate, filling the tile. */
 .q-tile.ot-logo { overflow: hidden; background: #fff; box-shadow: inset 0 0 0 0.5px var(--q-sep); }
 .q-tile.ot-logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* YouBike's wordmark where a bike glyph stood (not on the map: Jay 2026-10-30): a plan's
+   bike leg, a station's card in 附近. Lifted in dark so its navy "e" still reads. */
+.ot-yb {
+  display: block;
+  flex: none;
+  width: 38px;
+  height: 12px;
+}
+.ot-leg .ot-yb {
+  width: 31px;
+  height: 10px;
+}
+.ot-bk .ot-yb {
+  width: 44px;
+  height: 14px;
+}
+.ot-bk.off .ot-yb {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ot-yb {
+    filter: brightness(1.5);
+  }
+}
+:root[data-theme='dark'] .ot-yb {
+  filter: brightness(1.5);
+}
+/* A bike leg's step: YouBike's logo tile on its white plate. */
+.ot-step-i.ot-logo {
+  overflow: hidden;
+  background: #fff;
+  box-shadow: inset 0 0 0 0.5px var(--q-sep);
+}
+.ot-step-i.ot-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
