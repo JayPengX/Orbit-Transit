@@ -174,11 +174,21 @@ function dijkstra(g, s) {
 // 台鐵, 高鐵 or the metro: each line's pieces on their own first (lines
 // cross mid-line, 台北車站 on both 淡水信義線 and 板南線, and are joined only at
 // pieces' ends), the shortest way any one line gives; else the system's
-// pieces together (a train running from one line onto the next). A piece
-// that closes on itself is left out (TDX draws rings at some stations).
+// pieces together (a train running from one line onto the next).
 const SYS = { tra: 'tra', hsr: 'hsr', metro: 'metro' };
 const railLines = new WeakMap();
 const lengthOf = w => w.reduce((s, p, k) => (k ? s + dist(w[k - 1], p) : s), 0);
+// A piece closing on itself is cut where it turns, two pieces: TDX draws
+// a line there and back as one (六家線 both its tracks, 竹中 to 六家 and
+// back; 西部幹線 round 台中 and 基隆; Jay 2026-10-30, on the train to 六家,
+// the ride drawn straight, every one of these had been left out as a ring).
+// A ring at a station (turning within RING metres) is left out.
+const RING = 500;
+function cutAtTurn(pts) {
+  let turn = 0;
+  for (let k = 1; k < pts.length; k++) if (dist(pts[0], pts[k]) > dist(pts[0], pts[turn])) turn = k;
+  return dist(pts[0], pts[turn]) < RING ? [] : [pts.slice(0, turn + 1), pts.slice(turn)];
+}
 export function railGroups(pack, sys) {
   let by = railLines.get(pack);
   if (!by) railLines.set(pack, (by = {}));
@@ -186,10 +196,11 @@ export function railGroups(pack, sys) {
     const groups = new Map();
     for (const x of pack.lines.filter(y => y.sys === sys)) {
       const pts = decodeLine(x.line);
-      if (pts.length < 2 || (dist(pts[0], pts.at(-1)) < 30 && lengthOf(pts) > 200)) continue;
+      if (pts.length < 2) continue;
+      const pieces = dist(pts[0], pts.at(-1)) < 30 && lengthOf(pts) > 200 ? cutAtTurn(pts) : [pts];
       const k = `${x.op}:${x.id}`;
       if (!groups.has(k)) groups.set(k, []);
-      groups.get(k).push(pts);
+      groups.get(k).push(...pieces);
     }
     by[sys] = { lines: [...groups.values()], all: [...groups.values()].flat() };
   }

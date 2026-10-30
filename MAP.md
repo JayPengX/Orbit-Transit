@@ -53,7 +53,8 @@ Live: https://orbit.jaypengx.com/transit/
   for a later walk's end or the next stop → that step; heading nowhere on it →
   從這裡重新規劃 asked. Where you are is checked again every 20 s as on opening
   half way (a late train boarded after it was taken as missed); a rough fix
-  far from the stop you were waiting at counts; a silent watch is started over. Late for an
+  far from the stop you were waiting at counts; fresh fixes only, and a watch
+  silent 10 s is started over (twice as long each time it stays silent, up to a minute). Late for an
   arrival time → an on-time alternative offered. It resumes after the app
   is swiped away and tells the lock screen.
 - **Bikes at the next station** (`nav.mjs` `bikesText`): its counts;
@@ -69,7 +70,7 @@ Live: https://orbit.jaypengx.com/transit/
   - bus routes and timetables: weekly packs in R2 (`packs.mjs`);
   - what's near a point: worked out on the phone (`near.mjs`);
   - line shapes: `shapes.mjs` (packs and shapes read with the kit's
-    `packJson`);
+    `packJson`; a piece TDX draws there and back, 六家線, cut into its two tracks);
   - the map: Google under the month's cap, else NLSC;
   - walks: Google's streets, OpenStreetMap past the cap.
 - **Offline:** covered (`onlineOnly`); never old bus times.
