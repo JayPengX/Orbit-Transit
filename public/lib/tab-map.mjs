@@ -28,7 +28,7 @@ import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.m
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
-import { COLOR, tile, bikeTile, emptyNote } from './look.mjs';
+import { COLOR, tile, bikeTile, bikeStats, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt, nearStops } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
@@ -738,10 +738,7 @@ function renderCard() {
     const s = c.live || c.item;
     html = `${head(s.name, s.kind, 'bike')}
       <section class="q-focus ot-bike-now">
-        <span class="q-focus-label">${W('可借', 'Bikes to take')}</span>
-        <div class="ot-bike-row"><div class="ot-bike-kind"><b class="q-focus-value${s.bikes ? '' : ' none'}">${s.bikes}</b><small>${W('一般', 'Regular')}</small></div>
-        <div class="ot-bike-kind"><b class="q-focus-value${s.ebike ? '' : ' none'}">${s.ebike || 0}</b><small>${icon('bolt')}${W('電輔車', 'E-bikes')}</small></div>
-        <div class="q-focus-figs"><div><small>${W('空位', 'Docks')}</small><b>${s.ret}</b></div></div></div>
+        ${bikeStats(s)}
         ${s.ok === false || s.cap || s.at ? `<span class="q-focus-sub ot-card-tags">${[s.cap ? W(`共 ${s.cap} 柱`, `${s.cap} docks`) : '', s.at ? ago(s.at) : ''].filter(Boolean).map(e).join(' · ')}${s.ok === false ? ` <span class="q-tag red">${W('暫停營運', 'Closed')}</span>` : ''}</span>` : ''}
       </section>
       ${err}${rentButtons(c)}${actions(c)}`;

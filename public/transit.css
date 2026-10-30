@@ -1993,35 +1993,45 @@ body.tab-map {
 .ot-bike-now {
   margin-top: var(--q-s-3);
 }
-.ot-bike-row {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--q-s-4);
-}
-.ot-bike-row .q-focus-figs {
-  margin: 0 0 6px auto;
-  gap: var(--q-s-4);
-}
-/* Regular and 電輔車 side by side, each its own big number, its kind under it. */
-.ot-bike-kind {
+.ot-bstats {
   display: grid;
-  gap: 2px;
+  grid-template-columns: 1fr 1fr 1fr;
+  margin: 10px 0 4px;
 }
-.ot-bike-kind small {
+.ot-bstat {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 12px;
+  border-left: 1px solid rgb(255 255 255 / 0.25);
+}
+.ot-bstat:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.ot-bstat small {
   display: flex;
   align-items: center;
-  gap: 2px;
-  font-size: 13px;
-  font-weight: 600;
-  opacity: 0.85;
+  gap: 3px;
+  color: rgb(255 255 255 / 0.85);
+  font: 600 13px/16px var(--q-font);
+  white-space: nowrap;
 }
-.ot-bike-kind small .ot-i {
-  width: 13px;
-  height: 13px;
+.ot-bstat small .ot-i {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }
-.ot-bike-now .q-focus-value.none {
-  color: var(--q-red);
+.ot-bstat b {
+  color: #fff;
+  font: 700 36px/40px var(--q-font-rounded);
+  letter-spacing: -0.02em;
+}
+.ot-bstat.dock b {
+  font-size: 28px;
+}
+.ot-bstat.zero b {
+  opacity: 0.5;
 }
 
 /* A stop's buses (a bell each) and a station's trains: a card of rows. */
@@ -5734,4 +5744,7 @@ button.ot-trip-foot {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.ot-bike-now .ot-bstats {
+  margin-top: 0;
 }

@@ -62,6 +62,13 @@ export function focus({ eyebrow = '', big = '', title = '', sub = '', facts = []
   return attrs ? `<button class="q-focus q-press ot-focus" type="button" ${attrs}>${inner}</button>` : `<section class="q-focus ot-focus">${inner}</section>`;
 }
 
+// A YouBike station's bikes on a green focus card: 一般, 電輔車 and 空位 as three
+// columns apart (a small label over its number), hairlines between; a 0 dimmed.
+export const bikeStats = s => {
+  const col = (label, n, cls = '') => `<div class="ot-bstat${cls}${n ? '' : ' zero'}"><small>${label}</small><b class="num">${n}</b></div>`;
+  return `<div class="ot-bstats">${col(`${icon('bike')}${W('一般', 'Regular')}`, s.bikes || 0)}${col(`${icon('bolt')}${W('電輔車', 'E-bikes')}`, s.ebike || 0)}${col(`${icon('dock')}${W('空位', 'Docks')}`, s.ret || 0, ' dock')}</div>`;
+};
+
 // Nothing here: the kit's empty state.
 export const emptyNote = title => kitUI.emptyHtml({ title });
 // A non-first tab's large title (the kit's navTitle).
