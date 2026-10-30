@@ -26,7 +26,7 @@ import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
-import { cleanPlace, cleanSaved, remember, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
+import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, bikeTile, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
@@ -1367,7 +1367,7 @@ async function chooseResult(r) {
     backToPeek = from === 'peek';
   }
   const known = p => {
-    ctx.data.trips = remember(ctx.data.trips, { name: p.name, lat: p.lat, lon: p.lon, t: Date.now(), ...(p.gid ? { gid: p.gid } : {}) }, tripKey, 10);
+    ctx.data.trips = rememberTrip(ctx.data.trips, p);
     ctx.save();
   };
   if (Number.isFinite(r.lat) && r.kind !== 'place') known(r);
@@ -1598,7 +1598,7 @@ async function plan(from, to, opts = {}) {
     return renderCard();
   }
   map.fit([fromPt, dest], fitPad(40, 0.48));
-  ctx.data.trips = remember(ctx.data.trips, { name: dest.name, lat: dest.lat, lon: dest.lon, t: Date.now(), ...(dest.gid ? { gid: dest.gid } : {}) }, tripKey, 10);
+  ctx.data.trips = rememberTrip(ctx.data.trips, dest, { went: true });
   ctx.save();
   const c = card;
   let out = null;

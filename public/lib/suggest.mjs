@@ -10,6 +10,8 @@
 //   train  a pinned train or connection leaving soon
 //   bike   the nearest YouBike with a bike, when you're close to it
 //   home   「回家」 when you're far from 家 in the evening
+//   usual  常去: a place the person often plans a trip to at about this
+//          hour on this kind of day (最近's times, usualTrip), when not there
 // The best three, at most one of a kind (two saved trips may both fit).
 
 import { meters, tw } from './util.mjs';
@@ -59,8 +61,39 @@ export function homeScore(d, min) {
   return 88;
 }
 
+// 常去: of the places trips were planned to (最近, each with its times
+// `ts`), the one this moment is most like: each time counts by how near its
+// hour is (a Gaussian, an hour wide), the same kind of day (weekday or
+// weekend) and how recent (a month's half-life). It needs three trips there
+// and most of the weight of now: { place, w, share } or null.
+const HOUR_MIN = 60;
+const HALF_DAYS = 30;
+export function usualTrip(recents = [], now = Date.now(), here = null) {
+  const at = tw(now);
+  const weekend = d => d === 0 || d === 6;
+  let all = 0;
+  const scored = recents.map(p => {
+    let w = 0;
+    for (const t of p.ts || []) {
+      const x = tw(t);
+      const gap = Math.abs(x.min - at.min);
+      const m = Math.min(gap, 1440 - gap);
+      const age = (now - t) / 86_400_000;
+      w += Math.exp(-((m / HOUR_MIN) ** 2) / 2) * (weekend(x.dow) === weekend(at.dow) ? 1 : 0.3) * 0.5 ** (age / HALF_DAYS);
+    }
+    all += w;
+    return { place: p, w, n: (p.ts || []).length };
+  });
+  const best = scored.filter(x => x.n >= 3 && !(here && meters(here.lat, here.lon, x.place.lat, x.place.lon) < SAME_PLACE_M)).sort((a, b) => b.w - a.w)[0];
+  if (!best || best.w < 1.2 || best.w / all < 0.4) return null;
+  return { place: best.place, w: best.w, share: best.w / all };
+}
+export function usualScore(u) {
+  return u ? 58 + 20 * Math.min(1, u.share) + 4 * Math.min(3, u.w - 1.2) : 0;
+}
+
 // → [{ kind, key, score, ...the candidate }], best first.
-export function suggest({ now = Date.now(), here = null, places = [], trips = [], buses = [], trains = [], bikes = [] } = {}) {
+export function suggest({ now = Date.now(), here = null, places = [], trips = [], buses = [], trains = [], bikes = [], recents = [] } = {}) {
   const out = [];
   for (const t of trips) {
     const m = t.leaveAt == null ? null : minutesTo(t.leaveAt, now);
@@ -87,6 +120,11 @@ export function suggest({ now = Date.now(), here = null, places = [], trips = []
     const covered = out.some(x => x.kind === 'trip' && x.to?.lat != null && meters(x.to.lat, x.to.lon, home.lat, home.lon) < SAME_PLACE_M);
     if (score > 0 && !covered) out.push({ kind: 'home', key: `home:${home.id}`, score, place: home, d });
   }
+  // (A saved trip or 回家 to that place is it already.)
+  const usual = usualTrip(recents, now, here);
+  const to = usual?.place;
+  if (to && !out.some(x => (x.kind === 'trip' && x.to?.lat != null && meters(x.to.lat, x.to.lon, to.lat, to.lon) < SAME_PLACE_M) || (x.kind === 'home' && meters(x.place.lat, x.place.lon, to.lat, to.lon) < SAME_PLACE_M)))
+    out.push({ kind: 'usual', key: `usual:${to.lat},${to.lon}`, score: usualScore(usual), place: to });
   out.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
   // One of each kind but trips (the morning's and the evening's may both be due).
   const seen = new Map();
