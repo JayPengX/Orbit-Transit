@@ -1412,7 +1412,7 @@ body.tab-map {
   top: 0;
   left: 0;
   cursor: pointer;
-  will-change: transform;
+  will-change: translate, transform;
 }
 .leaflet-marker-icon.ot-mk {
   border: 0;

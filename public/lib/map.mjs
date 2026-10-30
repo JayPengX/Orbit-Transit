@@ -241,7 +241,9 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
     }
     place(rec) {
       const p = this.getProjection()?.fromLatLngToDivPixel(new g.LatLng(rec.it.lat, rec.it.lon));
-      if (p) rec.node.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      // The translate property, not transform: a selected marker's scale
+      // (.is-sel) then grows it in place, not its distance from the corner.
+      if (p) rec.node.style.translate = `${p.x}px ${p.y}px`;
     }
     draw() {
       for (const rec of this.items.els.values()) this.place(rec);
