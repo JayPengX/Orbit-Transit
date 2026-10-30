@@ -1,12 +1,13 @@
 // 台鐵's lines as the station picker draws them (public/lib/tra-map.mjs):
-// each region's stretch of the trunk lines in order, the branch lines
-// hanging off the station where they leave. TDX's Line and StationOfLine,
+// each county's stretch of the trunk lines in order, the branch lines
+// hanging off the station where they leave, and the stations just over the
+// county's edge at each end (where the line goes next). TDX's Line and StationOfLine,
 // through the proxy; run again when 台鐵 opens or closes a station.
 //   node scripts/tra-map.mjs
 
 import { writeFileSync } from 'node:fs';
 import { traStations } from '../public/lib/rail.mjs';
-import { REGIONS } from '../public/lib/tra-regions.mjs';
+import { CITIES } from '../public/lib/city.mjs';
 
 const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev/transit/tdx?p=';
 const get = async path => {
@@ -34,37 +35,40 @@ const [stationsJ, solJ] = await Promise.all([get('basic/v3/Rail/TRA/Station'), g
 // (臺北-環島 is the round-the-island ticket's, not a platform.)
 const byId = new Map(traStations(stationsJ).filter(s => !s.name.includes('-')).map(s => [s.id, s]));
 const lineIds = id => (solJ.StationOfLines.find(l => l.LineID === id)?.Stations || []).map(x => x.StationID).filter(x => byId.has(x));
-const regionOf = id => Object.keys(REGIONS).find(r => REGIONS[r].includes(byId.get(id).city));
 
 const out = {};
-for (const region of Object.keys(REGIONS)) {
+for (const [city] of CITIES) {
   const placed = new Set();
   const parts = [];
   for (const [id, zh, en] of LINES) {
-    // The line's stretches inside the region.
+    // The line's stretches inside the county ([before, ...stretch, after]: the stations either side).
+    const all = lineIds(id);
     const runs = [];
-    for (const s of lineIds(id)) {
-      if (regionOf(s) !== region) runs.push([]);
-      else (runs.at(-1) || runs[runs.push([]) - 1]).push(s);
-    }
-    for (let run of runs.filter(r => r.length)) {
+    all.forEach((s, i) => {
+      if (byId.get(s).city !== city) return;
+      if (i > 0 && byId.get(all[i - 1]).city === city) runs.at(-1).ids.push(s);
+      else runs.push({ ids: [s], prev: all[i - 1] || null });
+      runs.at(-1).next = all[i + 1] && byId.get(all[i + 1]).city !== city ? all[i + 1] : null;
+    });
+    for (let { ids: run, prev, next } of runs) {
       // Read on from a station already drawn (turned round if the stretch reaches it at its far end);
       // a branch hangs off that station.
-      if (!placed.has(run[0]) && placed.has(run.at(-1))) run = run.reverse();
+      if (!placed.has(run[0]) && placed.has(run.at(-1))) [run, prev, next] = [[...run].reverse(), next, prev];
       const at = placed.has(run[0]) ? run[0] : null;
       const ids = run.filter(s => !placed.has(s));
       if (!ids.length) continue;
       ids.forEach(s => placed.add(s));
-      parts.push({ line: id, zh, en, at, branch: BRANCH.has(id), ids });
+      parts.push({ line: id, zh, en, at, branch: BRANCH.has(id), ids, prev: at ? null : prev, next });
     }
   }
-  const missing = [...byId.values()].filter(s => REGIONS[region].includes(s.city) && !placed.has(s.id));
-  if (missing.length) console.warn(region, 'on no line:', missing.map(s => s.name).join(' '));
-  out[region] = parts;
-  for (const p of parts) console.log(region, p.zh, p.at ? `@${byId.get(p.at).name}` : '', p.ids.map(s => byId.get(s).name).join(' '));
+  const missing = [...byId.values()].filter(s => s.city === city && !placed.has(s.id));
+  if (missing.length) console.warn(city, 'on no line:', missing.map(s => s.name).join(' '));
+  if (parts.length) out[city] = parts;
+  const n = x => (x ? byId.get(x).name : '');
+  for (const p of parts) console.log(city, p.zh, p.at ? `@${n(p.at)}` : '', n(p.prev) && `(${n(p.prev)})`, p.ids.map(n).join(' '), n(p.next) && `(${n(p.next)})`);
 }
 
 writeFileSync(
   new URL('../public/lib/tra-map.mjs', import.meta.url),
-  `// Made by scripts/tra-map.mjs (TDX ${new Date().toISOString().slice(0, 10)}): don't edit by hand.\n// Each region's 台鐵 lines in order; \`at\`: the station a stretch goes on from\n// (a branch hangs off it; a trunk line's stretch is its own line after).\nexport const TRA_MAP = ${JSON.stringify(out)};\n`
+  `// Made by scripts/tra-map.mjs (TDX ${new Date().toISOString().slice(0, 10)}): don't edit by hand.\n// Each county's 台鐵 lines in order; \`at\`: the station a stretch goes on from\n// (a branch hangs off it; a trunk line's stretch is its own line after);\n// \`prev\`/\`next\`: the stations just over the county's edge.\nexport const TRA_MAP = ${JSON.stringify(out)};\n`
 );
