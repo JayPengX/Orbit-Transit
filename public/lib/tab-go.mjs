@@ -743,17 +743,21 @@ function render() {
   const box = $('panel-go');
   const keep = box.scrollTop;
   const railX = box.querySelector('.ot-places')?.scrollLeft || 0;
-  box.innerHTML = `<div class="ot-page">
+  // Two columns on a wide screen: your trips left, what's pinned and near right. Only the card and
+  // what's near (a new person): one column of a reading width, never a lone card beside a list.
+  const left = `${placesRail()}${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}`;
+  const pinned = pinnedHtml(lead.key);
+  const one = !left && !pinned;
+  box.innerHTML = `<div class="ot-page${one ? ' ot-one' : ''}">
     ${navTitle(W('交通', 'Transit'))}
-    <div class="q-cols ot-cols">
+    <div class="${one ? '' : 'q-cols ot-cols'}">
       <div>
         ${noticesHtml(S.notices)}
         ${lead.html}
-        ${placesRail()}
-        ${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}
+        ${left}
       </div>
       <div>
-        ${pinnedHtml(lead.key)}
+        ${pinned}
         ${nearHtml(lead.key)}
       </div>
     </div>
