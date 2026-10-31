@@ -65,6 +65,8 @@ export function init(c) {
 
 export async function show() {
   paintMode();
+  // (The screen may have turned while another tab was showing: the drawing fits its box again.)
+  view?.resize();
   const want = ctx.metroStation ? MAPS.find(m => m.systems.includes(ctx.metroStation.op))?.id : null;
   if (want && want !== current) await open(want);
   else if (!current) {

@@ -129,6 +129,13 @@ Live: https://orbit.jaypengx.com/transit/
 - The map opens on where you are and follows you. iOS is asked for the
   location unprompted once, never at every launch.
 - Status bar `black`, with a solid strip on the map tab too.
+- Every screen, either way up (Jay 2026-10-31): on a wide screen (640 px and
+  up) the map's sheet is a panel at the map's left, beside the tab rail, as
+  Maps on an iPad: on a phone on its side it keeps its three stops, on a
+  tablet or a computer it is pinned whole, as tall as what it holds
+  (`sheet.mjs` `pinned`, `tab-map.mjs` `SIDE_Q`/`PIN_Q`, `covered()` for what
+  the map frames around); navigation's cards stand in its place. 交通, 我的 and
+  查時刻 lay out in two columns (`transit.css` §11).
 - Logs hold places: keep them in `captures/` (git-ignored).
 - Taxis never.
 

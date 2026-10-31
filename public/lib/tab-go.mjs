@@ -745,12 +745,18 @@ function render() {
   const railX = box.querySelector('.ot-places')?.scrollLeft || 0;
   box.innerHTML = `<div class="ot-page">
     ${navTitle(W('交通', 'Transit'))}
-    ${noticesHtml(S.notices)}
-    ${lead.html}
-    ${placesRail()}
-    ${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}
-    ${pinnedHtml(lead.key)}
-    ${nearHtml(lead.key)}
+    <div class="q-cols ot-cols">
+      <div>
+        ${noticesHtml(S.notices)}
+        ${lead.html}
+        ${placesRail()}
+        ${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}
+      </div>
+      <div>
+        ${pinnedHtml(lead.key)}
+        ${nearHtml(lead.key)}
+      </div>
+    </div>
   </div>`;
   kitUI.wireNavTitles(box);
   fitStrips(box);

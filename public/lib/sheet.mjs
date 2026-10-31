@@ -10,9 +10,12 @@ const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)'
 
 // el: the sheet; parts: { head (its top: grabber and search), body (what scrolls), grab (the grabber button) };
 // room() the panel's height, top() the space kept above the large sheet; scrolls(detent) whether its body
-// scrolls at that stop (the large one, unless said otherwise).
-export function persistentSheet(el, { head, body, grab, room, top = () => 64, detent = 'peek', scrolls = d => d === 'large', onChange = () => {} }) {
+// scrolls at that stop (the large one, unless said otherwise). pinned() true: a panel beside the map on a
+// tall wide screen (a tablet, a computer), always whole, its height the stylesheet's: no stops, no dragging.
+export function persistentSheet(el, { head, body, grab, room, top = () => 64, detent = 'peek', scrolls = d => d === 'large', pinned = () => false, onChange = () => {} }) {
   let cur = DETENTS.includes(detent) ? detent : 'peek';
+  let pin = pinned();
+  if (pin) cur = 'large';
   const heights = () => detentHeights(room(), { top: top() });
   let hs = heights();
   let dragging = false;
@@ -26,6 +29,14 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   const full = () => hs.large + 40;
   const apply = (h, animate) => {
     shown = h;
+    if (pin) {
+      el.classList.remove('dragging');
+      el.style.height = '';
+      el.style.transform = '';
+      shown = el.offsetHeight || h;
+      el.parentElement?.style.setProperty('--ms-h', '0px');
+      return;
+    }
     el.classList.toggle('dragging', !animate);
     el.style.height = `${full()}px`;
     el.style.transform = `translate3d(0, ${Math.round(full() - h)}px, 0)`;
@@ -42,6 +53,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   };
   const set = (d, { animate = true, quiet = false } = {}) => {
     if (!DETENTS.includes(d)) return cur;
+    if (pin) d = 'large';
     const was = cur;
     cur = d;
     paint(animate);
@@ -49,6 +61,10 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
     return cur;
   };
   const relayout = () => {
+    const was = pin;
+    pin = pinned();
+    // (Pinned: whole. Back to stops on a narrower screen: the half one, the map showing above it.)
+    if (pin !== was) cur = pin ? 'large' : 'medium';
     hs = heights();
     if (!dragging) paint(false);
   };
@@ -65,6 +81,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
     return b[0] > a[0] ? (a[1] - b[1]) / (b[0] - a[0]) : 0; // up is positive
   };
   const start = (y, x, inHead) => {
+    if (pin) return void (g = null);
     g = { y0: y, x0: x, h0: shown, mode: null, head: inHead, trail: [[performance.now(), y]] };
   };
   const move = (y, x, ev) => {
@@ -138,7 +155,7 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   el.addEventListener('pointercancel', up);
   // A click after a drag on the grabber steps nothing.
   grab?.addEventListener('click', () => {
-    if (el.dataset.dragged) return;
+    if (el.dataset.dragged || pin) return;
     set(stepped(cur));
   });
   grab?.addEventListener('keydown', ev => {
@@ -157,6 +174,9 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
     el,
     get detent() {
       return cur;
+    },
+    get pinned() {
+      return pin;
     },
     get height() {
       return shown;
