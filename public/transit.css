@@ -5816,7 +5816,9 @@ button.ot-trip-foot {
 :root.q-wide {
   --q-page-max: 1180px;
 }
-:root.q-wide .ot-times-seg {
+:root.q-wide #panel-times .ot-page:has(> #panel-train:not([hidden]) #t-results:not(:empty)) .ot-times-seg,
+:root.q-wide #panel-times .ot-page:has(> #times-bus:not([hidden]) #tb-list:not(:empty)) .ot-times-seg,
+:root.q-wide #panel-times .ot-page:has(> #panel-metro:not([hidden])) .ot-times-seg {
   max-width: 720px;
 }
 :root.q-wide #panel-train:has(#t-results:not(:empty)),
@@ -5842,9 +5844,12 @@ button.ot-trip-foot {
   grid-column: 2;
   grid-row: 1 / span 9;
 }
-:root.q-wide #panel-train:not(:has(#t-results:not(:empty))),
-:root.q-wide #times-bus:not(:has(#tb-list:not(:empty))) {
+/* (Nothing yet beside it: the page one column of a reading width, centred,
+   its title and switch with it: a 交通 with only its card and what's near,
+   a train search with no trains yet, a bus search with nothing found.) */
+:root.q-wide :is(.ot-page.ot-one, #panel-times:has(> .ot-page > #panel-train:not([hidden]) #t-results:empty), #panel-times:has(> .ot-page > #times-bus:not([hidden]) #tb-list:empty)) {
   max-width: 720px;
+  margin-inline: auto;
 }
 @media (min-height: 521px) {
   :root.q-wide .ot-metro-view {
