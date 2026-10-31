@@ -55,9 +55,9 @@ export function nearBusRows(stops, { skip = '', planned = null, max = 4 } = {}) 
 function bikeCard(b) {
   const mins = b.walk ? Math.max(1, Math.round(b.walk.sec / 60)) : null;
   const far = mins != null ? `<i class="walk">${icon('walk')}${mins} ${W('分', 'min')}</i>` : b.d != null ? `<i class="walk">${icon('walk')}${e(distText(b.d))}</i>` : '';
-  if (b.ok === false) return `<button class="ot-bk off" type="button" data-bk="${e(b.uid)}">${bikeMark()}<span class="ot-bk-name">${e(shown(b.name))}</span><span class="ot-bk-n"><b>${W('暫停', 'Paused')}</b></span><span class="ot-bk-f">${far}</span></button>`;
+  if (b.ok === false) return `<button class="ot-bk off" type="button" data-bk="${e(b.uid)}">${bikeMark()}<span class="ot-bk-name q-fit-wrap">${e(shown(b.name))}</span><span class="ot-bk-n"><b>${W('暫停', 'Paused')}</b></span><span class="ot-bk-f">${far}</span></button>`;
   const lv = b.bikes + b.ebike === 0 ? 'none' : b.bikes + b.ebike <= 3 ? 'few' : 'ok';
-  return `<button class="ot-bk ${lv}" type="button" data-bk="${e(b.uid)}">${bikeMark()}<span class="ot-bk-name">${e(shown(b.name))}</span><span class="ot-bk-n"><b>${b.bikes}</b>${b.ebike ? `<em>${icon('bolt')}${b.ebike}</em>` : ''}</span><span class="ot-bk-f"><i>${icon('dock')}${b.ret}</i>${far}</span></button>`;
+  return `<button class="ot-bk ${lv}" type="button" data-bk="${e(b.uid)}">${bikeMark()}<span class="ot-bk-name q-fit-wrap">${e(shown(b.name))}</span><span class="ot-bk-n"><b>${b.bikes}</b>${b.ebike ? `<em>${icon('bolt')}${b.ebike}</em>` : ''}</span><span class="ot-bk-f"><i>${icon('dock')}${b.ret}</i>${far}</span></button>`;
 }
 // YouBike's stations: a rail of cards, or one row when every one is paused; '' when none.
 export function nearBikes(list) {
