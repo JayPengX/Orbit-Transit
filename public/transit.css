@@ -703,11 +703,15 @@ button.ot-hero {
 
 /* ==== 3. 地圖 ==================================================================================== */
 
-/* The map the whole column down to the tab bar. */
+/* The map the whole screen down to the tab bar (under the tab rail on a wide screen). */
 .ot-map-panel {
   position: fixed;
-  inset: 0 var(--q-side, 0px) var(--ot-tabs);
+  inset: 0 0 var(--ot-tabs);
   overflow: hidden;
+}
+/* (With the tabs a rail, nothing stands along the foot: the map goes down to it.) */
+html.q-tabrail .ot-map-panel {
+  bottom: 0;
 }
 .ot-map {
   position: absolute;
@@ -758,8 +762,8 @@ body.tab-map {
 .tab-map .q-appbar {
   position: fixed;
   top: 0;
-  left: var(--q-side, 0px);
-  right: var(--q-side, 0px);
+  left: 0;
+  right: 0;
   z-index: 40;
   background: none;
   box-shadow: none;
@@ -1035,6 +1039,67 @@ body.tab-map {
 }
 .ot-msheet[data-shows='card'] .ot-ms-head {
   padding-bottom: 0;
+}
+
+/* A wide screen (a phone on its side, a tablet, a computer): the sheet is a
+   panel at the map's left, beside the tab rail, as Maps on an iPad; the map
+   fills the rest. A phone on its side keeps the three stops (up from the foot);
+   a tall screen pins it whole, top to foot (tab-map.mjs SIDE_Q, PIN_Q). What
+   else stands over the map (the rental chip, navigation's cards) keeps to the
+   map's side of it or stands in the panel's place. */
+@media (min-width: 640px) {
+  .ot-map-panel {
+    --ot-side-l: calc(var(--q-inset-l, 0px) + 12px);
+    --ot-side-w: clamp(320px, 38vw, 400px);
+  }
+  /* (Right of the tab rail, wherever the kit stands it.) */
+  html.q-tabrail .ot-map-panel {
+    --ot-side-l: calc(var(--q-tabrail-x, calc(var(--q-inset-l, 0px) + 12px)) + 80px);
+  }
+  .ot-msheet {
+    right: auto;
+    left: var(--ot-side-l);
+    width: var(--ot-side-w);
+    max-width: none;
+    margin: 0;
+  }
+  .ot-map-panel[data-sheet='large'] .ot-fabs {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .ot-map-chips {
+    left: calc(var(--ot-side-l) + var(--ot-side-w) + 12px);
+  }
+  .ot-map-panel :is(.ot-nav-top, .ot-nav-bottom, .ot-pickbar-box) {
+    left: var(--ot-side-l);
+    right: auto;
+    width: var(--ot-side-w);
+    margin: 0;
+  }
+}
+@media (min-width: 640px) and (min-height: 521px) {
+  .ot-msheet {
+    top: calc(var(--q-top, 0px) + 12px);
+    bottom: auto;
+    height: auto;
+    /* (As tall as what it holds, down to 12 px above the map's foot, then it scrolls.) */
+    max-height: calc(100% - var(--q-top, 0px) - 24px);
+    border-radius: 24px;
+    box-shadow: var(--q-glass-rim), var(--ot-shadow);
+    touch-action: pan-x pan-y;
+  }
+  .ot-nav-min .ot-msheet {
+    max-height: calc(100% - var(--q-top, 0px) - 98px);
+  }
+  .ot-msheet .ot-ms-body {
+    flex: 0 1 auto;
+    padding-bottom: calc(16px + var(--ot-kb, 0px));
+  }
+  .ot-ms-grab {
+    visibility: hidden;
+    height: 14px;
+    pointer-events: none;
+  }
 }
 
 /* Search: the results are rows of one card in the sheet. */
@@ -3336,8 +3401,9 @@ body.tab-map {
 body.ot-navigating:not(.tab-map) .ot-nav-mini,
 body.ot-navigating.ot-nav-min .ot-nav-mini {
   position: fixed;
-  left: calc(var(--q-side, 0px) + 10px);
-  right: calc(var(--q-side, 0px) + 10px);
+  left: var(--q-mid, 50%);
+  width: min(560px, calc(var(--q-vw, 100vw) - 20px));
+  transform: translateX(-50%);
   bottom: calc(var(--q-nav, 0px) + 8px);
   z-index: 60;
   display: block;
@@ -5738,4 +5804,77 @@ button.ot-trip-foot {
 }
 .ot-bike-now .ot-bstats {
   margin-top: 0;
+}
+
+/* ==== 11. Wide screens (Jay 2026-10-31: every screen, either way up) =============================
+   The map is the whole screen with its panel at the left (section 3). The
+   other tabs are laid out in two columns of a phone's width (DESIGN.md §10),
+   read left to right in the phone's order: 交通 its trips left, what's pinned
+   and near right; 我的 trips and places left, pinned and settings right;
+   查時刻 the question left and its trains right (one column until there are
+   any), a bus search beside its routes. */
+:root.q-wide {
+  --q-page-max: 1180px;
+}
+:root.q-wide .ot-times-seg {
+  max-width: 720px;
+}
+:root.q-wide #panel-train:has(#t-results:not(:empty)),
+:root.q-wide #times-bus:has(#tb-list:not(:empty)) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--q-s-5, 24px);
+  align-items: start;
+}
+:root.q-wide #panel-train:has(#t-results:not(:empty)) > *,
+:root.q-wide #times-bus:has(#tb-list:not(:empty)) > * {
+  grid-column: 1;
+  min-width: 0;
+}
+:root.q-wide #panel-train:has(#t-results:not(:empty)) > .q-day-bar {
+  grid-column: 1 / -1;
+}
+:root.q-wide #panel-train:has(#t-results:not(:empty)) > #t-results {
+  grid-column: 2;
+  grid-row: 2 / span 9;
+}
+:root.q-wide #times-bus:has(#tb-list:not(:empty)) > #tb-list {
+  grid-column: 2;
+  grid-row: 1 / span 9;
+}
+:root.q-wide #panel-train:not(:has(#t-results:not(:empty))),
+:root.q-wide #times-bus:not(:has(#tb-list:not(:empty))) {
+  max-width: 720px;
+}
+@media (min-height: 521px) {
+  :root.q-wide .ot-metro-view {
+    height: max(420px, calc(100svh - var(--q-nav, 0px) - var(--q-top, 0px) - 220px));
+  }
+}
+/* (A column's first heading level with the other column's top, not a section's gap below it.) */
+:root.q-wide :is(.ot-cols > div, #t-results, #tb-list) > .q-section:first-child {
+  margin-top: 0;
+}
+:root.q-wide :is(.ot-cols > div, #t-results, #tb-list) > .q-section:first-child > .q-section-head {
+  margin-top: 0;
+  padding-top: 0;
+}
+/* (A bus search's cities: every one in view, wrapped, beside the routes.) */
+:root.q-wide #tb-city {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+/* A phone on its side: the metro map fills the screen once scrolled to. */
+@media (max-height: 520px) {
+  .ot-metro-view {
+    height: max(300px, calc(100svh - 24px));
+  }
+}
+/* A phone on its side: a sheet's rows a little tighter (圖層's four fit whole). */
+@media (max-height: 520px) {
+  .ot-sheet .q-rowcard > .q-ritem {
+    padding-block: 4px;
+  }
 }

@@ -26,7 +26,7 @@ import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
-import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
+import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, iconName, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, bikeTile, bikeStats, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
@@ -422,13 +422,15 @@ async function drawLayersNow() {
 
 const BIKE_COUNTS_ZOOM = 17;
 const BIKE_COUNTS_NEAR = 4;
-// The part of the map not covered: below the buttons at the top, above the sheet (its height now).
+// The part of the map not covered: below the buttons at the top, above the sheet (its height now),
+// right of it when it stands beside the map.
 function seenBounds(b) {
-  const band = seenBand();
-  if (!band) return b;
-  const { room, top, bottom } = band;
-  const lat = y => b.n - (b.n - b.s) * Math.min(1, Math.max(0, y / room));
-  return { ...b, n: lat(top), s: lat(bottom) };
+  const c = seen();
+  if (!c) return b;
+  const { p, top, bottom, left, right } = c;
+  const lat = y => b.n - (b.n - b.s) * Math.min(1, Math.max(0, y / p.height));
+  const lon = x => b.w + (b.e - b.w) * Math.min(1, Math.max(0, x / p.width));
+  return { ...b, n: lat(top), s: lat(p.height - bottom), w: lon(left), e: lon(p.width - right) };
 }
 // A station: its regular bikes, then its 電輔車 after a ⚡ when it has any,
 // or, quiet, a dot in its level's colour.
@@ -989,33 +991,55 @@ function pickOnMap(text, near) {
 
 // Its room is the panel above the tab bar (above the shrunk ride's bar while
 // one is followed); the large stop leaves the account buttons showing above it.
+// On a wide screen (a phone on its side, a tablet, a computer) the sheet is a
+// panel at the map's left, as Maps on an iPad; on a tall one (not a phone on
+// its side) it is pinned there whole (transit.css: the same two questions).
 const NAV_BAR = 74;
-const sheetRoom = () => $('panel-map').clientHeight - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
+const SIDE_Q = '(min-width: 640px)';
+const PIN_Q = '(min-width: 640px) and (min-height: 521px)';
+const sideMode = () => Boolean(globalThis.matchMedia?.(SIDE_Q).matches);
+const pinMode = () => Boolean(globalThis.matchMedia?.(PIN_Q).matches);
+const navBar = () => (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
+const sheetRoom = () => $('panel-map').clientHeight - navBar();
 const sheetTop = () => {
   const b = $('top-actions')?.getBoundingClientRect();
+  // (Beside the map: up to the top, level with the account buttons.)
+  if (sideMode()) return Math.max(10, Math.round(b?.top || 0));
   return b?.height ? Math.round(b.bottom + 10) : 64;
 };
-// Room kept clear when a trip is fitted: above the sheet.
-const fitPad = (m, share) => ({
-  top: 100,
-  bottom: (msheet?.heights().medium || Math.round(innerHeight * share)) + 24,
-  left: m,
-  right: Math.max(m, fabGutter())
-});
+// What covers the map, px in from each of its edges: the buttons at the top and the right, the sheet
+// (along the foot on a phone upright, beside the map on a wide screen), the shrunk ride's bar.
+function covered() {
+  const p = $('panel-map')?.getBoundingClientRect();
+  if (!msheet || !p?.height) return null;
+  if (sideMode()) {
+    const r = $('msheet').getBoundingClientRect();
+    return { p, top: 16, bottom: 16 + navBar(), left: r.width ? Math.max(0, Math.round(r.right - p.left)) : 0, right: fabGutter() };
+  }
+  const top = Math.max(0, ($('top-actions')?.getBoundingClientRect().bottom || 0) + 8 - p.top);
+  return { p, top, bottom: msheet.heights()[msheet.detent] + navBar(), left: 0, right: fabGutter() };
+}
+// Room kept clear when a trip is fitted: clear of the sheet and the buttons.
+const fitPad = (m, share) => {
+  const c = covered();
+  if (c && sideMode()) return { top: c.top + m, bottom: c.bottom + m, left: c.left + m, right: Math.max(m, c.right) };
+  return {
+    top: 100,
+    bottom: (msheet?.heights().medium || Math.round(innerHeight * share)) + 24,
+    left: m,
+    right: Math.max(m, fabGutter())
+  };
+};
 // How far under the middle of the map the middle of what the sheet leaves in view is, px: a point put
 // that high above the middle sits in the middle of the map you can see.
 function aboveDy() {
-  const band = seenBand();
-  return band ? Math.round(band.room / 2 - (band.top + band.bottom) / 2) : 0;
+  const c = seen();
+  return c ? Math.round((c.bottom - c.top) / 2) : 0;
 }
-// The band of the map left showing, px from its top: below the buttons at the top, above the sheet
-// (null: no sheet yet, or too little left to matter).
-function seenBand() {
-  const room = $('panel-map')?.clientHeight;
-  if (!msheet || !room) return null;
-  const top = Math.max(0, ($('top-actions')?.getBoundingClientRect().bottom || 0) + 8);
-  const bottom = room - msheet.heights()[msheet.detent] - (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
-  return bottom - top > 80 ? { room, top, bottom } : null;
+// The part of the map left showing (null: no sheet yet, or too little left to matter).
+function seen() {
+  const c = covered();
+  return c && c.p.height - c.top - c.bottom > 80 && c.p.width - c.left - c.right > 80 ? c : null;
 }
 // The room the round buttons take at the map's right, px: what is brought to the middle of the map
 // is the middle of what they leave (so a pin is never put under ⊙), and a trip is fitted clear of them.
@@ -1024,7 +1048,11 @@ const fabGutter = () => {
   const p = $('panel-map')?.getBoundingClientRect();
   return b?.width && p?.width ? Math.max(0, Math.round(p.right - b.left + 10)) : 0;
 };
-const aboveDx = () => Math.round(fabGutter() / 2);
+// (And left of the middle by half of what covers the right less what covers the left.)
+const aboveDx = () => {
+  const c = seen();
+  return c ? Math.round((c.right - c.left) / 2) : Math.round(fabGutter() / 2);
+};
 let liftedFor = false;
 // The stop the list of ways was at before one was opened (to go back to it when it's closed).
 let listDetent = null;
@@ -1064,6 +1092,7 @@ function buildSheet() {
     grab: $('ms-grab'),
     room: sheetRoom,
     top: sheetTop,
+    pinned: pinMode,
     // (A trip opened sits at half, its steps scrolling there, the map above showing its route.)
     scrolls: d => d === 'large' || (d === 'medium' && $('msheet').classList.contains('ot-trip')),
     onChange: d => {
@@ -1517,7 +1546,7 @@ function pinSheet(p) {
   let iconKey = p.icon in PLACE_ICONS ? p.icon : 'pin';
   const d = sheet(`${sheetHead(W('釘選地點', 'Pin a place'), '', tile('star', COLOR.place))}
     <label class="ot-field"><span>${W('名稱', 'Name')}</span><input id="pin-name" maxlength="20" value="${e(p.name)}" placeholder="${W('家、公司、學校', 'Home, Work, School')}"></label>
-    <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === iconKey}" aria-label="${k}">${icon(v)}</button>`).join('')}</div></div>
+    <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === iconKey}" aria-label="${e(iconName(k))}">${icon(v)}</button>`).join('')}</div></div>
     <button class="q-btn primary block ot-sheet-go" type="button" data-save="1">${W('儲存', 'Save')}</button>`);
   d.addEventListener('click', ev => {
     const ic = ev.target.closest('[data-icon]');
@@ -2304,9 +2333,15 @@ function navView(plan, i, tries = 0) {
   const pts = stageView(plan, i, n?.phase, n?.ahead ? null : n?.pos || ctx.here, legPath, n?.ride ? { ...n.ride, next: n.next } : null);
   if (!pts.length) return;
   const box = $('map').getBoundingClientRect();
-  const top = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect().bottom;
-  const bottom = $('nav').querySelector('.ot-nav-bottom')?.getBoundingClientRect().top;
-  const done = map.fit(pts, { top: Math.max(60, (top || box.top + 170) - box.top + 24), bottom: Math.max(60, box.bottom - (bottom || box.bottom - 150) + 24), left: 36, right: 36 });
+  const tr = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect();
+  const br = $('nav').querySelector('.ot-nav-bottom')?.getBoundingClientRect();
+  // (On a wide screen both cards stand at the map's left: the trip goes right of them.)
+  const side = sideMode() && (tr?.width || br?.width);
+  const top = tr?.bottom;
+  const bottom = br?.top;
+  const done = map.fit(pts, side
+    ? { top: 48, bottom: 48, left: Math.max(tr?.right || 0, br?.right || 0) - box.left + 36, right: 48 }
+    : { top: Math.max(60, (top || box.top + 170) - box.top + 24), bottom: Math.max(60, box.bottom - (bottom || box.bottom - 150) + 24), left: 36, right: 36 });
   // (No room yet, the page still laying out: again in a moment, never zoomed out to the island.)
   if (done === false && tries < 6) setTimeout(() => {
     const m = navNow();

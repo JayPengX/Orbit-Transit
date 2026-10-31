@@ -20,6 +20,9 @@ export const DAYS = '日一二三四五六';
 export const LAYERS = { bike: 'YouBike', bus: W('公車站', 'Bus stops'), rail: W('火車・高鐵', 'Trains'), metro: W('捷運', 'Metro') };
 // A place's glyph: the name of one of ui.mjs's icons (drawn by look.mjs's placeTile).
 export const PLACE_ICONS = { home: 'home', work: 'work', school: 'school', pin: 'pin', star: 'star' };
+// What each icon is called (a screen reader's word for its chip).
+const ICON_NAMES = { home: ['家', 'Home'], work: ['公司', 'Work'], school: ['學校', 'School'], pin: ['地點', 'Place'], star: ['最愛', 'Favourite'] };
+export const iconName = k => W(...(ICON_NAMES[k] || ICON_NAMES.pin));
 
 export const emptyData = () => ({
   v: 1,
