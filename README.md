@@ -13,7 +13,7 @@
   <img alt="JavaScript" src="https://img.shields.io/badge/JavaScript-ES_modules-F7DF1E?logo=javascript&logoColor=000"> <img alt="PWA" src="https://img.shields.io/badge/PWA-works_offline-5A0FC8?logo=pwa&logoColor=fff"> <img alt="Cloudflare" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=fff"> <img alt="Tests" src="https://img.shields.io/badge/Tests-node_--test-339933?logo=nodedotjs&logoColor=fff">
 </p>
 
-Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planned the way people really travel. Part of **Orbit**, a family of phone apps for life in Taiwan that share one sign-in, the Orbit Pass. See them all at [orbit.jaypengx.com](https://orbit.jaypengx.com/pass/).
+Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planned the way people really travel. Part of **Orbit**, a family of apps for life in Taiwan that share one sign-in, the Orbit Pass. See them all at [orbit.jaypengx.com](https://orbit.jaypengx.com/pass/).
 
 <p align="center">
   <img src="docs/screenshots/transit-1.webp" width="30%" alt="Your trip on Google Maps">
@@ -38,6 +38,7 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 - **到站提醒:** "tell me when the 5608 is 5 minutes away", checked by the server while the phone is locked.
 - **Service notices** from the operators themselves: a stopped line or route is marked and never planned.
 - **Saved places and trips** (家, 學校, your own), synced through the Orbit Pass.
+- **Every screen, either way up:** on a phone on its side, a tablet or a computer the map fills the screen with the trip as a panel at its left, and 交通 puts the trip card beside what's near.
 
 ## Tech stack
 
