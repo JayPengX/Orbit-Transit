@@ -49,6 +49,8 @@ jobs:
     needs: queue
     if: needs.queue.outputs.go == 'true'
     runs-on: ubuntu-latest
+    env:
+      HAS_CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       # main as it is now, never the commit that started the run: GitHub can
       # deliver a push late (hours, out of order), and an old tree deployed
@@ -64,7 +66,9 @@ jobs:
         with:
           repository: JayPengX/Orbit-Core
           path: .shared
-          sparse-checkout: kit
+          sparse-checkout: |
+            kit
+            deploy
       - run: ln -sfn .shared/kit .kit
       - name: Run tests
         run: npm test
@@ -75,6 +79,13 @@ jobs:
         # deploy didn't change.
         run: node scripts/stamp-version.mjs "$(git rev-parse HEAD)"
       - uses: actions/configure-pages@v5
+      # The site on Cloudflare, at its address on the family's domain
+      # (Orbit-Core deploy/cf-site.mjs): what phones are served.
+      - name: Publish to Cloudflare
+        if: ${{ env.HAS_CF == 'true' }}
+        run: node .shared/deploy/cf-site.mjs Orbit-Transit public
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: 'public'
