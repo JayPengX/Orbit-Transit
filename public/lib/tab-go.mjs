@@ -744,10 +744,12 @@ function render() {
   const keep = box.scrollTop;
   const railX = box.querySelector('.ot-places')?.scrollLeft || 0;
   // Two columns on a wide screen: your trips left, what's pinned and near right. Only the card and
-  // what's near (a new person): one column of a reading width, never a lone card beside a list.
+  // what's near (a new person): the card left and what's near beside it, never one column with half
+  // the screen empty beside it (Jay 2026-11-01).
   const left = `${placesRail()}${rest.length ? section(W('行程', 'Trips'), rest.map(tripCard).join('')) : ''}`;
   const pinned = pinnedHtml(lead.key);
-  const one = !left && !pinned;
+  const near = nearHtml(lead.key);
+  const one = !pinned && !near;
   box.innerHTML = `<div class="ot-page${one ? ' ot-one' : ''}">
     ${navTitle(W('交通', 'Transit'))}
     <div class="${one ? '' : 'q-cols ot-cols'}">
@@ -758,7 +760,7 @@ function render() {
       </div>
       <div>
         ${pinned}
-        ${nearHtml(lead.key)}
+        ${near}
       </div>
     </div>
   </div>`;
