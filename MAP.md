@@ -27,6 +27,10 @@ Live: https://orbit.jaypengx.com/transit/
     real map. A station: its line codes, the next trains each way counting
     down (live where the operator sends them, else the timetable, else how
     often the line runs), first and last trains, exits (`metro-ui.mjs`).
+  - **建議** (on 交通): each trip planned keeps its time (the last 12 per place
+    in 最近); a place gone to 3+ times at about this hour on days like this
+    comes up as 常在這時候去, its distance first, a tap plans it (not when
+    you're there, nor when a saved trip or 回家 covers it).
   - **我的:** places, trips, pinned stops, 交通偏好 (ways of moving, TPASS,
     the maps app).
 - **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by
@@ -61,10 +65,14 @@ Live: https://orbit.jaypengx.com/transit/
   silent 10 s is started over (twice as long each time it stays silent, up to a minute);
   one that hasn't answered yet (the location ask may be up) is left a minute, never a second ask over the first. Late for an
   arrival time → an on-time alternative offered. It resumes after the app
-  is swiped away and tells the lock screen.
+  is swiped away and tells the lock screen. 編輯行程 while navigating: a stop
+  added, or the one you're heading to taken off or changed, re-routes and
+  starts the new directions by itself.
 - **Bikes at the next station** (`nav.mjs` `bikesText`): its counts;
   換附近的站 asked only when 2 or fewer are left (a 電輔車 ride: its own),
-  else the count itself is the tap.
+  else the count itself is the tap. Everywhere a station shows, 一般, 電輔車
+  and 空位 are three columns apart; YouBike wears its own logo everywhere but
+  the map, whose pins keep the bike glyph.
 - **YouBike rental timer** (`rental.mjs`): starts by itself while
   navigating. With TPASS's free half hour, it warns at 25 minutes and
   offers nearby docks to swap.
