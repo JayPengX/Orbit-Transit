@@ -151,11 +151,14 @@ function resultsHtml() {
   if (state.results === 'loading') return `<p class="ot-note">${W('找班次…', 'Finding trains…')}</p>`;
   if (!state.results) return '';
   const pin = `<button type="button" data-act="pin-conn" aria-pressed="${pinnedConn()}">${pinnedConn() ? W('已釘選', 'Pinned') : W('釘選', 'Pin')}</button>`;
-  if (!state.results.length) return section(W('班次', 'Trains'), emptyNote(W('這個時間之後沒有班次', 'No trains after this time')), pin);
+  // (Inside the person's TPASS the list keeps to trains the pass covers: said, so
+  // a missing 普悠瑪 or 高鐵 isn't a mystery; lost 10-19, back 2026-11-01.)
+  const passNote = state.passOnly ? `<p class="ot-note ot-pass-note">${W('只列 TPASS 能搭的車', 'Only trains your TPASS covers')}</p>` : '';
+  if (!state.results.length) return section(W('班次', 'Trains'), passNote + emptyNote(W('這個時間之後沒有班次', 'No trains after this time')), pin);
   // The next train still to leave today: lit, its countdown on it.
   const now = Date.now();
   const next = (state.date || tw().date) === tw().date ? state.results.findIndex(j => leaveAt(j) >= now - 30_000) : -1;
-  return section(W('班次', 'Trains'), state.results.map((j, i) => journeyHtml(j, i, i === next)).join(''), pin);
+  return section(W('班次', 'Trains'), passNote + state.results.map((j, i) => journeyHtml(j, i, i === next)).join(''), pin);
 }
 
 // A train's delay now (台鐵's live board; 高鐵 has none): minutes, 0 on time, null not running yet.
