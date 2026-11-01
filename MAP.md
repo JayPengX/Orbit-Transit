@@ -178,7 +178,7 @@ node ../Orbit-Core/tools/preview.mjs transit --live --width 375
   HEAD` (old against new on today's data) and read what moved.
 - `scripts/replay.mjs` re-runs a 除錯紀錄 (`--why` shows the score).
 
-A push to `main` tests, stamps versions and deploys to Pages.
+A push to `main` tests, stamps versions and deploys to Cloudflare.
 
 ## If you change…
 
