@@ -135,8 +135,8 @@ useMapsApp(() => ctx.data.prefs?.maps);
 // ---- Tabs --------------------------------------------------------------------------------------
 
 const TABS = [
-  { id: 'map', label: W('地圖', 'Map'), icon: '<path d="M9 4.5L3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>', mod: mapTab },
   { id: 'go', label: W('交通', 'Transit'), icon: '<rect x="4.5" y="3.5" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 18.5V21M16 18.5V21"/><path d="M12 3.5V11"/>', mod: goTab },
+  { id: 'map', label: W('地圖', 'Map'), icon: '<path d="M9 4.5L3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>', mod: mapTab },
   { id: 'times', label: W('查時刻', 'Times'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', mod: timesTab },
   { id: 'me', label: W('我的', 'Me'), icon: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/>', mod: meTab }
 ];
@@ -207,7 +207,7 @@ async function boot() {
   // A ride being navigated when the app was swiped away: on with it, on the
   // map (or, shrunk to its bar, on the tab you were on).
   const was = savedNav();
-  const asked = /^#(map|go|times|me)/.exec(location.hash)?.[1] || 'map';
+  const asked = /^#(map|go|times|me)/.exec(location.hash)?.[1] || 'go';
   const want = was && !was.min ? 'map' : asked;
   mapTab.register(ctx);
   meTab.register(ctx);

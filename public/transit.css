@@ -500,6 +500,11 @@ button.ot-hero {
     opacity: 0.55;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .ot-strip-eta.now b {
+    animation: none;
+  }
+}
 .ot-strip-act {
   flex: none;
 }
@@ -5129,23 +5134,24 @@ button.ot-trip-foot {
 .ot-route-stops li:last-child::before {
   bottom: 50%;
 }
+/* A stop's time, all in one size and none on a pill (Jay 2026-11-03: the red
+   進站中 pill stood out of proportion and was hard to read): 進站中 / 即將進站
+   in the live colour, held steady to read; a few minutes away in full ink;
+   later or the timetable's quieter. Red stays for trouble (停駛). */
 .ot-rs-eta {
   justify-self: end;
   min-width: 0;
-  padding: 3px 8px;
-  border-radius: 8px;
+  padding: 3px 4px;
   color: var(--q-label);
   font: 700 15px/20px var(--q-font-rounded);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .ot-rs-eta.now {
-  background: var(--q-red);
-  color: #fff;
+  color: var(--ot-ink-green);
 }
 .ot-rs-eta.soon {
-  background: color-mix(in srgb, var(--q-orange) 16%, transparent);
-  color: var(--q-orange);
+  color: var(--q-label);
 }
 .ot-rs-eta.wait {
   color: var(--q-label-2);
@@ -5167,18 +5173,21 @@ button.ot-trip-foot {
   border-radius: 50%;
   background: var(--q-sheet);
 }
+/* The bus on the line: a dot of the line's own green a size up from a stop's,
+   ringed in the sheet's colour so it sits on the line (on a stop's dot when
+   it's there, between two stops when it's on its way). */
 .ot-route-stops li.at .ot-rs-dot {
-  width: 26px;
-  height: 26px;
-  margin-left: 2px;
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
   border: 0;
-  background: var(--q-red);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--q-red) 22%, transparent);
+  background: var(--q-green);
+  box-shadow: 0 0 0 2.5px var(--q-sheet);
   color: #fff;
 }
 .ot-rs-dot .ot-i {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   stroke-width: 2.2;
 }
 .ot-rs-bus {
@@ -5188,17 +5197,17 @@ button.ot-trip-foot {
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--q-red);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--q-red) 22%, transparent);
+  background: var(--q-green);
+  box-shadow: 0 0 0 2.5px var(--q-sheet);
   color: #fff;
   transform: translate(-50%, -50%);
 }
 .ot-rs-bus .ot-i {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   stroke-width: 2.2;
 }
 .ot-rs-name {

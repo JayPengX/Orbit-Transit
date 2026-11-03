@@ -97,6 +97,11 @@ export function register(c) {
     if (!to || to.here) return;
     saveTripSheet({ fromHere: Boolean(from.here), from, to });
   };
+  // 交通's 要去哪裡 (the board, board.mjs): a place picked, its ways from here on the map.
+  ctx.planTo = async () => {
+    const to = await pickPoint(W('要去哪裡', 'Where to?'), { onMap: false });
+    if (to && !to.here) ctx.openTrip(null, to);
+  };
 }
 
 export async function init(c) {

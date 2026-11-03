@@ -1,0 +1,126 @@
+/* Orbit's own look for 交通 (lib/board.mjs; Jay 2026-11-03, Orbit-Core DESIGN
+   §11), linked after transit.css on a page with <html data-look="native">.
+   One board: a bar to plan a trip, your places, your trips and pins as rows
+   of one shape, what's near. The only colour on a row is its line's badge. */
+
+/* 要去哪裡: one bar under the title; a tap opens the place search. */
+html[data-look='native'] .ob-plan {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  margin: 4px 0 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--q-fill-3);
+  color: var(--q-label-2);
+  font: 400 17px/22px var(--q-font);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-look='native'] .ob-plan .ot-i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+/* Your places under it, a row to scroll: a tap is its ways from here. */
+html[data-look='native'] .ob-places {
+  display: flex;
+  gap: 8px;
+  margin: 10px calc(-1 * var(--q-s-4, 16px)) 0;
+  padding: 0 var(--q-s-4, 16px) 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+html[data-look='native'] .ob-places::-webkit-scrollbar {
+  display: none;
+}
+html[data-look='native'] .ob-place {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px 0 6px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--q-fill-3);
+  color: var(--q-label);
+  font: 500 15px/20px var(--q-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+html[data-look='native'] .ob-place .q-tile {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+}
+html[data-look='native'] .ob-place .q-tile .ot-i {
+  width: 16px;
+  height: 16px;
+}
+
+/* A line's badge in its own colour: a trip's first ride, a train's kind. */
+html[data-look='native'] .ot-strip-no[style*='--line'] {
+  background: var(--line);
+  color: var(--ink, #fff);
+}
+html[data-look='native'] .ot-strip-no.ob-glyph .ot-i {
+  width: 22px;
+  height: 22px;
+}
+
+/* The time on the right: the countdown (its 分 small), a word under it. */
+html[data-look='native'] .ob-when b {
+  display: block;
+}
+html[data-look='native'] .ob-n {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font: inherit;
+}
+html[data-look='native'] .ob-when .ob-n small {
+  color: inherit;
+  font: 500 13px/1 var(--q-font);
+}
+
+/* 還沒有車: the routes with none on the way, one quiet line under the rows. */
+html[data-look='native'] .ob-quiet {
+  position: relative;
+  margin: 0;
+  padding: 11px 16px 13px 76px;
+  color: var(--q-label-2);
+  font: 400 13px/18px var(--q-font);
+}
+html[data-look='native'] .q-rowcard > .ot-strip + .ob-quiet::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 76px;
+  right: 0;
+  border-top: var(--q-hairline) solid var(--q-sep);
+}
+
+/* Nothing pinned yet: a line on what goes here and the way to add one. */
+html[data-look='native'] .ob-empty {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 16px;
+}
+html[data-look='native'] .ob-empty p {
+  margin: 0;
+  color: var(--q-label-2);
+  font: 400 15px/20px var(--q-font);
+}
+
+/* The board's sections closer together: rows to scan, not cards apart. */
+html[data-look='native'] .ob-page .ot-sec {
+  margin-top: 22px;
+}
