@@ -305,3 +305,66 @@ html[data-look='native'] .ot-msheet :is(.q-icon-btn, .q-close):not(.q-glass) {
   backdrop-filter: none;
   box-shadow: none;
 }
+
+/* 路線 (tab-map plansHtml), Orbit's own look (Jay 2026-11-03: "this need redesign"). The
+   tags are words: 推薦 in the app's colour, the rest grey, no pills (DESIGN §11). A way's
+   note that's no trouble (騎車過頭前溪, a bridge on the way) is grey with the facts; only
+   late, missed or stopped is red. This search's ways of moving sit on one quiet track,
+   the ones on lit, the ones off faint. */
+html[data-look='native'] .ot-plan .ot-tag {
+  padding: 0;
+  background: none;
+  color: var(--q-label-2);
+  font: inherit;
+}
+html[data-look='native'] .ot-plan .ot-tag.best,
+html[data-look='native'] .ot-plan .ot-tag.live {
+  color: var(--q-accent);
+  font-weight: 600;
+}
+html[data-look='native'] .ot-plan-sub.warn {
+  color: var(--q-red);
+}
+html[data-look='native'] .ot-plan-dur {
+  font: 300 24px/28px var(--nv-display, var(--q-font));
+}
+html[data-look='native'] .ot-mtogs {
+  flex: 0 1 auto;
+  margin-left: auto;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--q-fill-3);
+}
+html[data-look='native'] .ot-mtog {
+  width: 34px;
+  height: 32px;
+  background: none;
+  box-shadow: none;
+}
+html[data-look='native'] .ot-mtog[aria-pressed='true'] {
+  background: var(--nv-card, var(--q-surface));
+  color: var(--q-label);
+}
+html[data-look='native'] .ot-mtog[aria-pressed='false'] {
+  color: var(--q-label-3);
+}
+@media (max-width: 359px) {
+  html[data-look='native'] .ot-mtog {
+    width: 27px;
+  }
+}
+html[data-look='native'] .ot-when-pick {
+  background: var(--q-fill-3);
+}
+
+/* The map's own round buttons (layers, where I am): solid graphite with a soft shadow over
+   the map, no glass rim (Jay 2026-11-03: "glassy 3D"). */
+html[data-look='native'] .ot-fab {
+  width: 44px;
+  height: 44px;
+  background: var(--nv-card, var(--q-surface));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 0 0 0.5px var(--nv-edge, rgba(255, 255, 255, 0.08)), 0 4px 14px rgba(0, 0, 0, 0.28);
+}

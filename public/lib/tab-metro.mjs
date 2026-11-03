@@ -39,7 +39,7 @@ export function init(c) {
     mode = localStorage.getItem(MODE_KEY) === 'geo' ? 'geo' : 'schem';
   } catch {}
   const panel = $('panel-metro');
-  panel.innerHTML = `<nav class="q-chips ot-chip-rail" id="m-maps" aria-label="${W('城市', 'City')}">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(shown(m.name))}</button>`).join('')}</nav>
+  panel.innerHTML = `<nav class="q-chips q-texttabs ot-chip-rail" id="m-maps" aria-label="${W('城市', 'City')}">${MAPS.map(m => `<button class="q-chip" type="button" data-map="${m.id}">${e(shown(m.name))}</button>`).join('')}</nav>
     <div id="m-notice" class="ot-m-notice"></div>
     <div class="ot-metro-view" id="m-view">
       <div id="m-schem" class="mm-box" role="img" aria-label="${W('捷運路線圖', 'Metro map')}"></div>
@@ -48,9 +48,9 @@ export function init(c) {
         <div class="mm-mode" role="group" aria-label="${W('地圖', 'Map')}"><button type="button" data-mode="schem">${W('路線圖', 'Lines')}</button><button type="button" data-mode="geo">${W('實景', 'Real')}</button></div>
         <button class="mm-fab" type="button" data-locate aria-label="${W('最近的車站', 'Nearest station')}">${icon('locate')}</button>
       </div>
-      <div class="ot-metro-legend" id="m-legend"></div>
       <p class="ot-metro-msg" id="m-msg"></p>
-    </div>`;
+    </div>
+    <div class="ot-metro-legend" id="m-legend"></div>`;
   panel.addEventListener('click', ev => {
     const b = ev.target.closest('[data-map]');
     if (b) return open(b.dataset.map);

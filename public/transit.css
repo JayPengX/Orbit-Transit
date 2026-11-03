@@ -4186,7 +4186,9 @@ button.ot-trip-foot {
   position: relative;
   margin-top: 12px;
   overflow: hidden;
-  height: max(380px, calc(100svh - var(--q-nav, 0px) - var(--q-top, 0px) - 250px));
+  /* (The page's height less the title, the tabs, the city row and the lines under it: the
+     map never runs under the tab bar, the lines never sit on it; Jay 2026-11-03.) */
+  height: clamp(340px, calc(100svh - var(--q-nav, 0px) - var(--q-top, 0px) - 400px), 760px);
   border-radius: var(--q-r-card, 20px);
   background: var(--mm-bg);
 }
@@ -4288,9 +4290,14 @@ button.ot-trip-foot {
 .mm-tools > * {
   pointer-events: auto;
 }
-.ot-metro-legend > * {
-  background: var(--q-surface);
-  box-shadow: 0 0 0 0.5px var(--q-glass-edge), var(--q-glass-drop);
+/* The map's edges fade into the card, so a name running past one reads as going on. */
+.ot-metro-view::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 400;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--mm-bg), transparent 18px, transparent calc(100% - 18px), var(--mm-bg));
 }
 .mm-mode,
 .mm-fab {
@@ -4337,50 +4344,48 @@ button.ot-trip-foot {
   stroke: currentColor;
   stroke-width: 2;
 }
+/* The lines under the map, every one whole (they sat on the tab bar, cut at the edge; Jay
+   2026-11-03): even columns, a dot in its colour and its name; a tap brings it forward. */
 .ot-metro-legend {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
-  z-index: 500;
-  display: flex;
-  gap: 6px;
-  padding: 0 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ot-metro-legend::-webkit-scrollbar {
-  display: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 2px 8px;
+  margin-top: 10px;
+  padding: 6px 8px;
+  border-radius: var(--q-r-card, 20px);
+  background: var(--q-surface);
 }
 .ot-metro-legend:empty {
   display: none;
 }
 .ot-metro-legend > * {
-  display: inline-flex;
-  flex: none;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px 0 10px;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 12px;
+  background: none;
   color: var(--q-label);
-  font: 600 13px/1 var(--q-font);
+  font: 500 15px/20px var(--q-font);
+  text-align: left;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 .ot-metro-legend i {
+  flex: none;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: var(--c, var(--q-blue));
 }
 .ot-metro-legend > [aria-pressed='true'] {
-  background: var(--c);
-  color: var(--ink, #fff);
-}
-.ot-metro-legend > [aria-pressed='true'] i {
-  background: var(--ink, #fff);
+  background: color-mix(in srgb, var(--c) 18%, transparent);
+  font-weight: 600;
 }
 .ot-metro-msg {
   position: absolute;
