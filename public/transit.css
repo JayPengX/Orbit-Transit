@@ -3637,14 +3637,12 @@ body.ot-navigating:not(.tab-map) .ot-scroll::after {
 .q-rowcard.ot-near-bikes {
   margin-top: 12px;
 }
-/* A trip: its head, then a row for each ride (the time big, the legs), a foot. */
-.ot-trip {
+/* (The map's sheet showing a trip, as it was; never 我的's trip rows, which are rows of their card,
+   not cards of their own.) */
+:where(.ot-msheet).ot-trip {
   overflow: hidden;
   border-radius: var(--q-r-card, 20px);
   background: var(--q-surface);
-}
-.ot-trip + .ot-trip {
-  margin-top: 12px;
 }
 .ot-trip-head {
   display: flex;

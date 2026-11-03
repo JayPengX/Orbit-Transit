@@ -203,12 +203,14 @@ html[data-look='native'] .ob-way-arr small {
   font: 400 12px/1 var(--q-font);
 }
 
-/* 我的's trip (tab-me): its name and days on top, then a line each way, the places it
-   joins on the left and its time at the right edge, the days that differ small under it. */
+/* 我的's trip (tab-me), in 交通's card's sizes (Jay 2026-11-03: the old one's text "really small,
+   weird"): its tile, name (17 semibold) and days (15) on top; then each way a full-width row,
+   where it goes (17) on the left and its time (17 semibold, its word 15 grey) on the right; the
+   days whose time differs a row each under it, at 15. */
 .q-rowcard > .q-ritem.ot-trip {
   display: grid;
-  gap: 8px;
-  padding: 12px 16px 14px;
+  gap: 6px;
+  padding: 12px 16px 6px;
   text-align: left;
 }
 .ot-trip-top {
@@ -234,7 +236,7 @@ html[data-look='native'] .ob-way-arr small {
 .ot-trip-name small {
   flex: none;
   color: var(--q-label-2);
-  font: 400 13px/18px var(--q-font);
+  font: 400 15px/20px var(--q-font);
 }
 .ot-trip-go {
   flex: none;
@@ -246,55 +248,64 @@ html[data-look='native'] .ob-way-arr small {
 }
 .ot-trip-legs {
   display: grid;
-  margin-left: 52px;
 }
 .ot-tl {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 11px 0;
 }
 .ot-tl + .ot-tl {
   border-top: var(--q-hairline) solid var(--q-sep);
 }
+/* (A long name shrinks to fit, then wraps, never cut: kit .q-fit-wrap.) */
 .ot-tl-way {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   min-width: 0;
-  overflow: hidden;
   color: var(--q-label);
-  font: 400 15px/22px var(--q-font);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  font: 400 17px/22px var(--q-font);
+}
+.ot-tl-way.q-wrapped {
+  white-space: normal;
 }
 .ot-tl-way i {
-  display: inline-grid;
-  flex: none;
+  display: inline-block;
+  margin: 0 0.35em;
   color: var(--q-label-3);
+  vertical-align: -0.12em;
 }
 .ot-tl-way .ot-i {
-  width: 14px;
-  height: 14px;
+  display: block;
+  width: 0.88em;
+  height: 0.88em;
 }
 .ot-tl-t {
-  display: grid;
-  flex: none;
-  justify-items: end;
-  gap: 1px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
 }
 .ot-tl-t > b {
-  font: 300 22px/24px var(--nv-display, var(--q-font));
-  font-variant-numeric: tabular-nums;
   color: var(--q-label);
+  font: 600 17px/22px var(--q-font);
+  font-variant-numeric: tabular-nums;
 }
 .ot-tl-t > small {
   color: var(--q-label-2);
-  font: 400 12px/16px var(--q-font);
+  font: 400 15px/20px var(--q-font);
 }
-.ot-tl-t > b + small {
-  margin-top: 1px;
+.ot-tl-alt {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--q-label-2);
+  font: 400 15px/20px var(--q-font);
+  text-overflow: ellipsis;
+}
+.ot-tl-t.alt > b {
+  color: var(--q-label-2);
+  font-weight: 500;
 }
 
 /* The map's sheet is a surface too: its buttons lie flat, as in the kit's sheets
