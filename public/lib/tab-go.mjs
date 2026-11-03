@@ -13,9 +13,9 @@
 
 import * as kitUI from '#kit/ui.mjs';
 import { errorText, liveMs } from './api.mjs';
-import { stopsEta, etaRank, etaFor, said, cityRoutes } from './bus.mjs';
-import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
-import { nearStops, keptNear, keepNear, nearMoved, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
+import { stopsEta, etaRank, etaFor } from './bus.mjs';
+import { nearBikes } from './near-ui.mjs';
+import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
 import { railNetwork, railSpan, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
@@ -26,7 +26,7 @@ import { lateBy } from './nav.mjs';
 import { loadNotices, bikesOff, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor, legChips, fitLegs } from './ui.mjs';
+import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor, legChips, fitLegs, journeyLine } from './ui.mjs';
 import { boardRow, whenHtml } from './board.mjs';
 import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, tick, navTitle, noticesHtml } from './look.mjs';
 import { e, hm, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson, shown as nameIn } from './util.mjs';
@@ -41,9 +41,7 @@ let shown = false;
 const S = {
   pinned: new Map(), // stopUID → eta
   pinnedAt: 0, // when those were read (a countdown runs on from it)
-  near: null, // { at, stops, bikes }: the stops and YouBike around you, for when nothing is pinned or beside what is
   planned: new Map(), // stopUID → { at, day }: the timetable's next bus there, for when none is on its way
-  heads: new Map(), // route uid → [where it goes one way, the other]: the new look's 附近 says which way
   trains: new Map(), // pin id → { rows: [{ dep, arr, label, delay }] } once read, or { error }
   trips: new Map(), // key → { at, plans, error, loading }
   choice: new Map(), // `${trip}:${its card's plan}` → the departure picked from its times
@@ -75,8 +73,6 @@ export function init(c) {
   onDayOff(() => render());
   // (An operator's new notice: what's stopped, again.)
   onNotices(() => shown && loadNotices_().then(render));
-  // The phone's fix somewhere else than 附近 was read for (the last place kept, at an opening): read again.
-  (ctx.moved ||= []).push(h => shown && nearMoved(S.near, h) && loadNear({ force: true }));
 }
 // The first look, filled in (where you are, the kept plans timed, the
 // buses and trains): what the opening waits for, so the loading screen
@@ -86,7 +82,6 @@ export const ready = () => firstLook || Promise.resolve();
 
 export function show() {
   shown = true;
-  S.near ||= keptNearAll(ctx.here);
   render();
   const run = refresh(true);
   firstLook ||= run.catch(() => {});
@@ -236,7 +231,9 @@ async function refresh() {
     const items = ctx.data.groups.flatMap(g => g.items).map(sideOf);
     if (items.length) jobs.push(stopsEta(items).then(m => ((S.pinned = m), (S.pinnedAt = Date.now()))).then(() => plannedTimes(items)).catch(() => {}));
     jobs.push(trainPins());
-    jobs.push(loadNear().then(() => Promise.all([loadNotices_(), nearPlanned(), nearHeads()])));
+    // (No 附近 here any more, Jay 2026-11-03: "basically useless". Its live read of every bus
+    // around you every 20 s while 交通 was open is gone with it; the map has what's near.)
+    jobs.push(loadNotices_());
     // The two trips that matter most get their plans at once (planned once, their times kept up: `loadTrip`).
     for (const { w } of trips().slice(0, 2)) jobs.push(loadTrip(w));
     for (const id of S.open) jobs.push(loadPlace(id));
@@ -255,7 +252,7 @@ async function loadNotices_() {
   const ends = ctx.data.trips.flatMap(t => [t.from, t.to]).filter(p => p && Number.isFinite(p.lat)).slice(0, 6);
   const cities = [...new Set([ctx.city, ...(await Promise.all(ends.map(p => ctx.cityOf(p.lat, p.lon).catch(() => null))))].filter(Boolean))];
   const systems = h ? [...new Set(mapsNear([h.lat - 0.05, h.lon - 0.05, h.lat + 0.05, h.lon + 0.05]).flatMap(m => m.systems))] : [];
-  S.notices = await loadNotices({ cities, systems, bikes: bikesOff(S.near?.bikes) }).catch(() => S.notices);
+  S.notices = await loadNotices({ cities, systems, bikes: '' }).catch(() => S.notices);
 }
 
 async function trainPins() {
@@ -447,35 +444,6 @@ async function loadTrip(w, { force = false } = {}) {
 
 // The stops and YouBike stations around you: the first thing to catch when
 // nothing is pinned, and what's near beside what is.
-async function loadNear({ force = false } = {}) {
-  const h = ctx.here;
-  if (!h) return;
-  S.near ||= keptNearAll(h);
-  const old = S.near;
-  if (!force && old && !old.kept && Date.now() - old.at < 20_000 && !nearMoved(old, h)) return;
-  const read = Promise.all([nearStops(h, { n: 3, r: 350 }), bikesAround(h.lat, h.lon).catch(() => [])]).then(
-    ([stops, bikes]) => {
-      // (A newer read, for where you are now, already in: it stays.)
-      if (S.near !== old && ctx.here !== h) return;
-      S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: keepNear(h, stops), bikes: bikes.map(s => ({ ...s, d: meters(h.lat, h.lon, s.lat, s.lon) })).filter(s => s.d <= 700).sort((a, b) => a.d - b.d).slice(0, 3) };
-    },
-    () => {
-      if (!S.near || nearMoved(S.near, h)) S.near = { at: Date.now(), lat: h.lat, lon: h.lon, stops: [], bikes: [] };
-    }
-  );
-  // (Never bars for ever (near-ui.mjs): nothing yet, nothing shown; the read drawn when it lands.)
-  if (!(await inTime(read))) {
-    S.near ||= { at: 0, lat: h.lat, lon: h.lon, stops: [], bikes: [] };
-    read.then(render);
-  }
-  render();
-}
-// The stops kept from the last read (bus-ui keptNear), shown at once; the bikes come with the read.
-const keptNearAll = h => {
-  const k = keptNear(h);
-  return k ? { ...k, kept: true, bikes: [] } : null;
-};
-
 async function loadPlace(id) {
   const p = ctx.data.places.find(x => x.id === id);
   if (!p) return;
@@ -565,49 +533,51 @@ function render() {
 // A trip's row with no ride to show says why, never nothing: the read failed,
 // it's being read, none now, or not read yet (a tap reads it).
 export const tripWhy = st => (st?.error && !st.plans?.length ? st.error : st ? (st.loading ? W('找班次…', 'Finding rides…') : W('現在沒有班次', 'No rides now')) : W('點一下找班次', 'Tap for rides'));
-// A trip's row: the first thing you board (its line's badge), when to leave, when you're there.
-function boardTrip({ t, w }) {
+// A trip's main ride: the one you're on longest (上學 is the bus you sit on, not the YouBike to
+// its stop; Jay 2026-11-03: "the bike icon is misleading as the trip most involve bus").
+export const mainRide = legs => legs.filter(l => l.mode !== 'walk').reduce((a, l) => (!a || (l.dur || (l.arr - l.dep) / 1000) > (a.dur || (a.arr - a.dep) / 1000) ? l : a), null);
+const badgeOf = l => (!l ? { glyph: 'walk', color: COLOR.walk } : l.mode === 'bike' ? { glyph: 'bike', color: legColor(l) } : { no: legLabel(l), color: legColor(l) });
+// A way as one line through it (ui.mjs journeyLine): each ride its line's colour, a walk dotted.
+const wayLine = p => journeyLine(p.legs.filter(l => !(l.mode === 'walk' && l.dur < 120)).map(l => (l.mode === 'walk' ? { walk: true, min: l.dur / 60 } : { min: (l.dur || (l.arr - l.dep) / 1000) / 60, color: legColor(l) })));
+const warnOf = p => {
+  const late = lateBy(p, p.arr);
+  return p.off || p.miss || p.late || (late ? W(`晚 ${late} 分到`, `${late} min late`) : '');
+};
+// A trip as its own card (Jay 2026-11-03: 交通 "boring"): on top its main ride's badge, its name,
+// where it goes, and when to leave counting down; under it the way it takes as one line, leave
+// and arrive at its ends and its rides as chips; then the next ways to pick from at once.
+// A tap on the top opens its ways on the map, on a way that way (導航 a tap away there).
+const WAYS_MS = 3 * 3600_000;
+function tripCard({ t, w }) {
   const st = tripOf(w);
   const all = st?.plans || [];
-  const lead = tripPlans(all, t.picks).first[0];
-  if (!lead) return boardRow({ glyph: 'route', color: COLOR.route, main: e(w.label), note: e(tripWhy(st)), attrs: st ? `data-all-trip="${e(w.id)}"` : `data-load-trip="${e(t.id)}"` });
+  const { first, rest } = tripPlans(all, t.picks);
+  const lead = first[0];
+  const where = `${t.from ? nameIn(t.from.name) : W('這裡', 'Here')} → ${nameIn(w.to?.name || t.to.name)}`;
+  if (!lead) return `<div class="q-rowcard ob-trip">${boardRow({ glyph: 'route', color: COLOR.route, main: e(w.label), note: e(tripWhy(st)), attrs: st ? `data-all-trip="${e(w.id)}"` : `data-load-trip="${e(t.id)}"` })}</div>`;
   const at = all.indexOf(lead);
   const i = S.choice.get(`${w.id}:${at}`) ?? at;
   const p = all[i];
-  const goes = p.legs.filter(l => l.mode !== 'walk');
-  const first = goes[0];
-  const late = lateBy(p, p.arr);
-  const warn = p.off || p.miss || p.late || (late ? W(`晚 ${late} 分到`, `${late} min late`) : '');
-  const then = goes.slice(1).map(legLabel);
-  const note = warn ? `<span class="ot-warn">${e(warn)}</span>` : e([then.length ? W(`轉 ${then.join(' › ')}`, `then ${then.join(' › ')}`) : '', W(`${hm(p.arr)} 到`, `Arrive ${hm(p.arr)}`)].filter(Boolean).join(' · '));
-  return boardRow({
-    ...(!first ? { glyph: 'walk', color: COLOR.walk } : first.mode === 'bike' ? { glyph: 'bike', color: legColor(first) } : { no: legLabel(first), color: legColor(first) }),
+  const warn = warnOf(p);
+  const head = boardRow({
+    ...badgeOf(mainRide(p.legs)),
     main: e(w.label),
-    note,
+    note: warn ? `<span class="ot-warn">${e(warn)}</span>` : e(where),
     when: whenHtml(p.dep, W('出發', 'Leave'), p.live),
-    // (A tap opens its ways on the map, this one first: 導航 there, the other
-    // ways and times, a way pinned to go first; the old card's all in one place.)
     attrs: `data-all-trip="${e(w.id)}"`
   });
-}
-// Under a trip's row, its next ways to pick from at once (Jay 2026-11-03: 交通 was "so empty",
-// it "used to show detail or even trip for me to choose from directly"): up to three, each
-// when to leave, its rides as chips and when you're there; a tap shows that one on the map,
-// its 導航 a tap away. Only a trip with rides in the next three hours (later, the row says when).
-const WAYS_MS = 3 * 3600_000;
-function tripWays({ t, w }) {
-  const all = tripOf(w)?.plans || [];
-  const { first, rest } = tripPlans(all, t.picks);
   const now = Date.now();
-  const ways = [...first, ...rest].filter(p => p.dep < now + WAYS_MS).slice(0, 3);
-  if (!ways.length) return '';
-  return `<div class="ob-ways">${ways
-    .map(p => {
-      const late = lateBy(p, p.arr);
-      const warn = p.off || p.miss || p.late || (late ? W(`晚 ${late} 分到`, `${late} min late`) : '');
-      return `<button class="ob-way q-press" type="button" data-nav-trip="${e(w.id)}" data-i="${all.indexOf(p)}"><span class="ob-way-when${p.live ? ' live' : ''}">${e(hm(p.dep))}</span><span class="ob-way-mid"><span class="ot-legs">${legChips(p.legs)}</span>${warn ? `<small class="ot-warn">${e(warn)}</small>` : ''}</span><span class="ob-way-arr"><b>${e(hm(p.arr))}</b><small>${e(W(`${Math.round(p.dur / 60)} 分`, `${Math.round(p.dur / 60)} min`))}</small></span></button>`;
-    })
-    .join('')}</div>`;
+  const way = `<button class="ob-trip-way q-press" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ob-trip-line">${wayLine(p)}<b>${e(hm(p.arr))}<small>${W('到', ' in')}</small></b></span><span class="ot-legs">${legChips(p.legs)}</span></button>`;
+  const more = [...first, ...rest].filter(q => q !== p && q.dep < now + WAYS_MS).slice(0, 2);
+  const others = more.length
+    ? `<div class="ob-ways"><span class="ob-ways-h">${W('其他班次', 'Other ways')}</span>${more
+        .map(q => {
+          const wq = warnOf(q);
+          return `<button class="ob-way q-press" type="button" data-nav-trip="${e(w.id)}" data-i="${all.indexOf(q)}"><span class="ob-way-when${q.live ? ' live' : ''}">${e(hm(q.dep))}</span><span class="ob-way-mid"><span class="ot-legs">${legChips(q.legs)}</span>${wq ? `<small class="ot-warn">${e(wq)}</small>` : ''}</span><span class="ob-way-arr"><b>${e(hm(q.arr))}</b><small>${e(W(`${Math.round(q.dur / 60)} 分`, `${Math.round(q.dur / 60)} min`))}</small></span></button>`;
+        })
+        .join('')}</div>`
+    : '';
+  return `<div class="q-rowcard ob-trip">${head}${way}${others}</div>`;
 }
 // A pinned bus's row, as 釘選's (its way round a tap on its tag), in the order pinned.
 function boardBuses() {
@@ -637,64 +607,6 @@ function boardTrains() {
     return boardRow({ no: kindOf({ ...x, sys }), color: trainColor({ sys, type: x.type }), main, note, when: whenHtml(x.dep, whenSmall(x.dep)), attrs: `data-times="${e(p.id)}"` });
   });
 }
-// What's near: the buses on their way first (soonest first), then those the
-// timetable has next; the routes with neither are one quiet line, not a
-// list of 尚未發車. A typhoon day's every bus off is near-ui's one calm row.
-const offNow = v => {
-  const x = v && said(v);
-  return x?.status === 4 && x.flag;
-};
-function boardNear() {
-  if (!ctx.here) return '';
-  const n = S.near;
-  const seen = new Set();
-  const mine = new Set(ctx.data.groups.flatMap(g => g.items).map(it => `${it.routeUID}:${sideOf(it).stopUID}`));
-  const all = n ? n.stops.flatMap(st => st.rows.slice(0, 4).map(r => ({ ...r, dist: st.dist }))).filter(x => !mine.has(`${x.uid}:${x.stopUID}`) && !seen.has(x.uid) && seen.add(x.uid)) : null;
-  let buses = '';
-  if (!all || (all.length && all.every(x => offNow(x.v)))) buses = nearBusRows(all && n.stops, { planned: S.planned });
-  else if (all.length) {
-    const now = Date.now();
-    const live = all.filter(x => x.v?.status === 0 && x.v.sec != null).sort((a, b) => a.v.sec - b.v.sec);
-    const due = all.filter(x => !live.includes(x) && S.planned.get(x.stopUID)?.at > now).sort((a, b) => S.planned.get(a.stopUID).at - S.planned.get(b.stopUID).at);
-    const shownRows = [...live, ...due].slice(0, 6);
-    const quiet = all.filter(x => !shownRows.includes(x) && !live.includes(x) && !due.includes(x));
-    buses = shownRows.map(x => {
-      const head = S.heads.get(x.uid)?.[x.dir];
-      // (Which way first; how far, where it fits: on a narrow phone it goes, never the way cut.)
-      const dist = Number.isFinite(x.dist) ? distText(x.dist) : '';
-      const note = head ? `${e(`${W('往', 'To')} ${nameIn(head)}`)}${dist ? `<span class="ot-drop"> · ${e(dist)}</span>` : ''}` : e(dist);
-      return `<div class="ot-strip">${strip({ no: x.route, note, main: e(nameIn(x.stop || '')), eta: busWhen(x.v, S.planned.get(x.stopUID) || null), attrs: routeAttr({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }) })}</div>`;
-    }).join('');
-    if (quiet.length) {
-      const names = quiet.map(x => nameIn(x.route));
-      buses += `<p class="ob-quiet">${e(W(`還沒有車：${names.slice(0, 4).join('、')}${names.length > 4 ? ` 等 ${names.length} 條` : ''}`, `None on the way: ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` and ${names.length - 4} more` : ''}`))}</p>`;
-    }
-  }
-  const bikes = nearBikes(n?.bikes);
-  if (!buses && !bikes) return '';
-  return section(W('附近', 'Nearby'), `${buses ? rowCard(buses) : ''}${bikes}`);
-}
-// Which way each bus near you goes (its route's far end, from the city's route list, kept a
-// day on the phone), so one line's two ways read apart: 往 香山轉運站 and 往 新竹站.
-async function nearHeads() {
-  const rows = (S.near?.stops || []).flatMap(st => st.rows);
-  const cities = [...new Set(rows.filter(r => r.uid && !S.heads.has(r.uid)).map(r => r.city).filter(Boolean))].slice(0, 3);
-  if (!cities.length) return;
-  const lists = await Promise.all(cities.map(c => cityRoutes(c).catch(() => [])));
-  for (const r of lists.flat()) if (r.to || r.from) S.heads.set(r.uid, [r.to, r.from]);
-  render();
-}
-// The timetable's next bus for the routes near you with none on the way (as a pinned bus's).
-async function nearPlanned() {
-  const now = Date.now();
-  const todo = (S.near?.stops || [])
-    .flatMap(st => st.rows.slice(0, 4).map(r => ({ ...r, lat: st.lat, lon: st.lon })))
-    .filter(x => x.uid && !(x.v?.status === 0 && x.v.sec != null) && !(S.planned.get(x.stopUID)?.at > now))
-    .slice(0, 8);
-  if (!todo.length) return;
-  await Promise.all(todo.map(x => plannedAt({ routeUID: x.uid, route: x.route, city: x.city, dir: x.dir, stopUID: x.stopUID }, Number.isFinite(x.lat) ? x : null).then(q => q && S.planned.set(x.stopUID, q), () => {})));
-  render();
-}
 function renderBoard(ts) {
   const box = $('panel-go');
   const keep = box.scrollTop;
@@ -702,13 +614,17 @@ function renderBoard(ts) {
   const here = ctx.here;
   const places = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
   const plan = `<button class="ob-plan q-press" type="button" data-plan-to="1">${icon('search')}<span>${W('要去哪裡？', 'Where to?')}</span></button>${places.length ? `<div class="ob-places">${places.map(p => `<button class="ob-place q-press" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place, 'sm')}<span>${e(nameIn(p.name))}</span></button>`).join('')}</div>` : ''}`;
-  const rows = [...ts.map(x => boardTrip(x) + tripWays(x)), ...boardBuses(), ...boardTrains()].join('');
-  const mine = section(W('我的路線', 'My rides'), rows ? rowCard(rows) : `<div class="q-rowcard ob-empty"><p>${W('釘選常搭的車，時間都在這裡', 'Pin what you ride: its times show here')}</p><button class="q-btn" type="button" data-new-trip="1">${icon('plus')} ${W('新增行程', 'Add a trip')}</button></div>`);
+  // Your trips, each its own card; then what you've pinned, a row each in the order you keep
+  // them (on a wide screen beside the trips, where 附近 was: Jay 2026-11-03, "basically useless").
+  const tripsHtml = ts.length ? section(W('行程', 'Trips'), `<div class="ob-trips">${ts.map(tripCard).join('')}</div>`) : '';
+  const pins = [...boardBuses(), ...boardTrains()].join('');
+  const pinsHtml = pins ? section(W('釘選', 'Pinned'), rowCard(pins)) : '';
+  const empty = !tripsHtml && !pinsHtml ? section(W('我的路線', 'My rides'), `<div class="q-rowcard ob-empty"><p>${W('釘選常搭的車，時間都在這裡', 'Pin what you ride: its times show here')}</p><button class="q-btn" type="button" data-new-trip="1">${icon('plus')} ${W('新增行程', 'Add a trip')}</button></div>`) : '';
   box.innerHTML = `<div class="ot-page ob-page">
     ${navTitle(W('交通', 'Transit'))}
     <div class="q-cols ot-cols">
-      <div>${noticesHtml(S.notices)}${plan}${mine}</div>
-      <div>${boardNear()}</div>
+      <div>${noticesHtml(S.notices)}${plan}${tripsHtml}${empty}</div>
+      <div>${pinsHtml}</div>
     </div>
   </div>`;
   kitUI.wireNavTitles(box);
@@ -772,7 +688,7 @@ function onClick(ev) {
   // A YouBike station: on the map, its card open.
   const bk = ev.target.closest('[data-bk]');
   if (bk) {
-    const b = [...(S.near?.bikes || []), ...[...S.places.values()].flatMap(x => x.bikes || [])].find(x => x.uid === bk.dataset.bk);
+    const b = [...[...S.places.values()].flatMap(x => x.bikes || [])].find(x => x.uid === bk.dataset.bk);
     if (!b) return;
     ctx.mapFocus = { ...b, sys: 'bike' };
     return ctx.goTab('map');

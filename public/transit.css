@@ -351,19 +351,6 @@ button.ot-hero {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ot-add {
-  min-height: 48px;
-}
-/* An add row: the plus in the tile's place (no box), the words in the accent. */
-.ot-add .q-tile.soft {
-  height: 24px;
-  background: none;
-  color: var(--q-accent);
-}
-.ot-add .q-ritem-title {
-  color: var(--q-accent);
-  font-weight: 500;
-}
 /* A row's time on the right: big and rounded, the clock under it. */
 .ot-eta {
   display: grid;
@@ -4042,51 +4029,35 @@ button.ot-trip-foot {
   font: 500 12px/14px var(--q-font);
   white-space: nowrap;
 }
-.ot-jbar {
-  position: relative;
-  display: block;
+/* A journey as one line (ui.mjs journeyLine): each ride its colour, as long as
+   its minutes; a walk dotted; a change a ring between two rides. */
+.ot-jl {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   height: 10px;
+  min-width: 0;
 }
-/* (The ends: where you board and where you get off.) */
-.ot-jbar::before,
-.ot-jbar::after {
-  content: '';
-  position: absolute;
-  z-index: 1;
-  top: 0;
+.ot-jl i {
+  flex: var(--f, 1) 1 0;
+  min-width: 8px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--c, var(--q-label-3));
+}
+.ot-jl i.walk {
+  min-width: 6px;
+  height: 2px;
+  border-radius: 0;
+  background: radial-gradient(circle, var(--q-label-3) 1px, transparent 1.4px) 0 50% / 5px 2px repeat-x;
+}
+.ot-jl b.chg {
+  flex: none;
   width: 10px;
   height: 10px;
   box-sizing: border-box;
-  border: 2.5px solid var(--q-label);
+  border: 2px solid var(--q-label-2);
   border-radius: 50%;
-  background: var(--q-surface);
-}
-.ot-jbar::before {
-  left: -5px;
-}
-.ot-jbar::after {
-  right: -5px;
-}
-.ot-jbar i {
-  position: absolute;
-  top: 3px;
-  height: 4px;
-}
-.ot-jbar i.ride {
-  border-radius: 2px;
-  background: var(--c);
-}
-.ot-jbar i.walk {
-  background: radial-gradient(circle, var(--q-label-3) 1px, transparent 1.5px) 0 50% / 5px 4px repeat-x;
-}
-.ot-jbar em {
-  position: absolute;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  margin: -2px 0 0 -2px;
-  border-radius: 50%;
-  background: var(--q-surface);
 }
 .ot-jny-foot {
   display: flex;
@@ -4150,10 +4121,30 @@ button.ot-trip-foot {
   padding-top: 10px;
   border-top: 0.5px solid var(--q-sep);
 }
+/* 釘選這班: a quiet line under the train's facts (never accent text), the star its glyph,
+   filled once pinned (Jay 2026-11-03: it sat off its words and stayed hollow). */
 .ot-pin-train {
-  margin-left: 6px;
-  color: var(--q-accent);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 12px 0 9px;
+  border-radius: 16px;
+  background: var(--q-fill-3);
+  color: var(--q-label);
+  font: 500 13px/1 var(--q-font);
+  cursor: pointer;
+}
+.ot-pin-train .ot-i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.ot-pin-train.on .ot-i {
+  fill: var(--q-yellow, #ffcc00);
+  stroke: var(--q-yellow, #ffcc00);
 }
 /* 公車: nearby stops, their routes as small green buttons. */
 .ot-stop-row {

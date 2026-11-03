@@ -20,15 +20,18 @@ Live: https://orbit.jaypengx.com/transit/
     the old green focus card "kind of useless": half a screen for one item,
     a different one each open). 要去哪裡 (a bar opening the place search,
     `ctx.planTo`), your places as chips (a tap opens the place: its buses,
-    its bikes, 怎麼去), then 我的路線: each trip, pinned bus and pinned train
-    a row of one shape (its line's badge in its colour, what and where, the
-    time at the end) in the order you keep them, never lifted into a card or
-    moved as times change. A trip's row says when to leave and when you're
-    there, or why not (`tripWhy`); a tap opens its ways on the map (導航, the
-    other ways and times, a way pinned first); editing it is in 我的. Then
-    附近: the stops around you with the buses on their way, which way each
-    goes (`nearHeads`), the timetable's next where none is (`nearPlanned`),
-    and the routes with none as one quiet line.
+    its bikes, 怎麼去), then 行程: each trip its own card (Jay 2026-11-03:
+    交通 "boring", the first ride's bike badge "misleading"): its main ride's
+    badge (`mainRide`: the ride you're on longest), its name and ends, when to
+    leave counting down, or why not (`tripWhy`); under it the way as one line
+    (`ui.mjs journeyLine`: each ride its colour by its minutes, a change a
+    ring), leave and arrive at its ends, its rides as chips; then 其他班次, the
+    next two ways in three hours. A tap on the top opens its ways on the map,
+    on a way that way ready to go; editing it is in 我的. Then 釘選: each
+    pinned bus and train a row of one shape in the order you keep them (beside
+    the trips on a wide screen). No 附近 (Jay 2026-11-03: "basically useless";
+    its live read of every bus around you every 20 s went with it; the map
+    has what's near).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
     station picked by search, a nearby or recent one, or on a county's line
     map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), bus
@@ -55,8 +58,12 @@ Live: https://orbit.jaypengx.com/transit/
     --against <ref>` replays made-up people (2026-11-03, first two weeks
     caught 53/45/64% → 74/65/86%; wrong cards a week, later, a student
     7.9 → 4.5, one who never plans the commute 3.3 → 1.0).
-  - **我的:** places, trips, pinned stops, 交通偏好 (ways of moving, TPASS,
-    the maps app).
+  - **我的:** trips (each a way there and a way back, its time at the
+    right edge), places, pinned stops, 規劃: TPASS, each way of moving a
+    switch (the last one on stays on), 每 30 分換一台 YouBike as the person's
+    own choice (`prefs.swap30` 'on'/'off', else as before: 每 30 分換車 or a
+    pass with free first half hours; `tpass.mjs bikeSwap`), the maps app.
+    A switch keeps the page where it is.
 - **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by
   side, plus our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and
   metro router. A planner's YouBike ride needs a real station at each end
@@ -255,7 +262,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/aboard.mjs` | Already on a bus or train: which one, and the trip from its stops ahead |
 | `lib/service.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules |
 | `lib/compass.mjs` | Which way the phone faces, for the soft beam on your dot (`.ot-beam`): the compass (an iPhone asks on 我的位置, then quietly on the first tap), else the GPS's heading when moving; none known, or riding a bus or train (`navNow().aboard`, or a bus's or train's pace), no beam |
-| `tripWays` (tab-go) | 交通: under each trip's row its next ways (up to three in the next three hours: leave, rides, arrive), a tap shows that one on the map ready to go |
+| `tripCard` (tab-go) | 交通: a trip's card, its main ride's badge, its way as one line, the next two ways in three hours; a tap on a way shows it on the map ready to go |
 | `trimEnds` (tab-map) | A walk's or YouBike ride's line cut where it stops coming nearer its end (no detour past a station and back) |
 | `declutter` (tab-map) | A trip's marks never in a heap: by the map's zoom the end, start, boarding and YouBike marks win their spot in that order, one covering a more important one waits for a closer zoom, your stop's name drops where it would run over one (`tests/declutter.test.mjs`) |
 | `lib/tab-*.mjs`, `map.mjs` | Each tab; Google or Leaflet+NLSC behind one interface |
