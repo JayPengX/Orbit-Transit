@@ -37,6 +37,13 @@ Live: https://orbit.jaypengx.com/transit/
   side, plus our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and
   metro router. A planner's YouBike ride needs a real station at each end
   (never a made-up 附近的 YouBike 站). Buses are re-timed by TDX's live estimates (`adjustPlan`).
+  Our own bus ride's minutes (`busLink`): TDX's buses on the road first
+  (`live.mjs liveRide`: each hop between two stops showing the same bus, as TDX
+  estimates it), else the timetable's run you'd be on (`rideTime` with the
+  moment it boards; never its first run: 5608's 05:34 at 7 minutes stood for
+  every hour). A timetable's times between its ends can be far off (5608's
+  15:23 says 10 minutes to 豐邦公司; the bus took 23, as TDX's live estimates
+  said). A planner's bus keeps its own ride (Google's 22 minutes there was right).
   A bus TDX sees is matched to its timetable run (`live.mjs` `seenAt`,
   `nextCatchable`): one seen gone before you can be there is never planned
   or shown again, the next run you can make is. You're at a bus stop 5
