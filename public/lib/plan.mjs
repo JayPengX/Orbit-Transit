@@ -416,7 +416,7 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
   });
 }
 // A train of our router's as a plan's leg.
-function trainLeg(net, l) {
+export function trainLeg(net, l) {
   const pt = k => stationPoint(net.st.get(k));
   return {
     mode: l.trip.sys,

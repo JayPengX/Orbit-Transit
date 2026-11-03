@@ -13,10 +13,11 @@ import { fitNumbers, netState } from '#kit/orbit.mjs';
 import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
-import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
+import { railStations, metroSystems, traBoard, hsrBoard, railNetwork, stationPoint } from './raildata.mjs';
 import { OPERATORS, stationTitle } from './metro.mjs';
 import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
-import { planTrip, findAboard, planAboard } from './planner.mjs';
+import { planTrip, findAboard, planAboard, planTicket } from './planner.mjs';
+import { trainsNumbered, boardAlight, rideOf, ticketOf } from './ticket.mjs';
 import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
@@ -78,7 +79,9 @@ export function register(c) {
   // Other tabs open a trip here (交通's plans, 我的's saved trips). Set before
   // the map is made (the app opened on 交通): the trip waits for it.
   ctx.openTrip = (from, to, opts = {}) => {
-    if (opts.at || opts.by) when = { by: opts.by === 'arrive' ? 'arrive' : opts.at ? 'depart' : 'now', at: opts.at || null };
+    // (查時刻's 用這班規劃: the trip around that train.)
+    if (opts.ticket) when = { by: 'train', at: opts.ticket.rides[0].dep, ticket: opts.ticket };
+    else if (opts.at || opts.by) when = { by: opts.by === 'arrive' ? 'arrive' : opts.at ? 'depart' : 'now', at: opts.at || null };
     else when = { by: 'now', at: null };
     if (!map) pendingTrip = { from, to, opts };
     ctx.goTab('map');
@@ -1688,15 +1691,17 @@ async function plan(from, to, opts = {}) {
   let out = null;
   try {
     const at = when.by === 'now' ? null : when.at;
+    // 指定車次: the trip around that train (ticket.mjs), never another.
+    const onTicket = when.by === 'train' && dest.lat != null ? await planTicket(ctx.data, fromPt, dest, when.ticket, { modes: tripModes, ebike: ebikeNow() }) : null;
     // (A saved trip's ways from 交通, as its card ranked them: not found again.)
-    const onBoard = aboard && dest.lat != null ? await planAboard(ctx.data, aboard, dest, { modes: tripModes, ebike: ebikeNow() }).catch(() => null) : null;
+    const onBoard = onTicket ? null : aboard && dest.lat != null ? await planAboard(ctx.data, aboard, dest, { modes: tripModes, ebike: ebikeNow() }).catch(() => null) : null;
     if (aboard && !onBoard) c.aboard = null;
-    out = onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() }));
+    out = onTicket || onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() }));
     if (aboard && !onBoard) c.from = { ...c.from, name: start.name || HERE };
-    c.plans = onBoard ? out.plans : await walkHere(out.plans);
+    c.plans = onBoard || onTicket ? out.plans : await walkHere(out.plans);
     c.choice = {};
     c.sources = out.sources;
-    if (out.error && !out.plans.length) c.error = errorText(out.error);
+    if (out.error && !out.plans.length) c.error = out.error.text || errorText(out.error);
   } catch (err) {
     c.error = errorText(err);
     c.plans = [];
@@ -1840,7 +1845,7 @@ function setWhen(kind) {
   }
   // The one chip: which of the three.
   if (kind === 'menu') {
-    const m = sheet(`${sheetHead(W('什麼時候', 'When'))}<div class="ot-when-menu">${[['now', W('現在出發', 'Leave now')], ['depart', W('指定出發時間', 'Leave at…')], ['arrive', W('指定抵達時間', 'Arrive by…')]].map(([k, t]) => `<button class="q-btn${(when.by === k) ? ' primary' : ''}" type="button" data-pick-when="${k}">${t}</button>`).join('')}</div>`);
+    const m = sheet(`${sheetHead(W('什麼時候', 'When'))}<div class="ot-when-menu">${[['now', W('現在出發', 'Leave now')], ['depart', W('指定出發時間', 'Leave at…')], ['arrive', W('指定抵達時間', 'Arrive by…')], ['train', W('指定車次', 'My train…')]].map(([k, t]) => `<button class="q-btn${(when.by === k) ? ' primary' : ''}" type="button" data-pick-when="${k}">${t}</button>`).join('')}</div>`);
     m.addEventListener('click', ev => {
       const b = ev.target.closest('[data-pick-when]');
       if (!b) return;
@@ -1849,6 +1854,7 @@ function setWhen(kind) {
     });
     return;
   }
+  if (kind === 'train') return ticketSheet();
   const base = when.at && when.at > Date.now() ? when.at : Date.now() + 15 * 60_000;
   const today = tw().date;
   let date = tw(base).date;
@@ -1875,13 +1881,110 @@ function setWhen(kind) {
   });
 }
 
+// 指定車次 (Jay 2026-11-03: a ticket bought for a train, 台鐵 or 高鐵): its
+// number typed, the day picked, the day's trains with that number listed
+// (the timetable the planner already has: no read of its own), each with
+// where you'd get on and off (the stops nearest the trip's ends), then
+// those two changed if the ticket says otherwise. The trip is planned around it.
+const ticketText = t => {
+  const r = t.rides[0];
+  return `${whenDay(r.dep)}${r.sys === 'hsr' ? W('高鐵', 'HSR') : trainKind(r.type)} ${r.no} ${hm(r.dep)}`;
+};
+function ticketSheet() {
+  const today = tw().date;
+  const had = when.by === 'train' ? when.ticket.rides[0] : null;
+  let date = had ? tw(had.dep).date : today;
+  let chosen = null;
+  const d = sheet(`${sheetHead(W('指定車次', 'My train'))}
+    <div class="ot-field ot-when-day"><span>${W('日期', 'Date')}</span><div class="ot-when-strip"></div></div>
+    <label class="q-search ot-search-in"><input id="tk-no" type="search" inputmode="numeric" enterkeyhint="search" placeholder="${W('車次號碼，例如 128', 'Train number, e.g. 128')}" autocomplete="off" value="${e(had?.no || '')}"></label>
+    <div id="tk-list"></div>`, 'ot-ticket-sheet');
+  const dayRec = {};
+  const list = d.querySelector('#tk-list');
+  const input = d.querySelector('#tk-no');
+  const ends = () => ({ from: card?.from?.lat != null ? card.from : ctx.here || null, to: card?.to || null });
+  const netFor = () => railNetwork(date, { next: false, prev: false });
+  const name = (net, key) => {
+    const s = net.st.get(key);
+    return s ? (s.sys === 'hsr' ? s.name.replace(/^高鐵/, '') : s.name) : key;
+  };
+  const kind = t => (t.sys === 'hsr' ? W('高鐵', 'HSR') : trainKind(t.type));
+  let seq = 0;
+  const draw = async () => {
+    const q = input.value.trim();
+    const my = ++seq;
+    if (!q) return (list.innerHTML = '');
+    let net;
+    try {
+      net = await netFor();
+    } catch (err) {
+      if (my === seq) list.innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`;
+      return;
+    }
+    if (my !== seq) return;
+    const { from, to } = ends();
+    const rows = trainsNumbered(net, q)
+      .map(t => ({ t, ka: boardAlight(net, t, from, to) }))
+      .filter(x => x.ka);
+    if (!rows.length) return (list.innerHTML = `<p class="ot-note">${W('這天沒有這個車次', 'No train with that number that day')}</p>`);
+    list.innerHTML = `<div class="q-rowcard">${rows
+      .map(({ t, ka }, i) => {
+        const [a, b] = [t.stops[ka.k], t.stops[ka.j]];
+        return `<button class="q-ritem" type="button" data-tk="${i}">${tile(t.sys, t.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(kind(t))} ${e(t.no)}</span><small>${e(name(net, a.st))} ${e(hm(a.dep))} → ${e(name(net, b.st))} ${e(hm(b.arr))}</small></span></button>`;
+      })
+      .join('')}</div>`;
+    list.onclick = ev => {
+      const b = ev.target.closest('[data-tk]');
+      if (b) stations(net, rows[Number(b.dataset.tk)]);
+    };
+  };
+  // The train picked: where you get on and off (the nearest, to change), then 規劃.
+  const stations = (net, { t, ka }) => {
+    chosen = { t, k: ka.k, j: ka.j };
+    const opt = (lo, hi, at, arr) => t.stops.slice(lo, hi + 1).map((s, i) => `<option value="${lo + i}"${lo + i === at ? ' selected' : ''}>${e(name(net, s.st))} ${e(hm(arr ? s.arr : s.dep))}</option>`).join('');
+    const draw2 = () => {
+      list.innerHTML = `<div class="q-rowcard"><div class="q-ritem">${tile(t.sys, t.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(kind(t))} ${e(t.no)}</span><small>${W('往', 'to ')}${e(shown(String(t.headsign || '').replace(/^往/, '')))}</small></span></div>
+        <label class="q-ritem ot-tk-st"><span class="q-ritem-text"><span class="q-ritem-title">${W('上車', 'Board at')}</span></span><select id="tk-k">${opt(0, t.stops.length - 2, chosen.k, false)}</select></label>
+        <label class="q-ritem ot-tk-st"><span class="q-ritem-text"><span class="q-ritem-title">${W('下車', 'Get off at')}</span></span><select id="tk-j">${opt(chosen.k + 1, t.stops.length - 1, chosen.j, true)}</select></label></div>
+        <button class="q-btn primary block ot-when-go" type="button" data-tk-go="1">${W('用這班規劃', 'Plan with this train')}</button>`;
+    };
+    draw2();
+    list.onchange = ev => {
+      if (ev.target.id === 'tk-k') {
+        chosen.k = Number(ev.target.value);
+        if (chosen.j <= chosen.k) chosen.j = chosen.k + 1;
+        draw2();
+      } else if (ev.target.id === 'tk-j') chosen.j = Number(ev.target.value);
+    };
+    list.onclick = ev => {
+      if (!ev.target.closest('[data-tk-go]')) return;
+      const r = rideOf(chosen.t, chosen.k, chosen.j);
+      // (The stations as found kept picking again when the trip's ends change; a pair changed by hand kept.)
+      const auto = chosen.k === ka.k && chosen.j === ka.j;
+      when = { by: 'train', at: r.dep, ticket: ticketOf([r], auto) };
+      d.shut();
+      if (card?.kind === 'plans') return plan(card.fromHere ? null : card.from, card.to);
+    };
+  };
+  const pick = d2 => {
+    date = d2;
+    kitUI.dayBar(dayRec, { flat: true, days: kitUI.dayList(today, addDays(today, 6)), current: date, today, onPick: pick });
+    if (dayRec.bar?.isConnected || d.querySelector('.ot-when-strip')) draw();
+  };
+  pick(date);
+  d.querySelector('.ot-when-strip').replaceWith(dayRec.bar);
+  input.addEventListener('input', () => draw());
+  draw();
+  setTimeout(() => input.focus(), 60);
+}
+
 const whenDay = at => {
   const n = Math.round((twAt(tw(at).date, '12:00') - twAt(tw().date, '12:00')) / 86_400_000);
   return n === 0 ? '' : n === 1 ? W('明天 ', 'Tmrw ') : n === 2 ? W('後天 ', 'In 2 days ') : `${tw(at).date.slice(5).replace('-', '/')} `;
 };
 const MODE_CHIP = { bus: W('公車', 'Bus'), tra: W('台鐵', 'TRA'), hsr: W('高鐵', 'HSR'), metro: W('捷運', 'Metro'), bike: 'YouBike' };
 function plansHtml(c) {
-  const whenText = when.by === 'now' ? W('現在出發', 'Leave now') : `${when.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${hm(when.at)}`;
+  const whenText = when.by === 'now' ? W('現在出發', 'Leave now') : when.by === 'train' ? ticketText(when.ticket) : `${when.by === 'arrive' ? W('抵達', 'Arrive') : W('出發', 'Leave')} ${hm(when.at)}`;
   const saved = Boolean(tripOf(c));
   // A bar (back, 路線, ☆, ✕) over the fields, ⇅ beside them as in Maps: the four buttons in the start field's row had left it too short (the owner, 2026-10-19).
   const top = `<div class="ot-card-head ot-plans-head"><button class="q-icon-btn ot-ph-back" type="button" data-card="back" aria-label="${W('返回', 'Back')}">${icon('back')}</button>
@@ -1892,7 +1995,7 @@ function plansHtml(c) {
         .map((x, k) => `<div class="ot-od-stop"><button type="button" data-card="stop-first" data-k="${k}" aria-label="${W('先去', 'Go first to')} ${e(shown(x.name))}"><i class="ot-dot ${k === c.then.length - 1 ? 'to' : 'stop'}"></i><small class="ot-od-n">${k + 2}</small><b>${e(x.name || W('地點', 'Place'))}</b></button><button class="ot-od-x" type="button" data-card="stop-drop" data-k="${k}" aria-label="${W('移除這一站', 'Remove this stop')}">×</button></div>`)
         .join('')}${(c.then?.length || 0) < MAX_STOPS ? `<button class="ot-od-add" type="button" data-card="stop-add">${icon('plus')}<span>${W('加一站', 'Add stop')}</span></button>` : ''}</div>
       <button class="q-icon-btn ot-ph-swap" type="button" data-card="swap" aria-label="${W('對調起訖', 'Swap ends')}">${icon('swap')}</button></div>
-    ${aboardHtml(c)}<div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}${icon('down', 'ot-caret')}</button>
+    ${aboardHtml(c)}<div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${when.by === 'train' ? `${icon(when.ticket.rides[0].sys)}${e(ticketText(when.ticket))}` : `${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}`}${icon('down', 'ot-caret')}</button>
       <div class="ot-mtogs" role="group" aria-label="${W('這次搭什麼', 'Modes')}">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}${modesNow().bike !== false ? `<button class="ot-mtog" type="button" data-ebike aria-pressed="${tripEbike}" aria-label="${W('偏好電輔車', 'Prefer e-bikes')}" title="${W('偏好電輔車', 'Prefer e-bikes')}">${icon('bolt')}</button>` : ''}</div></div>`;
   if (!c.plans) return `${top}<div class="ot-plans">${'<div class="ot-plan ot-plan-wait" aria-hidden="true"><i class="ot-skel" style="width:40%"></i><i class="ot-skel" style="width:70%"></i></div>'.repeat(3)}</div><span class="ot-sr">${e(whenText)}</span>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : `<p class="ot-note">${W('找不到大眾運輸方案。', 'No transit route found.')}</p>`}${sourcesNote(c.sources)}`;
