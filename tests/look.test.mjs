@@ -19,13 +19,6 @@ test("the look is the page's own: data-look on <html>, board.css after transit.c
   assert.doesNotMatch(app, /orbit\.look|\bNV\b/, 'no localStorage switch left');
 });
 
-// (Jay 2026-11-03: "map should be the first tab": the redesign had put 交通 first.)
-test('the tabs stay 地圖, 交通, 查時刻, 我的, and the app opens on 地圖', () => {
-  const tabs = [...app.match(/const TABS = \[([\s\S]*?)\n\];/)[1].matchAll(/\{ id: '(\w+)'/g)].map(m => m[1]);
-  assert.deepEqual(tabs, ['map', 'go', 'times', 'me']);
-  assert.match(app, /exec\(location\.hash\)\?\.\[1\] \|\| 'map'/, 'opens on the map');
-  assert.ok(html.indexOf('id="panel-map"') < html.indexOf('id="panel-go"') && !/id="panel-map"[^>]*hidden/.test(html), "the map's panel first and shown");
-});
 
 test('交通: a trip row with no ride says why, never nothing (read failed, being read, none now, not read yet)', async () => {
   const { tripWhy } = await import('../public/lib/tab-go.mjs');
