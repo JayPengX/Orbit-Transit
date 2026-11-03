@@ -71,10 +71,12 @@ function render() {
     .map(t => {
       const when = t.date ? dayLabel(t.date) : t.days.length ? daysText(t.days) : '';
       const altDays = a => (en ? a.days.map(x => DAYS_EN[x]).join(', ') : `週${a.days.map(x => DAYS[x]).join('、')}`);
-      const alts = k => (t.alt || []).filter(a => a[k]).map(a => `<small>${e(altDays(a))} ${e(a[k])}</small>`).join('');
+      const alts = (k, word) => (t.alt || []).filter(a => a[k]).map(a => `<span class="ot-tl-alt">${e(altDays(a))}</span><span class="ot-tl-t alt"><b>${e(a[k])}</b><small>${e(word)}</small></span>`).join('');
       const from = t.from ? shown(t.from.name) : W('目前位置', 'Here');
       const to = shown(t.to.name);
-      const leg = (a, b, time, word, k) => `<span class="ot-tl"><span class="ot-tl-way">${e(a)}<i>${icon('arrow')}</i>${e(b)}</span><span class="ot-tl-t">${time ? `<b>${e(time)}</b><small>${e(word)}</small>` : `<small>${e(word)}</small>`}${alts(k)}</span></span>`;
+      // (A way's row: where it goes on the left, its time and word on the right as 交通's 07:13 到; the
+      // days whose time differs each a row of their own under it, the same sizes.)
+      const leg = (a, b, time, word, k) => `<span class="ot-tl"><span class="ot-tl-way q-fit-wrap">${e(a)}<i>${icon('arrow')}</i>${e(b)}</span><span class="ot-tl-t">${time ? `<b>${e(time)}</b>` : ''}<small>${e(word)}</small></span>${alts(k, word)}</span>`;
       const go = leg(from, to, t.time, t.time ? (t.by === 'arrive' ? W('抵達', 'arrive') : W('出發', 'leave')) : W('隨時', 'any time'), 'time');
       const back = t.back || (t.alt || []).some(a => a.back) ? leg(to, from, t.back, W('出發', 'leave'), 'back') : '';
       const place = D.places.find(p => meters(p.lat, p.lon, t.to.lat, t.to.lon) < 80);
