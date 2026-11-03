@@ -4,7 +4,7 @@
 import { packRoute } from './packs.mjs';
 import { tdx, rows, busEta, liveMs } from './api.mjs';
 import { etaStops } from './near.mjs';
-import { zh, hm, etaAge, meters, TDX_DAYS } from './util.mjs';
+import { zh, hm, etaAge, etaOld, ETA_STALE, ETA_GHOST, meters, TDX_DAYS } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 import { routeStatus } from './service.mjs';
 
@@ -156,11 +156,15 @@ export function stationEtaAsk(station) {
 // What's said about the route today (service.mjs routeStatus) rides along as
 // `flag` (改道, 減班…); not running (今日停駛, or 可能停駛: no bus on the road in
 // a city whose buses are all off it) with no bus coming: that, never the timetable's next.
+// `old`: how old TDX's estimate is (s); `stale`: past ETA_STALE, its feed
+// stopped (said so, never 進站中 or a bus drawn); past ETA_GHOST: no live time.
 export function etaOf(r, now = Date.now()) {
   const age = etaAge(r, now);
-  const sec = r.EstimateTime == null ? null : Math.max(0, Math.round(Number(r.EstimateTime) - age));
-  const more = (r.Estimates || []).map(x => Math.round(Number(x.EstimateTime) - age)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
-  const raw = { t: now, sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null, rt: { uid: r.RouteUID, name: zh(r.RouteName), stop: r.StopUID } };
+  const old = etaOld(r, now);
+  const ghost = old != null && old > ETA_GHOST;
+  const sec = r.EstimateTime == null || ghost ? null : Math.max(0, Math.round(Number(r.EstimateTime) - age));
+  const more = ghost ? [] : (r.Estimates || []).map(x => Math.round(Number(x.EstimateTime) - age)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
+  const raw = { t: now, sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null, old, stale: old != null && old > ETA_STALE && !ghost, rt: { uid: r.RouteUID, name: zh(r.RouteName), stop: r.StopUID } };
   return said(raw, now);
 }
 // A time with what's known about its route now (asked again at each drawing:
@@ -208,6 +212,12 @@ export function etaText(v, now = Date.now()) {
   return v.flag && !t.sub ? { ...t, sub: v.flag.label, flag: true } : v.flag ? { ...t, sub: `${v.flag.label}・${t.sub}`, flag: true } : t;
 }
 function etaTextOf(v, now) {
+  // A stopped feed: its time as it was, how old, and never 進站中 (the bus may be gone by).
+  if (v.status === 0 && v.sec != null && v.stale) {
+    const ago = W(`${Math.round(v.old / 60)} 分鐘前資料`, `${Math.round(v.old / 60)} min old`);
+    if (v.sec <= 180) return { main: W('可能已過', 'May be gone'), sub: ago, tone: 'wait stale' };
+    return { main: W(`${Math.floor(v.sec / 60)} 分`, `${Math.floor(v.sec / 60)} min`), sub: ago, tone: 'wait stale' };
+  }
   if (v.status === 0 && v.sec != null) {
     if (v.sec <= 60) return { main: W('進站中', 'Arriving'), sub: v.last ? W('末班車', 'Last bus') : '', tone: 'now' };
     if (v.sec <= 180) return { main: W('即將進站', 'Due'), sub: v.last ? W('末班車', 'Last bus') : W(`${Math.ceil(v.sec / 60)} 分`, `${Math.ceil(v.sec / 60)} min`), tone: 'now' };

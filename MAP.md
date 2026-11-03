@@ -55,6 +55,12 @@ Live: https://orbit.jaypengx.com/transit/
   sheet draws a bus between two stops only where a live time drops below the
   nearest one before it, a stop without one in between being no bus
   (`bus-ui.mjs busBetween`; `tests/route-bus-icon.test.mjs`).
+  A TDX estimate is counted from its DataTime (`etaAge`, at most 5 min). One
+  over 4 minutes old is a feed that stopped (`util.mjs ETA_STALE`; TDX's usual
+  lag is 1–3.5): shown as it was, 可能已過 for 3 minutes or less, never
+  進站中, no bus drawn or placed (`busWhere`), the route sheet saying so once
+  at the top; over 15 (`ETA_GHOST`) no live time and none planned on
+  (`tests/eta-stale.test.mjs`: 快捷8號's feed froze 17:37:54 on 2026-11-03).
 - **追公車** (`lib/chase.mjs`): a plan's first bus, walked to, due within the
   hour: a YouBike to a stop further along its way (within 4.5 km of you)
   where TDX sees a bus ahead of the one you'd make, there 2 minutes before

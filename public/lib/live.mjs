@@ -14,7 +14,7 @@ import { routeStops, routeSchedule, stopTimes, routeCity, runsOn } from './bus.m
 import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish, walkLeg } from './plan.mjs';
 import { stoppedNow, ensureBus, routeStatus } from './service.mjs';
-import { meters, walkSec, zh, tw, twAt, addDays, etaAge, routeNorm, sameRoute, isRide, RAIL } from './util.mjs';
+import { meters, walkSec, zh, tw, twAt, addDays, etaAge, etaOld, ETA_GHOST, routeNorm, sameRoute, isRide, RAIL } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 const MIN = 60_000;
@@ -42,6 +42,8 @@ export function liveTimes(list, name, now = Date.now(), { dir = null, routeUID =
     const st = status(r);
     // (From when TDX made the estimate, not from now: util.mjs etaAge.)
     const made = now - etaAge(r, now) * 1000;
+    // (A tracker quiet for 15 minutes is no bus: util.mjs ETA_GHOST.)
+    if ((etaOld(r, now) ?? 0) > ETA_GHOST) continue;
     if (r.EstimateTime != null && st === 0) times.push({ at: made + Number(r.EstimateTime) * 1000, last: r.IsLastBus === true, plate: r.PlateNumb || '' });
     for (const x of r.Estimates || []) if (Number.isFinite(Number(x.EstimateTime))) times.push({ at: made + Number(x.EstimateTime) * 1000, last: x.IsLastBus === true, plate: x.PlateNumb || '' });
     if (st === 1 && r.NextBusTime) times.push({ at: Date.parse(r.NextBusTime), last: r.IsLastBus === true, plate: '', planned: true });
