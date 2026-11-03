@@ -4784,21 +4784,33 @@ button.ot-trip-foot {
   gap: 8px;
   margin-top: 12px;
 }
-/* Ordering: a group's name to edit, its stops with up, down, remove. */
-.ot-manage {
+/* Ordering: a group's name to edit, its stops; each removed by its bin and
+   put in order by the kit's grip (ui.mjs reorder), groups by the grip on
+   their name's line. */
+.ot-groups {
+  display: grid;
+  gap: 12px;
   margin: 12px 0;
-  padding: 6px 6px 6px 14px;
+}
+.ot-manage {
+  padding: 6px 8px 6px 14px;
   border-radius: 18px;
   background: var(--q-sheet-cell, var(--q-surface));
 }
 .ot-order-row {
   display: flex;
   align-items: center;
-  gap: 2px;
-  min-height: 48px;
+  gap: 8px;
+  min-height: 52px;
   border-bottom: 0.5px solid var(--q-sep);
 }
-.ot-order-row:last-child {
+.ot-order-items > .ot-order-row:last-child {
+  border-bottom: 0;
+}
+.ot-order-items:empty {
+  display: none;
+}
+.ot-order-row.head:has(+ .ot-order-items:empty) {
   border-bottom: 0;
 }
 .ot-order-row > span {
@@ -4822,6 +4834,34 @@ button.ot-trip-foot {
   background: var(--q-fill-3);
   font-weight: 600;
   line-height: 40px;
+}
+.ot-order-x {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--q-label-2);
+  cursor: pointer;
+}
+.ot-order-x svg {
+  width: 19px;
+  height: 19px;
+}
+.ot-order-x:is(:active, [data-q-press]) {
+  background: var(--q-fill-3);
+  color: var(--q-red);
+}
+.ot-order-x:disabled {
+  opacity: 0.3;
+}
+.ot-manage.q-reorder-lift,
+.ot-manage.q-reorder-land {
+  border-radius: 18px;
 }
 .ot-list > .ot-order-row {
   padding: 0 14px;

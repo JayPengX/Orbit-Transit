@@ -9,8 +9,9 @@ import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaO
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
-import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
+import { cleanItem, MAX_GROUPS, MAX_ITEMS } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
+import { gripHtml, reorder } from '#kit/ui.mjs';
 import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson, shown } from './util.mjs';
 import { nextRun, nextUnseen, liveTrusted, departuresAt } from './live.mjs';
 import { routeLines } from './shapes.mjs';
@@ -579,27 +580,42 @@ export function chooseGroup(raw, done) {
 
 export function manageSheet() {
   const d = sheet('', 'ot-tall-sheet');
+  // Groups and their stops put in order by their grips (the kit's reorder,
+  // as every list in the family): a group's grip on its name's line, a
+  // stop's at its row's end.
   const draw = () => {
     d.innerHTML = `${sheetHead(W('公車站牌', 'Bus stops'))}
-      ${ctx.data.groups
+      <div class="ot-groups">${ctx.data.groups
         .map(
-          (g, i, all) => `<section class="ot-manage">
+          (g, i, all) => `<section class="ot-manage" data-q-key="${e(g.id)}">
           <div class="ot-order-row head"><input class="ot-name-in" data-name="${i}" value="${e(g.name)}" maxlength="16" aria-label="${W('群組名稱', 'Group name')}">
-            <button class="q-icon-btn" type="button" data-gmove="${i}" data-by="-1" aria-label="${W('上移', 'Move up')}" ${i ? '' : 'disabled'}>${icon('up')}</button>
-            <button class="q-icon-btn" type="button" data-gmove="${i}" data-by="1" aria-label="${W('下移', 'Move down')}" ${i < all.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
-            <button class="q-icon-btn" type="button" data-gdel="${i}" aria-label="${W('刪除群組', 'Delete group')}" ${all.length > 1 ? '' : 'disabled'}>${icon('trash')}</button></div>
-          ${g.items
+            <button class="ot-order-x" type="button" data-gdel="${i}" aria-label="${W('刪除群組', 'Delete group')}" ${all.length > 1 ? '' : 'disabled'}>${icon('trash')}</button>${all.length > 1 ? gripHtml(W(`拖曳排序：${g.name}`, `Reorder ${g.name}`)) : ''}</div>
+          <div class="ot-order-items" data-items="${i}">${g.items
             .map(
-              (it, k, list) => `<div class="ot-order-row"><span><b>${e(shown(it.route))}</b> ${e(shown(it.stop))}${it.off ? ` → ${e(shown(it.off.stop))}` : ''}<small>${W('往', 'to')} ${e(shown(it.headsign))}${it.back ? W(' · 回程自動對調', ' · back flips') : ''}</small></span>
-              <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="-1" aria-label="${W('上移', 'Move up')}" ${k ? '' : 'disabled'}>${icon('up')}</button>
-              <button class="q-icon-btn" type="button" data-imove="${i}:${k}" data-by="1" aria-label="${W('下移', 'Move down')}" ${k < list.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
-              <button class="q-icon-btn" type="button" data-idel="${i}:${k}" aria-label="${W('移除', 'Remove')}">${icon('trash')}</button></div>`
+              (it, k, list) => `<div class="ot-order-row" data-q-key="${k}"><span><b>${e(shown(it.route))}</b> ${e(shown(it.stop))}${it.off ? ` → ${e(shown(it.off.stop))}` : ''}<small>${W('往', 'to')} ${e(shown(it.headsign))}${it.back ? W(' · 回程自動對調', ' · back flips') : ''}</small></span>
+              <button class="ot-order-x" type="button" data-idel="${i}:${k}" aria-label="${W('移除', 'Remove')}">${icon('trash')}</button>${list.length > 1 ? gripHtml(W(`拖曳排序：${shown(it.route)}`, `Reorder ${shown(it.route)}`)) : ''}</div>`
             )
-            .join('')}
+            .join('')}</div>
         </section>`
         )
-        .join('')}
+        .join('')}</div>
       ${ctx.data.groups.length < MAX_GROUPS ? `<button class="q-btn block ot-sheet-go" type="button" data-gadd="1">${icon('plus')} ${W('新增群組', 'New group')}</button>` : ''}`;
+    const saved = () => (ctx.save(), draw(), ctx.refreshTabs?.());
+    reorder(d.querySelector('.ot-groups'), {
+      onChange: ids => {
+        ctx.data.groups = ids.map(id => ctx.data.groups.find(g => g.id === id)).filter(Boolean);
+        saved();
+      }
+    });
+    for (const box of d.querySelectorAll('[data-items]')) {
+      const g = ctx.data.groups[Number(box.dataset.items)];
+      reorder(box, {
+        onChange: keys => {
+          g.items = keys.map(k => g.items[Number(k)]).filter(Boolean);
+          saved();
+        }
+      });
+    }
   };
   draw();
   d.addEventListener('change', ev => {
@@ -610,17 +626,10 @@ export function manageSheet() {
     ctx.refreshTabs?.();
   });
   d.addEventListener('click', ev => {
-    const by = Number(ev.target.closest('[data-by]')?.dataset.by || 0);
-    const gm = ev.target.closest('[data-gmove]');
     const gd = ev.target.closest('[data-gdel]');
-    const im = ev.target.closest('[data-imove]');
     const id = ev.target.closest('[data-idel]');
-    if (gm) ctx.data.groups = move(ctx.data.groups, Number(gm.dataset.gmove), by);
-    else if (gd) ctx.data.groups = ctx.data.groups.filter((_, i) => i !== Number(gd.dataset.gdel));
-    else if (im) {
-      const [g, k] = im.dataset.imove.split(':').map(Number);
-      ctx.data.groups[g].items = move(ctx.data.groups[g].items, k, by);
-    } else if (id) {
+    if (gd) ctx.data.groups = ctx.data.groups.filter((_, i) => i !== Number(gd.dataset.gdel));
+    else if (id) {
       const [g, k] = id.dataset.idel.split(':').map(Number);
       ctx.data.groups[g].items = ctx.data.groups[g].items.filter((_, i) => i !== k);
     } else if (ev.target.closest('[data-gadd]')) ctx.data.groups.push({ id: 'g' + uid(), name: W(`群組 ${ctx.data.groups.length + 1}`, `Group ${ctx.data.groups.length + 1}`), items: [] });
