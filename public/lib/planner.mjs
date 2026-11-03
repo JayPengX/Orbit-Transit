@@ -145,8 +145,9 @@ export function searchFrom(t0, now, { by = 'depart', far = false, wide = false }
 // else the ways leaving 'now' (the deadline is too close); a wide search
 // already done stands (null).
 export const missedRetry = (at, now, wide = false) => (wide ? null : at - now > FAR_AHEAD ? 'wide' : 'now');
-// `ebike`: 偏好電輔車, this trip's own (withBikes).
-export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null, wide = false, ebike = false } = {}) {
+// `ebike`: 偏好電輔車, this trip's own (withBikes); not said, the person's own in 我的.
+export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null, wide = false, ebike = null } = {}) {
+  ebike ??= data.prefs?.ebike === true;
   const prefs = only ? { ...data.prefs, modes: { ...data.prefs.modes, ...only } } : data.prefs;
   const modes = prefs.modes;
   const now = Date.now();
@@ -446,7 +447,7 @@ export async function findAboard(now = Date.now()) {
 // there were two): stay on to where it gets off nearest the place (or one
 // more stop a kilometre away), then on from there as any trip from that stop
 // is planned; ranked together. → planTrip's { plans, sources, later } or null.
-export async function planAboard(data, a, to, { modes = null, ebike = false } = {}) {
+export async function planAboard(data, a, to, { modes = null, ebike = null } = {}) {
   const now = Date.now();
   const here = a.m ? { lat: a.m.lat, lon: a.m.lon } : null;
   let legTo;
@@ -493,7 +494,7 @@ export async function planAboard(data, a, to, { modes = null, ebike = false } = 
 // from where it gets in as any trip from that station is planned. Ways there
 // and ways on ranked together; the train is never swapped for another.
 // → planTrip's { plans, sources, error, later } (error: the train gone, or no way there in time).
-export async function planTicket(data, from, to, ticket, { modes = null, ebike = false } = {}) {
+export async function planTicket(data, from, to, ticket, { modes = null, ebike = null } = {}) {
   const now = Date.now();
   const r0 = ticket?.rides?.[0];
   if (!r0) return { plans: [], sources: {}, error: new Error('no ticket') };

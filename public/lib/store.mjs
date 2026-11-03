@@ -36,8 +36,8 @@ export const emptyData = () => ({
   prefs: defaultPrefs(),
   t: 0
 });
-// `maps`: the app a walk or a ride is handed to (google, apple).
-const defaultPrefs = () => ({ modes: Object.fromEntries(Object.keys(MODES).map(k => [k, true])), bike30: false, tpass: '', maps: 'google' });
+// `maps`: the app a walk or a ride is handed to (google, apple). `ebike`: 偏好電輔車.
+const defaultPrefs = () => ({ modes: Object.fromEntries(Object.keys(MODES).map(k => [k, true])), bike30: false, ebike: false, tpass: '', maps: 'google' });
 
 const str = (v, n = 60) => (typeof v === 'string' ? v.slice(0, n) : '');
 const coord = v => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 1e6) / 1e6 : null);
@@ -146,6 +146,8 @@ export function cleanPrefs(p) {
   if (!Object.values(d.modes).some(Boolean)) d.modes = defaultPrefs().modes;
   d.bike30 = p.bike30 === true;
   if (p.swap30 === 'on' || p.swap30 === 'off') d.swap30 = p.swap30;
+  // 偏好電輔車 (我的): every trip starts with the ⚡ on; off unless the person turned it on.
+  d.ebike = p.ebike === true;
   d.tpass = str(p.tpass, 12);
   d.maps = p.maps === 'apple' ? 'apple' : 'google';
   return d;

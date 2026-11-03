@@ -9,6 +9,8 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - A trip's YouBike stations with bikes and docks — `public/lib/tab-map.mjs`: `planBikes`
 - YouBike logo, 一般 and 電輔車 counted apart — `public/lib/look.mjs`: `bikeTile`, `bikeStats`
 - 偏好電輔車 per trip — `public/lib/plan.mjs`: `偏好電輔車`, `PREFER_SEC`
+- 偏好電輔車 in 我的, off by default (every trip's ⚡ starts on) — `public/lib/tab-me.mjs`: `ebikeRow`
+- 電輔車 counted first on station cards when preferred — `public/lib/look.mjs`: `ebikeFirst`
 - 換附近的站 only when a station runs low — `public/lib/nav.mjs`: `換附近的站`
 - Operators' notices: 今日停駛, 可能停駛 — `public/lib/service.mjs`, `public/lib/near-ui.mjs`: `可能停駛`, `今日停駛`
 - 附近 waits for nearby — `public/lib/near-ui.mjs`: `NEAR_WAIT_MS`

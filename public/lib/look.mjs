@@ -65,11 +65,19 @@ export function focus({ eyebrow = '', big = '', title = '', sub = '', facts = []
   return attrs ? `<button class="q-focus q-press ot-focus" type="button" ${attrs}>${inner}</button>` : `<section class="q-focus ot-focus">${inner}</section>`;
 }
 
+// 偏好電輔車 (我的): a station's 電輔車 counted first on its cards (the app hands
+// the person's choice in; off, the regular bikes first as always).
+let eFirst = () => false;
+export const useEbikeFirst = fn => (eFirst = fn);
+export const ebikeFirst = () => eFirst() === true;
+
 // A YouBike station's bikes on its graphite card: 一般, 電輔車 and 空位 as three
 // columns apart (a small label over its number), hairlines between; a 0 dimmed.
 export const bikeStats = s => {
   const col = (label, n, cls = '') => `<div class="ot-bstat${cls}${n ? '' : ' zero'}"><small>${label}</small><b class="num">${n}</b></div>`;
-  return `<div class="ot-bstats">${col(`${icon('bike')}${W('一般', 'Regular')}`, s.bikes || 0)}${col(`${icon('bolt')}${W('電輔車', 'E-bikes')}`, s.ebike || 0)}${col(`${icon('dock')}${W('空位', 'Docks')}`, s.ret || 0, ' dock')}</div>`;
+  const reg = col(`${icon('bike')}${W('一般', 'Regular')}`, s.bikes || 0);
+  const ev = col(`${icon('bolt')}${W('電輔車', 'E-bikes')}`, s.ebike || 0);
+  return `<div class="ot-bstats">${ebikeFirst() ? ev + reg : reg + ev}${col(`${icon('dock')}${W('空位', 'Docks')}`, s.ret || 0, ' dock')}</div>`;
 };
 
 // Nothing here: the kit's empty state.

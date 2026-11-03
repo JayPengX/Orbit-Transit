@@ -32,3 +32,24 @@ test('all the way by bike, preferring 電輔車: one way, by 電輔車', () => {
   assert.equal(ways.length, 1);
   assert.ok(ways[0].legs.some(l => l.ebike));
 });
+
+// 我的's 偏好電輔車 (Jay 2026-11-04): off unless turned on; on, a station's 電輔車 counted first.
+import { cleanPrefs } from '../public/lib/store.mjs';
+import { bikeStats, useEbikeFirst } from '../public/lib/look.mjs';
+
+test('偏好電輔車 in 我的: off by default, kept only as a real on', () => {
+  assert.equal(cleanPrefs(undefined).ebike, false);
+  assert.equal(cleanPrefs({}).ebike, false);
+  assert.equal(cleanPrefs({ ebike: 'yes' }).ebike, false);
+  assert.equal(cleanPrefs({ ebike: true }).ebike, true);
+});
+
+test('偏好電輔車 on: a station card counts its 電輔車 before its regular bikes; off, as always', () => {
+  const s = { bikes: 7, ebike: 3, ret: 5 };
+  const order = html => [...html.matchAll(/<b class="num">(\d+)<\/b>/g)].map(m => m[1]).join(',');
+  useEbikeFirst(() => false);
+  assert.equal(order(bikeStats(s)), '7,3,5');
+  useEbikeFirst(() => true);
+  assert.equal(order(bikeStats(s)), '3,7,5');
+  useEbikeFirst(() => false);
+});
