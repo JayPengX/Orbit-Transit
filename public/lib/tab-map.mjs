@@ -15,7 +15,8 @@ import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { OPERATORS, stationTitle } from './metro.mjs';
 import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
-import { planTrip } from './planner.mjs';
+import { planTrip, findAboard, planAboard } from './planner.mjs';
+import { aboardName } from './aboard.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
 import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
@@ -878,6 +879,12 @@ async function cardClick(ev) {
   if (act === 'back' && card.kind === 'plans' && card.sel >= 0 && card.plans.length > 1) return selectPlan(card.sel);
   if (act === 'back') return card.back ? openCard(card.back) : closeCard();
   // (With stops: the trip backwards, the last place first.)
+  // On board: another bus that fit, or none (planned from the street).
+  if (act === 'aboard-bus' && card?.aboard?.kind === 'bus') {
+    const b = card.aboard.buses.find(x => x.route.name === ev.target.closest('[data-bus]').dataset.bus);
+    return b && plan(null, card.to, { aboard: { ...card.aboard, bus: b } });
+  }
+  if (act === 'not-aboard' && card?.aboard) return plan(null, card.to, { street: true });
   if (act === 'swap') {
     if (card.from?.lat == null) return;
     const all = [card.to, ...(card.then || [])];
@@ -1608,13 +1615,20 @@ async function plan(from, to, opts = {}) {
   const here = !from ? await hereNow() : null;
   const start = from || here;
   const dest = opts.swapHere ? await hereNow() : to;
-  const fromPt = start ? { name: start.name || HERE, lat: start.lat, lon: start.lon } : { name: W('選擇出發地', 'Choose a start'), lat: null, lon: null };
+  let fromPt = start ? { name: start.name || HERE, lat: start.lat, lon: start.lon } : { name: W('選擇出發地', 'Choose a start'), lat: null, lon: null };
+  // Already on a bus or train (aboard.mjs): the trip from it, never from the
+  // point on the road or the track (Jay 2026-11-03). Only from where you are,
+  // leaving now; 不在車上 plans from the street.
+  const mayAboard = here && !opts.street && !opts.swapHere && !(opts.then || []).length && when.by === 'now' && !rental();
+  const aboard = opts.aboard || (mayAboard ? await Promise.race([findAboard(), wait(2500).then(() => null)]) : null);
+  if (aboard?.kind === 'bus' && !aboard.bus) aboard.bus = aboard.buses[0];
+  if (dest && aboard) fromPt = { ...fromPt, name: aboardName(aboard.kind === 'train' ? { short: trainShort(aboard.ride) } : { short: aboard.bus.route.name }) };
   if (!dest) return ctx.status(W('需要你的位置：請在設定允許定位', 'Needs your location: allow it in Settings'));
   if (dest.lat != null && !inTaiwan(dest.lat, dest.lon)) return ctx.status(OUTSIDE);
   // `then`: the places after this one, in order (a trip with stops: here to
   // the first, and on from each to the next once there).
   const then = (opts.then || []).filter(x => x?.lat != null).slice(0, MAX_STOPS);
-  card = { kind: 'plans', from: fromPt, fromHere: !from, to: dest, then, have: Boolean(opts.keep || rental()), since: opts.since ?? rental()?.at ?? null, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
+  card = { kind: 'plans', from: fromPt, fromHere: !from, aboard, to: dest, then, have: Boolean(opts.keep || rental()), since: opts.since ?? rental()?.at ?? null, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
   ctx.status('');
   document.body.classList.add('ot-planning');
   renderCard();
@@ -1631,8 +1645,11 @@ async function plan(from, to, opts = {}) {
   try {
     const at = when.by === 'now' ? null : when.at;
     // (A saved trip's ways from 交通, as its card ranked them: not found again.)
-    out = opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() });
-    c.plans = await walkHere(out.plans);
+    const onBoard = aboard && dest.lat != null ? await planAboard(ctx.data, aboard, dest, { modes: tripModes, ebike: ebikeNow() }).catch(() => null) : null;
+    if (aboard && !onBoard) c.aboard = null;
+    out = onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() }));
+    if (aboard && !onBoard) c.from = { ...c.from, name: start.name || HERE };
+    c.plans = onBoard ? out.plans : await walkHere(out.plans);
     c.choice = {};
     c.sources = out.sources;
     if (out.error && !out.plans.length) c.error = errorText(out.error);
@@ -1831,7 +1848,7 @@ function plansHtml(c) {
         .map((x, k) => `<div class="ot-od-stop"><button type="button" data-card="stop-first" data-k="${k}" aria-label="${W('先去', 'Go first to')} ${e(shown(x.name))}"><i class="ot-dot ${k === c.then.length - 1 ? 'to' : 'stop'}"></i><small class="ot-od-n">${k + 2}</small><b>${e(x.name || W('地點', 'Place'))}</b></button><button class="ot-od-x" type="button" data-card="stop-drop" data-k="${k}" aria-label="${W('移除這一站', 'Remove this stop')}">×</button></div>`)
         .join('')}${(c.then?.length || 0) < MAX_STOPS ? `<button class="ot-od-add" type="button" data-card="stop-add">${icon('plus')}<span>${W('加一站', 'Add stop')}</span></button>` : ''}</div>
       <button class="q-icon-btn ot-ph-swap" type="button" data-card="swap" aria-label="${W('對調起訖', 'Swap ends')}">${icon('swap')}</button></div>
-    <div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}${icon('down', 'ot-caret')}</button>
+    ${aboardHtml(c)}<div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}${icon('down', 'ot-caret')}</button>
       <div class="ot-mtogs" role="group" aria-label="${W('這次搭什麼', 'Modes')}">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}${modesNow().bike !== false ? `<button class="ot-mtog" type="button" data-ebike aria-pressed="${tripEbike}" aria-label="${W('偏好電輔車', 'Prefer e-bikes')}" title="${W('偏好電輔車', 'Prefer e-bikes')}">${icon('bolt')}</button>` : ''}</div></div>`;
   if (!c.plans) return `${top}<div class="ot-plans">${'<div class="ot-plan ot-plan-wait" aria-hidden="true"><i class="ot-skel" style="width:40%"></i><i class="ot-skel" style="width:70%"></i></div>'.repeat(3)}</div><span class="ot-sr">${e(whenText)}</span>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : `<p class="ot-note">${W('找不到大眾運輸方案。', 'No transit route found.')}</p>`}${sourcesNote(c.sources)}`;
@@ -1897,8 +1914,20 @@ function stretchChips(q) {
   const rides = q.legs.filter(l => l.mode !== 'walk');
   return legChips(rides.length ? rides : [{ mode: 'walk', dur: (q.arr - q.dep) / 1000 }]);
 }
+// On board (the plans are from the bus or train you're on): which one, the
+// other buses that fit to pick from, and 不在車上 to plan from the street.
+function aboardHtml(c) {
+  const a = c.aboard;
+  if (!a) return '';
+  // (Which one is the start field's own: 自強 128 上.)
+  const others = a.kind === 'bus' ? a.buses.filter(b => b !== a.bus) : [];
+  return `<div class="ot-aboard q-chips" role="group" aria-label="${W('你在車上', 'On board')}">${others.map(b => `<button class="q-chip" type="button" data-card="aboard-bus" data-bus="${e(b.route.name)}">${e(W(`在 ${b.route.name}`, `On ${b.route.name}`))}</button>`).join('')}<button class="q-chip" type="button" data-card="not-aboard">${W('不在車上', 'Not on it')}</button></div>`;
+}
+const trainShort = r => (r.mode === 'hsr' ? W(`高鐵 ${r.train.no} 次`, `HSR ${r.train.no}`) : `${trainKind(r.train.type)} ${r.train.no}`);
+
 // When to leave: 「12 分後出發」 soon, else 「建議 06:05 出發」; and when you're there.
 function leaveText(p) {
+  if (p.aboard) return W('在車上', 'On board');
   const m = Math.round((p.dep - Date.now()) / 60_000);
   return m <= 0 ? W('現在出發', 'Leave now') : m < 60 ? W(`${m} 分後出發`, `Leave in ${m} min`) : W(`建議 ${hm(p.dep)} 出發`, `Leave ${hm(p.dep)}`);
 }
@@ -1950,7 +1979,7 @@ function stepsHtml(p, c = card) {
   // (Each step its place in the whole way, as drawPlan draws it: a tap frames it.)
   const at = [p, ...later].map((q, k, all) => all.slice(0, k).reduce((a, x) => a + x.legs.length, 0));
   return `<ol class="ot-steps">${[p, ...later].map((q, k) => `${k ? stopAt([p, ...later][k - 1], k - 1) : ''}${stepItems(q.legs, at[k])}`).join('')}<li class="end" data-leg="end"><span class="ot-step-time">${e(hm((later.at(-1) || p).arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')}${c.then?.length ? ` ${e([c.to, ...c.then][later.length].name || '')}` : ''}</b></span></li></ol>
-    <span class="ot-plan-acts">${canNav(p) ? `<span class="q-btn primary" role="button" data-card="nav">${icon('route')} ${W('開始導航', 'Start')}</span>` : `<span class="ot-nav-later">${W(`${e(hm(p.dep - NAV_LEAD))} 起可以開始導航`, `Directions from ${e(hm(p.dep - NAV_LEAD))}`)}</span>`}<span class="q-btn${picked(c, p) ? ' on' : ''}" role="button" data-card="pick">${icon('star')} ${picked(c, p) ? W('已釘選', 'Pinned') : W('釘選這個方案', 'Pin route')}</span></span>`;
+    <span class="ot-plan-acts">${canNav(p) ? `<span class="q-btn primary" role="button" data-card="nav">${icon('route')} ${W('開始導航', 'Start')}</span>` : `<span class="ot-nav-later">${W(`${e(hm(p.dep - NAV_LEAD))} 起可以開始導航`, `Directions from ${e(hm(p.dep - NAV_LEAD))}`)}</span>`}${p.aboard ? '' : `<span class="q-btn${picked(c, p) ? ' on' : ''}" role="button" data-card="pick">${icon('star')} ${picked(c, p) ? W('已釘選', 'Pinned') : W('釘選這個方案', 'Pin route')}</span>`}</span>`;
 }
 function stepItems(legs, from = 0) {
   return legs
@@ -1961,8 +1990,10 @@ function stepItems(legs, from = 0) {
           ? W(`步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(shown(l.to.name))}` : ''}`, `Walk ${distText(l.dist)}${l.to?.name ? ` to ${e(shown(l.to.name))}` : ''}`)
           : l.mode === 'bike'
             ? `<b>${l.swap ? W('換一台，', 'Swap, ') : ''}${W('騎', 'ride')} ${l.ebike ? W('YouBike 電輔車', 'YouBike e-bike') : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-maps="${e(mapsLink(l.to, 'bicycling', l.from))}">${icon('route')}${mapsName()}</span>` : ''}${bikeEnd(l.kept ? W('騎', 'On') : W('借', 'Rent'), l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike]] : [[`${icon('bike')}${W('一般', 'bikes')}`, l.rent.bikes], [`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike || 0]]) : [])}${bikeEnd(l.park ? W('停', 'Park') : W('還', 'Return'), l.to.name, l.ret ? [[W('空位', 'docks'), l.ret.ret]] : [])}`
-            : `<b>${e(MODE_NAME[l.mode])} ${e(l.mode === 'tra' ? trainKind(l.short || l.name) : l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${e(shown(l.from.name))} → ${e(shown(l.to.name))}${l.stops ? ` · ${W(`${l.stops} 站`, `${l.stops} stops`)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
-      return `<li style="--c:${e(c)}" data-leg="${from + k}"><span class="ot-step-time">${e(hm(l.dep))}${l.live ? `<i class="ot-livedot" title="${W('即時', 'Live')}"></i>` : ''}</span>${l.mode === 'bike' ? '<span class="ot-step-i ot-logo"><img src="./img/youbike.png" alt="" width="28" height="28" decoding="async"></span>' : `<span class="ot-step-i">${icon(l.mode)}</span>`}<span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.dur))}</small></span></li>`;
+            : `<b>${e(MODE_NAME[l.mode])} ${e(l.mode === 'tra' ? trainKind(l.short || l.name) : l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${l.aboard ? W('在車上', 'On board') : e(shown(l.from.name))} → ${e(shown(l.to.name))}${l.stops ? ` · ${W(`${l.stops} 站`, `${l.stops} stops`)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
+      // (The ride you're on: from now, not from the station it left.)
+      const t0 = l.aboard ? l.aboard.at : l.dep;
+      return `<li style="--c:${e(c)}" data-leg="${from + k}"><span class="ot-step-time">${e(hm(t0))}${l.live ? `<i class="ot-livedot" title="${W('即時', 'Live')}"></i>` : ''}</span>${l.mode === 'bike' ? '<span class="ot-step-i ot-logo"><img src="./img/youbike.png" alt="" width="28" height="28" decoding="async"></span>' : `<span class="ot-step-i">${icon(l.mode)}</span>`}<span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.aboard ? (l.arr - t0) / 1000 : l.dur))}</small></span></li>`;
     })
     .join('');
 }
@@ -2232,7 +2263,7 @@ export function busGone(p, times, now = Date.now()) {
 async function dropGone(c) {
   const soon = (c.plans || []).filter(p => {
     const l = p.legs.find(x => x.mode !== 'walk');
-    return l?.mode === 'bus' && l.from?.lat && l.dep < Date.now() + 20 * 60_000;
+    return !p.aboard && l?.mode === 'bus' && l.from?.lat && l.dep < Date.now() + 20 * 60_000;
   });
   let changed = false;
   await Promise.all(soon.slice(0, 8).map(async p => {

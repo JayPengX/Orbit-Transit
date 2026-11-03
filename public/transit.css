@@ -2364,6 +2364,17 @@ body.tab-map {
 .ot-dot.stop {
   border: 2px solid var(--q-accent);
 }
+/* On board: the trip planned from the bus or train you're on (aboard.mjs), 不在車上 beside it. */
+.ot-aboard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 12px 0 0;
+}
+.ot-aboard .q-chip {
+  flex: none;
+}
 /* 現在出發, and the ways of moving for this search. */
 .ot-opts {
   display: flex;
