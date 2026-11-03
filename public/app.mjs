@@ -26,6 +26,7 @@ import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
 import { readSaved, UNREAD, writeJson } from './lib/util.mjs';
+import { keepLearning } from './lib/learn.mjs';
 import { W, en, lang } from '#kit/lang.mjs';
 
 const $ = id => document.getElementById(id);
@@ -55,6 +56,8 @@ if (en) {
 }
 const q = orbitSession('transit', { lang });
 useSession(q);
+// (建議's guesses learn on the family's engine, kept on the Pass: lib/learn.mjs.)
+keepLearning(q);
 
 // Where the device was last (opens the map there at once), this device's
 // copy of the pass's data (one that couldn't be read is never saved over).

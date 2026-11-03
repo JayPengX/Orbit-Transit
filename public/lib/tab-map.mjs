@@ -28,6 +28,7 @@ import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, iconName, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
+import { wentTo } from './learn.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, bikeTile, bikeStats, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
@@ -1644,6 +1645,7 @@ async function plan(from, to, opts = {}) {
   }
   map.fit([fromPt, dest], fitPad(40, 0.48));
   ctx.data.trips = rememberTrip(ctx.data.trips, dest, { went: true });
+  wentTo(dest);
   ctx.save();
   const c = card;
   let out = null;

@@ -145,3 +145,47 @@ test('常去: a place planned to at this hour on days like this comes up; not wh
   const list = suggest({ now, recents: [gym, shop] });
   assert.equal(list[0].kind, 'usual');
 });
+
+test('去公司 / 去學校: a working day\'s morning at 家, from the first day; not on a holiday, later, away from 家, or with a saved trip there', async () => {
+  const { goScore } = await import('../public/lib/suggest.mjs');
+  const WORK = { id: 'p3', name: '公司', icon: 'work', lat: 24.786, lon: 121.017 };
+  const places = [HOME, WORK];
+  const r = suggest({ now: T('07:40', '2026-11-04'), here: AT_HOME, places });
+  assert.equal(r[0].kind, 'go');
+  assert.equal(r[0].place.name, '公司');
+  // 國慶日補假 (a Friday), a Saturday, the afternoon, out already: none.
+  assert.equal(goScore(WORK, AT_HOME, T('07:40', '2026-10-09'), HOME), 0);
+  assert.equal(goScore(WORK, AT_HOME, T('07:40', '2026-11-07'), HOME), 0);
+  assert.equal(goScore(WORK, AT_HOME, T('14:00', '2026-11-04'), HOME), 0);
+  assert.equal(goScore(WORK, FAR, T('07:40', '2026-11-04'), HOME), 0);
+  // 學校 when that's what's pinned; and a saved trip there is it already.
+  assert.equal(suggest({ now: T('07:10', '2026-11-04'), here: AT_HOME, places: [HOME, SCHOOL] })[0].place.name, '學校');
+  assert.ok(!suggest({ now: T('07:40'), here: AT_HOME, places: [HOME, SCHOOL], trips: [trip()] }).some(x => x.kind === 'go'));
+});
+
+test('常去 by Taiwan\'s calendar: a holiday is a day off, so the workday commute isn\'t guessed on it', async () => {
+  const { usualTrip } = await import('../public/lib/suggest.mjs');
+  const work = { name: '公司', lat: 24.786, lon: 121.017, ts: ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-27'].map(d => T('07:50', d)) };
+  assert.equal(usualTrip([work], T('07:45', '2026-10-28'))?.place.name, '公司');
+  assert.equal(usualTrip([work], T('07:45', '2026-10-26')), null, '光復節補假');
+  assert.equal(usualTrip([work], T('07:45', '2026-10-31')), null, 'a Saturday');
+});
+
+test('a guess of a place learns: passed over too often it stops, gone to it rises; 常去 elsewhere now goes before 回家', async () => {
+  const { placeItem } = await import('../public/lib/suggest.mjs');
+  const evening = { now: T('19:00'), here: FAR, places: [HOME] };
+  assert.equal(suggest(evening)[0].kind, 'home');
+  // fb: the chance a card of the place is gone to (feedback.mjs chance).
+  assert.deepEqual(suggest({ ...evening, fb: () => 0.05 }), [], 'ignored evening after evening');
+  const up = suggest({ ...evening, fb: () => 0.6 })[0].score;
+  assert.ok(up > suggest({ ...evening, fb: () => 0.2 })[0].score);
+  // One look a day, by the place and by the place on that weekday.
+  const item = placeItem(HOME, T('19:00'));
+  assert.equal(item.id, `to:24.8000,120.9700:2026-10-05`);
+  assert.deepEqual(item.keys, ['to:24.8000,120.9700', 'to:24.8000,120.9700@1']);
+  // Out at 17:40 on a 補習班 day: 補習班, not 回家 yet.
+  const cram = { name: '補習班', lat: 24.802, lon: 120.975, ts: ['2026-09-22', '2026-09-24', '2026-09-29', '2026-10-01'].map(d => T('17:40', d)) };
+  const r = suggest({ now: T('17:35', '2026-10-06'), here: FAR, places: [HOME], recents: [cram] });
+  assert.equal(r[0].kind, 'usual');
+  assert.ok(!r.some(x => x.kind === 'home'));
+});
