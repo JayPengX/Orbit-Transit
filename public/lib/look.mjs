@@ -92,3 +92,22 @@ export const noticesHtml = items =>
 const firstLine = t => String(t || '').split('\n').find(x => x.trim()) || '';
 // (`open`: each shown whole, in the notice's own sheet.)
 export const saidRows = (list, { open = false } = {}) => `<div class="ot-said">${oneEach(list).map(n => `<details${open ? ' open' : ''} class="ot-said-row${n.effect === 'off' || n.effect === 'part' ? ' off' : ''}"><summary><b>${e(effectLabel(n.effect))}</b><span>${e(firstLine(n.title))}</span></summary><p>${e(n.text)}</p></details>`).join('')}</div>`;
+
+// A trip's own icon (Jay 2026-11-03: never its bus's badge, or it reads as a pinned bus): the
+// saved place it ends at (家, 學校, 公司), else what its name says (回家 and 放學 home, 上學
+// school, 上班 work), else a day's trip a calendar, else a route. A place's tile, not a line's badge.
+const KEPT = ['home', 'school', 'work'];
+export const tripIconKey = (name = '', place = null, dated = false) =>
+  KEPT.includes(place?.icon)
+    ? place.icon
+    : /家|放學|下班|home/i.test(name)
+      ? 'home'
+      : /學|校|課|補習|school|class/i.test(name)
+        ? 'school'
+        : /班|公司|工作|work|office/i.test(name)
+          ? 'work'
+          : place?.icon || (dated ? 'calendar' : 'route');
+export const tripTile = (name, place, dated = false, size = '') => {
+  const k = tripIconKey(name, place, dated);
+  return tile(k, PLACE_COLOR[k] || COLOR.route, size);
+};

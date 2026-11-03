@@ -20,5 +20,6 @@ export const whenHtml = (at, sub = '', live = false) => `<span class="ot-strip-e
 // `color` the line's own colour; `main` and `note` are HTML; `when` whenHtml's.
 // (A light colour, YouBike's yellow, takes dark ink: inkOn's line sits higher here, as a glyph is thin.)
 const ink = c => (inkOn(c) === '#fff' && /^#?f5b301$/i.test(c) ? '#1c1c1e' : inkOn(c));
-export const boardRow = ({ no = '', color = '', glyph = '', main = '', note = '', when = '', attrs = '' }) =>
-  `<div class="ot-strip"><button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no${glyph ? ' ob-glyph' : ''}"${color ? ` style="--line:${e(color)};--ink:${ink(color)}"` : ''}>${glyph ? icon(glyph) : noHtml(shown(no))}</span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${main}</b></span>${note ? `<span class="ot-strip-note"><small>${note}</small></span>` : ''}</span>${when}</button></div>`;
+// `lead` (HTML) takes the badge's place: a trip's own tile (look.mjs tripTile), never a line's badge.
+export const boardRow = ({ no = '', color = '', glyph = '', lead = '', main = '', note = '', when = '', attrs = '' }) =>
+  `<div class="ot-strip"><button class="ot-strip-main" type="button" ${attrs}>${lead || `<span class="ot-strip-no${glyph ? ' ob-glyph' : ''}"${color ? ` style="--line:${e(color)};--ink:${ink(color)}"` : ''}>${glyph ? icon(glyph) : noHtml(shown(no))}</span>`}<span class="ot-strip-mid"><span class="ot-strip-what"><b>${main}</b></span>${note ? `<span class="ot-strip-note"><small>${note}</small></span>` : ''}</span>${when}</button></div>`;

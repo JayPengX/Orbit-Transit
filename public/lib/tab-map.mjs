@@ -1262,6 +1262,13 @@ function wireSearch() {
     $('results').hidden = true;
     input.focus();
   });
+  // The keyboard put away with nothing typed: the search is over, 取消 goes and the field takes the
+  // row again (Jay 2026-11-03: it stayed). Something typed keeps it, its results still there.
+  // (A press on 取消 keeps the field's focus, so its tap lands before it'd go.)
+  input.addEventListener('blur', () => {
+    if (!input.value.trim()) $('q-cancel').hidden = true;
+  });
+  $('q-cancel').addEventListener('mousedown', ev => ev.preventDefault());
   $('q-cancel').addEventListener('click', () => {
     input.value = '';
     clear.hidden = true;
