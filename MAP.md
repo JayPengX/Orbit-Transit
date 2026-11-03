@@ -49,6 +49,12 @@ Live: https://orbit.jaypengx.com/transit/
   or shown again, the next run you can make is. You're at a bus stop 5
   minutes before a timetable time, 2 before a bus seen live; trains as
   timed (`plan.mjs boardEarly`, after ranking: the leave time alone moves).
+  A live bus is taken when the timetable has one due about then
+  (`liveTrusted`); at a stop the timetable doesn't time (快捷8號 times only
+  台大竹東分院 → 砂石廠), when a run left the first stop for it. A route
+  sheet draws a bus between two stops only where a live time drops below the
+  nearest one before it, a stop without one in between being no bus
+  (`bus-ui.mjs busBetween`; `tests/route-bus-icon.test.mjs`).
 - **追公車** (`lib/chase.mjs`): a plan's first bus, walked to, due within the
   hour: a YouBike to a stop further along its way (within 4.5 km of you)
   where TDX sees a bus ahead of the one you'd make, there 2 minutes before
