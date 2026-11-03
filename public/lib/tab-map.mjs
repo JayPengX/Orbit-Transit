@@ -1671,7 +1671,7 @@ async function plan(from, to, opts = {}) {
     if (c.sel < 0 && c.plans.length) {
       drawPlan(c.plans[0], { fit: false });
       roadLegs(c.plans[0], { roads: 'bike' });
-    }
+    } else if (c.sel >= 0) roadLegs(c.plans[c.sel]); // (The open plan is a new one now: its streets again, kept answers, not a straight line.)
   });
 }
 
@@ -1977,7 +1977,7 @@ function selectPlan(i) {
 // (`roads: 'bike'`: the buses' stops and the rides' streets (OpenStreetMap's free bike router), for the
 // plan drawn before any is opened; the walks' streets (Google's, billed) wait for a plan opened.)
 async function roadLegs(p, { lit = -1, roads = true } = {}) {
-  const todo = !roads ? [] : p.legs.filter(l => (l.mode === 'bike' || (roads !== 'bike' && l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
+  const todo = !roads ? [] : p.legs.filter(l => (l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
   // A ride the planner gave no shape: along its line (shapes.mjs: a bus its
   // route's road, a train or the metro its track), else a bus through its
   // stops; never a straight line across town.
@@ -1999,9 +1999,9 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
     ...todo.map(async l => {
       // A walk: the one walk (walkTo, Google's streets), from where you are
       // as the strip and the cards have it when it starts beside you; a
-      // ride: OpenStreetMap's bike router.
+      // ride: OpenStreetMap's bike router. (Before a plan's opened: OpenStreetMap's foot router, free.)
       const here = l.mode === 'walk' && ctx.here && meters(ctx.here.lat, ctx.here.lon, l.from.lat, l.from.lon) < 50;
-      const r = l.mode === 'walk' ? await (here ? walkFrom(ctx.here, l.to, { line: true }) : walkTo(l.from, l.to, { line: true }).catch(() => null)) : await roadPath(l.mode, l.from, l.to);
+      const r = l.mode === 'walk' && roads !== 'bike' ? await (here ? walkFrom(ctx.here, l.to, { line: true }) : walkTo(l.from, l.to, { line: true }).catch(() => null)) : await roadPath(l.mode, l.from, l.to);
       if (!r?.poly) return;
       l.road = true;
       l.poly = r.poly;
@@ -2017,6 +2017,10 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
     if (n) drawPlan(n.plan, { fit: false, lit: n.i });
     else drawPlan(p, { fit: false, lit });
     if (!navFull()) renderCard();
+  } else if (card?.plans?.length && !card.plans.includes(p) && !navFull()) {
+    // The plans came again while these streets were asked (the buses' times): the one shown now, its streets
+    // (the same answers, kept), never left straight.
+    roadLegs(card.plans[card.sel >= 0 ? card.sel : 0], { roads: card.sel >= 0 ? true : 'bike' });
   }
 }
 // A leg's way on the map: its shape; no shape from the planner, through its
@@ -2111,7 +2115,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
     // Navigating: the whole trip in its colours, the step you're on the boldest, the steps behind you faint.
     const done = lit >= 0 && k < lit;
     const on = lit < 0 || k === lit;
-    lines.push({ pts: path, color: done ? '#4b5263' : l.mode === 'walk' ? '#c5ccd8' : legColor(l), width: l.mode === 'walk' ? 4 : on ? 8 : 6, dash: l.mode === 'walk', z: on ? 6 : done ? 3 : 5 });
+    lines.push({ pts: path, color: done ? '#4b5263' : l.mode === 'walk' ? '#c5ccd8' : legColor(l), width: l.mode === 'walk' ? 4 : on ? 8 : 6, dash: l.mode === 'walk' || (l.mode === 'bike' && !l.road && !l.poly && !l.path), z: on ? 6 : done ? 3 : 5 });
     pts.push(...path.map(([lat, lon]) => ({ lat, lon })));
   }
   map.lines('plan', lines);

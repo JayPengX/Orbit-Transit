@@ -2833,3 +2833,15 @@ test('the location ask still up: never started over, one 「允許取用位置�
   await getPosition({ timeout: 20, maximumAge: -1, kick: true }, nav);
   assert.equal(starts, 1);
 });
+
+// Jay 2026-11-01 ("It's a fucking straight line"): a trip's walks and YouBike rides follow the streets,
+// also once the plans come again (the buses' times) while the streets are asked; a ride the router
+// couldn't give is dashed, never a solid straight line.
+test('walks and YouBike rides stay on the streets', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/lib/tab-map.mjs', import.meta.url), 'utf8');
+  assert.match(src, /else if \(c\.sel >= 0\) roadLegs\(c\.plans\[c\.sel\]\)/);
+  assert.match(src, /!card\.plans\.includes\(p\) && !navFull\(\)\) \{[\s\S]{0,300}roadLegs\(card\.plans\[/);
+  assert.match(src, /l\.mode === 'bike' \|\| \(l\.mode === 'walk' && !l\.poly\)\) && !l\.road/);
+  assert.match(src, /dash: l\.mode === 'walk' \|\| \(l\.mode === 'bike' && !l\.road && !l\.poly && !l\.path\)/);
+});
