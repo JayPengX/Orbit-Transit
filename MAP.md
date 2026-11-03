@@ -91,6 +91,12 @@ Live: https://orbit.jaypengx.com/transit/
   has passed lose their time, the rest are the estimates' own gaps from where
   it is (`tests/bus-gps.test.mjs`; on 快捷8號 the error to where buses really
   got to fell from about 2 minutes to under 1).
+  Today and the next day on one line (`bus-ui.mjs` `nexts`, `doneToday`):
+  the stops today's last bus has passed are the next day's (the line grey
+  there, the day said once where they begin); where today's begin, that bus
+  by the timetable as a ring on the line and 末班車. Today's last is kept 15
+  minutes past its time until a bus is seen beyond the stop (it shows up live
+  only once it's out). 今天已收班 only when no stop has a run still to come.
 - **追公車** (`lib/chase.mjs`): a plan's first bus, walked to, due within the
   hour: a YouBike to a stop further along its way (within 4.5 km of you)
   where TDX sees a bus ahead of the one you'd make, there 2 minutes before
