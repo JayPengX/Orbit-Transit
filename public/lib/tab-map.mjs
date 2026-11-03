@@ -8,6 +8,7 @@
 // starts navigation.
 
 import { createMap } from './map.mjs';
+import { watchHeading, askCompass, gpsFix, unwrap } from './compass.mjs';
 import { fitNumbers, netState } from '#kit/orbit.mjs';
 import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
@@ -319,10 +320,28 @@ const navFull = () => navigating() && !navNow()?.min;
 
 // ---- The device -------------------------------------------------------------------------------
 
+// You: the blue dot, and the way the phone faces as a soft beam from it (compass.mjs).
+let facing = null;
+let stopFacing = null;
 function drawMe(h) {
-  map?.layer('me').set([{ id: 'me', lat: h.lat, lon: h.lon, cls: 'me', z: 50, html: '<i class="ot-me"></i>' }]);
+  map?.layer('me').set([{ id: 'me', lat: h.lat, lon: h.lon, cls: 'me', z: 50, html: '<b class="ot-beam"></b><i class="ot-me"></i>' }]);
+  gpsFix(h);
+  stopFacing ||= watchHeading(turnBeam);
+  turnBeam(facing);
+}
+let shownTurn = null;
+function turnBeam(deg) {
+  facing = deg;
+  const beam = $('map')?.querySelector('.ot-beam');
+  if (!beam) return;
+  beam.classList.toggle('on', deg != null);
+  if (deg == null) return;
+  shownTurn = unwrap(shownTurn, deg);
+  beam.style.transform = `rotate(${shownTurn.toFixed(1)}deg)`;
 }
 async function locateMe() {
+  // (The compass asked here, in the tap: an iPhone asks for it only from one.)
+  askCompass();
   // (Where you were last seen, at once, however long ago: standing still, the watch has nothing new
   // to say and the fresh fix can take seconds, and a tap that waited on it looked like a dead button.)
   const was = ctx.here;
