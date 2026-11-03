@@ -5229,6 +5229,43 @@ button.ot-trip-foot {
   height: 12px;
   stroke-width: 2.2;
 }
+/* The bus stands out at a glance (Jay 2026-11-03: "too unnoticeable"): a
+   size up again, its glyph bigger, and a soft ring breathing out from it
+   (still under reduced motion). Not a pill: the line's own green. */
+.ot-route-stops li.at .ot-rs-dot,
+.ot-rs-bus:not(.plan) {
+  width: 30px;
+  height: 30px;
+  margin-left: 0;
+  box-shadow: 0 0 0 3px var(--q-sheet), 0 2px 8px color-mix(in srgb, var(--q-green) 45%, transparent);
+}
+.ot-route-stops li.at .ot-rs-dot .ot-i,
+.ot-rs-bus:not(.plan) .ot-i {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.3;
+}
+.ot-route-stops li.at .ot-rs-dot::after,
+.ot-rs-bus:not(.plan)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--q-green) 55%, transparent);
+  animation: ot-bus-ring 2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes ot-bus-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--q-green) 55%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--q-green) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ot-route-stops li.at .ot-rs-dot::after,
+  .ot-rs-bus:not(.plan)::after {
+    animation: none;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--q-green) 22%, transparent);
+  }
+}
 /* Today and the next day on one line (2026-11-03): where the day's last bus
    has passed, the line goes quiet and the stops are the next day's; where
    today's stops begin, that last bus by the timetable, a ring until it's
