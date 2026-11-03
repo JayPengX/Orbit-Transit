@@ -69,7 +69,10 @@ export const tpassOf = id => TPASSES.find(p => p.id === id) || null;
 // Long rides cut every 30 minutes (每 30 分鐘換車): when set, and always
 // when your TPASS takes YouBike's first half hour, each half hour free (the
 // owner, 2026-10-12: riding 成功九街 → 竹東高中 is two bikes for TPASS users).
-export const bikeSwap = prefs => prefs?.bike30 === true || !!tpassOf(prefs?.tpass)?.bike;
+// Changing bikes every 30 minutes: the person's own choice in 我的 (`swap30` 'on' or 'off'; Jay
+// 2026-11-03: "not everyone want that"), else as before: on by 每 30 分換車, or with a pass whose
+// first half hour is free.
+export const bikeSwap = prefs => (prefs?.swap30 === 'on' ? true : prefs?.swap30 === 'off' ? false : prefs?.bike30 === true || !!tpassOf(prefs?.tpass)?.bike);
 
 // What a pass takes, said: its own `modes` (else bus, 台鐵 and metro), the metro only where a city has one
 // (竹竹 has none: the owner, 2026-10-21), YouBike where it counts.

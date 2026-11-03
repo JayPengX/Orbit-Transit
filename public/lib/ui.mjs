@@ -64,6 +64,7 @@ const I = {
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
   bolt: '<path d="M13 2.5L5.5 13.5H11l-1 8 7.5-11H12z"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   chevron: '<path d="M9 5l7 7-7 7"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
   bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
@@ -125,6 +126,21 @@ export function legLabel(l) {
   // A planner's line (新竹-六家) once the train is known: its kind and number, as on its sign.
   if (l.mode === 'tra' && l.train?.type && l.train?.no && /-/.test(l.short || l.name || '')) return `${trainKind(l.train.type)} ${l.train.no}`;
   return l.short || l.name || MODE_NAME[l.mode];
+}
+// A journey as one line (Jay 2026-11-03, the old time-scaled bar "look like shit": a long wait
+// at a change left a stub, the stops' dots read as breaks). Each ride a stretch in its line's
+// colour, as long as its minutes (never too short to see), a walk a dotted stretch, a change a
+// ring between two rides; the time spent waiting is never drawn, the times beside say it.
+// `parts`: [{ min, color, walk }] in order.
+export function journeyLine(parts) {
+  const out = [];
+  parts.forEach((p, i) => {
+    const prev = parts[i - 1];
+    if (prev && !prev.walk && !p.walk) out.push('<b class="chg"></b>');
+    const f = Math.max(p.walk ? 2 : 6, Math.round(p.min || 0));
+    out.push(p.walk ? `<i class="walk" style="--f:${f}"></i>` : `<i style="--f:${f};--c:${e(p.color)}"></i>`);
+  });
+  return `<span class="ot-jl" aria-hidden="true">${out.join('')}</span>`;
 }
 // A plan's legs as a row of chips (the short walks left out).
 // A route's departures as times to pick (its bus or train's own time; the

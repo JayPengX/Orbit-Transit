@@ -320,7 +320,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     // 除錯紀錄: everything the ranking was worked out from (scripts/replay.mjs runs it again), and what it said.
     rec('trip', {
       now, t0, at, by, from, to, ms: { ...ms }, stage, buses: busTrace,
-      prefs: { modes, bike30: prefs.bike30, tpass: prefs.tpass },
+      prefs: { modes, bike30: prefs.bike30, swap30: prefs.swap30, tpass: prefs.tpass },
       sources: res.sources || {},
       plans: list, bikes, cities,
       shown: ranked.filter(p => p.lead && !p.weak).map(p => `${p.score} ${hm(p.dep)}→${hm(p.arr)} ${p.legs.map(l => (l.mode === 'walk' ? 'walk' : `${l.mode}${l.ebike ? '⚡' : ''}:${l.short || l.name || ''}`)).join(' ')}`)

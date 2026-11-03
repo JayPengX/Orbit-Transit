@@ -12,7 +12,7 @@ import { lineMapHtml, mapCities } from './linemap.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
-import { sheet, sheetHead, icon, tagText, trainKind, trainColor, inkOn, stationLabel, fitLegs } from './ui.mjs';
+import { sheet, sheetHead, icon, tagText, trainKind, trainColor, inkOn, stationLabel, fitLegs, journeyLine } from './ui.mjs';
 import { COLOR, tile, section, rowCard, emptyNote, noticesHtml } from './look.mjs';
 import { loadNotices, onNotices } from './service.mjs';
 import { e, hm, minsText, tw, twAt, addDays, meters, distText, readJson, writeJson, shown } from './util.mjs';
@@ -180,25 +180,8 @@ const trainChip = t => {
   const c = trainColor(t);
   return `<span class="ot-leg" style="--c:${c};--ink:${inkOn(c)}">${icon(t.sys)}<b><span class="k">${e(kindName(t))} </span>${e(t.no)}</b></span>`;
 };
-// The journey as a line through its time: each train a stretch in its colour
-// with a dot at each station it calls at, a change a gap, a walk dotted.
-function barHtml(j) {
-  const span = Math.max(1, j.arr - j.dep);
-  const pos = t => `${(((t - j.dep) / span) * 100).toFixed(2)}%`;
-  const wid = (a, b) => `${(((b - a) / span) * 100).toFixed(2)}%`;
-  const out = [];
-  j.legs.forEach(l => {
-    if (l.walk) return out.push(`<i class="walk" style="left:${pos(l.dep)};width:${wid(l.dep, l.arr)}"></i>`);
-    const c = trainColor(l.trip);
-    // (The stations between: where the train stops on the way, at their own times.)
-    const dots = l.trip.stops
-      .slice(l.fromK + 1, l.toK)
-      .map(s => `<em style="left:${(((s.arr - l.dep) / Math.max(1, l.arr - l.dep)) * 100).toFixed(2)}%"></em>`)
-      .join('');
-    out.push(`<i class="ride" style="left:${pos(l.dep)};width:${wid(l.dep, l.arr)};--c:${c}">${dots}</i>`);
-  });
-  return `<span class="ot-jbar" aria-hidden="true">${out.join('')}</span>`;
-}
+// The journey as one line (ui.mjs journeyLine): each train in its colour, a change a ring.
+const barHtml = j => journeyLine(j.legs.map(l => (l.walk ? { walk: true, min: l.min } : { min: (l.arr - l.dep) / 60_000, color: trainColor(l.trip) })));
 function journeyHtml(j, i, next) {
   const rides = j.legs.filter(l => !l.walk);
   const delays = rides.map(l => delayOf(l.trip));

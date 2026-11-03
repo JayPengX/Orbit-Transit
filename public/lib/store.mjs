@@ -145,6 +145,7 @@ export function cleanPrefs(p) {
   // Nothing at all allowed is everything.
   if (!Object.values(d.modes).some(Boolean)) d.modes = defaultPrefs().modes;
   d.bike30 = p.bike30 === true;
+  if (p.swap30 === 'on' || p.swap30 === 'off') d.swap30 = p.swap30;
   d.tpass = str(p.tpass, 12);
   d.maps = p.maps === 'apple' ? 'apple' : 'google';
   return d;
