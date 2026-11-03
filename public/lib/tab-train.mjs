@@ -4,7 +4,8 @@
 // station (or any, picked by city first); each option shows its trains,
 // where to change and how long you wait, the fare, and today's delays.
 
-import { railStations, railNetwork, railSpan, traDelays, legFare } from './raildata.mjs';
+import { railStations, railNetwork, railSpan, traDelays, legFare, stationPoint } from './raildata.mjs';
+import { ticketOf } from './ticket.mjs';
 import { journeys, findStations } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { cityShort } from './city.mjs';
@@ -153,7 +154,12 @@ function resultsHtml() {
   const pin = `<button type="button" data-act="pin-conn" aria-pressed="${pinnedConn()}">${pinnedConn() ? W('已釘選', 'Pinned') : W('釘選', 'Pin')}</button>`;
   // (Inside the person's TPASS the list keeps to trains the pass covers: said, so
   // a missing 普悠瑪 or 高鐵 isn't a mystery; lost 10-19, back 2026-11-01.)
-  const passNote = state.passOnly ? `<p class="ot-note ot-pass-note">${W('只列 TPASS 能搭的車', 'Only trains your TPASS covers')}</p>` : '';
+  // (And every train a tap away: a ticket bought for a 普悠瑪 or 高鐵, Jay 2026-11-03.)
+  const passNote = state.passOnly
+    ? `<p class="ot-note ot-pass-note">${W('只列 TPASS 能搭的車', 'Only trains your TPASS covers')}<button class="q-chip" type="button" data-act="all-trains">${W('全部班次', 'All trains')}</button></p>`
+    : state.allTrains
+      ? `<p class="ot-note ot-pass-note">${W('全部班次', 'All trains')}<button class="q-chip" type="button" data-act="pass-trains">${W('只看 TPASS', 'TPASS only')}</button></p>`
+      : '';
   if (!state.results.length) return section(W('班次', 'Trains'), passNote + emptyNote(W('這個時間之後沒有班次', 'No trains after this time')), pin);
   // The next train still to leave today: lit, its countdown on it.
   const now = Date.now();
@@ -205,7 +211,7 @@ function journeyHtml(j, i, next) {
   const eyebrow = next ? `<span class="ot-jny-next">${W('下一班', 'Next train')} · <b data-leave="${leaveAt(j)}">${e(leaveText(leaveAt(j)))}</b></span>` : '';
   return `<button class="ot-jny${i === state.open ? ' on' : ''}${next ? ' next' : ''}" type="button" data-j="${i}">
     ${eyebrow}
-    <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><span class="ot-jny-mid"><small>${e(minsText((j.arr - j.dep) / 1000))}</small>${barHtml(j)}</span><b>${e(hm(j.arr))}</b></span>
+    <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><span class="ot-jny-mid"><small>${e(minsText((j.arr - j.dep) / 1000))}${state.allTrains && rides.every(onPass) ? ' · TPASS' : ''}</small>${barHtml(j)}</span><b>${e(hm(j.arr))}</b></span>
     <span class="ot-jny-foot"><span class="ot-jny-legs">${legs}</span>${state_}</span>
     ${i === state.open ? detailHtml(j) : ''}
   </button>`;
@@ -245,7 +251,8 @@ function detailHtml(j) {
     out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : d === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span></span></li>`);
   });
   out.push(`<li class="end" style="--c:${COLOR.walk}"><span class="ot-step-time">${e(hm(j.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e(nameOf(j.legs.at(-1).to))}</b></span></li>`);
-  return `<ol class="ot-steps">${out.join('')}</ol>`;
+  // 用這班規劃: the trip from where you are around these trains (the ticket you hold: ticket.mjs), on the map.
+  return `<ol class="ot-steps">${out.join('')}</ol><span class="ot-jny-plan" role="button" data-ride-plan="${state.results.indexOf(j)}">${icon('route')} ${W('用這班規劃路線', 'Plan a trip on it')}</span>`;
 }
 
 async function search() {
@@ -276,14 +283,18 @@ async function search() {
     const ends = [{ key: toKey, extra: 0 }];
     // Both stations inside your TPASS's cities: only the trains it takes (unless there are none).
     state.passOnly = false;
-    if (state.mode !== 'hsr' && inPassSt(fromKey) && inPassSt(toKey)) {
+    state.allTrains = false;
+    if (state.mode !== 'hsr' && !state.everyTrain && inPassSt(fromKey) && inPassSt(toKey)) {
       const mine = journeys(net, starts, ends, t, { use: x => passTrainTrip(x) && use(x), n: 6 });
       if (mine.length) {
         state.passOnly = true;
         state.results = mine;
       }
     }
-    if (!state.passOnly) state.results = journeys(net, starts, ends, t, { use, n: 6 });
+    if (!state.passOnly) {
+      state.results = journeys(net, starts, ends, t, { use, n: 6 });
+      state.allTrains = Boolean(state.everyTrain && state.mode !== 'hsr' && inPassSt(fromKey) && inPassSt(toKey));
+    }
   } catch (err) {
     state.error = errorText(err);
     state.results = null;
@@ -305,6 +316,14 @@ const keyStation = key => {
   return s ? { sys: s.sys, id: s.id, name: s.name } : null;
 };
 function onClick(ev) {
+  const rp = ev.target.closest('[data-ride-plan]');
+  if (rp) {
+    const j = state.results?.[Number(rp.dataset.ridePlan)];
+    const rides = j?.legs.filter(l => !l.walk) || [];
+    const end = net?.st.get(j?.legs.at(-1).to);
+    if (!rides.length || !end) return;
+    return ctx.openTrip?.(null, { ...stationPoint(end), name: stationLabel(end) }, { ticket: ticketOf(rides) });
+  }
   const pt = ev.target.closest('[data-pin-train]');
   if (pt) {
     const x = JSON.parse(pt.dataset.pinTrain);
@@ -342,6 +361,10 @@ function onClick(ev) {
     return showResults();
   }
   const act = ev.target.closest('[data-act]')?.dataset.act;
+  if (act === 'all-trains' || act === 'pass-trains') {
+    state.everyTrain = act === 'all-trains';
+    return search();
+  }
   if (act === 'swap') {
     [state.from, state.to] = [state.to, state.from];
     state.results = null;

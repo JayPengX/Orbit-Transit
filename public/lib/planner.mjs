@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { rank, withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { rank, withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
 import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
@@ -31,6 +31,8 @@ import { modeList } from './store.mjs';
 import { meters, hm, isRide, tw } from './util.mjs';
 import { crossings } from './rivers.mjs';
 import { rec } from '#kit/orbit.mjs';
+import { W } from '#kit/lang.mjs';
+import { ridesIn, onTicketTrain } from './ticket.mjs';
 
 // 台鐵 and 高鐵 (our own router's trains; not the metro).
 const TRAINS = new Set(['tra', 'hsr']);
@@ -482,4 +484,74 @@ export async function planAboard(data, a, to, { modes = null, ebike = false } = 
   if (!first.length) return null;
   const later = parts.some(x => x.later) ? Promise.all(parts.map(x => (x.later ? x.later.catch(() => null) : null))).then(ls => ({ plans: done(parts.flatMap((x, i) => ls[i] || x.first)), sources: {} })) : null;
   return { plans: first, sources: Object.assign({}, ...parts.map(x => x.sources || {})), error: null, later };
+}
+
+// ---- 指定車次 (ticket.mjs) ----
+// A trip around the train you hold a ticket for: to its station in time
+// (3 minutes before a 台鐵 train, 5 before 高鐵's gates; a walk when it's
+// near, else the planners' ways there by then), the train or trains, then on
+// from where it gets in as any trip from that station is planned. Ways there
+// and ways on ranked together; the train is never swapped for another.
+// → planTrip's { plans, sources, error, later } (error: the train gone, or no way there in time).
+export async function planTicket(data, from, to, ticket, { modes = null, ebike = false } = {}) {
+  const now = Date.now();
+  const r0 = ticket?.rides?.[0];
+  if (!r0) return { plans: [], sources: {}, error: new Error('no ticket') };
+  // (The days its rides are filed under: a late train's change after midnight is the next day's.)
+  const net = await railNetwork(tw(r0.dep).date, railSpan(r0.dep, ticket.rides.at(-1).arr));
+  const rides = ridesIn(net, ticket, { from, to });
+  if (!rides) return { plans: [], sources: {}, error: Object.assign(new Error('no train'), { text: W('這天的時刻表裡找不到這班車', 'This train isn’t in that day’s timetable') }) };
+  const trainLegs = rides.map(r => trainLeg(net, r));
+  const first = trainLegs[0];
+  const last = trainLegs.at(-1);
+  const ready = first.dep - (first.mode === 'hsr' ? 5 : 3) * 60_000;
+  if (first.dep < now - 60_000) return { plans: [], sources: {}, error: Object.assign(new Error('gone'), { text: W(`${first.short} 已經開走了（${hm(first.dep)}）`, `${first.short} has left (${hm(first.dep)})`) }) };
+  const pass = tpassOf(data.prefs?.tpass);
+  const findCity = await cityFinder();
+  const ask = (a, b, opts) => planTrip(data, a, b, { ...opts, modes, ebike }).catch(() => null);
+  // There: a walk within 800 m, else the planners' ways in by `ready`.
+  const near = (a, b, m) => from.lat != null && meters(a.lat, a.lon, b.lat, b.lon) <= m;
+  const [walkTo, walkFrom] = [near(from, first.from, 800), near(to, last.to, 700)];
+  const thereAsk = walkTo ? Promise.resolve(null) : ask(from, first.from, { at: ready, by: 'arrive' });
+  const onAsk = walkFrom ? Promise.resolve(null) : ask(last.to, to, { at: last.arr + (last.mode === 'hsr' ? 3 : 1) * 60_000, by: 'depart' });
+  const [there, on] = await Promise.all([thereAsk, onAsk]);
+  const walkThere = () => {
+    const w = walkLeg(from, first.from, 0);
+    return w.dist > 20 ? [{ ...w, dep: ready - w.dur * 1000, arr: ready }] : [];
+  };
+  const walkOn = () => {
+    const w = walkLeg(last.to, to, last.arr);
+    return w.dist > 20 ? [w] : [];
+  };
+  const fine = q => q.lead !== false && !q.weak && !onTicketTrain(q, ticket);
+  const ways = !walkTo
+    ? (there?.plans || []).filter(q => fine(q) && q.arr <= ready + 60_000 && q.dep >= now - 60_000).slice(0, 3).map(q => q.legs)
+    : [walkThere()];
+  if (!ways.length) return { plans: [], sources: there?.sources || {}, error: Object.assign(new Error('late'), { text: W(`來不及趕上 ${first.short}（${hm(first.dep)} 開）`, `No way to make ${first.short} (${hm(first.dep)})`) }) };
+  // (Nothing found on from the station: the walk, as the card says how far.)
+  const onWays = list => {
+    const l = walkFrom ? [] : (list || []).filter(fine).slice(0, 3).map(q => q.legs);
+    return l.length ? l : [walkOn()];
+  };
+  const join = (a, b) => {
+    // (The few steps from the station to itself: none.)
+    let rest = [...b];
+    while (rest[0]?.mode === 'walk' && (rest[0].dist || 0) < 60 && isRide(rest[1])) rest = rest.slice(1);
+    rest = rest.map(l => (l.dep != null && l.dep < last.arr && !isRide(l) ? { ...l, dep: last.arr, arr: last.arr + (l.dur || 0) * 1000 } : l));
+    const p = finish({ src: 'ticket', legs: [...a, ...trainLegs, ...rest], ticket: true });
+    p.fareText = fareOf(p, coverage(p, pass, findCity)).text;
+    return p;
+  };
+  const done = list => {
+    const after = onWays(list);
+    if (!after.length) return [];
+    // Each way there with the best way on, and the best way there with each way on.
+    const all = [...ways.map(a => join(a, after[0])), ...after.slice(1).map(b => join(ways[0], b))];
+    const ranked = rank(all, { now, o: from, d: to });
+    return ranked.map((p, i) => ({ ...p, times: [i] }));
+  };
+  const plans = done(on?.plans);
+  const sources = Object.assign({}, there?.sources || {}, on?.sources || {});
+  const later = on?.later ? on.later.then(o => (o?.plans?.length ? { plans: done(o.plans), sources } : null)).catch(() => null) : null;
+  return { plans, sources, error: plans.length ? null : new Error('none'), later };
 }

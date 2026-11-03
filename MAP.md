@@ -119,6 +119,19 @@ Live: https://orbit.jaypengx.com/transit/
   偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
   own): of stations about as near, one with 電輔車 there now, ridden at
   their pace (`plan.mjs` `PREFER_SEC`).
+- **指定車次** (`lib/ticket.mjs`, `planner.mjs planTicket`, Jay 2026-11-03:
+  "some train you buy ticket, HSR as well"): the plans card's time chip →
+  指定車次: a 台鐵 or 高鐵 number typed, the day picked, the day's trains with
+  it listed from the timetable already loaded (no read of its own), on and
+  off at the stops nearest the trip's ends (two pickers to change them). Or
+  查時刻's 用這班規劃路線 under a journey's steps (its trains, to its last
+  station). The trip is that train: to its station 3 minutes before (高鐵 5)
+  by a walk within 800 m, else the planners' ways there by then (never on the
+  ticket's own train); then on from where it gets in as any trip from that
+  station; ranked together. The chip shows the train; 現在出發 clears it.
+  Inside a TPASS area the train list and planner still keep to the pass's
+  trains (查時刻 says so, with 全部班次 a chip away, `· TPASS` on the ones it
+  covers); a ticket's train is never filtered.
 - **On board** (`lib/aboard.mjs`, Jay 2026-11-03): 規劃 from 你的位置 while
   on a bus or train plans from it, never from the point on the track. A train:
   the last 2½ minutes of fixes (`api.mjs recentFixes`) at a train's pace and
@@ -262,6 +275,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |
 | `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; the buzz; bus alerts |
 | `lib/aboard.mjs` | Already on a bus or train: which one, and the trip from its stops ahead |
+| `lib/ticket.mjs` | 指定車次: a train by its number, where to get on and off, found again for the planner |
 | `lib/service.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules |
 | `lib/compass.mjs` | Which way the phone faces, for the soft beam on your dot (`.ot-beam`): the compass (an iPhone asks on 我的位置, then quietly on the first tap), else the GPS's heading when moving; none known, or riding a bus or train (`navNow().aboard`, or a bus's or train's pace), no beam |
 | `tripCard` (tab-go) | 交通: a trip's card, its own icon (`look.mjs tripTile`: the place it ends at, else its name; never a bus's badge), its way as one line, the next two ways in three hours; a tap on a way shows it on the map ready to go |
