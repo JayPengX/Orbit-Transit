@@ -382,6 +382,8 @@ function idle() {
   const n = navFull() ? navNow() : null;
   if (n && lookBare != null && navLook(n.plan, n.i).bare !== lookBare) drawPlan(n.plan, { fit: false, lit: n.i });
   idleTimer = setTimeout(drawLayers, 250);
+  // (Zoomed: the trip's marks sorted out again for the new size.)
+  if (planMarks.length && map.zoom() !== planZoom) setPlanMarks(planMarks);
   const c = map.center();
   writeJson(VIEW_KEY, { lat: c.lat, lon: c.lon, z: map.zoom() });
 }
@@ -608,7 +610,7 @@ function closeCard() {
   map.select(null);
   map.lines('plan', []);
   planDraw++;
-  map.layer('plan').set([]);
+  setPlanMarks([]);
 }
 // The card's live part, again every 20 s while it's open.
 function refreshCard() {
@@ -2184,6 +2186,55 @@ function navLook(p, lit) {
 }
 let lookBare = null;
 let planDraw = 0;
+
+// A trip's marks never on top of each other (Jay 2026-11-03: "packed together can't see
+// nothing"): at the map's zoom, the more important mark wins its spot (the end, the start,
+// where you board, your YouBike stations), one that would cover it is left out until you
+// zoom in, and your stop's name is dropped (its dot stays) where it would run over another.
+// The ride's small stop dots are always drawn. (Boxes in CSS pixels round each mark's point.)
+const markBox = it => {
+  const c = ` ${it.cls} `;
+  if (c.includes(' dest ')) return [-22, -40, 22, 12];
+  if (c.includes(' from ')) return [-10, -10, 10, 10];
+  if (c.includes(' board ')) return [-15, -15, 15, 15];
+  if (c.includes(' bike ')) return c.includes(' bare ') ? [-17, -17, 17, 17] : [-18, -32, 62, 14];
+  return null;
+};
+const MARK_RANK = it => (/\bdest\b/.test(it.cls) ? 0 : /\bfrom\b/.test(it.cls) ? 1 : /\bboard\b/.test(it.cls) ? 2 : 3);
+const worldPx = (lat, lon, z) => {
+  const n = 256 * 2 ** z;
+  const s = Math.sin((Math.max(-85, Math.min(85, lat)) * Math.PI) / 180);
+  return [((lon + 180) / 360) * n, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n];
+};
+const hits = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+export function declutter(list, z) {
+  if (!Number.isFinite(z)) return list;
+  const taken = [];
+  const at = (it, box) => {
+    const [x, y] = worldPx(it.lat, it.lon, z);
+    return [x + box[0], y + box[1], x + box[2], y + box[3]];
+  };
+  const out = new Map();
+  for (const it of list.filter(markBox).sort((a, b) => MARK_RANK(a) - MARK_RANK(b))) {
+    const r = at(it, markBox(it));
+    if (taken.some(t => hits(t, r))) out.set(it.id, { ...it, cls: `${it.cls} tuck` });
+    else taken.push(r);
+  }
+  for (const it of list) {
+    if (!/\boff\b/.test(it.cls) || !it.name) continue;
+    const r = at(it, [10, -12, 26 + [...it.name].length * 13, 12]);
+    if (taken.some(t => hits(t, r))) out.set(it.id, { ...it, cls: `${it.cls} nolabel` });
+    else taken.push(r);
+  }
+  return list.map(it => out.get(it.id) || it);
+}
+let planMarks = [];
+let planZoom = null;
+function setPlanMarks(list) {
+  planMarks = list;
+  planZoom = map?.zoom?.() ?? null;
+  map.layer('plan').set(declutter(list, planZoom));
+}
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
   // A way on a card with stops: the whole trip, to its last place.
@@ -2228,19 +2279,19 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
         const at = x + 1;
         const off = x === all.length - 1;
         const cls = off ? ' off' : cur && at < next ? ' past' : cur && at === next ? ' next' : '';
-        return { id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${cls}`, z: off ? 18 : 15, html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>${off && s.name ? `<b style="--c:${e(legColor(p.legs[k]))};color:${e(inkOn(legColor(p.legs[k])))}">${e(shown(s.name))}</b>` : ''}` };
+        return { id: `s${k}:${x}`, lat: s.lat, lon: s.lon, cls: `stopdot${cls}`, z: off ? 18 : 15, name: off ? shown(s.name || '') : '', html: `<i style="--c:${e(legColor(p.legs[k]))}" title="${e(s.name || '')}"></i>${off && s.name ? `<b style="--c:${e(legColor(p.legs[k]))};color:${e(inkOn(legColor(p.legs[k])))}">${e(shown(s.name))}</b>` : ''}` };
       })
     )
   ];
   const run = ++planDraw;
   lookBare = lit >= 0 ? bare : null;
-  map.layer('plan').set(marks(null));
+  setPlanMarks(marks(null));
   // Its YouBike stations as they are now (bikes to take, docks to return to).
   if (bikes.length)
     ctx
       .cityOf(bikes[0].st.lat, bikes[0].st.lon)
       .then(city => city && cityBikes(city))
-      .then(list => list && run === planDraw && map.layer('plan').set(marks(new Map(list.map(x => [x.uid, x])))))
+      .then(list => list && run === planDraw && setPlanMarks(marks(new Map(list.map(x => [x.uid, x])))))
       .catch(() => {});
   if (fit && pts.length) map.fit(pts, fitPad(30, 0.5));
 }
@@ -2403,7 +2454,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       // Reopened mid-trip, no card came with it: the line and its end had stayed.)
       map.lines('plan', []);
       planDraw++;
-      map.layer('plan').set([]);
+      setPlanMarks([]);
       $('card').hidden = false;
       renderCard();
       if (card.plans?.length) drawPlan(card.plans[card.sel >= 0 ? card.sel : 0], { fit: false });

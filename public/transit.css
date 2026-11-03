@@ -1902,6 +1902,12 @@ body.tab-map {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   pointer-events: none;
 }
+/* A trip's mark that would cover a more important one at this zoom, and your stop's name where it
+   would run over one: left out until you zoom in (tab-map declutter). */
+.ot-mk.tuck,
+.ot-mk.stopdot.nolabel b {
+  display: none;
+}
 /* A metro map's stations: a dot in the line's colour (a ring at an interchange), names zoomed in. */
 .ot-mk.mstop {
   display: flex;
