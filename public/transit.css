@@ -1431,6 +1431,16 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   width: 14px;
   height: 14px;
 }
+/* 偏好電輔車: the 電輔車 count big, its ⚡ before it. */
+.ot-bk-n b.e {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.ot-bk-n b.e .ot-i {
+  width: 20px;
+  height: 20px;
+}
 .ot-bk.none .ot-bk-n b {
   color: var(--q-red);
 }

@@ -21,6 +21,7 @@ import { warmRail } from './lib/raildata.mjs';
 import { setHome, onNotices } from './lib/service.mjs';
 import { startAlerts } from './lib/alerts.mjs';
 import { savedNav, useMapsApp } from './lib/nav.mjs';
+import { useEbikeFirst } from './lib/look.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
 import * as timesTab from './lib/tab-times.mjs';
@@ -134,6 +135,7 @@ async function locateNow(force) {
 }
 // (A walk or a ride handed to Google's or Apple's Maps, as 我的 says.)
 useMapsApp(() => ctx.data.prefs?.maps);
+useEbikeFirst(() => ctx.data.prefs?.ebike === true);
 
 // ---- Tabs --------------------------------------------------------------------------------------
 

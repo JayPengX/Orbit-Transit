@@ -118,7 +118,10 @@ Live: https://orbit.jaypengx.com/transit/
   the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
   偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
   own): of stations about as near, one with 電輔車 there now, ridden at
-  their pace (`plan.mjs` `PREFER_SEC`).
+  their pace (`plan.mjs` `PREFER_SEC`). 我的's 偏好電輔車 (`prefs.ebike`, off by
+  default, Jay 2026-11-04) is where it starts: on, every search and saved trip
+  prefers them (`planTrip`'s `ebike` unsaid = the pref) and station cards count
+  電輔車 first (`look.mjs ebikeFirst`, handed the pref by `app.mjs`).
 - **指定車次** (`lib/ticket.mjs`, `planner.mjs planTicket`, Jay 2026-11-03:
   "some train you buy ticket, HSR as well"): the plans card's time chip →
   指定車次: a 台鐵 or 高鐵 number typed, the day picked, the day's trains with

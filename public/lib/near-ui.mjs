@@ -6,7 +6,7 @@
 import { etaRank, said } from './bus.mjs';
 import { strip, busWhen } from './bus-ui.mjs';
 import { icon, bikeMark } from './ui.mjs';
-import { COLOR, tile, bikeTile } from './look.mjs';
+import { COLOR, tile, bikeTile, ebikeFirst } from './look.mjs';
 import { e, distText, shown } from './util.mjs';
 import { W } from '#kit/lang.mjs';
 
@@ -57,7 +57,9 @@ function bikeCard(b) {
   const far = mins != null ? `<i class="walk">${icon('walk')}${mins} ${W('分', 'min')}</i>` : b.d != null ? `<i class="walk">${icon('walk')}${e(distText(b.d))}</i>` : '';
   if (b.ok === false) return `<button class="ot-bk off" type="button" data-bk="${e(b.uid)}">${bikeMark()}<span class="ot-bk-name q-fit-wrap">${e(shown(b.name))}</span><span class="ot-bk-n"><b>${W('暫停', 'Paused')}</b></span><span class="ot-bk-f">${far}</span></button>`;
   const lv = b.bikes + b.ebike === 0 ? 'none' : b.bikes + b.ebike <= 3 ? 'few' : 'ok';
-  return `<button class="ot-bk ${lv}" type="button" data-bk="${e(b.uid)}">${bikeMark()}<span class="ot-bk-name q-fit-wrap">${e(shown(b.name))}</span><span class="ot-bk-n"><b>${b.bikes}</b>${b.ebike ? `<em>${icon('bolt')}${b.ebike}</em>` : ''}</span><span class="ot-bk-f"><i>${icon('dock')}${b.ret}</i>${far}</span></button>`;
+  // (偏好電輔車: the 電輔車 big, after a ⚡, and the regular bikes beside them.)
+  const n = ebikeFirst() ? `<b class="e">${icon('bolt')}${b.ebike || 0}</b>${b.bikes ? `<em>${icon('bike')}${b.bikes}</em>` : ''}` : `<b>${b.bikes}</b>${b.ebike ? `<em>${icon('bolt')}${b.ebike}</em>` : ''}`;
+  return `<button class="ot-bk ${lv}" type="button" data-bk="${e(b.uid)}">${bikeMark()}<span class="ot-bk-name q-fit-wrap">${e(shown(b.name))}</span><span class="ot-bk-n">${n}</span><span class="ot-bk-f"><i>${icon('dock')}${b.ret}</i>${far}</span></button>`;
 }
 // YouBike's stations: a rail of cards, or one row when every one is paused; '' when none.
 export function nearBikes(list) {

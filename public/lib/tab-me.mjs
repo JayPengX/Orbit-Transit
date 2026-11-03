@@ -100,7 +100,7 @@ function render() {
     )}
     ${section(
       W('規劃', 'Planning'),
-      rowCard(`${passRow}${modeRows(P)}<div class="q-ritem">${tile('bike', COLOR.bike)}<span class="q-ritem-text"><span class="q-ritem-title">${W('每 30 分換一台 YouBike', 'New YouBike every 30 min')}</span><small>${W('前 30 分鐘最便宜', 'The first half hour costs least')}</small></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${bikeSwap(P)}" aria-label="${W('每 30 分鐘換 YouBike', 'Swap YouBikes every 30 min')}"><i></i></button></div>
+      rowCard(`${passRow}${modeRows(P)}<div class="q-ritem">${tile('bike', COLOR.bike)}<span class="q-ritem-text"><span class="q-ritem-title">${W('每 30 分換一台 YouBike', 'New YouBike every 30 min')}</span><small>${W('前 30 分鐘最便宜', 'The first half hour costs least')}</small></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${bikeSwap(P)}" aria-label="${W('每 30 分鐘換 YouBike', 'Swap YouBikes every 30 min')}"><i></i></button></div>${ebikeRow(P)}
         <label class="q-ritem chevron ot-pick-row">${tile('pin', COLOR.place)}<span class="q-ritem-text"><span class="q-ritem-title">${W('導航 App', 'Maps app')}</span></span><span class="q-ritem-value">${P.maps === 'apple' ? W('Apple 地圖', 'Apple Maps') : W('Google 地圖', 'Google Maps')}</span><select id="me-maps" class="ot-cover" aria-label="${W('導航 App', 'Maps app')}"><option value="google" ${P.maps !== 'apple' ? 'selected' : ''}>${W('Google 地圖', 'Google Maps')}</option><option value="apple" ${P.maps === 'apple' ? 'selected' : ''}>${W('Apple 地圖', 'Apple Maps')}</option></select></label>`)
     )}
   </div></div></div>`;
@@ -113,6 +113,12 @@ function render() {
   // (A switch flipped, a row changed: the page stays where it was read.)
   if (box) box.scrollTop = keep;
 }
+
+// 偏好電輔車, off unless turned on (Jay 2026-11-04): every trip starts with the
+// plans card's ⚡ on, and a station's 電輔車 are counted first. Only while
+// YouBike is one of the ways of moving.
+const ebikeRow = P =>
+  P.modes.bike === false ? '' : `<div class="q-ritem">${tile('bolt', COLOR.bike)}<span class="q-ritem-text"><span class="q-ritem-title">${W('偏好電輔車', 'Prefer e-bikes')}</span><small>${W('站上有就騎電輔車', 'Ride one where a dock has it')}</small></span><button class="q-switch" type="button" role="switch" data-act="ebike" aria-checked="${P.ebike === true}" aria-label="${W('偏好電輔車', 'Prefer e-bikes')}"><i></i></button></div>`;
 
 // The ways of moving the planner may use, each a row with its switch, right in 我的 (Jay
 // 2026-11-03: the sheet of chips sat four and two, and a tap in it lost the page's place).
@@ -144,6 +150,10 @@ function onClick(ev) {
   if (act === 'tpass') return tpassSheet();
   if (act === 'bike30') {
     ctx.data.prefs.swap30 = bikeSwap(ctx.data.prefs) ? 'off' : 'on';
+    return done();
+  }
+  if (act === 'ebike') {
+    ctx.data.prefs.ebike = ctx.data.prefs.ebike !== true;
     return done();
   }
   if (act === 'groups') return manageSheet();

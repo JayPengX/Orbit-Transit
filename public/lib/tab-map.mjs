@@ -748,7 +748,7 @@ async function directTo(c, mode) {
   } else {
     const city = await ctx.cityOf(h.lat, h.lon);
     const bikes = city ? await cityBikes(city).catch(() => []) : [];
-    legs = bikeTrip(from, to, bikes, now, { first: true });
+    legs = bikeTrip(from, to, bikes, now, { first: true, prefer: ctx.data.prefs.ebike === true });
     if (!legs) return ctx.status(W('附近沒有 YouBike 站', 'No YouBike dock nearby'));
   }
   showPlan(finish({ src: mode, legs, tags: [] }), from, to);
@@ -880,7 +880,8 @@ async function cardClick(ev) {
   // (The mode toggles themselves: the sheet's own data-mode once matched here, so every tap on a trip's card planned it again and did nothing else.)
   // 偏好電輔車 on or off for this search, and plan again.
   if (ev.target.closest('.ot-mtog[data-ebike]') && card?.kind === 'plans') {
-    tripEbike = !tripEbike;
+    const next = !(tripEbike ?? ctx.data.prefs.ebike === true);
+    tripEbike = next === (ctx.data.prefs.ebike === true) ? null : next;
     return plan(card.fromHere ? null : card.from, card.to);
   }
   const mode = ev.target.closest('.ot-mtog[data-mode]');
@@ -1646,9 +1647,10 @@ let when = { by: 'now', at: null };
 // only where they start): null until one is changed, kept for the next search.
 let tripModes = null;
 const modesNow = () => ({ ...ctx.data.prefs.modes, ...(tripModes || {}) });
-// 偏好電輔車: this search's too (the ⚡ after the ways of moving), kept for the next.
-let tripEbike = false;
-const ebikeNow = () => tripEbike && modesNow().bike !== false;
+// 偏好電輔車: this search's too (the ⚡ after the ways of moving), kept for the next;
+// null until changed, starting as 我的's 偏好電輔車 (off unless turned on).
+let tripEbike = null;
+const ebikeNow = () => (tripEbike ?? ctx.data.prefs.ebike === true) && modesNow().bike !== false;
 // A trip from `from` (null: where you are) to `to`. `opts.swapHere`: the
 // trip turned round, ending where you are.
 async function plan(from, to, opts = {}) {
@@ -1997,7 +1999,7 @@ function plansHtml(c) {
         .join('')}${(c.then?.length || 0) < MAX_STOPS ? `<button class="ot-od-add" type="button" data-card="stop-add">${icon('plus')}<span>${W('加一站', 'Add stop')}</span></button>` : ''}</div>
       <button class="q-icon-btn ot-ph-swap" type="button" data-card="swap" aria-label="${W('對調起訖', 'Swap ends')}">${icon('swap')}</button></div>
     ${aboardHtml(c)}<div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${when.by === 'train' ? `${icon(when.ticket.rides[0].sys)}${e(ticketText(when.ticket))}` : `${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}`}${icon('down', 'ot-caret')}</button>
-      <div class="ot-mtogs" role="group" aria-label="${W('這次搭什麼', 'Modes')}">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}${modesNow().bike !== false ? `<button class="ot-mtog" type="button" data-ebike aria-pressed="${tripEbike}" aria-label="${W('偏好電輔車', 'Prefer e-bikes')}" title="${W('偏好電輔車', 'Prefer e-bikes')}">${icon('bolt')}</button>` : ''}</div></div>`;
+      <div class="ot-mtogs" role="group" aria-label="${W('這次搭什麼', 'Modes')}">${Object.entries(MODE_CHIP).map(([k, v]) => `<button class="ot-mtog" type="button" data-mode="${k}" aria-pressed="${modesNow()[k] !== false}" aria-label="${e(v)}" title="${e(v)}">${icon(k)}</button>`).join('')}${modesNow().bike !== false ? `<button class="ot-mtog" type="button" data-ebike aria-pressed="${ebikeNow()}" aria-label="${W('偏好電輔車', 'Prefer e-bikes')}" title="${W('偏好電輔車', 'Prefer e-bikes')}">${icon('bolt')}</button>` : ''}</div></div>`;
   if (!c.plans) return `${top}<div class="ot-plans">${'<div class="ot-plan ot-plan-wait" aria-hidden="true"><i class="ot-skel" style="width:40%"></i><i class="ot-skel" style="width:70%"></i></div>'.repeat(3)}</div><span class="ot-sr">${e(whenText)}</span>`;
   if (!c.plans.length) return `${top}${c.error ? `<p class="ot-note bad">${e(c.error)}</p>` : `<p class="ot-note">${W('找不到大眾運輸方案。', 'No transit route found.')}</p>`}${sourcesNote(c.sources)}`;
   // One row per route: the departure chosen (its best at first), the route's other departures as times to pick.
