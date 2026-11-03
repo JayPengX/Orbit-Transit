@@ -24,7 +24,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - 停著 or 還車 at a stop, with which is sooner — `public/lib/nav.mjs`: `parkAsk`, `到了要還車嗎`
 - 附近換車 from 25 minutes on a YouBike with the free half hour — `public/lib/nav.mjs`: `附近換車`, `splitRide`
 - A trip asked for on a bus or train planned from it (its stops ahead), 不在車上 to plan from the street — `public/lib/aboard.mjs`, `public/lib/planner.mjs`, `public/lib/tab-map.mjs`: `trainAboard`, `busesAboard`, `planAboard`, `不在車上`
-- 交通 as one board: 要去哪裡, your places, each trip its own card (its main ride's badge, its way as one line, the other ways), every pin a row in your order — `public/lib/tab-go.mjs`, `public/lib/board.mjs`: `renderBoard`, `tripCard`, `mainRide`, `boardBuses`, `boardTrains`, `boardRow`
+- 交通 as one board: 要去哪裡, your places, each trip its own card (its own icon (the place it ends at, else its name: 學校, 家, 公司), its way as one line, the other ways), every pin a row in your order — `public/lib/tab-go.mjs`, `public/lib/board.mjs`, `public/lib/look.mjs`: `renderBoard`, `tripCard`, `tripTile`, `boardBuses`, `boardTrains`, `boardRow`
 - A trip's row says when to leave, or why not; a tap opens its ways on the map — `public/lib/tab-go.mjs`: `tripWhy`, `whenHtml(p.dep`, `data-all-trip`
 - A place chip opens the place: its buses, its bikes, 怎麼去 — `public/lib/tab-go.mjs`: `openPlace`, `data-go-place`
 - A route's stops with its buses on the line (on a stop, between two), 進站中 / 即將進站 — `public/lib/bus-ui.mjs`, `public/transit.css`: `busAt`, `busBetween`, `ot-rs-bus`, `li.at .ot-rs-dot`

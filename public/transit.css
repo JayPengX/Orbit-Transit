@@ -964,7 +964,7 @@ body.tab-map {
   padding: 0 2px;
   border: 0;
   background: none;
-  color: var(--q-accent);
+  color: var(--q-label);
   font: 500 17px/22px var(--q-font);
 }
 .ot-ms-act[hidden] {
@@ -1353,8 +1353,11 @@ body.tab-map {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* Forget a recent: the ✕ alone, grey, in a 44px target (Jay 2026-11-03: a circle in a circle
+   in the card was "too layered"); a fill only under the finger. Above the kit's flat-button
+   fill (kit CSS loads after this file). */
+html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x,
 .ot-rec .ot-rec-x {
-  position: relative;
   flex: none;
   width: 44px;
   height: 44px;
@@ -1363,21 +1366,15 @@ body.tab-map {
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  color: var(--q-label-2);
+  color: var(--q-label-3);
 }
-/* A 30px chip in a 44px target: seen at a glance, still the quiet one. */
-.ot-rec .ot-rec-x::before {
-  content: '';
-  position: absolute;
-  inset: 7px;
-  border-radius: 50%;
+html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [data-q-press]) {
   background: var(--q-fill-3);
 }
 .ot-rec .ot-rec-x .ot-i {
-  position: relative;
-  width: 14px;
-  height: 14px;
-  stroke-width: 2.4;
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
 }
 .ot-rec.q-ritem + .q-ritem::before,
 .ot-rec + .ot-rec::before {

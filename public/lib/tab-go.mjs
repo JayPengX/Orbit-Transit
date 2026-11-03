@@ -28,7 +28,7 @@ import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor, legChips, fitLegs, journeyLine } from './ui.mjs';
 import { boardRow, whenHtml } from './board.mjs';
-import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, tick, navTitle, noticesHtml } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, tripTile, tag, section, rowCard, tick, navTitle, noticesHtml } from './look.mjs';
 import { e, hm, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson, shown as nameIn } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
@@ -533,10 +533,6 @@ function render() {
 // A trip's row with no ride to show says why, never nothing: the read failed,
 // it's being read, none now, or not read yet (a tap reads it).
 export const tripWhy = st => (st?.error && !st.plans?.length ? st.error : st ? (st.loading ? W('找班次…', 'Finding rides…') : W('現在沒有班次', 'No rides now')) : W('點一下找班次', 'Tap for rides'));
-// A trip's main ride: the one you're on longest (上學 is the bus you sit on, not the YouBike to
-// its stop; Jay 2026-11-03: "the bike icon is misleading as the trip most involve bus").
-export const mainRide = legs => legs.filter(l => l.mode !== 'walk').reduce((a, l) => (!a || (l.dur || (l.arr - l.dep) / 1000) > (a.dur || (a.arr - a.dep) / 1000) ? l : a), null);
-const badgeOf = l => (!l ? { glyph: 'walk', color: COLOR.walk } : l.mode === 'bike' ? { glyph: 'bike', color: legColor(l) } : { no: legLabel(l), color: legColor(l) });
 // A way as one line through it (ui.mjs journeyLine): each ride its line's colour, a walk dotted.
 const wayLine = p => journeyLine(p.legs.filter(l => !(l.mode === 'walk' && l.dur < 120)).map(l => (l.mode === 'walk' ? { walk: true, min: l.dur / 60 } : { min: (l.dur || (l.arr - l.dep) / 1000) / 60, color: legColor(l) })));
 const warnOf = p => {
@@ -553,14 +549,15 @@ function tripCard({ t, w }) {
   const all = st?.plans || [];
   const { first, rest } = tripPlans(all, t.picks);
   const lead = first[0];
-  const where = `${t.from ? nameIn(t.from.name) : W('這裡', 'Here')} → ${nameIn(w.to?.name || t.to.name)}`;
-  if (!lead) return `<div class="q-rowcard ob-trip">${boardRow({ glyph: 'route', color: COLOR.route, main: e(w.label), note: e(tripWhy(st)), attrs: st ? `data-all-trip="${e(w.id)}"` : `data-load-trip="${e(t.id)}"` })}</div>`;
+  const where = `${w.from ? nameIn(w.from.name) : W('這裡', 'Here')} → ${nameIn(w.to?.name || W('這裡', 'Here'))}`;
+  const mark = tripTile(w.rev ? '' : t.name || '', ctx.data.places.find(q => w.to && meters(q.lat, q.lon, w.to.lat, w.to.lon) < 80), !!t.date);
+  if (!lead) return `<div class="q-rowcard ob-trip">${boardRow({ lead: mark, main: e(w.label), note: e(tripWhy(st)), attrs: st ? `data-all-trip="${e(w.id)}"` : `data-load-trip="${e(t.id)}"` })}</div>`;
   const at = all.indexOf(lead);
   const i = S.choice.get(`${w.id}:${at}`) ?? at;
   const p = all[i];
   const warn = warnOf(p);
   const head = boardRow({
-    ...badgeOf(mainRide(p.legs)),
+    lead: mark,
     main: e(w.label),
     note: warn ? `<span class="ot-warn">${e(warn)}</span>` : e(where),
     when: whenHtml(p.dep, W('出發', 'Leave'), p.live),

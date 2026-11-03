@@ -19,7 +19,7 @@ import { stopsEta, etaFor } from './bus.mjs';
 import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
 import { nearStops, keptNear, keepNear, nearMoved, fitStrips } from './bus-ui.mjs';
 import { stationLabel, icon, legChips, fitLegs } from './ui.mjs';
-import { COLOR, tile, bikeTile, bikeStats, countHtml, tick, focus } from './look.mjs';
+import { COLOR, tile, tripTile, bikeTile, bikeStats, countHtml, tick, focus } from './look.mjs';
 import { tripKey } from './store.mjs';
 import { e, hm, distText, meters, shown } from './util.mjs';
 
@@ -73,7 +73,7 @@ export function createHome(box, ctx, act) {
         const plan = w.at ? keptLead(w, { prefs: ctx.data.prefs, here, picks: t.picks, now }) : null;
         // (By an arrival time with no way found yet, the time is when it must be there by, not when to leave.)
         const arriveBy = w.by === 'arrive' && !plan && w.at ? w.at : null;
-        return { id: w.id, label: w.label, from: w.from, to: w.to, leaveAt: plan ? plan.dep : w.at || w.late, plan, arriveBy, w, recurring: w.recurring, today: w.today };
+        return { id: w.id, label: w.label, from: w.from, to: w.to, dated: !!t.date, leaveAt: plan ? plan.dep : w.at || w.late, plan, arriveBy, w, recurring: w.recurring, today: w.today };
       });
     const buses = ctx.data.groups
       .flatMap(g => g.items)
@@ -104,7 +104,7 @@ export function createHome(box, ctx, act) {
         at: x.leaveAt,
         facts: [x.arriveBy ? W(`${hm(x.arriveBy)} 前到`, `Arrive by ${hm(x.arriveBy)}`) : W(`${hm(x.leaveAt)} 出發`, `Leave ${hm(x.leaveAt)}`), p ? W(`${hm(p.arr)} 到`, `Arrive ${hm(p.arr)}`) : ''],
         body: p ? `<span class="ot-legs ot-hc-legs">${legChips(p.legs)}</span>` : '',
-        tile: tile('route', COLOR.route)
+        tile: tripTile(x.w?.rev ? '' : x.label, ctx.data.places.find(q => x.to && meters(q.lat, q.lon, x.to.lat, x.to.lon) < 80), x.dated)
       };
     }
     if (x.kind === 'bus')

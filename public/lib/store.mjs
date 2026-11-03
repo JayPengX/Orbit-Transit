@@ -163,6 +163,7 @@ export function cleanData(d) {
     groups: groups.length ? groups : emptyData().groups,
     places: (Array.isArray(d.places) ? d.places : []).map(cleanPlace).filter(Boolean).slice(0, MAX_PLACES),
     trips: (Array.isArray(d.trips) ? d.trips : [])
+      .filter(x => !isHereEnd(x))
       .map(x => (x && coord(x.lat) != null ? { name: str(x.name, 40), lat: coord(x.lat), lon: coord(x.lon), t: Number(x.t) || 0, ...gidOf(x), ...timesOf(x) } : null))
       .filter(Boolean)
       .slice(0, 10),
@@ -203,7 +204,11 @@ const timesOf = x => {
 };
 // A place to the front of 最近; `went`: a trip planned to it now (one time a
 // half hour, however often it's planned again).
+// Where you are now is never a recent (Jay 2026-11-03: 目前位置 · 0 公尺 in 最近): it's always
+// there as 目前位置 itself, and a spot you stood on once is no destination.
+export const isHereEnd = p => Boolean(p?.here) || /^(目前位置|現在位置|我的位置|Here|Current location|My location)$/i.test(String(p?.name || '').trim());
 export function rememberTrip(list, p, { now = Date.now(), went = false } = {}) {
+  if (isHereEnd(p)) return list.filter(x => !isHereEnd(x));
   const old = list.find(x => tripKey(x) === tripKey(p));
   let ts = old?.ts || [];
   if (went) ts = [...ts.filter(t => now - t > 30 * 60_000), now];

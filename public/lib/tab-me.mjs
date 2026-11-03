@@ -13,7 +13,7 @@ import { MODES, PLACE_ICONS, iconName, DAYS, move } from './store.mjs';
 import { TPASSES, tpassOf, passModes, bikeSwap } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters, dayLabel, shown } from './util.mjs';
-import { COLOR, PLACE_COLOR, tile, tpassTile, bikeTile, section, rowCard } from './look.mjs';
+import { COLOR, PLACE_COLOR, tile, tripTile, tpassTile, bikeTile, section, rowCard } from './look.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 const $ = id => document.getElementById(id);
@@ -71,7 +71,7 @@ function render() {
       const go = leg(from, to, t.time, t.time ? (t.by === 'arrive' ? W('抵達', 'arrive') : W('出發', 'leave')) : W('隨時', 'any time'), 'time');
       const back = t.back || (t.alt || []).some(a => a.back) ? leg(to, from, t.back, W('出發', 'leave'), 'back') : '';
       const place = D.places.find(p => meters(p.lat, p.lon, t.to.lat, t.to.lon) < 80);
-      const glyph = place ? placeTile(place) : tile(t.date ? 'calendar' : 'route', COLOR.route);
+      const glyph = tripTile(t.name || '', place, !!t.date);
       return `<button class="q-ritem ot-trip" type="button" data-trip="${e(t.id)}"><span class="ot-trip-top">${glyph}<span class="ot-trip-name"><b>${e(t.name || to)}</b>${when ? `<small>${e(when)}</small>` : ''}</span><span class="ot-trip-go" aria-hidden="true">${icon('chevron')}</span></span><span class="ot-trip-legs">${go}${back}</span></button>`;
     })
     .join('');
