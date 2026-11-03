@@ -2,6 +2,7 @@
 // encodings the planners use.
 
 import { twHoliday } from '#kit/holidays.mjs';
+import * as kitDays from '#kit/holidays.mjs';
 import { dayOffOn } from '#kit/dayoff.mjs';
 import { W, en } from '#kit/lang.mjs';
 import { addDays } from '#kit/format.mjs';
@@ -220,6 +221,9 @@ export const tripNeed = t => (SCHOOL.test(`${t?.name || ''} ${t?.to?.name || ''}
 // (A stop from later in the day leaves the morning's trip as it is.)
 const offAllDay = o => Boolean(o && (!o.from || o.from <= '08:00'));
 export const holidayOn = (date, trip = null) => Boolean(twHoliday(date)) || Boolean(trip?.to && Number.isFinite(trip.to.lat) && offAllDay(dayOffOn(date, { lat: trip.to.lat, lon: trip.to.lon }, tripNeed(trip))));
+// A working day on Taiwan's calendar: not a weekend or a holiday, and a 補班
+// Saturday is one (an older kit without twWorkday: a weekday that isn't a holiday).
+export const workday = date => kitDays.twWorkday?.(date) ?? (![0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay()) && !twHoliday(date));
 export const weekdaysOnly = days => days.length > 0 && !days.includes(0) && !days.includes(6);
 
 // Google's and TDX's names for one route differ (快捷8經興隆大橋, 快捷8號;

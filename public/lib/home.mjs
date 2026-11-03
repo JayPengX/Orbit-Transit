@@ -13,6 +13,7 @@
 
 import * as kitUI from '#kit/ui.mjs';
 import { suggest } from './suggest.mjs';
+import { cardsShown, placeChance } from './learn.mjs';
 import { tripNow, keptLead, pinnedTrainsNext, rideNow } from './tab-go.mjs';
 import { stopsEta, etaFor } from './bus.mjs';
 import { nearBusRows, nearBikes, inTime } from './near-ui.mjs';
@@ -88,7 +89,7 @@ export function createHome(box, ctx, act) {
       })
       .filter(Boolean);
     const bikes = (S.bikes || []).map(b => ({ ...b, d: b.walk?.dist ?? b.d }));
-    return suggest({ now, here, places: ctx.data.places, trips, buses, trains, bikes, recents: ctx.data.trips });
+    return suggest({ now, here, places: ctx.data.places, trips, buses, trains, bikes, recents: ctx.data.trips, fb: placeChance(now) });
   };
 
   // One suggestion as { glyph, eyebrow, title, sub, tags, at, big, color, body }.
@@ -151,20 +152,24 @@ export function createHome(box, ctx, act) {
         tile: tile('route', COLOR.route)
       };
     }
+    // 回家, or a working day's 去公司 / 去學校 from the places pinned.
+    const go = x.kind === 'go';
     return {
-      glyph: 'home',
-      eyebrow: W('回家', 'Head home'),
+      glyph: go ? x.place.icon : 'home',
+      eyebrow: go ? (x.place.icon === 'school' ? W('去學校', 'To school') : W('去公司', 'To work')) : W('回家', 'Head home'),
       title: x.place.name,
       big: `<strong class="q-focus-value ot-count">${e(distText(x.d))}</strong>`,
       numText: distText(x.d),
       facts: [W('從目前位置', 'From here')],
-      tile: placeTile('home')
+      tile: placeTile(go ? x.place.icon : 'home')
     };
   };
 
   const sugHtml = list => {
     if (!list.length) return '';
     S.sug = list;
+    // (Each guess of a place on screen, once a day, for what it learns: learn.mjs.)
+    cardsShown(list.filter(x => x.kind === 'home' || x.kind === 'go' || x.kind === 'usual').map(x => x.place));
     const cards = list.map((x, i) => {
       const s = say(x);
       const big = s.big || (s.at != null ? countHtml(s.at, { floor: Boolean(s.floor), cls: 'q-focus-value' }) : '');
@@ -283,7 +288,8 @@ export function createHome(box, ctx, act) {
       // (A bike's own fields kept: the card opens the station itself.)
       if (x.kind === 'bike') return act.bike(S.bikes?.find(b => b.uid === x.uid));
       if (x.kind === 'usual') return act.recent(x.place);
-      return act[x.kind === 'home' ? 'place' : x.kind]?.(x.kind === 'home' ? x.place : x);
+      const toPlace = x.kind === 'home' || x.kind === 'go';
+      return act[toPlace ? 'place' : x.kind]?.(toPlace ? x.place : x);
     }
     const del = t.closest('[data-del-recent]');
     if (del) return act.delRecent(del.dataset.delRecent);

@@ -40,10 +40,21 @@ Live: https://orbit.jaypengx.com/transit/
     real map. A station: its line codes, the next trains each way counting
     down (live where the operator sends them, else the timetable, else how
     often the line runs), first and last trains, exits (`metro-ui.mjs`).
-  - **建議** (on 交通): each trip planned keeps its time (the last 12 per place
-    in 最近); a place gone to 3+ times at about this hour on days like this
-    comes up as 常在這時候去, its distance first, a tap plans it (not when
-    you're there, nor when a saved trip or 回家 covers it).
+  - **建議** (on 交通, `lib/suggest.mjs`): each trip planned keeps its time
+    (the last 12 per place in 最近); a place gone to 3+ times at about this
+    hour on days like this (a working day or a day off on Taiwan's calendar,
+    `util.mjs workday`: a holiday is a day off) comes up as 常在這時候去, its
+    distance first, a tap plans it (not when you're there, nor when a saved
+    trip or 回家 covers it; somewhere else usual now, 補習班, goes before
+    回家). From the first day, a working day's morning at 家 has 去公司 or
+    去學校 from the places pinned (`goScore`; not on a typhoon day off there).
+    These guesses of a place learn on the kit's feedback.mjs (`lib/learn.mjs`,
+    `fb:transit` on the Pass): each card drawn and each trip planned, by the
+    place and the place on that weekday (`placeItem`); one passed over too
+    often stops coming (`chance` under 0.16). `node scripts/backtest-usual.mjs
+    --against <ref>` replays made-up people (2026-11-03, first two weeks
+    caught 53/45/64% → 74/65/86%; wrong cards a week, later, a student
+    7.9 → 4.5, one who never plans the commute 3.3 → 1.0).
   - **我的:** places, trips, pinned stops, 交通偏好 (ways of moving, TPASS,
     the maps app).
 - **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by

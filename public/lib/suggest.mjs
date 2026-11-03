@@ -10,11 +10,18 @@
 //   train  a pinned train or connection leaving soon
 //   bike   the nearest YouBike with a bike, when you're close to it
 //   home   「回家」 when you're far from 家 in the evening
+//   go     「去公司」「去學校」 on a working day's morning, at 家, from the
+//          places pinned: a first week's guess before there's any history
 //   usual  常去: a place the person often plans a trip to at about this
 //          hour on this kind of day (最近's times, usualTrip), when not there
 // The best three, at most one of a kind (two saved trips may both fit).
+//
+// The guesses of a place (home, go, usual) learn from what's done with them
+// (the kit's feedback.mjs, by the place, `fb`): a card shown and no trip
+// planned there that day sinks, one gone to rises; ignored day after day
+// (回家 to one who never plans the way home) it stops coming.
 
-import { meters, tw } from './util.mjs';
+import { meters, tw, workday, holidayOn } from './util.mjs';
 
 export const MAX_SUGGESTIONS = 3;
 // A trip is news from this long before it's due to this long after.
@@ -63,14 +70,16 @@ export function homeScore(d, min) {
 
 // 常去: of the places trips were planned to (最近, each with its times
 // `ts`), the one this moment is most like: each time counts by how near its
-// hour is (a Gaussian, an hour wide), the same kind of day (weekday or
-// weekend) and how recent (a month's half-life). It needs three trips there
-// and most of the weight of now: { place, w, share } or null.
+// hour is (a Gaussian, an hour wide), the same kind of day (a working day or
+// a day off, on Taiwan's calendar: a holiday is a day off, a 補班 Saturday a
+// working day) and how recent (a month's half-life). It needs three trips
+// there and most of the weight of now: { place, w, share } or null.
 const HOUR_MIN = 60;
 const HALF_DAYS = 30;
 export function usualTrip(recents = [], now = Date.now(), here = null) {
   const at = tw(now);
-  const weekend = d => d === 0 || d === 6;
+  const days = new Map();
+  const work = date => (days.has(date) ? days.get(date) : days.set(date, workday(date)).get(date));
   let all = 0;
   const scored = recents.map(p => {
     let w = 0;
@@ -79,7 +88,7 @@ export function usualTrip(recents = [], now = Date.now(), here = null) {
       const gap = Math.abs(x.min - at.min);
       const m = Math.min(gap, 1440 - gap);
       const age = (now - t) / 86_400_000;
-      w += Math.exp(-((m / HOUR_MIN) ** 2) / 2) * (weekend(x.dow) === weekend(at.dow) ? 1 : 0.3) * 0.5 ** (age / HALF_DAYS);
+      w += Math.exp(-((m / HOUR_MIN) ** 2) / 2) * (work(x.date) === work(at.date) ? 1 : 0.1) * 0.5 ** (age / HALF_DAYS);
     }
     all += w;
     return { place: p, w, n: (p.ts || []).length };
@@ -92,8 +101,35 @@ export function usualScore(u) {
   return u ? 58 + 20 * Math.min(1, u.share) + 4 * Math.min(3, u.w - 1.2) : 0;
 }
 
+// 去公司 / 去學校: a working day's morning (06:00 to 09:30), at 家 (or with no
+// 家 pinned, anywhere not there), the place not off for a typhoon: below a
+// saved trip, a bus on its way, a pinned train within ten minutes and 回家.
+const MORNING = [6 * 60, 9 * 60 + 30];
+export function goScore(place, here, now, home = null) {
+  if (!place || !here) return 0;
+  const at = tw(now);
+  if (at.min < MORNING[0] || at.min >= MORNING[1] || !workday(at.date)) return 0;
+  if (meters(here.lat, here.lon, place.lat, place.lon) <= FAR_HOME_M) return 0;
+  if (home && meters(here.lat, here.lon, home.lat, home.lon) > FAR_HOME_M) return 0;
+  if (holidayOn(at.date, { name: place.name, to: place })) return 0;
+  return 65;
+}
+
+// A place guessed, as the kit's feedback.mjs knows it: by the place, and the
+// place on that day of the week (補習班 on Tuesdays and Thursdays only), one look a day.
+const placeKey = p => `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
+const placeKeys = (p, now) => [`to:${placeKey(p)}`, `to:${placeKey(p)}@${tw(now).dow}`];
+export const placeItem = (p, now = Date.now()) => ({ id: `to:${placeKey(p)}:${tw(now).date}`, keys: placeKeys(p, now) });
+// What's been done with a place's cards: `fb` (feedback.mjs chance) the
+// chance a card of it is gone to (0.2 with nothing known); a point of score
+// for every 2% over or under that, and under DROP, passed over too often to show.
+const LEARNT = 50;
+const USUAL_P = 0.2;
+const DROP = 0.16;
+const learnt = (fb, p, now) => (fb && p?.lat != null ? fb({ keys: placeKeys(p, now) }) : null);
+
 // → [{ kind, key, score, ...the candidate }], best first.
-export function suggest({ now = Date.now(), here = null, places = [], trips = [], buses = [], trains = [], bikes = [], recents = [] } = {}) {
+export function suggest({ now = Date.now(), here = null, places = [], trips = [], buses = [], trains = [], bikes = [], recents = [], fb = null } = {}) {
   const out = [];
   for (const t of trips) {
     const m = t.leaveAt == null ? null : minutesTo(t.leaveAt, now);
@@ -121,10 +157,27 @@ export function suggest({ now = Date.now(), here = null, places = [], trips = []
     if (score > 0 && !covered) out.push({ kind: 'home', key: `home:${home.id}`, score, place: home, d });
   }
   // (A saved trip or 回家 to that place is it already.)
+  const there = (to, kinds) => out.some(x => kinds.includes(x.kind) && (x.kind === 'trip' ? x.to : x.place)?.lat != null && meters((x.to || x.place).lat, (x.to || x.place).lon, to.lat, to.lon) < SAME_PLACE_M);
   const usual = usualTrip(recents, now, here);
   const to = usual?.place;
-  if (to && !out.some(x => (x.kind === 'trip' && x.to?.lat != null && meters(x.to.lat, x.to.lon, to.lat, to.lon) < SAME_PLACE_M) || (x.kind === 'home' && meters(x.place.lat, x.place.lon, to.lat, to.lon) < SAME_PLACE_M)))
+  if (to && !there(to, ['trip', 'home'])) {
     out.push({ kind: 'usual', key: `usual:${to.lat},${to.lon}`, score: usualScore(usual), place: to });
+    // (Somewhere else is where they usually go now, 補習班 before home: not 回家 yet.)
+    const h = out.findIndex(x => x.kind === 'home');
+    if (h >= 0) out.splice(h, 1);
+  }
+  // (公司 first, then 學校; none when a saved trip or 常去 goes there already.)
+  const go = ['work', 'school'].map(k => places.find(p => p.icon === k)).find(p => p && goScore(p, here, now, home) > 0);
+  if (go && !there(go, ['trip', 'usual'])) out.push({ kind: 'go', key: `go:${go.id}`, score: goScore(go, here, now, home), place: go, d: meters(here.lat, here.lon, go.lat, go.lon) });
+  // What's been done with each guess of a place: gone to rises, passed over sinks, and too often passed over goes.
+  for (let i = out.length - 1; i >= 0; i--) {
+    const x = out[i];
+    if (!['home', 'go', 'usual'].includes(x.kind)) continue;
+    const p = learnt(fb, x.place, now);
+    if (p == null || !Number.isFinite(p)) continue;
+    if (p < DROP) out.splice(i, 1);
+    else x.score += Math.max(-10, Math.min(10, LEARNT * (p - USUAL_P)));
+  }
   out.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
   // One of each kind but trips (the morning's and the evening's may both be due).
   const seen = new Map();
