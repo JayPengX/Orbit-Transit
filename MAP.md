@@ -251,7 +251,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; the buzz; bus alerts |
 | `lib/aboard.mjs` | Already on a bus or train: which one, and the trip from its stops ahead |
 | `lib/service.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules |
-| `lib/compass.mjs` | Which way the phone faces, for the soft beam on your dot (`.ot-beam`): the compass (an iPhone asks on 我的位置, then quietly on the first tap), else the GPS's heading when moving; none known, no beam |
+| `lib/compass.mjs` | Which way the phone faces, for the soft beam on your dot (`.ot-beam`): the compass (an iPhone asks on 我的位置, then quietly on the first tap), else the GPS's heading when moving; none known, or riding a bus or train (`navNow().aboard`, or a bus's or train's pace), no beam |
 | `lib/tab-*.mjs`, `map.mjs` | Each tab; Google or Leaflet+NLSC behind one interface |
 | `lib/store.mjs` | The Pass's data |
 

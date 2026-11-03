@@ -10,14 +10,14 @@
 import { createMap } from './map.mjs';
 import { watchHeading, askCompass, gpsFix, unwrap } from './compass.mjs';
 import { fitNumbers, netState } from '#kit/orbit.mjs';
-import { searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
+import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard } from './raildata.mjs';
 import { OPERATORS, stationTitle } from './metro.mjs';
 import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
 import { planTrip, findAboard, planAboard } from './planner.mjs';
-import { aboardName } from './aboard.mjs';
+import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
 import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
@@ -323,7 +323,16 @@ const navFull = () => navigating() && !navNow()?.min;
 // You: the blue dot, and the way the phone faces as a soft beam from it (compass.mjs).
 let facing = null;
 let stopFacing = null;
+// On a bus or train no beam (Jay 2026-11-03: "I don't need my direction when I am on a bus"):
+// navigation says you're aboard, or you've been moving at a bus's or train's pace.
+let riding = false;
+const ridingNow = () => {
+  if (navNow()?.aboard) return true;
+  const m = motion(recentFixes());
+  return busPace(m) || trainPace(m);
+};
 function drawMe(h) {
+  riding = ridingNow();
   map?.layer('me').set([{ id: 'me', lat: h.lat, lon: h.lon, cls: 'me', z: 50, html: '<b class="ot-beam"></b><i class="ot-me"></i>' }]);
   gpsFix(h);
   stopFacing ||= watchHeading(turnBeam);
@@ -334,8 +343,8 @@ function turnBeam(deg) {
   facing = deg;
   const beam = $('map')?.querySelector('.ot-beam');
   if (!beam) return;
-  beam.classList.toggle('on', deg != null);
-  if (deg == null) return;
+  beam.classList.toggle('on', deg != null && !riding);
+  if (deg == null || riding) return;
   shownTurn = unwrap(shownTurn, deg);
   beam.style.transform = `rotate(${shownTurn.toFixed(1)}deg)`;
 }
