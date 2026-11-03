@@ -91,6 +91,9 @@ Live: https://orbit.jaypengx.com/transit/
   has passed lose their time, the rest are the estimates' own gaps from where
   it is (`tests/bus-gps.test.mjs`; on 快捷8號 the error to where buses really
   got to fell from about 2 minutes to under 1).
+  Stop cards, a trip's bus, a ride aboard and the planner's live buses read
+  the same fix (`bus.mjs busEtaMended`, in place of `busEta`: up to 8 lagging
+  routes, never waiting past 2.5 s), so a frozen feed is felt nowhere.
   Today and the next day on one line (`bus-ui.mjs` `nexts`, `doneToday`):
   the stops today's last bus has passed are the next day's (the line grey
   there, the day said once where they begin); where today's begin, that bus

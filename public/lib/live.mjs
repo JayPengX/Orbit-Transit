@@ -10,7 +10,7 @@
 //               place: 竹中 → 5608 → 竹東高中)
 
 import { tdx, rows, busEta } from './api.mjs';
-import { routeStops, routeSchedule, stopTimes, routeCity, runsOn } from './bus.mjs';
+import { routeStops, routeSchedule, stopTimes, routeCity, runsOn, busEtaMended } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish, walkLeg } from './plan.mjs';
 import { stoppedNow, ensureBus, routeStatus } from './service.mjs';
@@ -522,7 +522,7 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
   await Promise.all([...cands.values()].slice(0, routes).map(async c => {
     const route = { uid: c.uid, name: c.route, city: routeCity(c.uid) };
     // (Its buses on the road now, for how long the ride takes: soon ones only.)
-    const [ways, sched, onRoad] = await Promise.all([routeStops(route, a).catch(() => null), routeSchedule(route, a).catch(() => []), at - now < 90 * MIN ? busEta(route.city, { route: c.uid }).then(x => x.rows, () => []) : []]);
+    const [ways, sched, onRoad] = await Promise.all([routeStops(route, a).catch(() => null), routeSchedule(route, a).catch(() => []), at - now < 90 * MIN ? busEtaMended(route.city, { route: c.uid }).then(x => x.rows, () => []) : []]);
     if (!ways) return void trace?.why.push(`${c.route}: no stops`);
     const boardUIDs = new Set(boards.flatMap(s => s.stops.filter(x => x.routeUID === c.uid).map(x => x.stopUID)));
     const alightUIDs = new Set(there.get(c.uid).map(x => x.stopUID));
