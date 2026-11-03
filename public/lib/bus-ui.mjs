@@ -198,10 +198,18 @@ export async function nextNear(route, here) {
 // bus, or it's gone by), and not at k already (that bus rides on k's dot).
 // Drawn on the line between them, so a bus on its way is seen at a glance.
 const coming = v => v?.status === 0 && v.sec != null;
-// Another bus than the one coming to stop k-1 first: k's live time sooner
-// than k-1's. (The same bus reaches k a minute or two after k-1: one bus
-// pulling in at 地方法院 is 2 分 to 東門市場 and 3 分 to 火車站, not three buses.)
-const nextBus = (lives, k) => k === 0 || !coming(lives[k - 1]) || lives[k - 1].sec > lives[k].sec + 20;
+// Another bus than the one coming to the stops before k first: k's live time
+// sooner than the nearest one before it with a live time. (The same bus
+// reaches k a minute or two after k-1: one bus pulling in at 地方法院 is 2 分
+// to 東門市場 and 3 分 to 火車站, not three buses.) A stop between without a
+// live time (TDX left it out, or it wasn't taken) is no bus: 快捷8號 東光 20
+// 分, 東海 and 東海國小 none, 高鐵新竹站 28 分 is the one bus, still before
+// 東光 (2026-11-03).
+const nextBus = (lives, k) => {
+  let j = k - 1;
+  while (j >= 0 && !coming(lives[j])) j--;
+  return j < 0 || lives[j].sec > lives[k].sec + 20;
+};
 export const busBetween = (lives, k) => k > 0 && coming(lives[k]) && etaText(lives[k]).tone !== 'now' && nextBus(lives, k);
 // A bus at stop k (進站中, 即將進站), drawn on its dot: only the one bus, at
 // the first stop it reaches; the stops after it say 即將進站 without one.

@@ -134,6 +134,10 @@ export async function officialPlan(plan, now = Date.now(), opts = {}) {
 // the timetable's own times there, or (公路客運 often lists only when a bus
 // leaves its first stop, the same time at every stop) the first stop's plus
 // the ride from it; else its headway (every 15–20 minutes) from `after`.
+// A stop the timetable doesn't time itself: no times of its own, or the
+// first stop's again (公路客運). Its times are then the first stop's plus a
+// ride guessed from the distance.
+const guessedAt = (here, first) => !here.length || (first.length > 0 && first.join() === here.join());
 export function departuresAt(sched, w, i, after, n = 4) {
   if (!sched?.length) return [];
   const d = tw(after);
@@ -143,7 +147,7 @@ export function departuresAt(sched, w, i, after, n = 4) {
   let shift = 0;
   if (i > 0) {
     const first = at(0).times;
-    if (!times.length || (first.length && first.join() === times.join())) {
+    if (guessedAt(here.times, first)) {
       times = first;
       shift = rideTime(w, 0, i) * 1000;
     }
@@ -221,10 +225,23 @@ export function nextCatchable(sched, w, i, seen, ready, now = Date.now()) {
 // service: one the timetable has due about then (25 minutes late at most, 10
 // early). A driver resting with the tracker on shows a bus 'coming' at the
 // terminal long before it leaves. No timetable for the way: taken as it is.
+//
+// A stop the timetable doesn't time (快捷8號 to 竹北 lists 台大竹東分院 →
+// 砂石廠 only; 東光 on is the first stop's time plus a ride guessed from the
+// distance, often 10 minutes slower than the bus): a bus is in service if a
+// run left the first stop by then (10 minutes' grace) and it's no later than
+// that ride and 25 minutes. A bus seen at 東海 at 17:49, its guessed 18:00,
+// is the 17:00 from 台大竹東分院 (2026-11-03), not a bus resting.
 export function liveTrusted(sched, w, i, at) {
   if (!sched?.length || !nextRun(sched, w, 0, at - 86_400_000)) return true;
   const t = departuresAt(sched, w, i, at - 25 * MIN, 1)[0];
-  return t != null && t <= at + 10 * MIN;
+  if (t != null && t <= at + 10 * MIN) return true;
+  if (i === 0) return false;
+  const d = tw(at);
+  const times = k => stopTimes(sched, { stopUID: w.stops[k].uid, name: w.stops[k].name, dir: w.dir }, d.date, d.dow).times;
+  if (!guessedAt(times(i), times(0))) return false;
+  const left = departuresAt(sched, w, 0, at - rideTime(w, 0, i) * 1000 - 25 * MIN, 1)[0];
+  return left != null && left <= at + 10 * MIN;
 }
 
 // An official bus leg's way and stop on it, with its timetable: { w, i, sched }, or null.
