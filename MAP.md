@@ -11,7 +11,11 @@ Live: https://orbit.jaypengx.com/transit/
 
 ## How it works
 
-- **Tabs** (交通 first, where the app opens):
+- **Tabs** (地圖 first, where the app opens; Jay 2026-11-03: "map should be the first tab"):
+  - **地圖:** YouBike stations (the five nearest along the bottom), every
+    bus stop with live times, train and metro stations, search, pins, and
+    a trip planned from anywhere. A stop's signs a few metres apart are one
+    stop (`stopGroups`).
   - **交通:** one board (`lib/board.mjs`, `board.css`; Jay 2026-11-03 found
     the old green focus card "kind of useless": half a screen for one item,
     a different one each open). 要去哪裡 (a bar opening the place search,
@@ -25,10 +29,6 @@ Live: https://orbit.jaypengx.com/transit/
     附近: the stops around you with the buses on their way, which way each
     goes (`nearHeads`), the timetable's next where none is (`nearPlanned`),
     and the routes with none as one quiet line.
-  - **地圖:** YouBike stations (the five nearest along the bottom), every
-    bus stop with live times, train and metro stations, search, pins, and
-    a trip planned from anywhere. A stop's signs a few metres apart are one
-    stop (`stopGroups`).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
     station picked by search, a nearby or recent one, or on a county's line
     map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), bus
