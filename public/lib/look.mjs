@@ -56,13 +56,16 @@ export function hero({ eyebrow = '', glyph = '', big = '', title = '', sub = '',
 // countdown at the focal size, the line under it, the facts as grey text (`facts`:
 // plain strings; `live`: a word in the live colour; `warn`: the one exception, a
 // tag), `body` (html), then the buttons. `attrs`: the whole block a button.
-export function focus({ eyebrow = '', big = '', title = '', sub = '', facts = [], live = false, warn = '', body = '', actions = [], attrs = '' }) {
+// (`lead`: the title and its facts sit under the eyebrow, above the big part: a
+// YouBike station's name and distance head its three numbers.)
+export function focus({ eyebrow = '', big = '', title = '', sub = '', facts = [], live = false, warn = '', body = '', actions = [], attrs = '', lead = false }) {
   const line = [live ? `<span class="ot-now">${W('即時', 'Live')}</span>` : '', ...facts.filter(Boolean).map(e)].filter(Boolean).join(' · ');
-  const inner = `${eyebrow ? `<span class="q-focus-label">${e(eyebrow)}</span>` : ''}${big}${title ? `<strong class="ot-focus-title">${e(shown(title))}</strong>` : ''}${sub ? `<span class="q-focus-sub">${e(sub)}</span>` : ''}${line || warn ? `<span class="q-focus-sub ot-focus-facts">${line}${warn ? `${line ? ' ' : ''}${tag(warn, 'red')}` : ''}</span>` : ''}${body}${actions.length ? `<div class="ot-focus-acts">${actions.map(a => `<button class="q-btn${a.primary ? ' primary' : ' tinted'}" type="button" ${a.attrs}>${a.label}</button>`).join('')}</div>` : ''}`;
+  const head = `${title ? `<strong class="ot-focus-title">${e(shown(title))}</strong>` : ''}${sub ? `<span class="q-focus-sub">${e(sub)}</span>` : ''}${line || warn ? `<span class="q-focus-sub ot-focus-facts">${line}${warn ? `${line ? ' ' : ''}${tag(warn, 'red')}` : ''}</span>` : ''}`;
+  const inner = `${eyebrow ? `<span class="q-focus-label">${e(eyebrow)}</span>` : ''}${lead ? `<span class="ot-focus-lead">${head}</span>${big}` : `${big}${head}`}${body}${actions.length ? `<div class="ot-focus-acts">${actions.map(a => `<button class="q-btn${a.primary ? ' primary' : ' tinted'}" type="button" ${a.attrs}>${a.label}</button>`).join('')}</div>` : ''}`;
   return attrs ? `<button class="q-focus q-press ot-focus" type="button" ${attrs}>${inner}</button>` : `<section class="q-focus ot-focus">${inner}</section>`;
 }
 
-// A YouBike station's bikes on a green focus card: 一般, 電輔車 and 空位 as three
+// A YouBike station's bikes on its graphite card: 一般, 電輔車 and 空位 as three
 // columns apart (a small label over its number), hairlines between; a 0 dimmed.
 export const bikeStats = s => {
   const col = (label, n, cls = '') => `<div class="ot-bstat${cls}${n ? '' : ' zero'}"><small>${label}</small><b class="num">${n}</b></div>`;

@@ -174,7 +174,7 @@ export function createHome(box, ctx, act) {
     const cards = list.map((x, i) => {
       const s = say(x);
       const big = s.big || (s.at != null ? countHtml(s.at, { floor: Boolean(s.floor), cls: 'q-focus-value' }) : '');
-      if (i === 0) return focus({ eyebrow: s.eyebrow, big, title: s.title, sub: s.sub || '', facts: s.facts, live: s.live, warn: s.warn, body: s.body || '', attrs: `data-sg="${e(x.key)}"` });
+      if (i === 0) return focus({ eyebrow: s.eyebrow, big, title: s.title, sub: s.sub || '', facts: s.facts, live: s.live, warn: s.warn, body: s.body || '', lead: x.kind === 'bike', attrs: `data-sg="${e(x.key)}"` });
       // The rest: a row, its number on the right.
       const end = s.num != null ? `<span class="ot-eta"><strong class="ot-eta-n">${s.num}</strong><small>${W('台', 'bikes')}</small></span>` : s.numText ? `<span class="ot-eta"><strong class="ot-eta-n sm">${e(s.numText)}</strong></span>` : s.at != null ? `<span class="ot-eta">${countHtml(s.at, { floor: Boolean(s.floor), cls: 'ot-eta-n' })}<small>${e(hm(s.at))}</small></span>` : '';
       return `<button class="q-ritem ot-sg" type="button" data-sg="${e(x.key)}">${s.tile}<span class="q-ritem-text"><span class="q-ritem-title">${e(s.eyebrow)}</span><small>${e(s.title)}</small></span>${end}</button>`;
