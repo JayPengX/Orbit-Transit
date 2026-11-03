@@ -5,6 +5,7 @@ import { packRoute } from './packs.mjs';
 import { tdx, rows, busEta, liveMs } from './api.mjs';
 import { etaStops } from './near.mjs';
 import { gpsFix } from './busgps.mjs';
+import { routeLines } from './shapes.mjs';
 import { zh, hm, etaAge, etaOld, ETA_STALE, ETA_GHOST, meters, TDX_DAYS } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 import { routeStatus } from './service.mjs';
@@ -129,6 +130,38 @@ export const routeEtaAt = route => routeLive.get(route.uid)?.at || 0;
 export async function routeGps(route) {
   const j = await tdx(`basic/v2/Bus/RealTimeByFrequency/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&$select=PlateNumb,Direction,BusPosition,GPSTime`, { fresh: 'live' });
   return rows(j);
+}
+// TDX's estimates as busEta gives them (a stop card, a trip's bus, a ride
+// aboard), each bus whose estimates lag over 2 minutes counted again from
+// its GPS along its route's line (busgps.mjs), for up to 8 routes at once;
+// what isn't ready in 2.5 s is left as it was (the card never waits on it).
+const MEND_OLD = 120;
+const MEND_ROUTES = 8;
+const MEND_WAIT = 2500;
+export async function busEtaMended(city, opts = {}, { ask = busEta, now = Date.now, stopsOf = routeStops, gpsOf = routeGps, linesOf = routeLines } = {}) {
+  const got = await ask(city, opts);
+  try {
+    const t = now();
+    const lag = new Map();
+    for (const r of got.rows || []) {
+      const old = etaOld(r, t);
+      if (r.EstimateTime != null && r.PlateNumb && r.PlateNumb !== '-1' && !Number(r.StopStatus) && old > MEND_OLD && old <= ETA_GHOST) lag.set(r.RouteUID, zh(r.RouteName));
+    }
+    if (!lag.size) return got;
+    const parts = [...lag].slice(0, MEND_ROUTES).map(async ([uid, name]) => {
+      const route = { uid, name, city: routeCity(uid) };
+      const [ways, gps] = await Promise.all([stopsOf(route), gpsOf(route)]);
+      if (!gps.length) return null;
+      return { gps, ways: await Promise.all(ways.map(async w => ({ w, lines: await linesOf(route, w).catch(() => null) }))) };
+    });
+    const timeout = new Promise(r => setTimeout(() => r(null), MEND_WAIT));
+    const done = await Promise.all(parts.map(x => Promise.race([x.catch(() => null), timeout])));
+    let list = got.rows;
+    for (const x of done) for (const { w, lines } of x?.ways || []) list = gpsFix(list, x.gps, w, lines, t);
+    return list === got.rows ? got : { ...got, rows: list };
+  } catch {
+    return got;
+  }
 }
 // A route's times with each lagging bus counted again from its GPS, along
 // each way's line (`lineOf(way)` → its shape's pieces, or null).

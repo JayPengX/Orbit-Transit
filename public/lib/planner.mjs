@@ -22,7 +22,7 @@ import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getO
 import { recentFixes, busEta } from './api.mjs';
 import { dayTrips, railStations, traLive } from './raildata.mjs';
 import { stationsAround } from './near.mjs';
-import { routeStops, routeSchedule, routeCity } from './bus.mjs';
+import { routeStops, routeSchedule, routeCity, busEtaMended } from './bus.mjs';
 import { chases } from './chase.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
@@ -433,7 +433,7 @@ export async function findAboard(now = Date.now()) {
       rec('aboard', aboardTrace(m, ride ? [ride] : []));
       if (ride) return { kind: 'train', ride, m };
     }
-    const buses = await busesAboard(m, { stationsAround, routeStops, busEta, routeCity });
+    const buses = await busesAboard(m, { stationsAround, routeStops, busEta: busEtaMended, routeCity });
     if (!trainPace(m) || buses.length) rec('aboard', aboardTrace(m, buses));
     return buses.length ? { kind: 'bus', buses, m } : null;
   } catch {
@@ -456,7 +456,7 @@ export async function planAboard(data, a, to, { modes = null, ebike = false } = 
     legTo = k => trainLegTo(a.ride, k, now);
   } else {
     const bus = a.bus || a.buses[0];
-    const [rows, sched] = await Promise.all([busEta(bus.route.city, { route: bus.route.uid }).then(x => x.rows, () => []), routeSchedule(bus.route, here).catch(() => [])]);
+    const [rows, sched] = await Promise.all([busEtaMended(bus.route.city, { route: bus.route.uid }).then(x => x.rows, () => []), routeSchedule(bus.route, here).catch(() => [])]);
     const sec = (j, k) => liveRide(rows, bus.w, j, k) ?? rideTime(bus.w, j, k, sched, now);
     stops = bus.w.stops;
     from = bus.j;

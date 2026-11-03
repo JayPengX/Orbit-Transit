@@ -17,7 +17,7 @@
 import * as kit from '#kit/orbit.mjs';
 import { liveMs, busEta } from './api.mjs';
 import { pack } from './packs.mjs';
-import { stationsNear, etaOf, routeCity } from './bus.mjs';
+import { stationsNear, etaOf, routeCity, busEtaMended } from './bus.mjs';
 import { cityBikes, bikesNear } from './bike.mjs';
 import { meters, zh } from './util.mjs';
 
@@ -127,7 +127,7 @@ async function flush(asks, ask) {
 
 // N1 rows for these stops ([{ uid, scope }]); throws when any couldn't be read.
 // `fresh`: how old a copy may be (ms; a stop's card asks at the live speed).
-export async function etaStops(stops, { ask = busEta, fresh = ETA_FRESH } = {}) {
+export async function etaStops(stops, { ask = busEtaMended, fresh = ETA_FRESH } = {}) {
   const key = s => `${s.scope}|${s.uid}`;
   // (Young by when it was asked: the Worker's copy, up to a minute old, asked again at each look was the same copy again.)
   const young = s => {
@@ -155,7 +155,7 @@ export async function etaStops(stops, { ask = busEta, fresh = ETA_FRESH } = {}) 
 // A bus stop's card (the map's stations, `stops` each): every bus due at its
 // signs, one ask a city for all of them, as a trip's (TDX's advanced read a
 // station was an ask a sign), at the live speed. Each row with its sign (`st`).
-export async function stationEta(stations, { ask = busEta } = {}) {
+export async function stationEta(stations, { ask = busEtaMended } = {}) {
   const of = new Map();
   for (const st of stations) for (const x of st.stops || []) if (x.stopUID && !of.has(x.stopUID)) of.set(x.stopUID, { uid: x.stopUID, scope: x.scope || routeCity(x.stopUID), st });
   if (!of.size) return [];
@@ -167,7 +167,7 @@ export async function stationEta(stations, { ask = busEta } = {}) {
 }
 
 // Every bus due at the stops within r metres (as live.mjs etaNear).
-export async function etaAround(lat, lon, r = 150, { ask = busEta, near = null } = {}) {
+export async function etaAround(lat, lon, r = 150, { ask = busEtaMended, near = null } = {}) {
   const list = await stopsAround(lat, lon, r).catch(() => null);
   if (!list) return near ? near(lat, lon, r) : (await import('./live.mjs')).etaNear(lat, lon, r);
   return list.length ? etaStops(list, { ask }) : [];

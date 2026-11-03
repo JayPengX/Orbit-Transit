@@ -54,3 +54,23 @@ test('no line, no fix, or a fix too old: the rows as they were', () => {
   assert.equal(gpsFix(rows, [], w, lines(w), now), rows);
   assert.deepEqual(gpsFix(rows, gps, w, lines(w), now + 10 * 60_000), rows);
 });
+
+// Stop cards, a trip's bus and a ride aboard read busEtaMended: the same fix,
+// so a frozen feed is never felt anywhere but the route sheet.
+test('busEtaMended: a lagging route counted again from its GPS; fresh rows and a slow read left as they were', async () => {
+  const { busEtaMended } = await import('../public/lib/bus.mjs');
+  const got = { rows };
+  const deps = { ask: async () => got, now: () => now, stopsOf: async () => ways, gpsOf: async () => gps, linesOf: async (r, w) => lines(w) };
+  const fixed = (await busEtaMended('HsinchuCounty', { route: 'HSQ0747' }, deps)).rows;
+  assert.equal(sec(fixed, '文興嘉興路口', 0), null);
+  assert.ok(row(fixed, '喜來登飯店', 0).GpsMended);
+  // Fresh estimates (made a minute ago): no GPS asked.
+  let asked = 0;
+  const young = rows.map(r => ({ ...r, DataTime: '2026-11-03T18:13:45+08:00' }));
+  const same = await busEtaMended('HsinchuCounty', {}, { ...deps, ask: async () => ({ rows: young }), gpsOf: async () => (asked++, gps) });
+  assert.equal(asked, 0);
+  assert.equal(same.rows, young);
+  // GPS that never comes: the card gets TDX's rows after the wait, never an error.
+  const slow = await busEtaMended('HsinchuCounty', {}, { ...deps, gpsOf: () => new Promise(() => {}) });
+  assert.equal(slow.rows, rows);
+});
