@@ -9,7 +9,8 @@
 //   設定         which ways of moving to use, 每 30 分鐘換 YouBike, the maps app
 
 import { manageSheet, useBusCtx } from './bus-ui.mjs';
-import { MODES, PLACE_ICONS, iconName, DAYS, move } from './store.mjs';
+import { MODES, PLACE_ICONS, iconName, DAYS } from './store.mjs';
+import { gripHtml, reorder } from '#kit/ui.mjs';
 import { TPASSES, tpassOf, passModes, bikeSwap } from './tpass.mjs';
 import { sheet, sheetHead, icon, trainKind, stationLabel } from './ui.mjs';
 import { e, distText, meters, dayLabel, shown } from './util.mjs';
@@ -54,8 +55,14 @@ function render() {
   // The pass: its name and price big, what it covers as tags; the whole card picks another.
   // TPASS: one row in 設定 (the owner, 2026-10-21: a big card of it opening 我的 made no sense), its price beside its name.
   const passRow = `<button class="q-ritem chevron" type="button" data-act="tpass">${tpassTile()}<span class="q-ritem-text"><span class="q-ritem-title">TPASS${pass ? ` ${e(shown(pass.name))} <span class="ot-pass-price">NT$${pass.price}</span>` : ''}</span><small>${e(pass ? passModes(pass).join('、') : W('沒有月票', 'No pass'))}</small></span></button>`;
+  // Places in their order: two or more carry the kit's grip (reorder), the row itself opens its sheet.
+  const placeBody = p => `${placeTile(p)}<span class="q-ritem-text"><span class="q-ritem-title">${e(shown(p.name))}</span>${p.address ? `<small>${e(p.address)}</small>` : ''}</span>${ctx.here ? `<span class="q-ritem-value">${e(distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon)))}</span>` : ''}`;
   const places = D.places
-    .map(p => `<button class="q-ritem chevron" type="button" data-place-edit="${e(p.id)}">${placeTile(p)}<span class="q-ritem-text"><span class="q-ritem-title">${e(shown(p.name))}</span>${p.address ? `<small>${e(p.address)}</small>` : ''}</span>${ctx.here ? `<span class="q-ritem-value">${e(distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon)))}</span>` : ''}</button>`)
+    .map(p =>
+      D.places.length > 1
+        ? `<div class="q-ritem" data-q-key="${e(p.id)}"><button class="q-row-open" type="button" data-place-edit="${e(p.id)}">${placeBody(p)}</button>${gripHtml(W(`拖曳排序：${shown(p.name)}`, `Reorder ${shown(p.name)}`))}</div>`
+        : `<button class="q-ritem chevron" type="button" data-place-edit="${e(p.id)}">${placeBody(p)}</button>`
+    )
     .join('');
   // A trip as what it is, a way there and a way back (Jay 2026-11-03: the old row, a tile and
   // times in a heap, looked terrible): its name and days on top, then one line each way, the
@@ -83,7 +90,7 @@ function render() {
   const keep = box?.scrollTop || 0;
   $('me-main').innerHTML = `<div class="ot-page"><div class="q-cols ot-cols"><div>
     ${section(W('行程', 'Trips'), rowCard(trips + addRow('add-trip', W('新增行程', 'Add a trip'))))}
-    ${section(W('地點', 'Places'), rowCard(places + addRow('add-place', W('釘選地點', 'Pin a place'))))}
+    ${section(W('地點', 'Places'), rowCard(places + addRow('add-place', W('釘選地點', 'Pin a place'))).replace('class="q-rowcard', 'id="me-places" class="q-rowcard'))}
     </div><div>
     ${section(
       W('釘選', 'Pinned'),
@@ -95,6 +102,12 @@ function render() {
         <label class="q-ritem chevron ot-pick-row">${tile('pin', COLOR.place)}<span class="q-ritem-text"><span class="q-ritem-title">${W('導航 App', 'Maps app')}</span></span><span class="q-ritem-value">${P.maps === 'apple' ? W('Apple 地圖', 'Apple Maps') : W('Google 地圖', 'Google Maps')}</span><select id="me-maps" class="ot-cover" aria-label="${W('導航 App', 'Maps app')}"><option value="google" ${P.maps !== 'apple' ? 'selected' : ''}>${W('Google 地圖', 'Google Maps')}</option><option value="apple" ${P.maps === 'apple' ? 'selected' : ''}>${W('Apple 地圖', 'Apple Maps')}</option></select></label>`)
     )}
   </div></div></div>`;
+  reorder($('me-places'), {
+    onChange: ids => {
+      ctx.data.places = ids.map(id => ctx.data.places.find(p => p.id === id)).filter(Boolean);
+      done();
+    }
+  });
   // (A switch flipped, a row changed: the page stays where it was read.)
   if (box) box.scrollTop = keep;
 }
@@ -160,16 +173,15 @@ function tpassSheet() {
   });
 }
 
-// A pinned place: its name and icon, its place in the list, or gone.
+// A pinned place: its name and icon, or gone (its place in the list: its grip on 我的).
 function placeSheet(id) {
   const p = ctx.data.places.find(x => x.id === id);
   if (!p) return;
-  const at = ctx.data.places.indexOf(p);
   let ic = p.icon;
   const d = sheet(`${sheetHead(W('編輯地點', 'Edit place'), p.address ? e(p.address) : '', placeTile(p))}
     <label class="ot-field"><span>${W('名稱', 'Name')}</span><input id="pl-name" maxlength="30" value="${e(p.name)}" placeholder="${W('家、公司、學校', 'Home, Work, School')}"></label>
     <div class="ot-field"><span>${W('圖示', 'Icon')}</span><div class="q-chips ot-wrap-chips">${Object.entries(PLACE_ICONS).map(([k, v]) => `<button class="q-chip" type="button" data-icon="${k}" aria-pressed="${k === ic}" aria-label="${e(iconName(k))}">${icon(v)}</button>`).join('')}</div></div>
-    <div class="ot-sheet-acts"><button class="q-btn" type="button" data-del="1">${icon('trash')} ${W('刪除', 'Delete')}</button>${at ? `<button class="q-btn" type="button" data-up="1">${icon('up')} ${W('上移', 'Move up')}</button>` : ''}<button class="q-btn primary" type="button" data-save="1">${W('儲存', 'Save')}</button></div>`);
+    <div class="ot-sheet-acts"><button class="q-btn" type="button" data-del="1">${icon('trash')} ${W('刪除', 'Delete')}</button><button class="q-btn primary" type="button" data-save="1">${W('儲存', 'Save')}</button></div>`);
   d.addEventListener('click', ev => {
     const b = ev.target.closest('[data-icon]');
     if (b) {
@@ -177,7 +189,6 @@ function placeSheet(id) {
       return d.querySelectorAll('[data-icon]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.icon === ic)));
     }
     if (ev.target.closest('[data-del]')) ctx.data.places = ctx.data.places.filter(x => x.id !== id);
-    else if (ev.target.closest('[data-up]')) ctx.data.places = move(ctx.data.places, ctx.data.places.findIndex(x => x.id === id), -1);
     else if (ev.target.closest('[data-save]')) ctx.data.places = ctx.data.places.map(x => (x.id === id ? { ...x, name: d.querySelector('#pl-name').value.trim().slice(0, 30) || x.name, icon: ic } : x));
     else return;
     d.shut();

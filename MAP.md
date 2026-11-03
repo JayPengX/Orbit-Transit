@@ -64,6 +64,8 @@ Live: https://orbit.jaypengx.com/transit/
     own choice (`prefs.swap30` 'on'/'off', else as before: 每 30 分換車 or a
     pass with free first half hours; `tpass.mjs bikeSwap`), the maps app.
     A switch keeps the page where it is.
+    Places, bus groups and their stops are put in order by their grips
+    (kit `reorder`; `tab-me.mjs`, `bus-ui.mjs` manageSheet).
 - **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by
   side, plus our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and
   metro router. A planner's YouBike ride needs a real station at each end
