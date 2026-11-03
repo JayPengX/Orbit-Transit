@@ -124,7 +124,7 @@ body {
   padding: 8px 0;
   border: 0;
   background: none;
-  color: var(--q-accent);
+  color: var(--q-text-2);
   font: 500 15px/20px var(--q-font);
 }
 .ot-link .ot-i {
@@ -1271,7 +1271,7 @@ body.tab-map {
   color: var(--q-label);
 }
 .ot-fav.ghost small {
-  color: var(--q-accent);
+  color: var(--q-label-2);
   font-weight: 600;
 }
 .ot-fav-plus {
@@ -1290,7 +1290,7 @@ body.tab-map {
   stroke-width: 2.2;
 }
 .ot-fav.add b {
-  color: var(--q-accent);
+  color: var(--q-label);
 }
 
 /* 建議: the best one a big card, the rest rows with their numbers. */
