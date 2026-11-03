@@ -251,7 +251,11 @@ async function readTownships() {
 const UNANSWERED_MS = 60_000;
 const geo = { id: null, last: null, fns: new Set(), waiting: new Set(), answered: false, at: 0 };
 const restartable = () => geo.answered || Date.now() - geo.at > UNANSWERED_MS;
-const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading });
+const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading, speed: p.coords.speed });
+// The last three minutes of fixes, for telling whether you're on a bus or train (aboard.mjs).
+const TRACK_MS = 180_000;
+const track = [];
+export const recentFixes = (now = Date.now()) => track.filter(x => x.t >= now - TRACK_MS);
 function watchDevice(nav) {
   if (geo.id != null || !nav?.geolocation?.watchPosition) return;
   geo.answered = false;
@@ -261,6 +265,8 @@ function watchDevice(nav) {
       geo.answered = true;
       const fix = fixOf(p);
       geo.last = { fix, t: Date.now() };
+      track.push({ ...fix, t: geo.last.t });
+      while (track.length && track[0].t < geo.last.t - TRACK_MS) track.shift();
       for (const f of [...geo.fns]) f(fix);
       for (const w of [...geo.waiting]) w(fix);
     },

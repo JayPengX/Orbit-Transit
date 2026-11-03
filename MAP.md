@@ -65,6 +65,18 @@ Live: https://orbit.jaypengx.com/transit/
   偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
   own): of stations about as near, one with 電輔車 there now, ridden at
   their pace (`plan.mjs` `PREFER_SEC`).
+- **On board** (`lib/aboard.mjs`, Jay 2026-11-03): 規劃 from 你的位置 while
+  on a bus or train plans from it, never from the point on the track. A train:
+  the last 2½ minutes of fixes (`api.mjs recentFixes`) at a train's pace and
+  today's train where you are going your way (`trainAboard`: timetable plus
+  TDX's delay). A bus: faster than a bike between two fixes, every fix along a
+  route's stops going its way, and TDX's estimate of that route's bus at the
+  stop just ahead matching when you'll be there (`busesAboard`); two routes
+  that fit are chips to pick. The ride to the stop nearest the place (and one
+  more a kilometre off), then a trip planned from there (`planAboard`, the
+  same ride boarded again joined on: `joinRide`). Navigation starts on the
+  ride (`aboard` on the first leg). 不在車上 plans from the street; the metro
+  (no fixes underground) as before; never a trip started by itself.
 - **Speed:** the first plans wait at most 1.5 s on the buses' live times
   (`planner.mjs FIRST_WAIT`), the rest come with the second round.
 - **Planned once:** a saved trip's ways are kept and re-timed live. The
@@ -194,6 +206,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |
 | `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; the buzz; bus alerts |
+| `lib/aboard.mjs` | Already on a bus or train: which one, and the trip from its stops ahead |
 | `lib/service.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules |
 | `lib/tab-*.mjs`, `map.mjs` | Each tab; Google or Leaflet+NLSC behind one interface |
 | `lib/store.mjs` | The Pass's data |

@@ -1845,7 +1845,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     return Boolean(a && a.off < (ON_WAY[plan.legs[k].mode] || 80));
   };
   const behind = !resume && fresh && !here0 && from.i > 0 ? [...Array(from.i).keys()].reverse().find(onOwn) : undefined;
-  const start = here0 && (here0.i > from.i || (here0.i === from.i && here0.phase === 'on')) ? here0 : behind != null ? { i: behind, phase: 'before' } : from;
+  // (A trip planned from the bus or train you're on, aboard.mjs: on it from the start.)
+  const onBoard = !resume && plan.legs[0]?.aboard && isRide(plan.legs[0]) ? { i: 0, phase: 'on' } : null;
+  const start = onBoard || (here0 && (here0.i > from.i || (here0.i === from.i && here0.phase === 'on')) ? here0 : behind != null ? { i: behind, phase: 'before' } : from);
   // (Opened again: as far as it had got, the step shown as it was.)
   state.reached = start === from && resume?.reached != null ? Math.min(Number(resume.reached) || 0, start.i) : start.i;
   // (Started where you are already riding a bike the trip takes: its timer too.)

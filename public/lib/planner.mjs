@@ -16,14 +16,19 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
-import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn } from './live.mjs';
+import { rank, withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
+import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
+import { recentFixes, busEta } from './api.mjs';
+import { dayTrips, railStations, traLive } from './raildata.mjs';
+import { stationsAround } from './near.mjs';
+import { routeStops, routeSchedule, routeCity } from './bus.mjs';
 import { chases } from './chase.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { traNotices, traLegOff } from './service.mjs';
 import { modeList } from './store.mjs';
-import { meters, hm, isRide } from './util.mjs';
+import { meters, hm, isRide, tw } from './util.mjs';
 import { crossings } from './rivers.mjs';
 import { rec } from '#kit/orbit.mjs';
 
@@ -412,4 +417,69 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     return { ...r, plans: mark(r.plans), later: after };
   }
   return { plans: first, sources: res.sources || {}, error: first.length ? null : stopErr() || res.err || null, later, ms };
+}
+
+// ---- Already on board (aboard.mjs) ----
+// The bus or train you're on, from the last few minutes of fixes: a train
+// first (its pace and today's timetable say it), else the buses that fit.
+// → { kind: 'train', ride } | { kind: 'bus', buses } | null; never throws.
+export async function findAboard(now = Date.now()) {
+  try {
+    const m = motion(recentFixes(now), now);
+    if (!m) return null;
+    if (trainPace(m)) {
+      const [trips, sts, lv] = await Promise.all([dayTrips(tw(now).date), railStations(), traLive().catch(() => new Map())]);
+      const ride = trainAboard(trips, sts, m, lv, now);
+      rec('aboard', aboardTrace(m, ride ? [ride] : []));
+      if (ride) return { kind: 'train', ride, m };
+    }
+    const buses = await busesAboard(m, { stationsAround, routeStops, busEta, routeCity });
+    if (!trainPace(m) || buses.length) rec('aboard', aboardTrace(m, buses));
+    return buses.length ? { kind: 'bus', buses, m } : null;
+  } catch {
+    return null;
+  }
+}
+// The trip from the ride you're on (`a`: findAboard's, a bus picked when
+// there were two): stay on to where it gets off nearest the place (or one
+// more stop a kilometre away), then on from there as any trip from that stop
+// is planned; ranked together. → planTrip's { plans, sources, later } or null.
+export async function planAboard(data, a, to, { modes = null, ebike = false } = {}) {
+  const now = Date.now();
+  const here = a.m ? { lat: a.m.lat, lon: a.m.lon } : null;
+  let legTo;
+  let stops;
+  let from;
+  if (a.kind === 'train') {
+    stops = a.ride.stops;
+    from = a.ride.at + 1;
+    legTo = k => trainLegTo(a.ride, k, now);
+  } else {
+    const bus = a.bus || a.buses[0];
+    const [rows, sched] = await Promise.all([busEta(bus.route.city, { route: bus.route.uid }).then(x => x.rows, () => []), routeSchedule(bus.route, here).catch(() => [])]);
+    const sec = (j, k) => liveRide(rows, bus.w, j, k) ?? rideTime(bus.w, j, k, sched, now);
+    stops = bus.w.stops;
+    from = bus.j;
+    legTo = k => busLegTo(bus, k, sec, now);
+  }
+  const offs = getOffAt(stops, from, to, here);
+  if (!offs.length) return null;
+  const parts = await Promise.all(offs.map(async k => {
+    const ride = legTo(k);
+    if (meters(ride.to.lat, ride.to.lon, to.lat, to.lon) <= 700) return { first: [rideThenWalk(ride, to, now)], later: null };
+    const out = await planTrip(data, ride.to, to, { at: ride.arr + (a.kind === 'train' ? 60_000 : 30_000), by: 'depart', modes, ebike }).catch(() => null);
+    const join = list => (list || []).filter(q => q.lead !== false && !q.weak).map(q => joinRide(ride, q, now));
+    return { first: join(out?.plans), later: out?.later?.then(o => (o?.plans ? join(o.plans) : null)) || null, sources: out?.sources };
+  }));
+  const done = list => {
+    const all = list.filter(p => p?.legs?.length);
+    if (!all.length) return [];
+    const ranked = rank(all, { now: all[0].legs[0].dep, o: here, d: to });
+    // (One plan a row: there are no other departures of a ride you're on.)
+    return ranked.map((p, i) => ({ ...p, dep: now, dur: Math.round((p.arr - now) / 1000), times: [i] }));
+  };
+  const first = done(parts.flatMap(x => x.first));
+  if (!first.length) return null;
+  const later = parts.some(x => x.later) ? Promise.all(parts.map(x => (x.later ? x.later.catch(() => null) : null))).then(ls => ({ plans: done(parts.flatMap((x, i) => ls[i] || x.first)), sources: {} })) : null;
+  return { plans: first, sources: Object.assign({}, ...parts.map(x => x.sources || {})), error: null, later };
 }
