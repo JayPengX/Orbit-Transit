@@ -26,7 +26,7 @@ import { lateBy } from './nav.mjs';
 import { loadNotices, bikesOff, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor } from './ui.mjs';
+import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor, legChips, fitLegs } from './ui.mjs';
 import { boardRow, whenHtml } from './board.mjs';
 import { COLOR, PLACE_COLOR, tile, tag, section, rowCard, tick, navTitle, noticesHtml } from './look.mjs';
 import { e, hm, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson, shown as nameIn } from './util.mjs';
@@ -590,6 +590,25 @@ function boardTrip({ t, w }) {
     attrs: `data-all-trip="${e(w.id)}"`
   });
 }
+// Under a trip's row, its next ways to pick from at once (Jay 2026-11-03: 交通 was "so empty",
+// it "used to show detail or even trip for me to choose from directly"): up to three, each
+// when to leave, its rides as chips and when you're there; a tap shows that one on the map,
+// its 導航 a tap away. Only a trip with rides in the next three hours (later, the row says when).
+const WAYS_MS = 3 * 3600_000;
+function tripWays({ t, w }) {
+  const all = tripOf(w)?.plans || [];
+  const { first, rest } = tripPlans(all, t.picks);
+  const now = Date.now();
+  const ways = [...first, ...rest].filter(p => p.dep < now + WAYS_MS).slice(0, 3);
+  if (!ways.length) return '';
+  return `<div class="ob-ways">${ways
+    .map(p => {
+      const late = lateBy(p, p.arr);
+      const warn = p.off || p.miss || p.late || (late ? W(`晚 ${late} 分到`, `${late} min late`) : '');
+      return `<button class="ob-way q-press" type="button" data-nav-trip="${e(w.id)}" data-i="${all.indexOf(p)}"><span class="ob-way-when${p.live ? ' live' : ''}">${e(hm(p.dep))}</span><span class="ob-way-mid"><span class="ot-legs">${legChips(p.legs)}</span>${warn ? `<small class="ot-warn">${e(warn)}</small>` : ''}</span><span class="ob-way-arr"><b>${e(hm(p.arr))}</b><small>${e(W(`${Math.round(p.dur / 60)} 分`, `${Math.round(p.dur / 60)} min`))}</small></span></button>`;
+    })
+    .join('')}</div>`;
+}
 // A pinned bus's row, as 釘選's (its way round a tap on its tag), in the order pinned.
 function boardBuses() {
   return ctx.data.groups
@@ -683,7 +702,7 @@ function renderBoard(ts) {
   const here = ctx.here;
   const places = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
   const plan = `<button class="ob-plan q-press" type="button" data-plan-to="1">${icon('search')}<span>${W('要去哪裡？', 'Where to?')}</span></button>${places.length ? `<div class="ob-places">${places.map(p => `<button class="ob-place q-press" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place, 'sm')}<span>${e(nameIn(p.name))}</span></button>`).join('')}</div>` : ''}`;
-  const rows = [...ts.map(boardTrip), ...boardBuses(), ...boardTrains()].join('');
+  const rows = [...ts.map(x => boardTrip(x) + tripWays(x)), ...boardBuses(), ...boardTrains()].join('');
   const mine = section(W('我的路線', 'My rides'), rows ? rowCard(rows) : `<div class="q-rowcard ob-empty"><p>${W('釘選常搭的車，時間都在這裡', 'Pin what you ride: its times show here')}</p><button class="q-btn" type="button" data-new-trip="1">${icon('plus')} ${W('新增行程', 'Add a trip')}</button></div>`);
   box.innerHTML = `<div class="ot-page ob-page">
     ${navTitle(W('交通', 'Transit'))}
@@ -694,6 +713,7 @@ function renderBoard(ts) {
   </div>`;
   kitUI.wireNavTitles(box);
   fitStrips(box);
+  fitLegs(box);
   box.scrollTop = keep;
   const rail = box.querySelector('.ob-places');
   if (rail) rail.scrollLeft = railX;
@@ -789,6 +809,13 @@ function onClick(ev) {
   if (lt) {
     const w = trips().find(x => x.t.id === lt.dataset.loadTrip)?.w;
     if (w) return loadTrip(w, { force: true });
+  }
+  // One of a trip's ways: that one on the map, ready to go.
+  const nt = ev.target.closest('[data-nav-trip]');
+  if (nt) {
+    const x = trips().find(y => y.w.id === nt.dataset.navTrip);
+    const p = x && tripOf(x.w)?.plans?.[Number(nt.dataset.i)];
+    if (p) return ctx.navPlan(p, x.w.from, x.w.to || p.legs.at(-1).to);
   }
   const pl = ev.target.closest('[data-place]');
   if (pl) return openPlace(pl.dataset.place);

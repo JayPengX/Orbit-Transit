@@ -1749,6 +1749,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const end = ev.target.closest('[data-nav-bike]')?.dataset.navBike;
     if (end) return swapStation(end);
     const k = ev.target.closest('[data-nav-go]')?.dataset.navGo;
+    // The step you're on tapped: it stays as it is (go() started it over: the card lost the
+    // stop you're coming to and showed the distance until the next fix; Jay 2026-11-03),
+    // opened if folded, and the map framed on it again.
+    if (k != null && Number(k) === state.i && !state.look) {
+      if (state.fold.top) foldCard('top', false);
+      return onAction?.('view');
+    }
     if (k != null && Number(k) >= state.reached) {
       // (Looking ahead from a ride you're on: it's still followed, and a tap back is on it again.)
       if (Number(k) !== state.i && state.i === state.reached && state.phase === 'on' && isRide(plan.legs[state.i])) state.look = { k: state.i };
