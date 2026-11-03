@@ -54,8 +54,9 @@ export function createHome(box, ctx, act) {
     const rank = p => (KINDS.includes(p.icon) ? KINDS.indexOf(p.icon) : KINDS.length);
     const list = ctx.data.places.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(x => x.p);
     const tiles = list.map(p => `<button class="ot-fav" type="button" data-fav="${e(p.id)}">${placeTile(p.icon)}<b>${e(shown(p.name))}</b>${here ? `<small>${e(near(meters(here.lat, here.lon, p.lat, p.lon)))}</small>` : ''}</button>`);
-    // 家 and 公司 not set yet: their tiles wait, to be filled in with a tap.
-    const ghosts = ['home', 'work'].filter(k => !ctx.data.places.some(p => p.icon === k)).map(k => `<button class="ot-fav ghost" type="button" data-fav-add="${k}">${placeTile(k)}<b>${e(PLACE_WORD[k])}</b><small>${W('加入', 'Add')}</small></button>`);
+    // 家 not set yet: its tile waits, to be filled in with a tap. (Never an empty 公司: not everyone
+    // has one (Jay 2026-11-03, a student); 公司 or 學校 is added with ＋ by whoever goes there.)
+    const ghosts = ['home'].filter(k => !ctx.data.places.some(p => p.icon === k)).map(k => `<button class="ot-fav ghost" type="button" data-fav-add="${k}">${placeTile(k)}<b>${e(PLACE_WORD[k])}</b><small>${W('加入', 'Add')}</small></button>`);
     const add = `<button class="ot-fav add" type="button" data-fav-add="" aria-label="${W('釘選地點', 'Pin a place')}"><span class="ot-fav-plus">${icon('plus')}</span><b>${W('新增', 'New')}</b></button>`;
     return `<section class="ot-shelf">${head(W('常用', 'Favorites'))}<div class="q-rail ot-favs">${[...tiles, ...ghosts, add].join('')}</div></section>`;
   };

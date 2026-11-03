@@ -2114,9 +2114,28 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
 function legPath(l) {
   const polys = Array.isArray(l.poly) ? l.poly : l.poly ? [l.poly] : [];
   const path = polys.flatMap(x => decodeLine(x, l.fmt));
-  if (path.length) return path;
+  if (path.length) return l.mode === 'walk' || l.mode === 'bike' ? trimEnds(path, l.from, l.to) : path;
   if (Array.isArray(l.path) && l.path.length > 1) return l.path;
   return l.from?.lat && l.to?.lat ? [[l.from.lat, l.from.lon], [l.to.lat, l.to.lon]] : [];
+}
+// A walk's or a ride's line without its detour past either end: a road path
+// taken to the road point nearest a YouBike station inside a block went on
+// past the station and back, so the walk to it and the ride from it ran over
+// each other there (Jay 2026-11-03, 六家: "these lines are broke"). From
+// each end the line is cut where it stops coming nearer the place it ends
+// at (or starts from), and joined to the place itself.
+export function trimEnds(path, from, to) {
+  if (path.length < 3) return path;
+  const d = (k, p) => meters(path[k][0], path[k][1], p.lat, p.lon);
+  let a = 0;
+  let b = path.length - 1;
+  if (to?.lat != null) while (b > 1 && d(b - 1, to) < d(b, to) - 2) b--;
+  if (from?.lat != null) while (a < b - 1 && d(a + 1, from) < d(a, from) - 2) a++;
+  if (a === 0 && b === path.length - 1) return path;
+  const out = path.slice(a, b + 1);
+  if (a > 0) out.unshift([from.lat, from.lon]);
+  if (b < path.length - 1) out.push([to.lat, to.lon]);
+  return out;
 }
 // A trip's YouBike stations, where you take a bike and where it goes back:
 // each as the map's own station marker, its tip on the station (looking at
@@ -2576,6 +2595,12 @@ function refitNav() {
 let cardsTimer = 0;
 function navAction(a, info) {
   if (a === 'open') return shrinkNav(false);
+  // (The step you're on, tapped: the map back on it.)
+  if (a === 'view') {
+    const n = navNow();
+    viewAt = 0;
+    return n && navView(n.plan, n.i);
+  }
   if (a === 'more') return navMore();
   if (a === 'replan') return replanFromHere();
   if (a === 'late') return navLate(info);
@@ -2807,10 +2832,15 @@ async function restAfter({ k, at }) {
 }
 const nextOf = n => {
   const rs = n.ride;
+  // (The stop navigation follows you to, when it knows it: the nearest stop to you was the
+  // wrong one on a way that loops back past itself (快捷8號支 round 六家), and 改下車站 then
+  // offered only stops after the one you're getting off at; Jay 2026-11-03.)
+  if (n.next != null && n.phase === 'on') return Math.max(rs.i + 1, Math.min(n.next, rs.stops.length - 1));
   let best = rs.i + 1;
   if (n.pos) {
     let bd = Infinity;
-    for (let k = rs.i; k < rs.stops.length; k++) {
+    // (Up to your stop: past it, a way looping back can come nearer you.)
+    for (let k = rs.i; k <= Math.min(rs.j ?? Infinity, rs.stops.length - 1); k++) {
       const d = meters(n.pos.lat, n.pos.lon, rs.stops[k].lat, rs.stops[k].lon);
       if (d < bd) [best, bd] = [k + 1, d];
     }

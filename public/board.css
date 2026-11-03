@@ -124,3 +124,60 @@ html[data-look='native'] .ob-empty p {
 html[data-look='native'] .ob-page .ot-sec {
   margin-top: 22px;
 }
+
+/* A trip's next ways under its row (tab-go tripWays): indented under its text, a line each,
+   when to leave, its rides as chips, when you're there; a tap shows it on the map. */
+html[data-look='native'] .ob-ways {
+  position: relative;
+  padding: 0 0 6px 76px;
+  margin-top: -4px;
+}
+html[data-look='native'] .ob-way {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 16px 4px 0;
+  border: 0;
+  background: none;
+  color: var(--q-label);
+  text-align: left;
+  font: inherit;
+}
+html[data-look='native'] .ob-way + .ob-way {
+  border-top: var(--q-hairline) solid var(--q-sep);
+}
+html[data-look='native'] .ob-way-when {
+  min-width: 42px;
+  font: 600 15px/1 var(--q-font);
+  font-variant-numeric: tabular-nums;
+}
+html[data-look='native'] .ob-way-when.live {
+  color: var(--q-good);
+}
+html[data-look='native'] .ob-way-mid {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+html[data-look='native'] .ob-way-mid .ot-warn {
+  font: 400 12px/1.2 var(--q-font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[data-look='native'] .ob-way-arr {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+}
+html[data-look='native'] .ob-way-arr b {
+  font: 600 15px/1 var(--q-font);
+  font-variant-numeric: tabular-nums;
+}
+html[data-look='native'] .ob-way-arr small {
+  color: var(--q-label-2);
+  font: 400 12px/1 var(--q-font);
+}

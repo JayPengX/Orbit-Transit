@@ -24,3 +24,20 @@ test('zoomed in, every mark and the name are back', () => {
   const out = declutter([bike, off, dot, end], 19);
   assert.ok(out.every(x => !/tuck|nolabel/.test(x.cls)));
 });
+
+// A walk's road path to a YouBike station inside a block went on past it and back (六家, Jay 2026-11-03).
+const { meters } = await import('../public/lib/util.mjs');
+const tsrc = src.slice(src.indexOf('export function trimEnds'), src.indexOf('// A trip\'s YouBike stations, where you take'));
+const trimEnds = new Function('meters', tsrc.replace('export function', 'function') + '\nreturn trimEnds;')(meters);
+test('a line that goes on past where it ends, and back, is cut where it stops coming nearer', () => {
+  const stop = { lat: 24.8100, lon: 121.0400 };
+  const station = { lat: 24.8100, lon: 121.0380 };
+  // West along the road to the corner by the station, then on 300 m south past it.
+  const path = [[24.81, 121.04], [24.81, 121.039], [24.8101, 121.0381], [24.809, 121.0381], [24.8073, 121.0382]];
+  const out = trimEnds(path, stop, station);
+  assert.deepEqual(out.at(-1), [station.lat, station.lon]);
+  assert.equal(out.length, 4);
+  // A straight way in is left as it is.
+  const plain = [[24.81, 121.04], [24.81, 121.039], [24.81, 121.0381]];
+  assert.deepEqual(trimEnds(plain, stop, station), plain);
+});
