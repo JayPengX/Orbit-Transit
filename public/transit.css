@@ -5229,6 +5229,30 @@ button.ot-trip-foot {
   height: 12px;
   stroke-width: 2.2;
 }
+/* Today and the next day on one line (2026-11-03): where the day's last bus
+   has passed, the line goes quiet and the stops are the next day's; where
+   today's stops begin, that last bus by the timetable, a ring until it's
+   seen live. */
+.ot-route-stops li.tmrw::before {
+  background: var(--q-fill-1);
+}
+.ot-route-stops li.tmrw .ot-rs-dot {
+  border-color: var(--q-label-3);
+}
+.ot-route-stops li.tmrw .ot-rs-eta,
+.ot-route-stops li.tmrw .ot-rs-name b {
+  color: var(--q-label-3);
+}
+/* The whole way done for today: said quietly, as its stops are. */
+.ot-note.ot-off-note.ot-done-note {
+  color: var(--q-label-2);
+}
+.ot-rs-bus.plan {
+  border: 2px solid var(--q-green);
+  background: var(--q-sheet);
+  color: var(--ot-ink-green);
+  box-sizing: border-box;
+}
 .ot-rs-name {
   display: grid;
   min-width: 0;
