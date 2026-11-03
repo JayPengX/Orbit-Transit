@@ -217,6 +217,17 @@ export const busBetween = (lives, k) => k > 0 && coming(lives[k]) && etaText(liv
 // the first stop it reaches; the stops after it say 即將進站 without one.
 export const busAt = (lives, k) => coming(lives[k]) && etaText(lives[k]).tone === 'now' && nextBus(lives, k);
 
+// A way done for today: its first stop's next run another day, no stop with
+// a run still to come today, and no bus on its way (the last run left its
+// first stop but is still coming to the rest: 快捷8號支 at 18:32 said
+// 今天已收班 with its 18:33 at 下公館 to come; the owner, 2026-11-03).
+export function doneToday(sched, w, lives = [], now = Date.now()) {
+  if (!sched?.length || !w?.stops?.length) return false;
+  const first = nextRun(sched, w, 0, now);
+  if (!first || first.day === 0) return false;
+  if (lives.some(v => v?.status === 0 && v.sec != null)) return false;
+  return !w.stops.some((_, k) => nextRun(sched, w, k, now)?.day === 0);
+}
 export async function openRoute(c, route, { stopUID = '', stopName = '', dir = null, add = false } = {}) {
   ctx ||= c;
   let ways = null;
@@ -250,9 +261,12 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     return n === 1 ? W(`明天（週${WEEK[(t.dow + 1) % 7]}）`, `tomorrow (${WEEK_EN[(t.dow + 1) % 7]})`) : wk((t.dow + n) % 7);
   };
   // The route not running again today: which day the stops' times are of.
-  const offNote = w => {
+  // Only when no stop has a run still to come today and no bus is on its way:
+  // the last run's left its first stop but is still coming to the rest
+  // (快捷8號支 at 18:32 said 今天已收班 with its 18:33 at 下公館 to come; the owner, 2026-11-03).
+  const offNote = (w, lives = []) => {
+    if (!doneToday(sched, w, lives)) return '';
     const first = planned(w, 0);
-    if (!first || first.day === 0) return '';
     const ranToday = nextRun(sched, w, 0, twAt(today().date, '00:00'), 0);
     return W(`${ranToday ? '今天已收班' : '今天不行駛'}，以下是${dayName(first.day)}的時刻`, `${ranToday ? 'Done for today' : 'Not running today'}; times for ${dayName(first.day)}`);
   };
@@ -300,8 +314,6 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // What's said about it today (service.mjs): its status at the top, the notice a tap away.
     const said = routeStatus(route.uid, route.name);
     const stopped = said && (said.effect === 'off' || said.effect === 'likely');
-    const off = stopped ? '' : w && sched?.length ? offNote(w) : '';
-    offDay = off ? planned(w, 0).day : 0;
     const keep = d.scrollTop;
     // Like a stop's sign: the route's number big, where it's going beside it;
     // the way and the view stay at the top while the stops scroll under.
@@ -321,6 +333,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       const v = live.get(etaKey(s.uid, route.uid, w.dir));
       return v?.status === 0 && v.sec != null && !liveTrusted(sched, w, k, Date.now() + v.sec * 1000) ? null : v;
     });
+    const off = stopped ? '' : w && sched?.length ? offNote(w, lives) : '';
+    offDay = off ? planned(w, 0).day : 0;
     const between = k => busBetween(lives, k);
     // A stopped feed (bus.mjs etaOf stale): said once above the stops, not under each.
     const oldest = Math.max(0, ...lives.filter(v => v?.stale).map(v => v.old));

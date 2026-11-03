@@ -51,3 +51,15 @@ test('a stop without a live time between two of the same bus’s is no bus', () 
   assert.equal(busAt([v(10), null, v(40)], 2), false);
   assert.equal(busAt([v(900), null, v(40)], 2), true);
 });
+
+test('收班 only when no stop has a run still to come today (the owner, 2026-11-03 18:32)', async () => {
+  const { doneToday } = await import('../public/lib/bus-ui.mjs');
+  // The day's last run left 台大竹東分院 at 18:00: its first stop is done, 砂石廠's 18:45 isn't.
+  assert.equal(doneToday(sched, way, [], t('18:30')), false);
+  // A bus still on its way: not done.
+  assert.equal(doneToday(sched, way, [{ status: 0, sec: 300 }], t('20:30')), false);
+  // Every stop's last run gone, no bus: done.
+  assert.equal(doneToday(sched, way, [], t('20:30')), true);
+  // Before the day's first run: not done.
+  assert.equal(doneToday(sched, way, [], t('05:00')), false);
+});
