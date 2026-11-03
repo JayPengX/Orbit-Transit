@@ -2989,6 +2989,14 @@ body.tab-map {
 .ot-nav-rent.over {
   color: var(--q-red);
 }
+.ot-nav-rent span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+.ot-nav-rent .ot-nav-gm {
+  flex: none;
+}
 
 /* Waiting: the last stops before yours on a rail, the bus or train on it. */
 .ot-track {
@@ -3392,6 +3400,19 @@ body.tab-map {
 }
 .ot-nav-chip.on .ot-i {
   color: #fff;
+}
+/* A trip with stops: each stop, then the stretch after it as planned (not a tap yet). */
+.ot-nav-chip.stop {
+  padding: 0 4px 0 6px;
+  background: none;
+  color: var(--q-label);
+  font-weight: 600;
+}
+.ot-nav-chip.stop .ot-i {
+  color: var(--q-red);
+}
+.ot-nav-chip.later {
+  opacity: 0.6;
 }
 
 /* Shrunk, or on another tab: one glass bar above the tab bar. */

@@ -203,6 +203,27 @@ export function tidy(p) {
   return legs === p.legs ? p : finish({ ...p, legs });
 }
 
+// How early to be at a bus's stop (the owner, 2026-11-03: "don't be too exact
+// to the schedule, leave maybe 5 minutes earlier for bus; trains are on
+// time"): 5 minutes before a timetable's time (or a planner's), 2 before a
+// bus TDX sees on its way (its countdown is the bus itself).
+export const BUS_EARLY = { sched: 5 * 60_000, live: 2 * 60_000 };
+export const busEarly = l => (l?.live && !l.live.planned && Math.abs(l.live.at - l.dep) < 60_000 ? BUS_EARLY.live : BUS_EARLY.sched);
+// A plan whose first ride is a bus: the way to its stop set out so as to be
+// there busEarly before it, never before `floor` (now, or the time asked)
+// unless the plan already did. Shown, not scored: the ranking's own `board`
+// minutes already count a bus's slack (rank runs before this).
+export function boardEarly(p, floor) {
+  const i = p.legs.findIndex(isRide);
+  const l = p.legs[i];
+  if (i <= 0 || l.mode !== 'bus' || l.dep == null || p.legs[i - 1].arr == null || p.legs[0].dep == null) return p;
+  const dep0 = p.legs[0].dep;
+  const dep = Math.max(dep0 + (l.dep - busEarly(l) - p.legs[i - 1].arr), Math.min(floor, dep0));
+  const d = dep - dep0;
+  if (Math.abs(d) < 30_000) return p;
+  return finish({ ...p, legs: p.legs.map((x, k) => (k < i ? { ...x, dep: x.dep + d, arr: x.arr + d } : x)) });
+}
+
 // Legs that overlap the one before them (a walk added after a ride) moved on
 // after it, as far as a fixed time allows: a bus or train after them keeps
 // its time, and a plan that then can't be done is left to inOrder.

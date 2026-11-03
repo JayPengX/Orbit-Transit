@@ -19,7 +19,7 @@ import { planTrip } from './planner.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
 import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
-import { startNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { startNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, navLater, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
@@ -1652,7 +1652,7 @@ async function plan(from, to, opts = {}) {
       roadLegs(best, { roads: 'bike' });
     }
     if (opts.nav && c.plans[opts.index || 0]) navigate(c.plans[opts.index || 0]);
-    const rest = (c.then.length || c.have) && c.plans.length ? planRest(c) : null;
+    const rest = (c.then.length || c.have) && c.plans.length ? (c.restP = planRest(c)) : null;
     if (opts.go) goBest(c, rest, opts.go);
   }
   // The direct buses and every bus's times come a moment later: the list
@@ -1747,6 +1747,24 @@ async function planRest(c) {
 // A way on a card with stops, the whole trip: its later stretches (null
 // while they're being planned, or nothing gets there).
 const restOf = (c, p) => (p.keep ? p.later : c?.then?.length && c.rest?.length === c.then.length ? chainOn(p, c.rest) : null);
+// The stretches after a navigated trip's stops, planned with no card (its
+// places changed on the way): each from when the one before gets in, its
+// recommended way. → [plan…], or null when one finds nothing.
+async function laterFor(p) {
+  const out = [];
+  let prev = p.dest || p.legs.at(-1).to;
+  let at = p.arr;
+  for (const x of p.then || []) {
+    const o = await planTrip(ctx.data, prev, x, { at: Math.max(at, Date.now()), by: 'depart', modes: tripModes, ebike: ebikeNow() }).catch(() => null);
+    const list = ((await o?.later?.catch(() => null))?.plans?.length ? (await o.later).plans : o?.plans) || [];
+    const q = list.find(y => y.tags?.includes('推薦')) || list.find(y => y.lead !== false && !y.weak) || list[0];
+    if (!q) return null;
+    out.push(q);
+    prev = x;
+    at = q.arr;
+  }
+  return out;
+}
 
 // 出發時間 / 抵達時間: a day (today, tomorrow…) and a time, for this trip
 // (its other ways of moving, its stops, turned round); a new trip is from
@@ -2103,8 +2121,9 @@ let planDraw = 0;
 function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!p) return map.lines('plan', []);
   // A way on a card with stops: the whole trip, to its last place.
-  const later = lit < 0 && card?.plans?.includes(p) ? restOf(card, p) : null;
-  if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: card.then[later.length - 1] };
+  // (Navigating one: its stretches after each stop, drawn after it.)
+  const later = lit < 0 && card?.plans?.includes(p) ? restOf(card, p) : lit >= 0 ? p.later : null;
+  if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: lit >= 0 ? p.then?.[later.length - 1] || p.dest : card.then[later.length - 1] };
   // (Its own YouBike stations, only: drawLayers.)
   if (!navFull()) drawLayers();
   const lines = [];
@@ -2254,7 +2273,16 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   stopWatch();
   roadLegs(p);
   // The stops after this one ride with the plan (kept with it on the phone: on after the app is reopened).
-  if (c?.then?.length) p = { ...p, then: c.then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) })) };
+  // And the stretches after them as planned: the whole trip navigated as one
+  // (the owner, 2026-11-03), filled in once they're planned.
+  if (c?.then?.length) p = { ...p, then: c.then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) })), later: restOf(c, p) || null };
+  if (p.then?.length && !p.later?.length) {
+    const base = p;
+    (c?.restP || Promise.resolve())
+      .then(() => restOf(c, base) || laterFor(base))
+      .then(later => navNow()?.plan?.legs === base.legs && navLater(later))
+      .catch(() => {});
+  }
   startNav(p, {
     box: $('nav'),
     mini: $('nav-mini'),
@@ -2297,10 +2325,12 @@ async function navigate(p, resume = null, { swap = false } = {}) {
         when = { by: 'now', at: null };
         // (On one YouBike kept, parked here: it rides on from here; its rental from when it really began, a stay included.)
         const kp = how.plan;
-        const parked = Boolean(kp?.keep && kp.legs.some(l => l.park));
+        // (Kept: as planned, or as said at the parkAsk.)
+        const parked = Boolean(kp?.legs.some(l => l.mode === 'bike' && l.park));
         // (The rental's real start when it's timed; else from the plan.)
         const since = parked ? (rental()?.at ?? (kp.rentAt != null ? (kp.rentAt >= kp.dep ? Date.now() - (kp.arr - kp.rentAt) : kp.rentAt) : null)) : null;
-        return plan(null, next[0], { then: next.slice(1), keep: parked, since });
+        // Straight on: the next stretch planned from here and navigated (no card to tap through).
+        return plan(null, next[0], { then: next.slice(1), keep: parked, since, go: W(`接著去 ${next[0].name || '下一站'}`, `Next: ${next[0].name || 'the next stop'}`) });
       }
       if (how.arrived || !card) return closeCard();
       // (Ended by hand: the trip's way off the map, whatever card is open; the plans it came from draw theirs again.
@@ -2562,6 +2592,9 @@ function editTripSheet() {
     const first = list[0];
     if (first.lat === places[0].lat && first.lon === places[0].lon) {
       navRetarget(first, list.slice(1));
+      // (The stretches after it planned again, the trip still one.)
+      const np = navNow()?.plan;
+      if (np?.then?.length) laterFor(np).then(later => navNow()?.plan === np && navLater(later)).catch(() => {});
       return ctx.status(said);
     }
     const now = navNow();

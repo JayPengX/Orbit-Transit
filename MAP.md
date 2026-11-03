@@ -37,6 +37,16 @@ Live: https://orbit.jaypengx.com/transit/
   side, plus our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and
   metro router. A planner's YouBike ride needs a real station at each end
   (never a made-up 附近的 YouBike 站). Buses are re-timed by TDX's live estimates (`adjustPlan`).
+  A bus TDX sees is matched to its timetable run (`live.mjs` `seenAt`,
+  `nextCatchable`): one seen gone before you can be there is never planned
+  or shown again, the next run you can make is. You're at a bus stop 5
+  minutes before a timetable time, 2 before a bus seen live; trains as
+  timed (`plan.mjs boardEarly`, after ranking: the leave time alone moves).
+- **追公車** (`lib/chase.mjs`): a plan's first bus, walked to, due within the
+  hour: a YouBike to a stop further along its way (within 4.5 km of you)
+  where TDX sees a bus ahead of the one you'd make, there 2 minutes before
+  it, listed when it gets you in 3+ minutes sooner. Navigating, the same is
+  offered once the bus you're walking to is seen gone (騎車追上).
   YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
   the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
   偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
@@ -56,7 +66,11 @@ Live: https://orbit.jaypengx.com/transit/
   each step moving on by itself (on board only once two fixes say so; a
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
   chime on iPhone) before yours. Missed bus → the next; on an earlier
-  train than planned → the changes after it moved sooner. Off the plan your
+  train than planned → the changes after it moved sooner. A bus you can't
+  make (`pastHurry`: later than you'd hurry back) says 趕不上了, never 快一點.
+  A trip with stops is one trip: the chips run on past each stop, the end
+  time is the last place's; on a YouBike to a stop, 到了要還車嗎 (停著 or
+  還車, with which is sooner) in its last 5 minutes (`parkAsk`). Off the plan your
   own way (`offPlan`): a bike's pace on a walk → on the YouBike step; heading
   for a later walk's end or the next stop → that step; heading nowhere on it →
   從這裡重新規劃 asked. Where you are is checked again every 20 s as on opening
@@ -75,7 +89,8 @@ Live: https://orbit.jaypengx.com/transit/
   the map, whose pins keep the bike glyph.
 - **YouBike rental timer** (`rental.mjs`): starts by itself while
   navigating. With TPASS's free half hour, it warns at 25 minutes and
-  offers nearby docks to swap.
+  offers nearby docks to swap: navigating, 附近換車 on the timer's line
+  (the docks your way, one tapped cuts the ride there: `splitRide`).
 - **到站提醒** (`alerts.mjs`): "tell me when the 5608 is 5 minutes away";
   the Worker checks every 2 minutes while the phone is locked.
 - **Data:**
@@ -121,6 +136,11 @@ Live: https://orbit.jaypengx.com/transit/
   bike: never at a station with no bike now.
 - A trip with stops is planned whole. One kept YouBike through the stops
   is recommended unless a stop is far, or walking it all is sooner.
+- Buses come early or late, trains on time (Jay 2026-11-03): at a bus stop
+  5 minutes before its timetable time, 2 before a bus seen live. A bus seen
+  gone is never offered again, and never "hurry" when hurrying can't make it.
+- A trip with stops is navigated as one trip (Jay 2026-11-03), the YouBike
+  kept or returned at a stop as you choose.
 - Train or bus, then a ride over 頭前溪, is listed when it's 5 minutes
   sooner. At most one of each, under the recommendations.
 - A ride over 頭前溪 after a bus is recommended when nothing else is close
@@ -154,6 +174,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `app.mjs` | The frame: Pass, tabs, location |
 | `lib/api.mjs` | The proxy: TDX, places, plans, walks; caches |
 | `lib/planner.mjs`, `plan.mjs`, `live.mjs` | Planning; YouBike ideas, score and ranking; live re-timing |
+| `lib/chase.mjs` | 追公車: a bus caught further along its way by YouBike |
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |
 | `lib/linemap.mjs`, `tra-map.mjs` | The station picker's line map (rerun `node scripts/tra-map.mjs` when 台鐵 opens a station) |
 | `lib/bus.mjs`, `bus-ui.mjs` | Routes, stops, arrivals; the route strip |

@@ -1435,11 +1435,15 @@ test('navigating, live: when you’ll be at the train from where you are (early,
   // Right outside: minutes to spare.
   const b = navTimes(plan, 0, 'before', { lat: 24.8390, lon: 121.0093 }, new Map(), at(2));
   assert.equal(paceOf(plan, 0, 'before', b, new Map(), at(2)).tone, 'good');
-  // A kilometre and a half away: late, and the trip after it later too.
+  // A kilometre and a half away: 10 minutes late on an 18-minute walk, past
+  // what hurrying makes up: said so, never "hurry" (the owner, 2026-11-03).
   const far = { lat: 24.8257, lon: 121.0093 };
   const c = navTimes(plan, 0, 'before', far, new Map(), at(2));
   assert.equal(paceOf(plan, 0, 'before', c, new Map(), at(2)).tone, 'bad');
-  assert.match(paceOf(plan, 0, 'before', c, new Map(), at(2)).text, /晚 \d+ 分/);
+  assert.match(paceOf(plan, 0, 'before', c, new Map(), at(2)).text, /趕不上了/);
+  // 600 m out with the train in 7: a minute or two behind, hurry.
+  const close = navTimes(plan, 0, 'before', { lat: 24.8392 - 0.0054, lon: 121.0093 }, new Map(), at(3));
+  assert.match(paceOf(plan, 0, 'before', close, new Map(), at(3)).text, /晚 [12] 分，快一點/);
   // A train 4 minutes late (its live time): you make it, and you're there later.
   const late = new Map([[1, at(14)]]);
   const d = navTimes(plan, 0, 'before', near, late, at(2));
