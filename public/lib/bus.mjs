@@ -4,6 +4,7 @@
 import { packRoute } from './packs.mjs';
 import { tdx, rows, busEta, liveMs } from './api.mjs';
 import { etaStops } from './near.mjs';
+import { gpsFix } from './busgps.mjs';
 import { zh, hm, etaAge, etaOld, ETA_STALE, ETA_GHOST, meters, TDX_DAYS } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 import { routeStatus } from './service.mjs';
@@ -123,6 +124,22 @@ const routeRows = route => {
 };
 // When that route's live times are from (ms), or 0.
 export const routeEtaAt = route => routeLive.get(route.uid)?.at || 0;
+// Where a route's buses are now (TDX RealTimeByFrequency: GPS, under a
+// minute old), for the ones whose estimates lag (busgps.mjs).
+export async function routeGps(route) {
+  const j = await tdx(`basic/v2/Bus/RealTimeByFrequency/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&$select=PlateNumb,Direction,BusPosition,GPSTime`, { fresh: 'live' });
+  return rows(j);
+}
+// A route's times with each lagging bus counted again from its GPS, along
+// each way's line (`lineOf(way)` → its shape's pieces, or null).
+export async function routeEtaMended(route, ways, lineOf) {
+  const [got, gps] = await Promise.all([routeRows(route), routeGps(route).catch(() => [])]);
+  const k = routeLive.get(route.uid);
+  if (k) k.at = got.at;
+  let list = got.rows;
+  if (gps.length) for (const w of ways || []) list = gpsFix(list, gps, w, await Promise.resolve(lineOf?.(w)).catch(() => null));
+  return etaMap(list);
+}
 export async function routeEta(route, dir = null) {
   const got = await routeRows(route);
   const k = routeLive.get(route.uid);
@@ -164,7 +181,7 @@ export function etaOf(r, now = Date.now()) {
   const ghost = old != null && old > ETA_GHOST;
   const sec = r.EstimateTime == null || ghost ? null : Math.max(0, Math.round(Number(r.EstimateTime) - age));
   const more = ghost ? [] : (r.Estimates || []).map(x => Math.round(Number(x.EstimateTime) - age)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
-  const raw = { t: now, sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null, old, stale: old != null && old > ETA_STALE && !ghost, rt: { uid: r.RouteUID, name: zh(r.RouteName), stop: r.StopUID } };
+  const raw = { t: now, sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null, old, stale: old != null && old > ETA_STALE && !ghost && Number.isFinite(sec), rt: { uid: r.RouteUID, name: zh(r.RouteName), stop: r.StopUID } };
   return said(raw, now);
 }
 // A time with what's known about its route now (asked again at each drawing:

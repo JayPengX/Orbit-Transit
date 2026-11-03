@@ -74,6 +74,12 @@ Live: https://orbit.jaypengx.com/transit/
   進站中, no bus drawn or placed (`busWhere`), the route sheet saying so once
   at the top; over 15 (`ETA_GHOST`) no live time and none planned on
   (`tests/eta-stale.test.mjs`: 快捷8號's feed froze 17:37:54 on 2026-11-03).
+  A route sheet counts a lagging bus again from its GPS (`lib/busgps.mjs`
+  `gpsFix`, `bus.mjs routeEtaMended`: TDX RealTimeByFrequency, under a minute
+  old, placed along the route's shape, `shapes.mjs routeLines`): the stops it
+  has passed lose their time, the rest are the estimates' own gaps from where
+  it is (`tests/bus-gps.test.mjs`; on 快捷8號 the error to where buses really
+  got to fell from about 2 minutes to under 1).
 - **追公車** (`lib/chase.mjs`): a plan's first bus, walked to, due within the
   hour: a YouBike to a stop further along its way (within 4.5 km of you)
   where TDX sees a bus ahead of the one you'd make, there 2 minutes before
@@ -221,7 +227,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/chase.mjs` | 追公車: a bus caught further along its way by YouBike |
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |
 | `lib/linemap.mjs`, `tra-map.mjs` | The station picker's line map (rerun `node scripts/tra-map.mjs` when 台鐵 opens a station) |
-| `lib/bus.mjs`, `bus-ui.mjs` | Routes, stops, arrivals; the route strip; a route's sheet (its stops with the buses on the line: a bus a green dot a size up from a stop's, 進站中 / 即將進站 at the list's own size in the live green, never a red pill) |
+| `lib/bus.mjs`, `bus-ui.mjs`, `busgps.mjs` | Routes, stops, arrivals; the route strip; a route's sheet (its stops with the buses on the line: a bus a green dot a size up from a stop's, 進站中 / 即將進站 at the list's own size in the live green, never a red pill); a lagging bus placed by its GPS |
 | `lib/board.mjs`, `board.css` | 交通's board: `boardRow` (a row of the one shape), `whenHtml` (the time at its end) |
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |

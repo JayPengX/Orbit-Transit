@@ -253,3 +253,15 @@ export async function busWay(l, route) {
     { reach: 250 }
   );
 }
+
+// A bus route's line one way ({ uid, city }, way { dir, stops }): its shape's
+// pieces ([[lat, lon]…]…), or null (busgps.mjs places its buses on it).
+export async function routeLines(route, way) {
+  const s = way?.stops?.[0];
+  if (!route?.uid || !s) return null;
+  const city = route.city || '';
+  const name = city === 'InterCity' || !city ? `bus/InterCity/${squareOf(s.lat, s.lon)}` : `bus/${city}`;
+  const pack = await shapePack(name);
+  const parts = pack?.shapes?.[`${route.uid}|${Number(way.dir) || 0}`];
+  return parts?.length ? parts.map(([, enc]) => decodeLine(enc)) : null;
+}

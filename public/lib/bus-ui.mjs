@@ -5,7 +5,7 @@
 // every bus due.
 
 import { emptyNote, saidRows } from './look.mjs';
-import { routeStops, routeEta, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
+import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
@@ -13,6 +13,7 @@ import { cleanItem, MAX_GROUPS, MAX_ITEMS, move } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
 import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson, shown } from './util.mjs';
 import { nextRun, nextUnseen, liveTrusted } from './live.mjs';
+import { routeLines } from './shapes.mjs';
 import { routeStatus, effectLabel } from './service.mjs';
 
 import { W, en } from '#kit/lang.mjs';
@@ -415,7 +416,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   };
   const refresh = async () => {
     try {
-      live = await routeEta(route);
+      // (A bus whose estimates lag counted again from its GPS: busgps.mjs.)
+      live = await routeEtaMended(route, ways, w => routeLines(route, w));
       at = Math.min(Date.now(), routeEtaAt(route) || Date.now());
       err = '';
     } catch (x) {
