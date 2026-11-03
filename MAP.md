@@ -3,19 +3,32 @@
 Taiwan's public transport in one app: buses, 台鐵, 高鐵, the metros and
 YouBike; trips planned the way a person really travels; navigation that
 follows the trip. Signs in with the Orbit Pass, which keeps places, trips
-and pins. Light or dark follows the phone; the look is `lib/look.mjs` on the kit.
+and pins. Light or dark follows the phone; the look is `lib/look.mjs` on the kit,
+in Orbit's own look (Jay 2026-11-03, Orbit-Core DESIGN §11: `data-look="native"`
+on the page, `board.css` after `transit.css`).
 
 Live: https://orbit.jaypengx.com/transit/
 
 ## How it works
 
-- **Tabs:**
+- **Tabs** (交通 first, where the app opens):
+  - **交通:** one board (`lib/board.mjs`, `board.css`; Jay 2026-11-03 found
+    the old green focus card "kind of useless": half a screen for one item,
+    a different one each open). 要去哪裡 (a bar opening the place search,
+    `ctx.planTo`), your places as chips (a tap opens the place: its buses,
+    its bikes, 怎麼去), then 我的路線: each trip, pinned bus and pinned train
+    a row of one shape (its line's badge in its colour, what and where, the
+    time at the end) in the order you keep them, never lifted into a card or
+    moved as times change. A trip's row says when to leave and when you're
+    there, or why not (`tripWhy`); a tap opens its ways on the map (導航, the
+    other ways and times, a way pinned first); editing it is in 我的. Then
+    附近: the stops around you with the buses on their way, which way each
+    goes (`nearHeads`), the timetable's next where none is (`nearPlanned`),
+    and the routes with none as one quiet line.
   - **地圖:** YouBike stations (the five nearest along the bottom), every
     bus stop with live times, train and metro stations, search, pins, and
     a trip planned from anywhere. A stop's signs a few metres apart are one
     stop (`stopGroups`).
-  - **交通:** saved trips' next departures with real bus times, pinned
-    rides, and the places rail (家, 學校 and your pins).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
     station picked by search, a nearby or recent one, or on a county's line
     map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), bus
@@ -208,7 +221,8 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/chase.mjs` | 追公車: a bus caught further along its way by YouBike |
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |
 | `lib/linemap.mjs`, `tra-map.mjs` | The station picker's line map (rerun `node scripts/tra-map.mjs` when 台鐵 opens a station) |
-| `lib/bus.mjs`, `bus-ui.mjs` | Routes, stops, arrivals; the route strip |
+| `lib/bus.mjs`, `bus-ui.mjs` | Routes, stops, arrivals; the route strip; a route's sheet (its stops with the buses on the line: a bus a green dot a size up from a stop's, 進站中 / 即將進站 at the list's own size in the live green, never a red pill) |
+| `lib/board.mjs`, `board.css` | 交通's board: `boardRow` (a row of the one shape), `whenHtml` (the time at its end) |
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |
 | `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; the buzz; bus alerts |

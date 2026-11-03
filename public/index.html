@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant" data-app="transit">
+<html lang="zh-Hant" data-app="transit" data-look="native">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
@@ -54,6 +54,8 @@
 <script>!function(b,d,v,h,n,m,f,i,u){try{v=localStorage.getItem('orbit.kit')||'';h=JSON.parse(localStorage.getItem('orbit.kitFiles')||'null')}catch(e){v=''}n=!!v;if(!n&&d){v=d.version;h=d}h=h&&h.version===v?h.files:null;u=function(x){var k=h&&h[x];return b+x+(k?'?v='+k:v?'?v='+encodeURIComponent(v):'')};m={'#kit/':b};f=['brand.mjs','catalog.mjs','dayoff.mjs','devconfig.mjs','domain.mjs','f1live.mjs','feedback.mjs','flight.mjs','format.mjs','gov.mjs','help.mjs','hold-place.mjs','holidays.mjs','lang.mjs','logos.mjs','mirror.mjs','names.mjs','orbit.mjs','pass-sync.mjs','pass.mjs','passkey.mjs','pay.mjs','photo-urls.mjs','photos.mjs','postseason.mjs','qrcode.mjs','share.mjs','sports-broadcast.mjs','sports-espn.mjs','sports-highlights.mjs','sports-winprob.mjs','stock-access.mjs','stock-account.mjs','stock-bonds.mjs','stock-codec.mjs','stock-credit.mjs','stock-hk-lots.mjs','stock-holidays.mjs','stock-ipo.mjs','stock-jp-lists.mjs','stock-markets.mjs','stock-quotes.mjs','stock-savings.mjs','ui.mjs'];for(i=0;i<f.length;i++)m['#kit/'+f[i]]=u(f[i]);if(h)for(i in h)/\.mjs$/.test(i)&&(m['#kit/'+i]=u(i));window.ORBIT_KIT={base:b,version:v,noted:n,url:u};document.write('<script type="import'+'map">'+JSON.stringify({imports:m})+'<\/script><link rel="stylesheet" href="'+u('orbit.css')+'"><link rel="modulepreload" href="'+u('orbit.mjs')+'"><link rel="modulepreload" href="'+u('brand.mjs')+'">')}('../Orbit-Core/kit/',null)</script>
 <!-- /kit:head -->
 <link rel="stylesheet" href="./transit.css" />
+<!-- Orbit's own look for 交通 (lib/board.mjs), after the app's own stylesheet. -->
+<link rel="stylesheet" href="./board.css" />
 <!-- The map's library, asked as the page opens (the provider kept from the
      last opening: map.mjs loadGoogle / loadLeaflet take it over), not a second later
      once the app's code has loaded; and its tiles' servers connected to. -->
