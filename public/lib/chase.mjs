@@ -42,7 +42,7 @@ export function chasePlan(p, o, x, due, bikes, start, { prefer = false } = {}) {
     const legs = bikeTrip(o, { name: s.name, lat: s.lat, lon: s.lon }, bikes, start, { first: true, prefer });
     if (!legs?.some(y => y.mode === 'bike')) continue;
     const there = legs.at(-1).arr;
-    const toK = rideTime(w, i, k, sched) * 1000;
+    const toK = rideTime(w, i, k, sched, l.dep) * 1000;
     // The bus you'd catch walking, there; a bus ahead of it you're at the stop for.
     const usual = l.dep + toK;
     const t = due(k).filter(a => a >= there + BUS_EARLY.live && a <= usual - 2 * MIN).sort((a1, a2) => a1 - a2)[0];
@@ -54,7 +54,7 @@ export function chasePlan(p, o, x, due, bikes, start, { prefer = false } = {}) {
   }
   if (!best) return null;
   const s = w.stops[best.k];
-  const dur = rideTime(w, best.k, j, sched);
+  const dur = rideTime(w, best.k, j, sched, best.t);
   const { next, nextP, seen, poly, ...rest } = l;
   const bus = { ...rest, from: { name: s.name, lat: s.lat, lon: s.lon }, dep: best.t, arr: best.t + dur * 1000, dur, stops: j - best.k, route: { ...l.route, stopUID: s.uid }, live: { at: best.t }, path: w.stops.slice(best.k, j + 1).filter(y => y.lat != null).map(y => [y.lat, y.lon]), chase: { from: l.from.name, k: best.k } };
   // What follows the bus moves with it, up to a train (which keeps its time).
