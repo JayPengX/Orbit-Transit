@@ -1886,9 +1886,10 @@ function setWhen(kind) {
 // (the timetable the planner already has: no read of its own), each with
 // where you'd get on and off (the stops nearest the trip's ends), then
 // those two changed if the ticket says otherwise. The trip is planned around it.
+// (Short, beside the ways of moving at 320 px: its day and time are the plans' own.)
 const ticketText = t => {
   const r = t.rides[0];
-  return `${whenDay(r.dep)}${r.sys === 'hsr' ? W('高鐵', 'HSR') : trainKind(r.type)} ${r.no} ${hm(r.dep)}`;
+  return `${r.sys === 'hsr' ? W('高鐵', 'HSR') : trainKind(r.type)} ${r.no}`;
 };
 function ticketSheet() {
   const today = tw().date;
@@ -2015,7 +2016,7 @@ function plansHtml(c) {
     const arr = all.at(-1).arr;
     const sum = k => all.reduce((a, q) => a + (q[k] || 0), 0);
     const facts = !c.then?.length
-      ? [leaveText(p), p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')]
+      ? [leaveText(p), p.ticket ? '' : p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')]
       : !later
         ? [leaveText(p), W(`後面 ${c.then.length} 段規劃中…`, `Planning ${c.then.length} more…`)]
         : [leaveText(p), sum('transfers') ? W(`轉乘 ${sum('transfers')} 次`, `${sum('transfers')} changes`) : W('不必轉乘', 'No changes'), sum('walk') > 50 ? W(`步行 ${distText(sum('walk'))}`, `walk ${distText(sum('walk'))}`) : '', sum('fare') ? `NT$${sum('fare')}` : ''];
