@@ -2915,7 +2915,7 @@ function saveTripSheet(c, { edit = null } = {}) {
           .map((n, i) => (days.has(i) ? `<button class="q-chip" type="button" data-alt-day="${k}:${i}" aria-pressed="${a.days.has(i)}">${n}</button>` : ''))
           .join('')}</div><button class="q-icon-btn" type="button" data-alt-del="${k}" aria-label="${W('移除', 'Remove')}">${icon('trash')}</button></div><div class="ot-times"><span class="ot-times-l">${W('去', 'Go')}</span><input type="time" data-alt-time="${k}" value="${e(a.time)}" aria-label="${W('這幾天的時間', 'Time these days')}"><span class="ot-times-l">${W('回', 'Back')}</span><input type="time" data-alt-back="${k}" value="${e(a.back)}" aria-label="${W('這幾天的回程', 'Return these days')}"></div></div>`
       )
-      .join('')}${alt.length < 4 ? `<button class="ot-link" type="button" data-alt-add="1">${icon('plus')} ${W('某幾天時間不一樣', 'Different times some days')}</button>` : ''}`;
+      .join('')}${alt.length < 4 ? `<button class="q-more ot-link" type="button" data-alt-add="1">${icon('plus')}<span>${W('某幾天時間不一樣', 'Different times some days')}</span></button>` : ''}`;
   };
   const drawEnds = () =>
     (d.querySelector('#st-ends').innerHTML = `<button class="ot-row-btn" type="button" data-end="from">${icon('pin')}<span><b>${e(from ? from.name : HERE)}</b><small>${from ? W('出發', 'From') : W('出發：每次從你在的地方', 'From: wherever you are')}</small></span></button><button class="ot-row-btn" type="button" data-end="to">${icon('pin')}<span><b>${e(shown(to.name))}</b><small>${W('目的地', 'To')}</small></span></button>`);
