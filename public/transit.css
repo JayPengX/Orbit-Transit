@@ -5097,6 +5097,10 @@ button.ot-trip-foot {
   color: var(--ot-ink-green);
   font-weight: 600;
 }
+/* A stopped bus feed (bus.mjs etaOf stale): a caution, not the route's green. */
+.ot-note.ot-off-note.ot-stale-note {
+  color: var(--q-orange);
+}
 .ot-route-stops {
   margin: 6px 0 0;
   padding: 0;

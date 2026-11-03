@@ -13,7 +13,8 @@ import { meters } from './util.mjs';
 // sec (to yours), in (to stop k), far (further back than we look) } or null.
 export function busWhere(stops, i, eta, max = 12) {
   const v = eta?.get(stops[i]?.uid);
-  if (!v || v.status !== 0 || v.sec == null) return null;
+  // (A stopped feed says nothing of where the bus is now: bus.mjs etaOf stale.)
+  if (!v || v.status !== 0 || v.sec == null || v.stale) return null;
   let k = i;
   let cur = v.sec;
   for (let j = i - 1; j >= 0; j--) {

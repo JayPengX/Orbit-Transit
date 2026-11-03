@@ -116,7 +116,7 @@ export function strip({ no, note = '', main = '', eta = null, attrs = '', wait =
   const when = wait
     ? `<span class="ot-strip-eta"><b>${skel('46px')}</b><small>${skel('28px')}</small></span>`
     : eta
-      ? `<span class="ot-strip-eta ${eta.tone}${/\d/.test(eta.main) ? '' : ' words'}${/分|進站|min|Arriving|Due/.test(eta.main) ? ' live' : ''}"><b data-q-live="${e(`eta:${no}:${attrs}`)}">${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>`
+      ? `<span class="ot-strip-eta ${eta.tone}${/\d/.test(eta.main) ? '' : ' words'}${/分|進站|min|Arriving|Due/.test(eta.main) && !/stale/.test(eta.tone) ? ' live' : ''}"><b data-q-live="${e(`eta:${no}:${attrs}`)}">${e(eta.main)}</b>${eta.sub ? `<small>${e(eta.sub)}</small>` : ''}</span>`
       : '';
   const sub = wait ? `<small>${skel('84px')}</small>` : note ? `<small>${note}</small>` : '';
   return `<button class="ot-strip-main" type="button" ${attrs}><span class="ot-strip-no${wait && !no ? ' wait' : ''}">${wait && !no ? '' : noHtml(shown(no))}</span><span class="ot-strip-mid"><span class="ot-strip-what"><b>${wait ? skel('128px') : main}</b></span>${sub ? `<span class="ot-strip-note">${sub}</span>` : ''}</span>${when}</button>`;
@@ -197,7 +197,8 @@ export async function nextNear(route, here) {
 // time, trusted): k's live time sooner than k-1's (that one's is a later
 // bus, or it's gone by), and not at k already (that bus rides on k's dot).
 // Drawn on the line between them, so a bus on its way is seen at a glance.
-const coming = v => v?.status === 0 && v.sec != null;
+// (A stopped feed's bus isn't drawn: where it is now nobody knows.)
+const coming = v => v?.status === 0 && v.sec != null && !v.stale;
 // Another bus than the one coming to the stops before k first: k's live time
 // sooner than the nearest one before it with a live time. (The same bus
 // reaches k a minute or two after k-1: one bus pulling in at 地方法院 is 2 分
@@ -320,6 +321,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       return v?.status === 0 && v.sec != null && !liveTrusted(sched, w, k, Date.now() + v.sec * 1000) ? null : v;
     });
     const between = k => busBetween(lives, k);
+    // A stopped feed (bus.mjs etaOf stale): said once above the stops, not under each.
+    const oldest = Math.max(0, ...lives.filter(v => v?.stale).map(v => v.old));
+    const staleNote = oldest ? W(`公車動態 ${Math.round(oldest / 60)} 分鐘沒更新，時間可能不準`, `No bus update for ${Math.round(oldest / 60)} min: times may be off`) : '';
     const stops = !ways
       ? `<p class="ot-note">${W('載入站牌中…', 'Loading stops…')}</p>`
       : !w
@@ -331,6 +335,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
               const k = w.stops.indexOf(s);
               const v = lives[k];
               let t = etaText(v);
+              if (/stale/.test(t.tone)) t = { ...t, sub: '' };
               // No bus on its way to it (尚未發車, 末班已過 the other way…): the timetable's next.
               // (Not the bus already seen further on: nextUnseen.)
               const p = !stopped && (!v || v.status !== 0 || v.sec == null) && sched?.length ? nextUnseen(sched, w, k, lives, Date.now()) : null;
@@ -350,7 +355,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
             .join('')}</ol>`;
     const choose = boarding && view === 'live' ? `<div class="ot-ride-pick"><div><b>${W(`${e(shown(boarding.name))} 上車`, `Board at ${e(shown(boarding.name))}`)}</b><small>${W('選下車站', 'Pick your stop')}</small></div><button class="q-btn" type="button" data-only="1">${W('只釘這站', 'Just this stop')}</button><button class="q-icon-btn" type="button" data-cancel-ride="1" aria-label="${W('取消', 'Cancel')}">${icon('x')}</button></div>` : '';
     const dirLeft = d.querySelector('.ot-dir-chips')?.scrollLeft || 0;
-    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${tabs}${views}${choose}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
+    d.querySelector('#rt').innerHTML = `<div class="ot-rt-top q-day-still">${head}${tabs}${views}${choose}${staleNote && view === 'live' && ways && w ? `<p class="ot-note ot-off-note ot-stale-note">${e(staleNote)}</p>` : ''}</div>${err && view === 'live' ? `<p class="ot-note bad">${e(err)}</p>` : ''}${stops}${view === 'live' && !boarding && at ? `<p class="ot-note center">${e(ago(at))}</p>` : ''}`;
     // (The row of ways where it was; the one chosen in sight.)
     const row = d.querySelector('.ot-dir-chips');
     if (row) {

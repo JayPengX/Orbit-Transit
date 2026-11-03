@@ -89,6 +89,18 @@ export const etaAge = (r, now = Date.now()) => {
   const t = Date.parse(r?.DataTime || '');
   return Number.isFinite(t) ? Math.min(300, Math.max(0, (now - t) / 1000)) : 0;
 };
+// The same, not capped (null without a DataTime). TDX's estimates are
+// usually 1 to 3.5 minutes old when they reach the phone; one older than 4
+// (ETA_STALE) is a feed that stopped: 快捷8號's froze at 17:37:54 on
+// 2026-11-03, and at 17:43 富貴街口 still said 進站中 with the bus 5 minutes
+// on (the owner took the wrong bus). Older than 15 (ETA_GHOST) it is no bus
+// on the road at all (a tracker gone quiet hours ago).
+export const ETA_STALE = 240;
+export const ETA_GHOST = 900;
+export const etaOld = (r, now = Date.now()) => {
+  const t = Date.parse(r?.DataTime || '');
+  return Number.isFinite(t) ? Math.max(0, (now - t) / 1000) : null;
+};
 export const walkSec = m => Math.round(((m * 1.3) / WALK_M_MIN) * 60);
 // A walk of `m` metres as the crow flies, as shown and timed (the streets' ×1.3 in both).
 export const walkGuess = m => ({ dist: Math.round(m * 1.3), sec: walkSec(m) });
