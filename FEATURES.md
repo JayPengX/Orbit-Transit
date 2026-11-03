@@ -15,7 +15,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - 查時刻: TPASS-only trains, said so — `public/lib/tab-train.mjs`: `passOnly`, `只列 TPASS`
 - 查時刻: train kinds coloured, legs on one line — `public/lib/ui.mjs`: `trainColor`, `fitLegs`
 - 建議 guesses a place: 去公司 / 去學校 from the first day, 常去 by Taiwan's calendar, a card passed over too often stops coming — `public/lib/suggest.mjs`, `public/lib/learn.mjs`: `goScore`, `workday`, `placeItem`, `cardsShown`
-- Station picker on a county line map — `public/lib/linemap.mjs`: `lineMapHtml`
+- Station picker on a county line map (winding rows, 新竹 one area, 高鐵 beside 台鐵 as one stop) — `public/lib/linemap.mjs`: `lineMapHtml`
 - Bus arrival alerts — `public/lib/alerts.mjs`: `startAlerts`
 - At a bus stop 5 minutes before its timetable time, 2 before a bus seen live; trains as timed — `public/lib/plan.mjs`, `public/lib/planner.mjs`, `public/lib/tab-go.mjs`: `boardEarly`, `BUS_EARLY`
 - A bus seen gone is never planned or shown again; 趕不上了, never 快一點, when hurrying can't make it — `public/lib/live.mjs`, `public/lib/nav.mjs`: `seenAt`, `nextCatchable`, `pastHurry`, `趕不上了`

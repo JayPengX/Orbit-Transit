@@ -4893,159 +4893,228 @@ button.ot-trip-foot {
 .ot-lm-h span {
   font-weight: 400;
 }
-/* A station: the line through it, its dot, its name. */
-.ot-lm-row,
-.ot-lm-edge {
+/* The line winds across the card: a row of stations left to right, round
+   the end, the next right to left (linemap.mjs puts each in its cell). */
+.ot-sn {
+  --sn-h: 70px;
+  --sn-tall: 100px;
+  --sn-y: 20px;
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+  padding: 2px 0 6px;
+}
+.ot-sn-st {
   position: relative;
+  min-width: 0;
+}
+/* The line in from the station before and out to the next: half a cell each. */
+.ot-sn-ln {
+  position: absolute;
+  top: calc(var(--sn-y) - 2px);
+  left: 0;
+  width: 50%;
+  height: 4px;
+  background: var(--lm);
+}
+.ot-sn-ln.out,
+.ot-sn-st.rtl .ot-sn-ln.in {
+  left: 50%;
+}
+.ot-sn-st.rtl .ot-sn-ln.out {
+  left: 0;
+}
+/* (Over the area's edge: the line going on, dotted.) */
+.ot-sn-ln.dash {
+  background: repeating-linear-gradient(90deg, var(--lm) 0 5px, transparent 5px 10px);
+}
+/* Round the end of a row, down to the row below. */
+.ot-sn-turn {
+  position: absolute;
+  z-index: 0;
+  top: calc(var(--sn-y) - 2px);
+  left: 50%;
+  width: 50%;
+  height: calc(var(--sn-h) + 4px);
+  border: 4px solid var(--lm);
+  border-left: 0;
+  border-radius: 0 calc(var(--sn-h) / 2) calc(var(--sn-h) / 2) 0;
+}
+.ot-sn-turn.left {
+  left: 0;
+  border-right: 0;
+  border-left: 4px solid var(--lm);
+  border-radius: calc(var(--sn-h) / 2) 0 0 calc(var(--sn-h) / 2);
+}
+/* The station: the whole cell is its button, the dot on the line, the name under it. */
+.ot-sn-tap {
+  position: absolute;
+  z-index: 1;
+  inset: 0 2px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 0 12px 0 40px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: calc(var(--sn-y) + 18px) 2px 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: none;
   color: var(--q-label);
-  font: var(--q-t-body);
-  text-align: left;
+  font: var(--q-t-subhead);
+  font-size: 15px;
+  text-align: center;
   cursor: pointer;
   transition: background-color 0.25s;
   -webkit-tap-highlight-color: transparent;
 }
-.ot-lm-row:is(:active, [data-q-press]):not(:disabled),
-.ot-lm-edge:is(:active, [data-q-press]) {
+html[lang='en'] .ot-sn-tap {
+  font-size: 13px;
+}
+.ot-sn-tap:is(:active, [data-q-press]):not(:disabled) {
   background: var(--q-fill-4);
   transition-duration: 0s;
 }
-.ot-lm-row::before,
-.ot-lm-edge::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 18px;
-  width: 4px;
-  background: var(--lm);
-}
-.ot-lm-row.first::before {
-  top: 50%;
-}
-.ot-lm-row.last::before {
-  bottom: 50%;
-}
-.ot-lm-row.first.last::before {
-  display: none;
-}
-.ot-lm-dot {
-  position: absolute;
-  top: 50%;
-  left: 20px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--lm);
-  transform: translate(-50%, -50%);
-  transition: transform 0.2s var(--q-spring-snappy, ease-out), border-color 0.2s;
-}
-.ot-lm-row.big {
-  font-weight: 600;
-}
-.ot-lm-row.big .ot-lm-dot {
-  width: 16px;
-  height: 16px;
-  border: 4px solid var(--lm);
-  background: var(--q-sheet-cell, var(--q-surface));
-}
-.ot-lm-row:is(.on, .picked) {
-  color: var(--q-accent);
-}
-.ot-lm-row:is(.on, .picked) .ot-lm-dot {
-  width: 18px;
-  height: 18px;
-  border: 5px solid var(--q-accent);
-  background: var(--q-sheet-cell, var(--q-surface));
-}
-/* (Picked: the dot gives a beat before the sheet closes.) */
-.ot-lm-row.picked .ot-lm-dot {
-  transform: translate(-50%, -50%) scale(1.25);
-}
-.ot-lm-row:disabled {
-  color: var(--q-label-3);
-  cursor: default;
-}
-.ot-lm-name {
-  flex: 1;
-  min-width: 0;
+.ot-sn-tap .ot-lm-name {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Over the county's edge: the line going on, dotted; the next station and its county. */
-.ot-lm-edge {
-  min-height: 40px;
+.ot-sn-st .ot-lm-dot {
+  position: absolute;
+  top: var(--sn-y);
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  border: 4px solid var(--q-sheet-cell, var(--q-surface));
+  border-radius: 50%;
+  background: var(--lm);
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  transition: transform 0.2s var(--q-spring-snappy, ease-out);
+}
+.ot-sn-st.big .ot-lm-name {
+  font-weight: 600;
+}
+.ot-sn-st.big .ot-lm-dot {
+  width: 28px;
+  height: 28px;
+  border: 6px solid var(--lm);
+  background: var(--q-sheet-cell, var(--q-surface));
+}
+/* (A branch's first stop: the station it leaves from, said again.) */
+.ot-sn-st.via .ot-lm-name {
   color: var(--q-label-2);
-  font: var(--q-t-subhead);
+  font-weight: 400;
 }
-.ot-lm-edge::before {
-  background: repeating-linear-gradient(var(--lm) 0 4px, transparent 4px 8px);
+.ot-sn-st.on .ot-sn-tap {
+  color: var(--q-accent);
 }
-.ot-lm-edge.prev::before {
-  bottom: 50%;
+.ot-sn-st.on .ot-lm-dot,
+.ot-sn-tap.picked .ot-lm-dot {
+  width: 32px;
+  height: 32px;
+  border: 8px solid var(--q-accent);
+  background: var(--q-sheet-cell, var(--q-surface));
 }
-.ot-lm-edge.next::before {
-  top: 50%;
+.ot-sn-tap.picked {
+  color: var(--q-accent);
 }
-.ot-lm-city {
-  flex: none;
+/* (Picked: the dot gives a beat before the sheet closes.) */
+.ot-sn-tap.picked .ot-lm-dot {
+  transform: translate(-50%, -50%) scale(1.2);
+}
+.ot-sn-tap:disabled {
+  color: var(--q-label-3);
+  cursor: default;
+}
+.ot-sn-tap:disabled .ot-lm-dot {
+  opacity: 0.4;
+}
+/* A 高鐵 station beside it: its own tap, in the 高鐵's orange, under the name. */
+.ot-sn-hsr {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--sn-y) + 50px);
+  left: 50%;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, #f97316 18%, transparent);
+  color: #c2410c;
+  font: 600 12px/18px var(--q-font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  .ot-sn-hsr {
+    color: #fdba74;
+  }
+}
+.ot-sn-hsr:is(:active, [data-q-press]):not(:disabled) {
+  background: color-mix(in srgb, #f97316 32%, transparent);
+}
+.ot-sn-hsr.on,
+.ot-sn-hsr.picked {
+  background: var(--q-accent);
+  color: var(--q-on-accent, #fff);
+}
+.ot-sn-hsr:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Over the area's edge: the next station there and its area, a tap away. */
+.ot-lm-ends {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 0 0 2px;
+}
+.ot-lm-edge {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--q-fill-4);
   color: var(--q-label-2);
   font: var(--q-t-footnote);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.ot-lm-city .ot-i {
+.ot-lm-edge.prev {
+  margin-left: 0;
+  margin-right: auto;
+}
+.ot-lm-edge:is(:active, [data-q-press]) {
+  background: var(--q-fill-3);
+}
+.ot-lm-edge .ot-lm-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ot-lm-edge .ot-lm-city {
+  color: var(--q-label);
+  font-weight: 600;
+}
+.ot-lm-edge .ot-i {
+  flex: none;
   width: 14px;
   height: 14px;
 }
-/* A branch line: hangs off its station, the main line running on beside it. */
-.ot-lm-sub {
-  position: relative;
-  padding-left: 22px;
-}
-.ot-lm-sub::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 18px;
-  width: 4px;
-  background: var(--lm);
-}
-.ot-lm-sub > .ot-lm-h {
-  position: relative;
-  padding: 8px 0 4px 40px;
-}
-/* (Its first stretch: off the main line, across and down.) */
-.ot-lm-sub > .ot-lm-h::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -2px;
-  width: 22px;
-  height: 16px;
-  border: solid var(--lm);
-  border-width: 4px 4px 0 0;
-  border-top-right-radius: 12px;
-}
-.ot-lm-sub > .ot-lm-h::after {
-  content: '';
-  position: absolute;
-  top: 16px;
-  bottom: 0;
-  left: 18px;
-  width: 4px;
-  background: var(--lm);
+.ot-lm-edge.prev .ot-i {
+  transform: scaleX(-1);
 }
 .ot-lm-hsr {
   --lm: #f97316;
