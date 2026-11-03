@@ -17,15 +17,32 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 
 <p align="center">
   <img src="docs/screenshots/transit-1.webp" width="30%" alt="Your trip on Google Maps">
-  <img src="docs/screenshots/transit-2.webp" width="30%" alt="Trains and HSR, ranked for you">
-  <img src="docs/screenshots/transit-3.webp" width="30%" alt="Every train between two cities">
+  <img src="docs/screenshots/transit-2.webp" width="30%" alt="The fastest way, at a glance">
+  <img src="docs/screenshots/transit-3.webp" width="30%" alt="Every train between two stations">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/transit-4.webp" width="30%" alt="Live trains at the station">
+  <img src="docs/screenshots/transit-4.webp" width="30%" alt="How long until the bus">
   <img src="docs/screenshots/transit-5.webp" width="30%" alt="YouBike docks, live">
-  <img src="docs/screenshots/transit-6.webp" width="30%" alt="TRA to HSR, step by step">
+  <img src="docs/screenshots/transit-6.webp" width="30%" alt="Live trains at the station">
 </p>
+
+<details>
+<summary>中文畫面</summary>
+
+<p align="center">
+  <img src="docs/screenshots/transit-1.zh.webp" width="30%" alt="路線畫在 Google 地圖上">
+  <img src="docs/screenshots/transit-2.zh.webp" width="30%" alt="最快的走法，一眼看懂">
+  <img src="docs/screenshots/transit-3.zh.webp" width="30%" alt="兩站之間每一班車">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/transit-4.zh.webp" width="30%" alt="公車還要等多久">
+  <img src="docs/screenshots/transit-5.zh.webp" width="30%" alt="YouBike 即時車位">
+  <img src="docs/screenshots/transit-6.zh.webp" width="30%" alt="車站即時班次">
+</p>
+
+</details>
 
 ## Features
 
