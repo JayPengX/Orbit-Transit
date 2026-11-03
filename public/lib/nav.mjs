@@ -12,17 +12,18 @@ import { emptyNote } from './look.mjs';
 import * as kit from '#kit/orbit.mjs';
 import { watchPosition, getPosition, roadPath, liveMs } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
-import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt } from './live.mjs';
+import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt, seenAt, nextCatchable } from './live.mjs';
+import { chaseFrom } from './chase.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
 import { canRent, canReturn } from './bike.mjs';
 import { rideSec, DOCK_SEC, walkLeg, rideLeg } from './plan.mjs';
-import { rental, startRental, endRental, rentalStep, FREE_MS } from './rental.mjs';
+import { rental, startRental, endRental, rentalStep, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
-import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown } from './util.mjs';
+import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown, distText } from './util.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 let nav = null;
@@ -404,6 +405,10 @@ export function navTimes(plan, i, phase, pos = null, liveAt = new Map(), now = D
   return { end, ready, eta: t };
 }
 
+// Late by `late` ms for a ride, with `left` ms still to go to its stop at a
+// walk: past what hurrying makes up (a third quicker, a minute at least).
+export const pastHurry = (late, left) => late > Math.max(60_000, 0.3 * Math.max(0, left));
+
 // The line under the step: how you're doing for the bus or train to catch
 // (there with minutes to spare, only just, or late), when to set out, or
 // when you'll be there. → { text, tone: 'good' | 'warn' | 'bad' | '' }.
@@ -437,6 +442,8 @@ export function paceOf(plan, i, phase, times, liveAt = new Map(), now = Date.now
   const slack = Math.round((dep - times.ready.get(ri)) / 60_000);
   if (slack >= 2) return { text: `${at}${when}・${W(`早到 ${slack} 分`, `${slack} min to spare`)}`, tone: 'good' };
   if (slack >= 0) return { text: `${at}${when}・${W('剛好趕上', 'just in time')}`, tone: 'warn' };
+  // (Never "hurry" when hurrying can't make it: the owner, 2026-11-03.)
+  if (pastHurry(times.ready.get(ri) - dep, times.ready.get(ri) - now)) return { text: `${at}${when}・${W('趕不上了', 'can’t make it')}`, tone: 'bad' };
   return { text: `${at}${when}・${W(`晚 ${-slack} 分，快一點`, `${-slack} min behind, hurry`)}`, tone: 'bad' };
 }
 
@@ -505,6 +512,59 @@ export function moveRide(plan, k, end, station) {
   plan.dur = (plan.dur || before) + (after - before);
   if (plan.arr) plan.arr += (after - before) * 1000;
   return true;
+}
+
+// A YouBike ride cut at a station on its way (returned there and another
+// taken: TPASS's next free half hour), from where you are (`pos`) now: two
+// rides, the second a swap, what follows moved with it up to a train. → true when cut.
+export function splitRide(plan, k, st, pos = null, now = Date.now()) {
+  const l = plan.legs[k];
+  if (l?.mode !== 'bike' || st?.lat == null || l.to?.lat == null) return false;
+  const s = { name: st.name, lat: st.lat, lon: st.lon };
+  // (From where you are: no dock to take it from.)
+  const a = rideLeg(pos || l.from, s, now, l.ebike);
+  const there = a.arr - (pos ? DOCK_SEC * 1000 : 0);
+  const b = rideLeg(s, l.to, there, l.ebike);
+  const clear = { poly: undefined, road: false, path: undefined };
+  const first = { ...l, ...clear, to: s, ret: { ...st }, arr: there, dur: Math.max(60, Math.round((there - l.dep) / 1000)), dist: rideLeg(l.from, s, 0, l.ebike).dist, park: false };
+  const second = { ...l, ...clear, from: s, rent: { ...st }, dep: b.dep, arr: b.arr, dur: b.dur, dist: b.dist, swap: true, kept: false };
+  const d = second.arr - l.arr;
+  plan.legs.splice(k, 1, first, second);
+  for (let m = k + 2; m < plan.legs.length && !(isRide(plan.legs[m]) && plan.legs[m].mode !== 'bus'); m++) Object.assign(plan.legs[m], { dep: plan.legs[m].dep + d, arr: plan.legs[m].arr + d });
+  plan.arr = plan.legs.at(-1).arr;
+  plan.dur = Math.round((plan.arr - plan.dep) / 1000);
+  return true;
+}
+
+// A trip with stops, navigated whole (the owner, 2026-11-03: the first
+// stretch had been a trip of its own): the stretches after this one
+// (`plan.later`, as planned, one for each place in `plan.then`), and when
+// you're at the end, by how late or early this stretch is running now.
+export function laterEnd(plan, eta) {
+  const last = plan.later?.at(-1);
+  return last?.arr != null ? last.arr + Math.max(0, eta - plan.arr) : eta;
+}
+// On a YouBike to a stop with places after it: keep it (parked while
+// there, ridden on) or return it (and the next stretch as planned:
+// another bike, a bus…), and which gets you on sooner, by how much.
+// → { keep, back, text } (minutes, null when not planned yet; the line
+// said), or null when it isn't asked.
+export function parkAsk(plan, i) {
+  const l = plan.legs[i];
+  const next = plan.then?.[0];
+  if (l?.mode !== 'bike' || !next || l.asked || l.park || plan.legs.slice(i + 1).some(x => x.mode === 'bike' || isRide(x))) return null;
+  const stop = plan.dest || plan.legs.at(-1).to;
+  const m = meters(stop.lat, stop.lon, next.lat, next.lon);
+  const keep = Math.round((rideSec(m, l.ebike) + DOCK_SEC) / 60);
+  // (Later stretches on this same bike: no way without it planned to tell.)
+  const q = plan.later?.[0]?.legs?.some(x => x.kept) ? null : plan.later?.[0];
+  if (!q) return { keep, back: null, text: W(`停著騎過去 ${keep} 分`, `Keep it: ${keep} min on`) };
+  const on = rides(q)[0];
+  const how = on ? W(`搭 ${on.short || on.name} `, '') : q.legs.some(x => x.mode === 'bike') ? W('再借一台', '') : W('走路', '');
+  const back = Math.round((q.arr - q.dep) / 60_000);
+  const d = Math.abs(back - keep);
+  const text = d <= 2 ? W(`差不多，都約 ${Math.max(back, keep)} 分`, `About ${Math.max(back, keep)} min either way`) : back < keep ? W(`還車${how}快 ${d} 分`, `Return: ${d} min sooner`) : W(`停著騎過去快 ${d} 分`, `Keep: ${d} min sooner`);
+  return { keep, back, text };
 }
 
 // How long till you're there, short enough to sit beside the time and its drift: 45 分, 1時29分.
@@ -763,12 +823,21 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // What's left: along its road when it has one (where you are on it), else as the crow flies.
     const left = state.pos && l.to?.lat ? (state.leftAlong ?? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon)) : null;
     let title = state.done ? W(`已抵達 ${plan.legs.at(-1).to?.name || '目的地'}`, `Arrived at ${plan.legs.at(-1).to?.name || 'your destination'}`) : t.title;
-    let sub = state.done ? '' : t.sub;
+    let sub = state.done ? (plan.then?.length ? W(`接著去 ${plan.then[0].name || '下一站'}`, `Next: ${plan.then[0].name || 'the next stop'}`) : '') : t.sub;
     // On a bike with the timer running: how long you've had it (and with TPASS, the free minutes left).
     // (A line of its own under the step, amber the last 5 free minutes, red past them.)
     const rent = l.mode === 'bike' && !state.done && state.i <= state.reached ? rental() : null;
     const rms = rent ? now - rent.at : 0;
-    const rentLine = rent ? `<div class="ot-nav-rent${state.swap30 ? (rms >= FREE_MS ? ' over' : rms >= FREE_MS - 5 * 60_000 ? ' warn' : '') : ''}">${icon('bike')}<span>${W(`已騎 ${Math.floor(rms / 60_000)} 分`, `Ridden ${Math.floor(rms / 60_000)} min`)}${state.swap30 ? (rms < FREE_MS ? W(`・免費剩 ${Math.ceil((FREE_MS - rms) / 60_000)} 分`, `・${Math.ceil((FREE_MS - rms) / 60_000)} min free left`) : W('・已超過免費 30 分', '・past the free 30 min')) : ''}</span></div>` : '';
+    // From 25 minutes on, with more than a few minutes still to ride: the
+    // stations near you to return it at and take another, a tap away
+    // (buzzed once; the owner, 2026-11-03).
+    const rideLeft = rent && state.pos && l.to?.lat != null ? rideSec(meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon), l.ebike) : 0;
+    const swapNow = Boolean(rent && state.swap30 && rms >= WARN_MS && rms < FREE_MS + 30 * 60_000 && rideLeft > 3 * 60);
+    if (swapNow && state.swapBuzz !== rent.at) {
+      state.swapBuzz = rent.at;
+      buzz();
+    }
+    const rentLine = rent ? `<div class="ot-nav-rent${state.swap30 ? (rms >= FREE_MS ? ' over' : rms >= FREE_MS - 5 * 60_000 ? ' warn' : '') : ''}">${icon('bike')}<span>${W(`已騎 ${Math.floor(rms / 60_000)} 分`, `Ridden ${Math.floor(rms / 60_000)} min`)}${state.swap30 ? (rms < FREE_MS ? W(`・免費剩 ${Math.ceil((FREE_MS - rms) / 60_000)} 分`, `・${Math.ceil((FREE_MS - rms) / 60_000)} min free left`) : W('・已超過免費 30 分', '・past the free 30 min')) : ''}</span>${swapNow ? `<button class="ot-nav-gm" type="button" data-nav="swapdock">${icon('dock')}${W('附近換車', 'Swap nearby')}</button>` : ''}</div>` : '';
     // Yours the next stop (ringNow): the card turned round to say so.
     const offNext = on && !state.done && (rs && state.next != null ? ringNow(rs, state.next) : left != null && left < NEXT_STOP_M);
     if (offNext) {
@@ -817,8 +886,14 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       const k = rideOf(plan, state.i);
       queueMicrotask(() => nav === state && onAction?.('late', { eta: null, k, ride: k >= state.i ? rideName(plan.legs[k]) : '' }));
     }
+    // (An offer for a bus that's about to leave goes with it.)
+    if (state.offer?.until && now > state.offer.until) state.offer = null;
     const of = !state.done && state.offer;
     const offer = of ? `<div class="ot-nav-ask ot-nav-late"><span><b>${e(of.title)}</b>${of.sub ? `<small>${e(of.sub)}</small>` : ''}</span>${of.plan ? `<button type="button" data-nav="offer">${W('改走這條', 'Take it')}</button>` : ''}<button class="x" type="button" data-nav="offer-x" aria-label="${W('不用', 'No thanks')}">${icon('x')}</button></div>` : '';
+    // On a YouBike to a stop with more after it: keep it or return it there (parkAsk).
+    // (Asked in the last 5 minutes of the ride, not all the way.)
+    const pa = !state.done && state.i === state.reached && left != null && rideSec(left, l.ebike) <= 5 * 60 ? parkAsk(plan, state.i) : null;
+    const park = pa ? `<div class="ot-nav-ask ot-nav-late"><span><b>${W('到了要還車嗎？', 'Return it there?')}</b><small>${e(pa.text)}</small></span><button type="button" data-nav="park">${W('停著', 'Keep')}</button><button type="button" data-nav="return">${W('還車', 'Return')}</button></div>` : '';
     const strayed = on && !state.done && state.away >= 2 && now - state.awayAt >= AWAY_MS ? `<div class="ot-nav-ask"><span>${W('好像已經下車了？', 'Got off already?')}</span><button type="button" data-nav="replan">${W('從這裡重新規劃', 'Replan from here')}</button></div>` : !on && !state.done && state.lost && state.i === state.reached ? `<div class="ot-nav-ask"><span>${W('不照這條路走了？', 'Going another way?')}</span><button type="button" data-nav="replan">${W('從這裡重新規劃', 'Replan from here')}</button></div>` : '';
     const ri = rideOf(plan, state.i);
     const liveNow = !state.done && ri >= state.i && state.fresh && now - state.fresh < 75_000;
@@ -832,15 +907,19 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       // (A step the trip has got past by itself is done: shown, never tapped back to; one you only
       // looked ahead past stays a tap away; the owner, 2026-10-13.)
       .map((x, k) => `<button class="ot-nav-chip${k < state.reached ? ' done' : k === state.i ? ' on' : ''}" type="button"${k < state.reached ? ' disabled' : ` data-nav-go="${k}"`} style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`)
-      .join('');
-    const minsLeft = Math.max(0, Math.round((times.eta - now) / 60_000));
+      .join('') +
+      // (The stretches after each stop, as they're planned: the whole trip in one row.)
+      (plan.later || []).map((q, n) => `<span class="ot-nav-chip stop">${icon('pin')}<span>${e(shortPlace([plan.dest, ...(plan.then || [])][n]?.name || ''))}</span></span>${q.legs.map(x => `<span class="ot-nav-chip later" style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></span>`).join('')}`).join('');
+    // (A trip with stops: there at the last place, 全程剩 its minutes; the next stop's time is the step's.)
+    const whole = plan.later?.length ? laterEnd(plan, times.eta) : times.eta;
+    const minsLeft = Math.max(0, Math.round((whole - now) / 60_000));
     // Later or sooner than the plan said, by what's live now.
     // (Only while a bus or train is still ahead: the rest by bike or on foot is at your own pace, nothing to be early or late for.)
     const drift = state.done || !plan.legs.slice(state.i).some(isRide) ? 0 : Math.round((times.eta - plan.arr) / 60_000);
     const driftText = Math.abs(drift) >= 2 ? `<em class="${drift > 0 ? 'bad' : 'good'}">${drift > 0 ? W(`晚 ${drift} 分`, `${drift} min late`) : W(`早 ${-drift} 分`, `${-drift} min early`)}</em>` : '';
     const fold = state.fold;
     const topHtml = `<div class="ot-nav-top${offNext ? ' alert' : ''}${coming ? ' coming' : ''}${on ? ' aboard' : ''}${fold.top ? ' folded' : ''}" style="--c:${e(legColor(l))}">
-        ${off}${offer}${strayed}
+        ${off}${offer}${park}${strayed}
         <div class="ot-nav-main">
           <span class="ot-nav-i">${icon(state.done ? 'pin' : offNext ? 'bell' : l.mode)}</span>
           <div class="ot-nav-text"><b>${titleHtml(title, plan)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>
@@ -854,7 +933,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         ${grip('top', fold.top)}
       </div>`;
     const etaHtml = `<div class="ot-nav-eta">
-          <span><b>${e(hm(state.done ? now : times.eta))}</b><small>${state.done ? W('已抵達', 'Arrived') : driftText ? `${driftText}・${W('剩 ', '')}${leftText(minsLeft)}` : `${W('抵達・還要 ', 'arrive・')}${leftText(minsLeft)}`}</small></span>
+          <span><b>${e(hm(state.done && !plan.later?.length ? now : whole))}</b><small>${state.done && !plan.later?.length ? W('已抵達', 'Arrived') : plan.later?.length ? `${driftText ? `${driftText}・` : ''}${W('全程剩 ', 'trip: ')}${leftText(minsLeft)}` : driftText ? `${driftText}・${W('剩 ', '')}${leftText(minsLeft)}` : `${W('抵達・還要 ', 'arrive・')}${leftText(minsLeft)}`}</small></span>
           <button class="q-icon-btn" type="button" data-nav="more" aria-label="${W('更多：縮小、改下車站、重新規劃、改目的地', 'More: shrink, change stop, replan, change destination')}">${icon('more')}</button>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">${W('結束', 'End')}</button>
         </div>`;
@@ -1023,6 +1102,18 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           const soon = times.find(x => x.at > Date.now() - 30_000);
           if (next) state.liveAt.set(ri, next.at);
           else state.liveAt.delete(ri);
+          // None you'll be there for, and the very bus this ride was timed for
+          // is coming sooner than you can be at its stop (its timetable's
+          // 17:30 due at 17:22, you there at 17:26): it's gone for you, said
+          // so, the next one taken, a YouBike ahead of it offered (the
+          // owner, 2026-11-03: the stop said 2 分, the trip still "hurry").
+          const seen = times.filter(t => !t.planned).map(t => t.at);
+          const was = !next && ri > state.i && seen.length && state.gone !== `${ri}|${l.dep}` ? seenAt(x.sched, x.way?.w, x.way?.i, seen, l.dep, Date.now()) : null;
+          if (was != null && pastHurry(ready - was, ready - Date.now())) {
+            state.gone = `${ri}|${l.dep}`;
+            state.liveAt.set(ri, was);
+            queueMicrotask(() => goneBus(ri, x, was, ready, seen));
+          }
           live = next
             ? `${next.planned ? W('預計', 'planned') : W('即時', 'live')}${next.last ? W('・末班', '・last') : ''}`
             : soon
@@ -1350,8 +1441,51 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const eta = late ? Infinity : plan.arr;
     if (lateBy(plan, eta)) onAction?.('late', { eta, k, ride: rideName(plan.legs[k]) });
   };
+  // The bus you were walking to, gone before you can be there: the next you
+  // can make (the timetable's, never that one again), and a YouBike to a
+  // stop further on that still catches it, offered (chase.mjs).
+  const goneBus = async (k, x, was, ready, seen) => {
+    const l = plan.legs[k];
+    if (nav !== state || state.i >= k || !l) return;
+    const nx = nextCatchable(x.sched, x.way?.w, x.way?.i, seen, ready, Date.now());
+    if (nx) takeOther(k, { dep: nx.at, arr: nx.at + (l.arr - l.dep) }, W(`趕不上 ${hm(was)} 這班，改搭 ${hm(nx.at)}`, `Can’t make the ${hm(was)}; next ${hm(nx.at)}`));
+    const c = await chaseFrom(state.pos, plan.legs.slice(k), Date.now(), { prefer: plan.legs.some(y => y.ebike) }).catch(() => null);
+    if (!c || nav !== state || state.i >= k) return;
+    const b = c.legs.find(isRide);
+    // (Short enough for a 320 screen beside its button: how much sooner, then where and when you board.)
+    const gain = Math.round((plan.arr - c.arr) / 60_000);
+    state.offer = { title: W(`騎車追上，早 ${gain} 分到`, `${gain} min sooner by bike`), sub: W(`${shortPlace(b.from.name)} ${hm(b.dep)} 上車`, `Board at ${shortPlace(b.from.name)} ${hm(b.dep)}`), plan: { ...c, dest: plan.dest, then: plan.then, ...(plan.deadline ? { deadline: plan.deadline } : {}) }, until: b.dep - 60_000 };
+    buzz();
+    render();
+  };
   const optText = (o, l) => (en ? `${o.train ? `${trainKind(o.train.type || '')} ${o.train.no} ` : ''}${l.mode === 'bus' ? 'due' : 'leaves'} ${hm(o.dep)}` : `${o.train ? `${o.train.type || ''} ${o.train.no} 次 ` : ''}${hm(o.dep)}${l.mode === 'bus' ? ' 到站' : ' 開'}`);
   // 改搭別班: the ride ahead's departures, one tap to take another.
+  // 附近換車 (a YouBike ridden 25 minutes): the stations near you with a
+  // dock and a bike, the way you're going first; one tapped, the ride is cut there.
+  state.swapDock = async () => {
+    const k = state.i;
+    const l = plan.legs[k];
+    if (l?.mode !== 'bike' || !state.pos) return;
+    const pos = state.pos;
+    const list = await bikesAround(pos.lat, pos.lon).catch(() => []);
+    if (nav !== state || state.i !== k) return;
+    const docks = swapDocks(pos, list, { toward: l.to, max: 800, n: 3 });
+    const rows = docks.map(({ s, d }, n) => `<button class="ot-row-btn" type="button" data-n="${n}">${icon('dock')}<span><b>${e(shown(s.name))}</b><small>${e(distText(d))}・${W('空位', 'docks')} ${s.ret}・${W('可借', 'bikes')} ${s.bikes + (s.ebike || 0)}</small></span></button>`);
+    const d = sheet(`${sheetHead(W('還車再借一台', 'Return and re-rent'), W('又有 30 分鐘免費', '30 more free minutes'))}<div class="ot-nav-menu">${rows.join('') || emptyNote(W('附近 800 公尺內沒有可還又可借的站', 'No dock with bikes and space within 800 m'))}</div>`);
+    d.addEventListener('click', ev => {
+      const n = ev.target.closest('[data-n]')?.dataset.n;
+      if (n == null) return;
+      d.shut();
+      const s = docks[Number(n)].s;
+      if (nav !== state || state.i !== k || !splitRide(plan, k, s, state.pos || pos, Date.now())) return;
+      state.gen++;
+      // (The legs after it are one further on now.)
+      for (const m of [state.ride, state.info, state.liveAt]) for (const key of [...m.keys()]) if (key > k) m.delete(key);
+      state.swap = { at: Date.now(), text: W(`到 ${shown(s.name)} 還車再借一台`, `Swap bikes at ${shown(s.name)}`) };
+      buzz();
+      go(k, state.phase);
+    });
+  };
   state.pickTimes = async () => {
     const k = rideOf(plan, state.i);
     const l = plan.legs[k];
@@ -1625,6 +1759,15 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       return go(Number(k), Number(k) === state.i ? state.phase : back ? 'on' : 'before');
     }
     const a = ev.target.closest('[data-nav]')?.dataset.nav;
+    if (a === 'swapdock') return state.swapDock();
+    if (a === 'park' || a === 'return') {
+      // Kept (parked at the stop, ridden on: its timer runs on) or returned there.
+      const l = plan.legs[state.i];
+      if (l?.mode !== 'bike') return;
+      Object.assign(l, { park: a === 'park', asked: true });
+      saveNav(state);
+      return render();
+    }
     if (a === 'end') {
       // Asked first: 結束 sits where a thumb lands, and an ended ride can't be had back.
       kit.ask({ title: W('結束導航？', 'End navigation?'), body: W(`到 ${plan.dest?.name || plan.legs.at(-1)?.to?.name || '目的地'} 的導航會停止。`, `Directions to ${plan.dest?.name || plan.legs.at(-1)?.to?.name || 'your destination'} stop.`), ok: W('結束導航', 'End'), cancel: W('繼續導航', 'Keep going'), danger: true }).then(ok => {
@@ -1881,6 +2024,15 @@ export function navRetarget(dest, then = []) {
   if (!nav) return;
   nav.plan.dest = { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) };
   nav.plan.then = then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) }));
+  // (The stretches after it were for the old places: planned again, navLater.)
+  nav.plan.later = null;
+  saveNav(nav);
+  nav.render?.();
+}
+// The stretches after each stop, once they're planned (a trip with stops started before they were).
+export function navLater(later) {
+  if (!nav || !later?.length || nav.plan.later?.length) return;
+  nav.plan.later = later;
   saveNav(nav);
   nav.render?.();
 }

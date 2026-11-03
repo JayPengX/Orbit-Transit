@@ -21,7 +21,7 @@ import { railNetwork, railSpan, traDelays } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
 import { setTripPush } from './alerts.mjs';
-import { pickSig } from './plan.mjs';
+import { pickSig, boardEarly } from './plan.mjs';
 import { canNav, lateBy } from './nav.mjs';
 import { loadNotices, bikesOff, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
@@ -387,7 +387,9 @@ async function retimed(base, w) {
   // (From when you can set out: now, or the trip's time; by an arrival time, as planned.)
   const start = w.by === 'arrive' ? null : Math.max(now, w.at || now);
   const plans = w.by === 'arrive' ? base : rollPlans(base, now);
-  return Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000 && l.dep >= now - 2 * 60_000) ? adjustPlan(p, now, { start }).catch(() => p) : p)));
+  const out = await Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000 && l.dep >= now - 2 * 60_000) ? adjustPlan(p, now, { start }).catch(() => p) : p)));
+  // (At the stop a few minutes early, by the bus's time now.)
+  return out.map(p => boardEarly(p, start ?? now));
 }
 
 async function loadTrip(w, { force = false } = {}) {

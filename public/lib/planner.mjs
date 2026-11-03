@@ -16,8 +16,9 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn } from './live.mjs';
+import { chases } from './chase.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
 import { traNotices, traLegOff } from './service.mjs';
@@ -301,6 +302,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
       ranked = dayTimes(ranked, net, t0, { use: useTrain });
       lap(`days${stage}`, t4);
     }
+    // At a bus's stop a few minutes early (its timetable is a guess), set out for it so.
+    ranked = ranked.map(p => boardEarly(p, by === 'arrive' ? now : Math.max(now, t0)));
     // Each plan's fare line (TPASS counted); to be there by a time, the time
     // (navigation keeps to it: late, the way that still makes it).
     for (const p of ranked) {
@@ -385,6 +388,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
             const all = await bikesNow;
             bikesNow = Promise.resolve([...new Map([...all, ...more].map(s => [s.uid, s])).values()]);
           }
+          // 追公車: a bus you'd miss walking to it, caught further along its way by YouBike.
+          if (modes.bike && by !== 'arrive' && t0 - now < 60 * 60_000) list.push(...(await chases(list, from, now, Math.max(now, t0), { prefer: ebike }).catch(() => [])).filter(p => allowed(p, modes)));
           lap('later', t3);
           const two = await finishOff(list, 2);
           return { plans: two, sources: res.sources || {}, error: two.length ? null : stopErr() };

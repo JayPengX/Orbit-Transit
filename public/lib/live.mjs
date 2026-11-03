@@ -187,6 +187,36 @@ export function nextUnseen(sched, w, i, lives, now = Date.now()) {
   }
   return p;
 }
+// The timetable's runs at stop i of a way from 2 minutes ago, each with the
+// bus TDX sees coming that is it (`seen`: moments at that stop): a bus is the
+// earliest run not yet taken it can be, 25 minutes late to 10 early (as
+// liveTrusted). → [{ t, seen }] (seen: that bus's moment, or null).
+export function runsSeen(sched, w, i, seen, now = Date.now(), n = 6) {
+  const runs = departuresAt(sched, w, i, now - 2 * MIN, n + seen.length).map(t => ({ t, seen: null }));
+  for (const a of [...seen].sort((x, y) => x - y)) {
+    const r = runs.find(x => x.seen == null && x.t >= a - 25 * MIN && x.t <= a + 10 * MIN);
+    if (r) r.seen = a;
+  }
+  return runs;
+}
+// The bus a ride was timed for (`dep`: its time at the stop) as TDX sees it
+// now: the moment it's really there, or null (not seen; nothing to go by).
+// Without a timetable, the first bus seen within that window of it.
+// (The owner, 2026-11-03: the bus 2 minutes away and the trip still on the
+// timetable's time, saying hurry and you'll make it.)
+export function seenAt(sched, w, i, seen, dep, now = Date.now()) {
+  if (sched?.length && w) return runsSeen(sched, w, i, seen, now).find(x => Math.abs(x.t - dep) < MIN)?.seen ?? null;
+  return [...seen].sort((x, y) => x - y).find(a => dep >= a - 25 * MIN && dep <= a + 10 * MIN) ?? null;
+}
+// The first run at stop i you can be there for (`ready`) that isn't a bus
+// already seen: { at, live } (live: a seen bus's moment), or null.
+export function nextCatchable(sched, w, i, seen, ready, now = Date.now()) {
+  const live = [...seen].sort((x, y) => x - y).find(a => a >= ready - 30_000);
+  const run = sched?.length && w ? runsSeen(sched, w, i, seen, now, 12).find(x => x.seen == null && x.t >= ready - 30_000) : null;
+  if (live != null && (!run || live <= run.t + MIN)) return { at: live, live: true };
+  return run ? { at: run.t, live: false } : null;
+}
+
 // Whether a live estimate (a bus due at the stop at `at`) is a bus in
 // service: one the timetable has due about then (25 minutes late at most, 10
 // early). A driver resting with the tracker on shows a bus 'coming' at the
@@ -195,6 +225,15 @@ export function liveTrusted(sched, w, i, at) {
   if (!sched?.length || !nextRun(sched, w, 0, at - 86_400_000)) return true;
   const t = departuresAt(sched, w, i, at - 25 * MIN, 1)[0];
   return t != null && t <= at + 10 * MIN;
+}
+
+// An official bus leg's way and stop on it, with its timetable: { w, i, sched }, or null.
+export async function wayAt(l, { stops = routeStops, schedule = routeSchedule } = {}) {
+  if (!l.route?.uid) return null;
+  const route = { uid: l.route.uid, name: l.short || l.name, city: l.route.city || routeCity(l.route.uid) };
+  const [ways, sched] = await Promise.all([stops(route, l.from).catch(() => []), schedule(route, l.from).catch(() => [])]);
+  const w = ways.find(x => x.dir === l.route.dir && x.stops.some(y => y.uid === l.route.stopUID));
+  return w ? { w, i: w.stops.findIndex(y => y.uid === l.route.stopUID), sched } : null;
 }
 
 // Which way of a route a ride is, and its stops: the way where the stop
@@ -252,7 +291,7 @@ export async function busTimes(plan, { near = etaAround, now = Date.now() } = {}
 // plan had you leave for the bus it was made around (it left at 19:05 for the
 // timetable's 19:15, and skipped the live 19:06 a walk away; the owner,
 // 2026-10-12). Without it, from the plan's own start.
-export async function adjustPlan(plan, now = Date.now(), { near = etaAround, start = null } = {}) {
+export async function adjustPlan(plan, now = Date.now(), { near = etaAround, start = null, stops = routeStops, schedule = routeSchedule } = {}) {
   let legs = plan.legs.map(l => ({ ...l }));
   let changed = false;
   let miss = '';
@@ -291,13 +330,24 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     const before = legs.slice(0, i).reduce((a, x) => a + (x.dur || 0) * 1000, 0);
     // When you can be at the stop: now plus the walk (or ride) to it, else after the leg before.
     const ready = i === first ? Math.max(now, start ?? legs[0].dep ?? now) + before : (legs[i - 1]?.arr ?? l.dep) + 30_000;
-    const bus = times.find(t => t.at >= ready - 30_000);
+    let bus = times.find(t => t.at >= ready - 30_000);
+    // None you can be there for, and the bus this ride was timed for is one
+    // TDX sees coming sooner (its timetable's 17:30 due at 17:22): that one's
+    // gone for you; the timetable's next run that isn't it.
+    if (!bus && l.route?.uid) {
+      const seen = times.filter(t => !t.planned).map(t => t.at);
+      const x = seen.length ? await wayAt(l, { stops, schedule }).catch(() => null) : null;
+      const was = x && seenAt(x.sched, x.w, x.i, seen, l.dep, now);
+      const nx = was != null && was < ready - 30_000 ? nextCatchable(x.sched, x.w, x.i, seen, ready, now) : null;
+      if (nx && !nx.live) bus = { at: nx.at, planned: true, last: false, sched: true };
+    }
     if (!bus) {
       if (stopped) off = stopped === 3 ? W(`${l.short || l.name} 末班已過`, `${l.short || l.name}: last one gone`) : W(`${l.short || l.name} 今日未營運`, `${l.short || l.name}: not running today`);
       if (stopped === 4) dead = true;
       continue;
     }
-    legs[i].live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
+    // (A run of the timetable, not a bus seen: re-timed, not live.)
+    if (!bus.sched) legs[i].live = { at: bus.at, planned: Boolean(bus.planned), last: bus.last };
     // The buses after it, for the route's other times (moreBuses).
     // (Not waited for here: the planner waits for them all at once, beside the bikes.)
     if (i === first) legs[i].nextP = laterBuses(list, l, bus.at, { now, n: DAY_BUSES });
@@ -444,7 +494,9 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
       dep = t.at;
       isLive = !t.planned;
     } else if (sched.length) {
-      dep = departuresAt(sched, w, i, ready - 30_000, 1)[0] ?? null;
+      // (Never the run a bus already seen is, gone before you're there.)
+      const seen = lt.times.filter(x => !x.planned).map(x => x.at);
+      dep = (seen.length ? nextCatchable(sched, w, i, seen, ready, now)?.at : departuresAt(sched, w, i, ready - 30_000, 1)[0]) ?? null;
     }
     if (dep == null || dep - ready > 75 * MIN) return void trace?.why.push(`${c.route}: ${dep == null ? 'no bus now' : 'next in over 75 min'}`);
     const ride = rideTime(w, i, j, sched);

@@ -1,4 +1,4 @@
-// node scripts/navstate.mjs <walk|wait|on|train|bike|long|liujia|late|wenxing> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
+// node scripts/navstate.mjs <walk|wait|on|train|bike|long|liujia|late|wenxing|stops> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
 const now = Date.now(), m = x => now + x * 60_000;
 const here = { lat: 24.8026, lon: 120.9702 };
 const stop = { name: '新竹車站(中正路)', lat: 24.8026, lon: 120.9702 };
@@ -40,7 +40,23 @@ if (sc === 'wenxing') {
   ];
   i = 1;
 }
+// A trip with a stop (全家, then 竹東高中), on the YouBike to it, about 4 minutes
+// to go: the stop and the place after it in the chips, 停著 or 還車 asked;
+// with the timer at 26 minutes (`--store orbit-transit.rental=…`, the key
+// `${dep}:1`) and 每 30 分換車 on, 附近換車 too.
+if (sc === 'stops') {
+  const P = (name, lat, lon) => ({ name, lat, lon });
+  const dock = P('新竹市政府', 24.8066, 120.9689), end = P('東門市場', 24.8026, 120.9781), shop = P('全家 新竹東門店', 24.803, 120.9785), st = P('東門市場', 24.8032, 120.979), hs = P('竹東高中', 24.733, 121.088);
+  legs = [
+    { mode: 'walk', from: { name: '', ...here }, to: dock, dep: m(-28), arr: m(-26), dur: 120 },
+    { mode: 'bike', name: 'YouBike', from: dock, to: end, dep: m(-26), arr: m(4), dur: 1800, dist: 5200, rent: { uid: 'r', ...dock, bikes: 6, ebike: 2 }, ret: { uid: 's', ...end, ret: 9 } },
+    { mode: 'walk', from: end, to: shop, dep: m(4), arr: m(5), dur: 60 }
+  ];
+  i = 1;
+  var then = [hs];
+  var later = [{ legs: [{ mode: 'walk', from: shop, to: st, dep: m(15), arr: m(17), dur: 120 }, { ...bus(st, 19), to: P('竹東高中', 24.7333, 121.0879) }, { mode: 'walk', from: P('竹東高中', 24.7333, 121.0879), to: hs, dep: m(49), arr: m(51), dur: 120 }], dep: m(15), arr: m(51) }];
+}
 // (liujia: waiting at 竹中 for the 六家線, its ride along the track.)
 if (sc === 'liujia') i = 4;
-const plan = { tags: [], transfers: 0, walk: 400, legs, dep: legs[0].dep, arr: legs.at(-1).arr, dur: (legs.at(-1).arr - legs[0].dep) / 1000, dest: { name: legs.at(-1).to.name, lat: legs.at(-1).to.lat, lon: legs.at(-1).to.lon }, ...(sc === 'late' ? { deadline: m(70) } : {}) };
+const plan = { tags: [], transfers: 0, walk: 400, legs, dep: legs[0].dep, arr: legs.at(-1).arr, dur: (legs.at(-1).arr - legs[0].dep) / 1000, dest: { name: legs.at(-1).to.name, lat: legs.at(-1).to.lat, lon: legs.at(-1).to.lon }, ...(sc === 'late' ? { deadline: m(70) } : {}), ...(sc === 'stops' ? { then, later } : {}) };
 process.stdout.write(JSON.stringify({ plan, i, phase, at: now }));
