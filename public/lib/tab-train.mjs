@@ -8,7 +8,7 @@ import { railStations, railNetwork, railSpan, traDelays, legFare } from './raild
 import { journeys, findStations } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { cityShort } from './city.mjs';
-import { lineMapHtml, mapCities } from './linemap.mjs';
+import { lineMapHtml, mapCities, mapCols, areaOf, areaName } from './linemap.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
@@ -386,13 +386,13 @@ async function pickStation(which) {
     el?.classList.add('picked');
     state[which] = { sys: s.sys, id: s.id, name: s.name };
     state.results = null;
-    writeJson(CITY_KEY, s.city);
+    writeJson(CITY_KEY, areaOf(s.city));
     // (The dot lights, then the sheet goes: a tap that shows it landed.)
     setTimeout(() => {
       d.shut();
       render();
       if (state.from && state.to) search();
-    }, el?.classList.contains('ot-lm-row') ? 160 : 0);
+    }, el?.closest('.ot-sn-st') ? 160 : 0);
   };
   const keyOf = x => (x ? `${x.sys}:${x.id}` : '');
   const isOther = s => s.key === keyOf(other);
@@ -411,17 +411,32 @@ async function pickStation(which) {
   };
   const chip = (s, sub = '') => `<button class="q-chip" type="button" data-st="${e(s.key)}">${e(stationLabel(s))}${sub ? `<small>${e(sub)}</small>` : ''}</button>`;
   const quickRow = (label, chips) => (chips.length ? `<div class="q-chips ot-chip-rail ot-pick-quick"><span class="ot-pick-label">${label}</span>${chips.join('')}</div>` : '');
+  let cols = 0;
+  const colsNow = map => mapCols(map.clientWidth - 16);
   const drawMap = (fresh = false) => {
     const map = d.querySelector('#s-map');
     if (!map) return;
-    // (Never shorter than it was: the sheet doesn't shrink and scroll under the finger.)
-    map.style.minHeight = `${map.offsetHeight}px`;
-    map.innerHTML = lineMapHtml(city, byKey, { current: keyOf(state[which]), other: keyOf(other) });
+    // (Room for a whole screen under the counties, and no more: a short
+    // county ends where it ends, yet a tap never pulls the page from under the finger.)
+    const rail = d.querySelector('.ot-pick-cities');
+    map.style.minHeight = `${Math.max(0, d.clientHeight - (rail?.offsetHeight || 0))}px`;
+    cols = colsNow(map);
+    map.innerHTML = lineMapHtml(city, byKey, { current: keyOf(state[which]), other: keyOf(other), cols });
     if (fresh) {
       map.classList.remove('fresh');
       void map.offsetWidth;
       map.classList.add('fresh');
     }
+  };
+  // (A phone turned, a window made wider: as many stations a row as fit.)
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
+    const map = d.querySelector('#s-map');
+    if (map && cols && colsNow(map) !== cols) drawMap();
+  }) : null;
+  const closed = d.onclosed;
+  d.onclosed = () => {
+    ro?.disconnect();
+    closed?.();
   };
   const draw = () => {
     const q = d.querySelector('#s-q').value;
@@ -436,10 +451,11 @@ async function pickStation(which) {
     const close = near().filter(([, s]) => !seen.has(s.key));
     body.innerHTML = `${quickRow(W('常用', 'Yours'), mine.map(s => chip(s)))}${quickRow(W('附近', 'Nearby'), close.map(([m, s]) => chip(s, distText(m))))}
       <div class="q-chips ot-chip-rail ot-pick-cities" role="group" aria-label="${W('縣市', 'County')}">${mapCities(list)
-        .map(k => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(cityShort(k))}</button>`)
+        .map(k => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(areaName(k))}</button>`)
         .join('')}</div>
       <div class="ot-pick-map" id="s-map"></div>`;
     drawMap();
+    ro?.observe(body.querySelector('#s-map'));
     // (The county in sight in its row, once as the sheet opens.)
     const on = body.querySelector('.ot-pick-cities [aria-pressed="true"]');
     if (on) on.parentElement.scrollLeft = on.offsetLeft - on.parentElement.offsetWidth / 2 + on.offsetWidth / 2;
@@ -476,7 +492,7 @@ async function pickStation(which) {
     // The county of the station picked now, else of the nearest, else the last one looked at.
     const now = byKey.get(keyOf(state[which])) || near()[0]?.[1];
     const cities = mapCities(list);
-    city = [now?.city, readJson(CITY_KEY), ctx.city].find(k => cities.includes(k)) || cities[0];
+    city = [now?.city, readJson(CITY_KEY), ctx.city].map(areaOf).find(k => cities.includes(k)) || cities[0];
     draw();
   } catch (err) {
     d.querySelector('#s-body').innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`;

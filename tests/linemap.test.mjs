@@ -33,3 +33,34 @@ test('the station picked is lit; the other end cannot be picked', () => {
   assert.match(html, /data-st="tra:1000"[^>]*aria-current="true"/);
   assert.match(html, /data-st="tra:0990" disabled/);
 });
+
+test('新竹市 inside 新竹縣 is one area: its lines joined over the old border, no edge between them', async () => {
+  const { areaParts, areaOf } = await import('../public/lib/linemap.mjs');
+  const cities = mapCities([...stations.values()]);
+  assert.ok(cities.includes('HsinchuCounty') && !cities.includes('Hsinchu'));
+  assert.equal(areaOf('Hsinchu'), 'HsinchuCounty');
+  const parts = areaParts('HsinchuCounty');
+  const wl = parts.filter(p => p.line === 'WL');
+  assert.equal(wl.length, 1, '西部幹線 one line through 新竹');
+  assert.deepEqual(wl[0].ids, [...TRA_MAP.HsinchuCounty[0].ids, ...TRA_MAP.Hsinchu[0].ids]);
+  const nw = parts.filter(p => p.line === 'NW');
+  assert.equal(nw.length, 1, '內灣線 one line');
+  assert.ok(nw[0].ids.includes('1191') && nw[0].ids.includes('1208'));
+  const html = lineMapHtml('HsinchuCounty', stations);
+  assert.ok(!/data-city="(Hsinchu|HsinchuCounty)"/.test(html), 'no edge into itself');
+});
+
+test('a row runs left to right, the next right to left; a 高鐵 station beside a 台鐵 one is a tap on that stop', () => {
+  const at = (lat, lon) => ({ lat, lon });
+  const st = new Map(
+    TRA_MAP.Taipei.flatMap(p => p.ids).map((id, i) => [`tra:${id}`, { key: `tra:${id}`, sys: 'tra', id, name: id, cls: '4', city: 'Taipei', ...at(25 + i * 0.05, 121.5) }])
+  );
+  const h = { key: 'hsr:0990', sys: 'hsr', id: '0990', name: '0990', city: 'Taipei', ...at(25.05, 121.5) };
+  st.set(h.key, h);
+  const html = lineMapHtml('Taipei', st, { cols: 3 });
+  // No 高鐵 card: its one station is on the 台鐵 line.
+  assert.ok(!html.includes('ot-lm-hsr'));
+  assert.match(html, /data-st="tra:0990"[^]*?data-st="hsr:0990"/);
+  const cells = [...html.matchAll(/grid-area:(\d+)\/(\d+)/g)].map(m => [+m[1], +m[2]]);
+  assert.deepEqual(cells, [[1, 1], [1, 2], [1, 3], [2, 3]]);
+});
