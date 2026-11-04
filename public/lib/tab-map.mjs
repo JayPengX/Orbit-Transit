@@ -22,7 +22,7 @@ import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
 import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
-import { startNav, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, navLater, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, navLater, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
@@ -89,7 +89,9 @@ export function register(c) {
   };
   // 交通's one tap: that plan, navigated at once when it leaves within
   // NAV_LEAD; a later one only opens (its 開始導航 is there to tap).
-  ctx.navPlan = (p, from, to) => {
+  // (`among`: the ways it was picked from, when it isn't the one shown first: a later train chosen is kept.)
+  ctx.navPlan = (p, from, to, { among = null } = {}) => {
+    if (among) p = pickedPlan(p, among);
     if (!map) pendingTrip = { nav: p, from, to };
     ctx.goTab('map');
     if (map) showPlan(p, from, to);
@@ -2510,6 +2512,9 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   replanTo = null;
   // (Swapped for the way that's on time: the trip goes on, whatever card is open.)
   const c = swap ? null : card;
+  // A way picked over the one first shown (another plan, or a later
+  // departure of it): its train kept as picked, never switched sooner.
+  if (!resume && c?.plans?.length > 1 && (c.plans.indexOf(p) > 0 || Object.entries(c.choice || {}).some(([a, j]) => j === c.plans.indexOf(p) && Number(a) !== j))) p = pickedPlan(p, c.plans);
   closeResults({ keep: true });
   $('card').hidden = true;
   document.body.classList.add('ot-navigating');

@@ -653,6 +653,24 @@ async function rideOptions(l, info, now = Date.now()) {
   }
   return out.sort((x, y) => x.dep - y.dep).slice(0, 6);
 }
+// A train you chose over an earlier one from the same station (a later
+// departure picked on the plans card or 交通's 其他班次; 指定車次 marks its
+// own): `picked`, kept as chosen. Navigation never moves it to a sooner one
+// by itself (the owner, 2026-11-04: a later train picked on purpose, and at
+// 竹東 the trip said 「區間 1833 次 18:12 開 比較早到，改搭這班」).
+// `others`: the plans it was picked from. → the plan (a copy when marked).
+const isRail = l => l?.mode === 'tra' || l?.mode === 'hsr';
+export function pickedPlan(p, others = []) {
+  let hit = false;
+  const legs = (p?.legs || []).map(l => {
+    if (!isRail(l) || l.picked || !l.from || l.from.lat == null) return l;
+    const earlier = others.some(q => q !== p && q?.legs?.some(x => x !== l && x.mode === l.mode && x.dep < l.dep - 60_000 && x.from?.lat != null && meters(x.from.lat, x.from.lon, l.from.lat, l.from.lon) < 300));
+    if (!earlier) return l;
+    hit = true;
+    return { ...l, picked: true };
+  });
+  return hit ? { ...p, legs } : p;
+}
 // A bus or train step moved to another departure (picked, or the one after
 // the one missed): its times (a train's number), and what follows it moved
 // with it up to the next train (which keeps its time). → the train after it
@@ -1430,8 +1448,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   };
   // The bus or train you're on your way to (or waiting for) moved to another
   // departure: picked from its times, or the next once you've missed it.
-  const takeOther = (k, opt, text) => {
+  // (`pick`: chosen by you, kept as chosen; the next after one missed is not.)
+  const takeOther = (k, opt, text, pick = false) => {
     const late = retimeRide(plan, k, opt);
+    if (pick) plan.legs[k].picked = true;
+    else delete plan.legs[k].picked;
     state.gen++;
     state.delay = 0;
     for (const m of [state.ride, state.info, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
@@ -1500,7 +1521,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       if (n == null) return;
       d.shut();
       const o = opts[Number(n)];
-      if (nav === state && Math.abs(o.dep - cur) >= 90_000) takeOther(k, o, W(`改搭 ${optText(o, l)}`, `Switched: ${optText(o, l)}`));
+      if (nav === state && Math.abs(o.dep - cur) >= 90_000) takeOther(k, o, W(`改搭 ${optText(o, l)}`, `Switched: ${optText(o, l)}`), true);
     });
   };
   // Missed it, for sure: past its time (a train's with its live delay, a
@@ -1526,10 +1547,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // (there early, or an earlier one running late): that one, said and
   // buzzed, and the changes after it moved sooner too (the owner,
   // 2026-10-28: at 竹中 at 16:30, 1754 at 16:43 still to come, the trip
-  // waiting for 1758 at 17:41). Looked at once a minute.
+  // waiting for 1758 at 17:41). Looked at once a minute. Never off a train
+  // you picked (pickedPlan): you chose that one.
   const sooner = async k => {
     const l = plan.legs[k];
-    if ((l.mode !== 'tra' && l.mode !== 'hsr') || Date.now() - (state.soonerAt || 0) < 60_000) return;
+    if (!isRail(l) || l.picked || Date.now() - (state.soonerAt || 0) < 60_000) return;
     state.soonerAt = Date.now();
     state.missing = k;
     const opts = await rideOptions(l, null).catch(() => []);
@@ -1671,7 +1693,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       const ready = m === state.i ? now : navTimes(plan, state.i, state.phase, state.pos, new Map(), now, state.phase === 'on' ? (state.arrAt ?? null) : null).ready.get(m);
       if (ready == null) continue;
       const fits = l.dep >= ready - 60_000 && l.dep - ready < 3 * 3_600_000;
-      if (fits && m <= from) continue;
+      // (A train you picked that you'll still make: kept, never moved sooner.)
+      if (fits && (m <= from || l.picked)) continue;
       const opts = await rideOptions(l, state.info.get(m), ready).catch(() => []);
       if (nav !== state) return;
       const late = o => (o.delay || 0) * 60_000;

@@ -282,6 +282,52 @@ test('waiting at the station with a sooner train still to come: that one, the ar
   useRail({});
 });
 
+// The owner's case (2026-11-04): a later train picked on purpose over an
+// earlier one, and waiting at 竹東 the trip said 「區間 1833 次 18:12 開 比較早到，
+// 改搭這班」. One picked (a later departure on the plans card, 其他班次, 指定車次)
+// is kept: never switched to the sooner one by itself.
+test('a later train picked on purpose: kept while waiting, never switched to the sooner one', async () => {
+  const { useRail, pickedPlan } = await import('../public/lib/nav.mjs');
+  const A = { lat: 24.7382, lon: 121.0947 };
+  const sts = ['竹東', '竹中'].map((name, n) => ({ key: `tra:${n}`, sys: 'tra', name, ...off(A, n * 3000, -n * 3000) }));
+  const S = n => ({ name: sts[n].name, lat: sts[n].lat, lon: sts[n].lon });
+  const run = (no, t0) => ({ sys: 'tra', no, type: '區間', stops: sts.map((s, n) => ({ st: s.key, arr: t0 + n * 6 * 60e3 - 30e3, dep: t0 + n * 6 * 60e3 })) });
+  useRail({ dayTrips: async () => [run('1833', T(18, 12)), run('1835', T(18, 34))], railStations: async () => sts, traLive: async () => new Map() });
+  const dest = { name: '竹中站前', ...off(sts[1], 300, 0) };
+  const trip = (no, t0) => {
+    const legs = [
+      { mode: 'tra', name: '區間', short: `區間 ${no}`, train: { no, type: '區間' }, from: S(0), to: S(1), dep: t0, arr: t0 + 6 * 60e3 - 30e3, dur: 330, path: sts.map(s => [s.lat, s.lon]) },
+      { mode: 'walk', from: S(1), to: dest, dep: t0 + 6 * 60e3, arr: t0 + 11 * 60e3, dur: 300 }
+    ];
+    return { legs, dep: legs[0].dep, arr: legs.at(-1).arr, tags: [], dest };
+  };
+  const early = trip('1833', T(18, 12));
+  const later = trip('1835', T(18, 34));
+  // Picked over the earlier one: marked; the earlier one itself (nothing sooner beside it): not.
+  const plan = pickedPlan(later, [early, later]);
+  assert.equal(plan.legs[0].picked, true);
+  assert.equal(pickedPlan(early, [early, later]), early);
+  clock.set(T(18, 4));
+  const { st: s } = start(plan, { here: { ...off(A, 30, 0), at: T(18, 4) } });
+  await settle();
+  pos(off(A, 25, 5));
+  await settle();
+  clock.add(2 * 60_000);
+  pos(off(A, 20, 5));
+  await settle();
+  assert.equal(String(s.plan.legs[0].train.no), '1835', 'the train you picked');
+  assert.equal(s.plan.arr, later.arr);
+  assert.ok(!/比較早到|sooner/.test(s.swap?.text || ''), `no switch said: ${s.swap?.text}`);
+  // Not picked (the plan as planned): the sooner one, as before.
+  const { st: s2 } = start(trip('1835', T(18, 34)), { here: { ...off(A, 30, 0), at: T(18, 6) } });
+  await settle();
+  clock.add(2 * 60_000);
+  pos(off(A, 25, 5));
+  await settle();
+  assert.equal(String(s2.plan.legs[0].train.no), '1833');
+  useRail({});
+});
+
 // The owner's case (2026-10-28, 17:15): opened again at the trip's end (the
 // last walk's line a block off), the trip was back on its first walk to the
 // YouBike at 臺鐵六家車站, 2.0 km away.
