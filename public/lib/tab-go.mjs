@@ -727,8 +727,11 @@ function onClick(ev) {
   const nt = ev.target.closest('[data-nav-trip]');
   if (nt) {
     const x = trips().find(y => y.w.id === nt.dataset.navTrip);
-    const p = x && tripOf(x.w)?.plans?.[Number(nt.dataset.i)];
-    if (p) return ctx.navPlan(p, x.w.from, x.w.to || p.legs.at(-1).to);
+    const all = (x && tripOf(x.w)?.plans) || [];
+    const p = all[Number(nt.dataset.i)];
+    // (Not the way shown first: picked, its train kept as chosen.)
+    const lead = p && tripPlans(all, x.t.picks).first[0];
+    if (p) return ctx.navPlan(p, x.w.from, x.w.to || p.legs.at(-1).to, p !== lead ? { among: all } : {});
   }
   const pl = ev.target.closest('[data-place]');
   if (pl) return openPlace(pl.dataset.place);

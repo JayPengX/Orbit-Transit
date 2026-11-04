@@ -161,7 +161,10 @@ Live: https://orbit.jaypengx.com/transit/
   each step moving on by itself (on board only once two fixes say so; a
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
   chime on iPhone) before yours. Missed bus → the next; on an earlier
-  train than planned → the changes after it moved sooner. A bus you can't
+  train than planned → the changes after it moved sooner; waiting for a
+  train, a sooner one still to come is taken, except a train you picked
+  (`pickedPlan`: a later one chosen over an earlier one on the plans card or
+  交通's 其他班次, 指定車次, 改搭別班; `leg.picked`), kept as chosen. A bus you can't
   make (`pastHurry`: later than you'd hurry back) says 趕不上了, never 快一點.
   A trip with stops is one trip: the chips run on past each stop, the end
   time is the last place's; on a YouBike to a stop, 到了要還車嗎 (停著 or
