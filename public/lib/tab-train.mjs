@@ -197,7 +197,7 @@ function journeyHtml(j, i, next) {
   const state_ = late
     ? `<span class="ot-jny-st late">${W(`晚 ${late} 分`, `${late} min late`)}</span>`
     : delays.some(d => d === 0)
-      ? `<span class="ot-jny-st ok">${icon('check')}${W('準點', 'On time')}</span>`
+      ? `<span class="ot-jny-st ok" aria-label="${W('準點', 'On time')}">${icon('check')}<span>${W('準點', 'On time')}</span></span>`
       : rides.some(l => l.trip.maybe)
         ? `<span class="ot-jny-st maybe">${W('視天候', 'Weather')}</span>`
         : '';
@@ -212,7 +212,7 @@ function journeyHtml(j, i, next) {
   return `<button class="ot-jny${i === state.open ? ' on' : ''}${next ? ' next' : ''}" type="button" data-j="${i}">
     ${eyebrow}
     <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><span class="ot-jny-mid"><small>${e(minsText((j.arr - j.dep) / 1000))}${state.allTrains && rides.every(onPass) ? ' · TPASS' : ''}</small>${barHtml(j)}</span><b>${e(hm(j.arr))}</b></span>
-    <span class="ot-jny-foot"><span class="ot-jny-legs">${legs}</span>${state_}</span>
+    <span class="ot-jny-foot${rides.length === 1 ? ' one' : ''}"><span class="ot-jny-legs">${legs}</span>${state_}</span>
     ${i === state.open ? detailHtml(j) : ''}
   </button>`;
 }
