@@ -192,9 +192,11 @@ export function legChips(legs) {
 // One line, never two (Jay 2026-10-27: a trip on two rows is hard to read):
 // each row is drawn tighter, a step at a time, until it fits its width
 // (.f1 tighter chips, .f2 a train's number only, .f3 no walks, .f4 smaller,
-// .f5 a ride's colour and number without its icon);
+// .f5 a ride's colour and number without its icon, .f6 a train journey's
+// change stations: the last thing to go, so they stay at 320; a row that loses
+// them anyway is drawn again from f1 without them, so it keeps what then fits);
 // `group`: rows that take the same step (a card's time lines alike).
-const FIT_STEPS = ['f1', 'f2', 'f3', 'f4', 'f5'];
+const FIT_STEPS = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'];
 const overflows = el => el.scrollWidth > el.clientWidth + 1;
 export function fitRows(rows, { group = false } = {}) {
   rows = [...rows].filter(r => r.isConnected && r.clientWidth);
@@ -203,6 +205,10 @@ export function fitRows(rows, { group = false } = {}) {
   for (const r of rows) {
     let k = 0;
     while (k < FIT_STEPS.length && overflows(r)) r.classList.add(FIT_STEPS[k++]);
+    if (!group && k === FIT_STEPS.length) {
+      r.classList.remove(...FIT_STEPS.slice(0, -1));
+      for (k = 0; k < FIT_STEPS.length - 1 && overflows(r); ) r.classList.add(FIT_STEPS[k++]);
+    }
     need = Math.max(need, k);
   }
   if (group) for (const r of rows) r.classList.add(...FIT_STEPS.slice(0, need));
