@@ -147,11 +147,18 @@ const TABS = [
 ];
 const started = new Set();
 let bar = null;
+// The page's frame for a tab (body.tab-<id>: the map holds the page to one
+// screen). Also set by the kit's bar the moment a tab drawn before is shown,
+// so the place it was left at can be scrolled back to at once.
+function frame(id) {
+  if (document.body.classList.contains(`tab-${id}`)) return;
+  for (const c of [...document.body.classList]) if (c.startsWith('tab-')) document.body.classList.remove(c);
+  document.body.classList.add(`tab-${id}`);
+}
 function select(id, { again = false } = {}) {
   const tab = TABS.find(t => t.id === id) || TABS[0];
   bar.select(tab.id);
-  for (const c of [...document.body.classList]) if (c.startsWith('tab-')) document.body.classList.remove(c);
-  document.body.classList.add(`tab-${tab.id}`);
+  frame(tab.id);
   if (!started.has(tab.id)) {
     started.add(tab.id);
     tab.mod.init(ctx);
@@ -175,7 +182,7 @@ for (const [id, title, before] of [['times', W('查時刻', 'Times'), '.ot-page'
 }
 
 async function boot() {
-  bar = tabBar({ tabs: TABS, onSelect: (id, o) => select(id, o), label: W('分頁', 'Tabs') });
+  bar = tabBar({ tabs: TABS, onSelect: (id, o) => select(id, o), onShow: frame, label: W('分頁', 'Tabs') });
   // Opened again (back from the background after iOS let it go): on what this
   // device has, at once — its copy of the pass's data and the map's settings
   // kept from last time — and the pass and the settings read behind it
