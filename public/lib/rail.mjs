@@ -103,7 +103,9 @@ function stopTimes(date, list, keyOf) {
   return out;
 }
 
-// TDX v3 TRA DailyTrainTimetable/TrainDate/{date} → trips.
+// TDX v3 TRA DailyTrainTimetable/TrainDate/{date} → trips. (The proxy sends
+// only the fields read here and in hsrTrips: a new one is added to Orbit-Core
+// transit.js tdxTrim too; tests/rail-trim.test.mjs.)
 export function traTrips(j) {
   const date = j?.TrainDate;
   return (j?.TrainTimetables || [])
