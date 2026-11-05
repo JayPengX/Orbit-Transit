@@ -5,10 +5,12 @@
 //   2. A place in the country a few kilometres past its station, no bus on
 //      from it and no YouBike there (池上's 伯朗大道), is reached by the train
 //      and the walk: before, nothing was found.
+//   3. A 高鐵 ridden past 台南 to 左營 and back by 自強 is no way when a
+//      way that doesn't ride past gets in about as soon.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { network } from '../public/lib/rail.mjs';
-import { railPlans, RAIL_FAR_WALK_M } from '../public/lib/plan.mjs';
+import { railPlans, RAIL_FAR_WALK_M, overshoots, dropOvershoots } from '../public/lib/plan.mjs';
 import { planFare, faresIn } from '../public/lib/raildata.mjs';
 import { fareOf } from '../public/lib/tpass.mjs';
 
@@ -53,4 +55,22 @@ test('our own trains are priced from the fares, a bus beside them makes it a flo
   assert.equal(planFare({ fare: 500, legs: toTainan.legs }, net, price), null);
   assert.equal(fareOf(toTainan, { all: true }, planFare(toTainan, net, price)).text.includes('TPASS'), true);
   assert.equal(planFare({ legs: [{ mode: 'bus' }] }, net, price), null);
+});
+
+test('a 高鐵 ridden past the place and back: dropped beside a way about as soon, kept alone; round the island is no overshoot', () => {
+  const hsrNet = network([st('hsr:1000', 25.0477, 121.5173), st('hsr:1040', 24.1121, 120.6157), st('hsr:1060', 22.9251, 120.2858), st('hsr:1070', 22.6873, 120.3076), st('tra:4220', 22.9971, 120.2127), st('tra:4340', 22.6876, 120.3077)], [], []);
+  const p = (name, lat, lon) => ({ name, lat, lon });
+  const [tpe, tnHsr, zy, tn, zyTra] = [p('高鐵台北', 25.0477, 121.5173), p('高鐵台南', 22.9251, 120.2858), p('高鐵左營', 22.6873, 120.3076), p('臺南', 22.9971, 120.2127), p('新左營', 22.6876, 120.3077)];
+  const ride = (mode, from, to, dep, arr) => ({ mode, from, to, dep: T(dep), arr: T(arr) });
+  const back = { legs: [ride('hsr', tpe, zy, 17.52, 19.08), { mode: 'walk' }, ride('tra', zyTra, tn, 19.25, 19.72)], dep: T(17.52), arr: T(19.72) };
+  const direct = { legs: [ride('hsr', tpe, tnHsr, 17.35, 19.1), ride('tra', p('沙崙', 22.9244, 120.2869), tn, 19.47, 19.85)], dep: T(17.35), arr: T(19.85) };
+  assert.equal(overshoots(back, hsrNet, tn), true);
+  assert.equal(overshoots(direct, hsrNet, tn), false);
+  assert.deepEqual(dropOvershoots([back, direct], hsrNet, tn), [direct]);
+  // Nothing else within 15 minutes: kept (a way is better than none).
+  assert.deepEqual(dropOvershoots([back, { ...direct, arr: T(20.5) }], hsrNet, tn).length, 2);
+  assert.deepEqual(dropOvershoots([back], hsrNet, tn), [back]);
+  // 台北 → 左營 → 台東: passes 台南, which is further from 台東 than 左營.
+  const taitung = p('臺東', 22.7936, 121.1233);
+  assert.equal(overshoots({ legs: [ride('hsr', tpe, zy, 16.85, 18.5), ride('tra', zyTra, taitung, 18.83, 21.22)] }, hsrNet, taitung), false);
 });

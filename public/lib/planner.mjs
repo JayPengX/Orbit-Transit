@@ -16,7 +16,7 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { rank, withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
 import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
@@ -285,6 +285,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
       for (const p of list) more.push(...moreTrains(p, net, t0, { use: useTrain }), ...moreBuses(p, t0));
       list = [...list, ...more];
     }
+    // A 高鐵 ridden past the place and back by another train: not when a way that doesn't gets in about as soon.
+    list = dropOvershoots(list, net, to);
     // A bus its operator says isn't running today (or none on the road in a
     // city where they all are off): no plan, never its timetable instead.
     // (Nothing left: which buses, said, not 找不到.)

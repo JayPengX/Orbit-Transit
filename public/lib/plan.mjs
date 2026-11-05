@@ -1340,3 +1340,29 @@ export function keepWins(keep, whole) {
   return !(walked && whole.at(-1).arr <= keep.at(-1).arr);
 }
 
+
+// A 高鐵 ride past where you're going, then back by another train (0149
+// skips 台南: on to 左營, back by 自強 to 臺南; 2026-11-05): it went by a
+// 高鐵 station much nearer the place on the way. `net`: raildata's network
+// (the 高鐵's stations lie north to south, so passing one is its latitude).
+// (Round the island is no such thing: 台北 → 左營 → 台東 passes 台南, further
+// from 台東 than 左營 is.)
+export function overshoots(plan, net, d) {
+  if (!net || d?.lat == null) return false;
+  const hsr = [...net.st.values()].filter(s => s.sys === 'hsr');
+  return plan.legs.some((l, i) => {
+    if (l.mode !== 'hsr' || l.from?.lat == null || l.to?.lat == null || !plan.legs.slice(i + 1).some(isRide)) return false;
+    const [lo, hi] = [Math.min(l.from.lat, l.to.lat), Math.max(l.from.lat, l.to.lat)];
+    const off = meters(l.to.lat, l.to.lon, d.lat, d.lon);
+    return hsr.some(s => s.lat > lo + 0.005 && s.lat < hi - 0.005 && meters(s.lat, s.lon, d.lat, d.lon) + 5000 < off);
+  });
+}
+// Such a plan only when nothing that doesn't ride past gets there within 15
+// minutes of it (every plan here leaves from now on, so the other is one to take).
+export const OVERSHOOT_SLACK = 15 * 60_000;
+export function dropOvershoots(list, net, d) {
+  const over = new Set(list.filter(p => overshoots(p, net, d)));
+  if (!over.size) return list;
+  const direct = list.filter(p => !over.has(p) && p.legs.some(isRide));
+  return list.filter(p => !over.has(p) || !direct.some(q => q.arr <= p.arr + OVERSHOOT_SLACK));
+}

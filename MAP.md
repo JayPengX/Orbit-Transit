@@ -123,6 +123,9 @@ Live: https://orbit.jaypengx.com/transit/
   Nothing within three hours (a place in the country past its station, no bus
   on from it and no YouBike there: 台北 → 池上's 伯朗大道): the trains with a
   walk up to 6 km at the end (`RAIL_FAR_WALK_M`), beside tomorrow's ways.
+  A 高鐵 ridden past the place and back by another train (0149 skips 台南: to
+  左營, back by 自強) is dropped when a way that doesn't ride past gets in
+  within 15 minutes of it (`plan.mjs overshoots`, `dropOvershoots`).
   偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
   own): of stations about as near, one with 電輔車 there now, ridden at
   their pace (`plan.mjs` `PREFER_SEC`). 我的's 偏好電輔車 (`prefs.ebike`, off by
