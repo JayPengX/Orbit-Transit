@@ -197,3 +197,55 @@ export async function legFare(leg) {
   if (sa === 'hsr') return hsrFare(await tdx(`basic/v2/Rail/THSR/ODFare/${a}/to/${b}`, { fresh: 7 * DAY, persist: true }))?.standard ?? null;
   return null;
 }
+
+// ---- A plan's price from its trains ----
+// Our own router's plans (and a planner's that came without one) have no
+// fare: each 台鐵 and 高鐵 ride priced from TDX's ODFare (a week on the
+// device, as 查時刻's). → { fare, more } from what's in now (`more`: a bus,
+// the metro or a ferry of the plan isn't priced, so the fare is a floor),
+// or null while a train's fare isn't in (its read started) or a train isn't
+// one of ours. YouBike's few dollars aren't counted, as the planners don't.
+const fareMemo = new Map();
+const stationKey = (net, pt, sys) => {
+  let best = null;
+  for (const [key, s] of net.st) {
+    if (s.sys !== sys) continue;
+    const m = Math.hypot((s.lat - pt.lat) * 111_000, (s.lon - pt.lon) * 101_000);
+    if (m < 400 && (!best || m < best.m)) best = { key, m };
+  }
+  return best?.key || null;
+};
+function trainLegFares(plan, net) {
+  const out = [];
+  for (const l of plan.legs) {
+    if (l.mode !== 'tra' && l.mode !== 'hsr') continue;
+    const [a, b] = [l.from, l.to].map(pt => (pt?.lat != null ? stationKey(net, pt, l.mode) : null));
+    if (!a || !b || a === b) return null;
+    const code = l.mode === 'hsr' ? '' : String(l.train?.code ?? '');
+    out.push({ k: `${a}>${b}:${code}`, leg: { from: a, to: b, trip: { code } } });
+  }
+  return out;
+}
+export function planFare(plan, net, price = legFare) {
+  if (!net || Number(plan.fare)) return null;
+  const legs = trainLegFares(plan, net);
+  if (!legs?.length) return null;
+  let fare = 0;
+  let waiting = false;
+  for (const { k, leg } of legs) {
+    if (!fareMemo.has(k)) fareMemo.set(k, price(leg).then(p => (fareMemo.set(k, p ?? null), p)).catch(() => (fareMemo.delete(k), null)));
+    const p = fareMemo.get(k);
+    if (p instanceof Promise) waiting = true;
+    else if (p == null) return null;
+    else fare += p;
+  }
+  if (waiting) return null;
+  const more = plan.legs.some(l => l.mode !== 'walk' && l.mode !== 'bike' && l.mode !== 'tra' && l.mode !== 'hsr');
+  return { fare, more };
+}
+// The fares of these plans' trains read, `ms` at most (what isn't in by then stays out).
+export function faresIn(plans, net, ms, price = legFare) {
+  for (const p of plans) planFare(p, net, price);
+  const pending = [...fareMemo.values()].filter(p => p instanceof Promise);
+  return pending.length ? Promise.race([Promise.all(pending), new Promise(r => setTimeout(r, ms))]) : Promise.resolve();
+}

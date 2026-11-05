@@ -116,6 +116,13 @@ Live: https://orbit.jaypengx.com/transit/
   offered once the bus you're walking to is seen gone (騎車追上).
   YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
   the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
+  A plan's price line: the planner's own fare, else our own trains at their
+  real fares (`raildata.mjs planFare`, TDX's ODFare as 查時刻's, read while the
+  buses are looked at; a bus or the metro beside them unpriced makes it
+  `NT$… 起`); the ranking still costs trains by distance (`tests/cross-county.test.mjs`).
+  Nothing within three hours (a place in the country past its station, no bus
+  on from it and no YouBike there: 台北 → 池上's 伯朗大道): the trains with a
+  walk up to 6 km at the end (`RAIL_FAR_WALK_M`), beside tomorrow's ways.
   偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
   own): of stations about as near, one with 電輔車 there now, ridden at
   their pace (`plan.mjs` `PREFER_SEC`). 我的's 偏好電輔車 (`prefs.ebike`, off by

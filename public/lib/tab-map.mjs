@@ -2019,11 +2019,12 @@ function plansHtml(c) {
     const all = [p, ...(later || [])];
     const arr = all.at(-1).arr;
     const sum = k => all.reduce((a, q) => a + (q[k] || 0), 0);
+    // (The price before the walk: at 320 px the line ends in …, and a walk of a few hundred metres matters less.)
     const facts = !c.then?.length
-      ? [leaveText(p), p.ticket ? '' : p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '', p.fareText || (p.fare ? `NT$${p.fare}` : '')]
+      ? [leaveText(p), p.ticket ? '' : p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.fareText || (p.fare ? `NT$${p.fare}` : ''), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '']
       : !later
         ? [leaveText(p), W(`後面 ${c.then.length} 段規劃中…`, `Planning ${c.then.length} more…`)]
-        : [leaveText(p), sum('transfers') ? W(`轉乘 ${sum('transfers')} 次`, `${sum('transfers')} changes`) : W('不必轉乘', 'No changes'), sum('walk') > 50 ? W(`步行 ${distText(sum('walk'))}`, `walk ${distText(sum('walk'))}`) : '', sum('fare') ? `NT$${sum('fare')}` : ''];
+        : [leaveText(p), sum('transfers') ? W(`轉乘 ${sum('transfers')} 次`, `${sum('transfers')} changes`) : W('不必轉乘', 'No changes'), sum('fare') ? `NT$${sum('fare')}` : '', sum('walk') > 50 ? W(`步行 ${distText(sum('walk'))}`, `walk ${distText(sum('walk'))}`) : ''];
     // (Nothing gets there from one stop on: said, the time up to it.)
     const short = later?.short != null ? W(`${[c.to, ...c.then][later.short].name || '這一站'}之後找不到方案`, `Nothing found after ${[c.to, ...c.then][later.short].name || 'this stop'}`) : '';
     // With stops, each stretch short so the whole trip is one line: its rides, or its walk or ride all of it.
