@@ -326,6 +326,10 @@ export function bikeFromRail(plan, d, bikes, { anyRide = false, at = -1, prefer 
 // stations near both ends, for trips the planners answer with buses only.
 // `net` is raildata's railNetwork. Walks to and from the stations up to 2 km.
 const RAIL_WALK_M = 2000;
+// A place in the country a station's walk further off (an hour and a bit),
+// when no bus or YouBike gets there from the train: the walk is the way,
+// never nothing found (台北 → 池上's 伯朗大道, 2.8 km from the station).
+export const RAIL_FAR_WALK_M = 6000;
 // With YouBike allowed, stations this far are reached by bike (竹北 → 六家, 千甲).
 export const RAIL_BIKE_M = 4500;
 const BIKE_OVER_M = 1200; // past this, a station is ridden to rather than walked
@@ -338,11 +342,11 @@ const access = (m, bike) => (bike && m > BIKE_OVER_M ? { mode: 'bike', sec: ride
 const BUS_ACCESS = m => ({ mode: 'walk', bus: true, sec: Math.round((m * 1.3) / 330 * 60) + 8 * 60 });
 // The stations near a point you'd set out to or finish from, each with the
 // way there (`a`); `bus` (the far end, without YouBike) a few by bus too.
-function stationsNear(net, pt, { bike = false, bus = false } = {}) {
+function stationsNear(net, pt, { bike = false, bus = false, walkM = RAIL_WALK_M } = {}) {
   const all = [...net.st.values()].map(s => ({ s, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m);
   // Walked to: on your side of the river only (the straight line over 頭前溪
   // is no footpath: the bridge is far round and made for cars).
-  const walk = all.filter(x => x.m <= RAIL_WALK_M && !crossings(pt, x.s)).slice(0, 3);
+  const walk = all.filter(x => x.m <= walkM && !crossings(pt, x.s)).slice(0, 3);
   const far = x => (x.m > BIKE_OVER_M || crossings(pt, x.s)) && x.m <= RAIL_BIKE_M && !walk.includes(x);
   // Every station a ride away, not the nearest few: one a little further
   // on the line you're on (竹中, for 竹東's trains) can be the one to take.
@@ -373,12 +377,14 @@ const wasted = (j, could, chased) =>
   j.legs.some((l, x) => !l.walk && (x > 0 ? could.get(l.from) <= l.dep : l.trip.stops.slice(0, l.toK).some((s, k) => k !== l.fromK && chased.get(s.st) <= s.dep)));
 // `chase`: the stations near where the whole trip sets out (railStarts),
 // when o is a station a bus gets you to on the way.
-export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use = () => true, chase = [] } = {}) {
+// `walkM`: how far a station may be walked to or from (RAIL_FAR_WALK_M for
+// the trip nothing else reaches: 池上's fields, no bus and no YouBike there).
+export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use = () => true, chase = [], walkM = RAIL_WALK_M } = {}) {
   if (!net || meters(o.lat, o.lon, d.lat, d.lon) < 3000) return [];
   // A station near both ends (千甲, 北新竹 between 竹北 and 巨城) is the
   // nearer end's only: from it to itself is no train, and would be all found.
-  const A0 = stationsNear(net, o, { bike });
-  const B0 = stationsNear(net, d, { bike, bus });
+  const A0 = stationsNear(net, o, { bike, walkM });
+  const B0 = stationsNear(net, d, { bike, bus, walkM });
   const A = A0.filter(x => !B0.some(y => y.s.key === x.s.key && y.m < x.m));
   const B = B0.filter(x => !A.some(y => y.s.key === x.s.key));
   if (!A.length || !B.length) return [];

@@ -16,11 +16,11 @@ import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans } from './metroroute.mjs';
-import { rank, withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { rank, withBikes, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
 import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
-import { dayTrips, railStations, traLive } from './raildata.mjs';
+import { dayTrips, railStations, traLive, planFare, faresIn } from './raildata.mjs';
 import { stationsAround } from './near.mjs';
 import { routeStops, routeSchedule, routeCity, busEtaMended } from './bus.mjs';
 import { chases } from './chase.mjs';
@@ -204,6 +204,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
       ? []
       : netAsk
           .then(n => railPlans((net = n), from, to, tS, { n: by === 'arrive' ? 8 : 4, bike: modes.bike, bus: modes.bus, use: useTrain }))
+          // (Their fares read now, while the buses are looked at: the plans' price line.)
+          .then(list => (faresIn(list, net, 0), list))
           .catch(() => [])
           .finally(() => lap('trains', t)),
     // Our metro rides (板南線 then 文湖線, which the planners may leave out).
@@ -303,7 +305,14 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     const bikes = await bikesNow;
     await streetWalks(bikes, from, to);
     const t2 = performance.now();
-    let ranked = withBikes(list, from, to, bikes, t0, { modes, swap: bikeSwap(prefs), ebike, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now });
+    const bikeOpts = { modes, swap: bikeSwap(prefs), ebike, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now };
+    let ranked = withBikes(list, from, to, bikes, t0, bikeOpts);
+    // Nothing gets there within three hours (a place in the country past its
+    // station, no bus on from it now and no YouBike there): the trains with
+    // the long walk at the end, beside tomorrow's ways, never nothing found.
+    const soonRide = p => p.legs.some(isRide) && (by === 'arrive' || p.dep - t0 < 3 * 3_600_000);
+    const farWalks = useRail && net && !ranked.some(soonRide) ? railPlans(net, from, to, tS, { n: 2, use: useTrain, walkM: RAIL_FAR_WALK_M }) : [];
+    if (farWalks.length) ranked = withBikes([...list, ...farWalks], from, to, bikes, t0, bikeOpts);
     // Each route's card offers the rest of the day's departures (its bus's every later bus, its trains' every later train).
     if (by !== 'arrive') {
       const t4 = performance.now();
@@ -312,10 +321,13 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     }
     // At a bus's stop a few minutes early (its timetable is a guess), set out for it so.
     ranked = ranked.map(p => boardEarly(p, by === 'arrive' ? now : Math.max(now, t0)));
-    // Each plan's fare line (TPASS counted); to be there by a time, the time
-    // (navigation keeps to it: late, the way that still makes it).
+    // Each plan's fare line (TPASS counted; our own trains at their real
+    // fares, what's in by then: the first plans wait a moment, the second
+    // round longer); to be there by a time, the time (navigation keeps to
+    // it: late, the way that still makes it).
+    if (net) await faresIn(ranked.filter(p => p.lead !== false), net, stage === 1 && twoRounds ? 300 : 1500);
     for (const p of ranked) {
-      p.fareText = fareOf(p, coverage(p, pass, cityOf)).text;
+      p.fareText = fareOf(p, coverage(p, pass, cityOf), planFare(p, net)).text;
       if (by === 'arrive') p.deadline = at;
     }
     lap(`rank${stage}`, t2);
@@ -525,6 +537,8 @@ export async function planTicket(data, from, to, ticket, { modes = null, ebike =
     const w = walkLeg(last.to, to, last.arr);
     return w.dist > 20 ? [w] : [];
   };
+  // (The ticket's trains priced, as any plan's: its fare line.)
+  await faresIn([{ legs: trainLegs }], net, 1200);
   const fine = q => q.lead !== false && !q.weak && !onTicketTrain(q, ticket);
   const ways = !walkTo
     ? (there?.plans || []).filter(q => fine(q) && q.arr <= ready + 60_000 && q.dep >= now - 60_000).slice(0, 3).map(q => q.legs)
@@ -541,7 +555,7 @@ export async function planTicket(data, from, to, ticket, { modes = null, ebike =
     while (rest[0]?.mode === 'walk' && (rest[0].dist || 0) < 60 && isRide(rest[1])) rest = rest.slice(1);
     rest = rest.map(l => (l.dep != null && l.dep < last.arr && !isRide(l) ? { ...l, dep: last.arr, arr: last.arr + (l.dur || 0) * 1000 } : l));
     const p = finish({ src: 'ticket', legs: [...a, ...trainLegs, ...rest], ticket: true });
-    p.fareText = fareOf(p, coverage(p, pass, findCity)).text;
+    p.fareText = fareOf(p, coverage(p, pass, findCity), planFare(p, net)).text;
     return p;
   };
   const done = list => {

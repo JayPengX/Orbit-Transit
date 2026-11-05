@@ -139,13 +139,15 @@ export const inPass = (o, d, pass, cityOf) => Boolean(pass) && [o, d].every(p =>
 // only costs a little past the half hour).
 export const passOk = (plan, pass, cityOf) => plan.legs.every(l => !isRide(l) || (passMode(l, pass) && [l.from, l.to].every(p => p?.lat != null && pass.cities.includes(cityOf(p))) && busOk(l, pass, cityOf) && !skippedLeg(l, pass, cityOf)));
 
-export function fareOf(plan, cov) {
+// `own`: raildata's planFare, the trains' real fares for a plan that came without one.
+export function fareOf(plan, cov, own = null) {
   const fare = Number(plan.fare) || 0;
   // (What it costs, for the ranking: a plan our own router made has no fare,
   // so its trains by their distance at Taiwan's rates; never shown as a price.)
   const cost = fare || trainCost(plan);
   if (cov?.all) return { text: W('TPASS 涵蓋', 'TPASS covers it'), cost: 0 };
   if (cov?.some) return { text: fare ? W(`NT$${fare}（部分 TPASS）`, `NT$${fare} (part TPASS)`) : W('部分 TPASS', 'Part TPASS'), cost: Math.round(cost / 2) };
+  if (!fare && own?.fare) return { text: own.more ? W(`NT$${own.fare} 起`, `from NT$${own.fare}`) : `NT$${own.fare}`, cost };
   return { text: fare ? `NT$${fare}` : '', cost };
 }
 // A plan's trains at about what they cost: 高鐵 NT$4.3 a km, 台鐵's express
