@@ -27,6 +27,21 @@ const token = async (renew = false) => {
 // 5xx, TDX busy): most of what used to say 暫時無法取得資料 was one of those.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const passing = err => !err.status || err.status === 429 || err.status >= 500;
+const BODY_QUIET_MS = 10_000;
+// An answer's JSON, read a piece at a time, `quiet()` called before each.
+async function bodyJson(res, quiet) {
+  const reader = res.body?.getReader?.();
+  quiet();
+  if (!reader) return res.json();
+  const decoder = new TextDecoder();
+  let text = '';
+  for (;;) {
+    quiet();
+    const { done, value } = await reader.read();
+    if (done) return JSON.parse(text + decoder.decode());
+    text += decoder.decode(value, { stream: true });
+  }
+}
 async function ask(path, { signal, wait = 15_000, meta = null, renew = false } = {}) {
   // (The token is waited for within `wait` too: a sign-in refresh that never answered held every ask behind it.)
   const t = await Promise.race([token(renew), sleep(wait).then(() => Promise.reject(Object.assign(new Error('network'), { code: 'TIMEOUT', status: 0 })))]);
@@ -35,8 +50,15 @@ async function ask(path, { signal, wait = 15_000, meta = null, renew = false } =
   // (The answer's body is waited for too, not only its headers: a body that
   // stalled on a weak link, a city's YouBike list, half a megabyte, never
   // came and its ask never ended, so every later ask for it waited on it and
-  // the map's bikes stayed empty until the app was restarted; 2026-10-22.)
-  const stop = setTimeout(() => timer?.abort(), wait + 10_000);
+  // the map's bikes stayed empty until the app was restarted; 2026-10-22.
+  // Each piece of it that comes gives it BODY_QUIET_MS more: a limit on the
+  // whole body cut a big answer off while it was still coming on a slow,
+  // busy link (a day's trains), and it was downloaded again; 2026-11-05.)
+  let stop = 0;
+  const quiet = () => {
+    clearTimeout(stop);
+    stop = setTimeout(() => timer?.abort(), BODY_QUIET_MS);
+  };
   const head = setTimeout(() => timer?.abort(), wait);
   signal?.addEventListener?.('abort', () => timer?.abort());
   const failed = err => {
@@ -54,7 +76,7 @@ async function ask(path, { signal, wait = 15_000, meta = null, renew = false } =
       clearTimeout(head);
     }
     try {
-      body = await res.json();
+      body = await bodyJson(res, quiet);
     } catch (err) {
       // (A good answer whose body didn't come whole is a failed ask, never an empty answer.)
       if (res.ok) throw failed(err);
