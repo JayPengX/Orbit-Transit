@@ -60,3 +60,77 @@ test("a plan's buses: one ask a city for its routes, each route its own rows, no
     api.useSession(null);
   }
 });
+
+// A city whose estimates come every 30 s (Hsinchu's, 2026-11-06): once an ask
+// brings a new one, the next ask waits until the next can be there, and says
+// how old the phone's copy is (had=, the Worker reading TDX if its own is no
+// newer); Taipei's rows (no DataTime) are asked every beat as before.
+test('bus times: not asked again before the next estimate can be there; asked every beat where estimates come faster', async () => {
+  const api = await import('../public/lib/api.mjs');
+  const was = { fetch: globalThis.fetch, now: Date.now };
+  let clock = Date.parse('2026-11-06T03:00:00Z');
+  Date.now = () => clock;
+  // The feed: a new estimate every 30 s, reaching the Worker 18 s after it's made.
+  const made = t => Math.floor((t - 18_000) / 30_000) * 30_000;
+  const asked = [];
+  globalThis.fetch = async url => {
+    const u = new URL(url);
+    asked.push({ at: clock, city: u.searchParams.get('city'), had: Number(u.searchParams.get('had')) || 0 });
+    const city = u.searchParams.get('city');
+    const row = city === 'Taipei' ? { StopUID: 'TPE1', RouteUID: 'TPE10132', EstimateTime: 120 } : { StopUID: 'HSZ1', RouteUID: 'HSZ0010', EstimateTime: 120, DataTime: new Date(made(clock)).toISOString() };
+    return answer([row]);
+  };
+  api.useSession({ ensureToken: async () => 'tok' });
+  try {
+    // A stop card's beat (10 s) for 3 minutes, in each city.
+    for (let s = 0; s < 180; s += 10) {
+      clock = Date.parse('2026-11-06T03:00:00Z') + s * 1000;
+      await api.busEta('Hsinchu', { stops: ['HSZ1'] });
+      await api.busEta('Taipei', { stops: ['TPE1'] });
+    }
+    const of = city => asked.filter(x => x.city === city).map(x => (x.at - Date.parse('2026-11-06T03:00:00Z')) / 1000);
+    // Taipei: every beat.
+    assert.equal(of('Taipei').length, 18);
+    // Hsinchu: once the 30 s rhythm is seen, one ask an estimate, and never a new estimate missed.
+    const h = of('Hsinchu');
+    assert.ok(h.length <= 8, `Hsinchu asked ${h.length} times: ${h}`);
+    // The first ask takes the Worker's copy as it is; each after it says how old the phone's is.
+    const hs = asked.filter(x => x.city === 'Hsinchu');
+    assert.equal(hs[0].had, 0);
+    assert.deepEqual(hs.slice(1).map(x => x.had), hs.slice(1).map((x, i) => Math.floor((x.at - hs[i].at) / 1000)));
+    const seen = new Set();
+    for (const at of h) seen.add(made(Date.parse('2026-11-06T03:00:00Z') + at * 1000));
+    const all = new Set();
+    for (let s = 0; s < 180; s += 10) all.add(made(Date.parse('2026-11-06T03:00:00Z') + s * 1000));
+    assert.equal(seen.size, all.size, 'every estimate the beat would have caught was caught');
+  } finally {
+    globalThis.fetch = was.fetch;
+    Date.now = was.now;
+    api.useSession(null);
+  }
+});
+
+// A route's beat says how old its copy is too (a trip's buses, a route sheet), its city's routes still in one ask.
+test("a route's next beat says how old the phone's copy is, its city's routes together", async () => {
+  const api = await import('../public/lib/api.mjs');
+  const was = { fetch: globalThis.fetch, now: Date.now };
+  let clock = Date.parse('2026-11-06T05:00:00Z');
+  Date.now = () => clock;
+  const asked = [];
+  globalThis.fetch = async url => {
+    const u = new URL(url);
+    asked.push(decodeURIComponent(u.pathname + u.search).replace(/&qt=.*$/, ''));
+    return answer([]);
+  };
+  api.useSession({ ensureToken: async () => 'tok' });
+  try {
+    await Promise.all([api.busEta('HsinchuCounty', { route: 'HSQ0090' }), api.busEta('HsinchuCounty', { route: 'HSQ0091' })]);
+    clock += 10_000;
+    await Promise.all([api.busEta('HsinchuCounty', { route: 'HSQ0090' }), api.busEta('HsinchuCounty', { route: 'HSQ0091' })]);
+    assert.deepEqual(asked, ['/transit/eta?city=HsinchuCounty&routes=HSQ0090,HSQ0091', '/transit/eta?city=HsinchuCounty&routes=HSQ0090,HSQ0091&had=10']);
+  } finally {
+    globalThis.fetch = was.fetch;
+    Date.now = was.now;
+    api.useSession(null);
+  }
+});

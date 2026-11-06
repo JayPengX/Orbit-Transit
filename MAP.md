@@ -257,7 +257,13 @@ Live: https://orbit.jaypengx.com/transit/
     or routes from TDX's filtered read, a busy city's from one read of the
     whole city (公路客運 always by its stops); the phone asks the same thing
     once a beat at most, and the routes asked within a moment as one ask a
-    city (`routes=`; a plan's buses were five to ten asks, 2026-11-06);
+    city (`routes=`; a plan's buses were five to ten asks, 2026-11-06); where
+    a city's estimates come every 30 s (新竹, 新竹縣, 公路客運), not again
+    until the next can be there (each city's rhythm learnt from its answers),
+    and an ask says how old the phone's copy is (`had=`: the Worker reads TDX
+    then if its own is no newer); `tests/bus-asks.test.mjs`,
+    `scripts/bus-rhythm.mjs` (the rule against TDX's timing, a stop card's
+    asks before and after);
   - bus routes and timetables: weekly packs in R2 (`packs.mjs`);
   - what's near a point: worked out on the phone (`near.mjs`);
   - line shapes: `shapes.mjs` (packs and shapes read with the kit's
