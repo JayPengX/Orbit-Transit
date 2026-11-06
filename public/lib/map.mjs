@@ -16,7 +16,7 @@ const darkNow = () => {
   return t ? t === 'dark' : Boolean(globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches);
 };
 
-// Google's map in the app's dark colours (its own default look in light).
+// Google's map in the app's dark colours (its own ground in light).
 const DARK = [
   { elementType: 'geometry', stylers: [{ color: '#161a22' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#9aa3b5' }] },
@@ -35,11 +35,38 @@ const DARK = [
   { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#c2c9d6' }] },
   { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2b3140' }] },
   { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#b9c2d3' }] },
-  // Google's own bus stops off: ours (each side of the road, with live times) are the ones to tap.
-  { featureType: 'transit.station.bus', stylers: [{ visibility: 'off' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c1724' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6680' }] }
 ];
+
+// Google's places in Orbit's look (Jay 2026-11-06: "we already got our own
+// design for bus stop, Ubike stop… replace all the things on Google map"),
+// both looks: every pin of Google's (a restaurant, a hotel, a hospital, a
+// temple, a station) one quiet graphite, its name grey, a shop's quieter
+// still, so the only colour on the map is ours (DESIGN §7: what you can use
+// loud, the rest quiet). Google's own bus stops off: ours (each side of the
+// road, with live times) are the ones to tap. A style only: no place is read,
+// nothing is spent (a map load costs the same with it). Google's pins keep
+// their shape and their tap (our place card); its styles can't tint them a
+// colour (hue and color are ignored on a pin), only grey them.
+const PLACES = {
+  light: [
+    { featureType: 'poi', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: 15 }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+    { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: 45 }] },
+    { featureType: 'poi.business', elementType: 'labels.text.fill', stylers: [{ color: '#8a909b' }] },
+    { featureType: 'transit.station', elementType: 'labels.icon', stylers: [{ saturation: -100 }] }
+  ],
+  dark: [
+    { featureType: 'poi', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: -35 }] },
+    { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: -50 }] },
+    { featureType: 'poi.business', elementType: 'labels.text.fill', stylers: [{ color: '#6f7788' }] },
+    { featureType: 'transit.station', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: -35 }] }
+  ]
+};
+const NO_BUS_STOPS = { featureType: 'transit.station.bus', stylers: [{ visibility: 'off' }] };
+// The whole style for the page's look now (tests/map-style.test.mjs).
+export const mapStyles = dark => (dark ? [...DARK, ...PLACES.dark, NO_BUS_STOPS] : [...PLACES.light, NO_BUS_STOPS]);
 
 function script(src) {
   return new Promise((resolve, reject) => {
@@ -164,7 +191,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
   const map = new g.Map(el, {
     center: { lat: center.lat, lng: center.lon },
     zoom,
-    styles: darkNow() ? DARK : null,
+    styles: mapStyles(darkNow()),
     backgroundColor: darkNow() ? '#0a0b0f' : '#e8eaed',
     disableDefaultUI: true,
     clickableIcons: true,
@@ -176,7 +203,7 @@ function googleMap(el, { center, zoom, onPick, onTap, onIdle, onPlace, onDrag })
     minZoom: 7
   });
   // (The phone changes between light and dark while the app is open.)
-  globalThis.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => map.setOptions({ styles: darkNow() ? DARK : null }));
+  globalThis.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => map.setOptions({ styles: mapStyles(darkNow()) }));
   const transit = new g.TransitLayer();
   transit.setMap(map);
   // (The first screen's tiles in: what the loading screen waits for.)
