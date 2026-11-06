@@ -91,7 +91,8 @@ const TRAIN_EN = [[/區間快/, 'Fast Local'], [/區間/, 'Local'], [/自強/, '
 export const trainKind = s => {
   const t = String(s || '');
   const hit = en && TRAIN_EN.find(([re]) => re.test(t));
-  return hit ? t.replace(new RegExp(`(${hit[0].source})[號車]?`), hit[1]).replace(/[（(][^）)]*[）)]/g, '').trim() : t;
+  // (TDX's 普悠瑪(普悠瑪): the name once; Jay 2026-11-06.)
+  return hit ? t.replace(new RegExp(`(${hit[0].source})[號車]?`), hit[1]).replace(/[（(][^）)]*[）)]/g, '').trim() : t.replace(/^([^（(]+)[（(]\1[）)]$/, '$1');
 };
 // A train by its kind and number, as a row shows it: 「區間 1804」「Local 1804」「高鐵 0612」「HSR 0612」.
 // One piece on a narrow row: never broken at its hyphen (Tze‑Chiang, a

@@ -2559,6 +2559,13 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
 .ot-plan-sub.warn {
   color: var(--q-orange);
 }
+/* The plan's facts: on as many lines as they need, each fact whole. */
+.ot-plan-sub.facts {
+  white-space: normal;
+}
+.ot-plan-sub .ot-plan-fact {
+  white-space: nowrap;
+}
 .ot-plan .ot-plan-deps {
   margin: 2px 0 8px;
 }

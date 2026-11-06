@@ -226,8 +226,10 @@ function trainLegFares(plan, net) {
   }
   return out;
 }
+// (A planner's plan too: Google's fare for a 普悠瑪 was the 區間's, NT$213
+// for 新竹 → 彰化 beside 查時刻's NT$331; tpass.mjs fareOf takes ours for trains.)
 export function planFare(plan, net, price = legFare) {
-  if (!net || Number(plan.fare)) return null;
+  if (!net) return null;
   const legs = trainLegFares(plan, net);
   if (!legs?.length) return null;
   let fare = 0;
