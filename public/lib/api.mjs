@@ -240,17 +240,74 @@ export const config = () => get('/transit/config');
 // And the routes asked within a moment of each other go as one ask a city
 // (`routes=`, 20 at most), each route given its own rows: a plan's buses were
 // five to ten asks, one a route.
-const etaAsks = new Map(); // address (or city|route) → { got, ask }
+// A city makes its estimates all at once every so often (the newest of its
+// rows' DataTime: Hsinchu's, Hsinchu County's and 公路客運's every 30 s,
+// Taipei's every 10 to 20 s), and TDX has each a few seconds later, about as
+// regular as the clock (5 to 10 s, 2026-11-06). So the phone learns each
+// city's rhythm: its step (the lower middle of its last ones, at most 30 s)
+// and how soon after its DataTime a new estimate has been had (the least of
+// the last 12 times an answer brought one the ask before hadn't: never
+// sooner than it can be read). The same stops or route aren't asked again
+// until the next estimate can be there (a second sooner, DataTime being to
+// the second): one ask an estimate, not three, and none later than asking
+// every beat would have shown it. A stop or route whose rows sat one out
+// (none of them new in it) waits for the next once it's surely there (a beat
+// and 5 s on). Where the step is no longer than a beat (Taipei; or rows with
+// no DataTime), every beat asks as before. And an ask says how old the
+// phone's copy is (`had`): the Worker reads TDX then if its own copy is no
+// newer, not answering with it and reading behind (each phone saw the
+// estimates a beat late). Estimates are counted from their DataTime
+// (util.mjs etaAge), so no countdown moves.
+const etaAsks = new Map(); // address (or city|route) → { got, ask, dt, at (its data's time) }
+const feeds = new Map(); // city → { dt: its newest DataTime seen, steps, seen: how long after its DataTime each new one was had }
+const newestOf = rows => rows.reduce((m, r) => Math.max(m, Date.parse(r?.DataTime || '') || 0), 0);
+const stepOf = f => {
+  const s = [...f.steps].sort((a, b) => a - b);
+  return s.length ? Math.min(s[(s.length - 1) >> 1], 30_000) : 0;
+};
+// An answer (data from `at`) with newest DataTime `d`; the same ask's last
+// answer was from `was` with newest `had`.
+function feedSaw(city, d, at, was, had) {
+  const f = feeds.get(city) || { dt: 0, steps: [], seen: [] };
+  feeds.set(city, f);
+  if (d > f.dt) {
+    if (f.dt) f.steps = [...f.steps.slice(-7), d - f.dt];
+    f.dt = d;
+  }
+  if (was && had && d > had) f.seen = [...f.seen.slice(-11), at - d];
+}
+// When the first estimate an answer (data from `at`, newest `had`) hasn't
+// had can be there: one newer than its newest, and not surely there by
+// then (its rows sat that one out). 0: the city's rhythm not known yet.
+function nextDue(city, at, had) {
+  const f = feeds.get(city);
+  const step = f ? stepOf(f) : 0;
+  if (!f?.seen.length || !f.dt || !(step > liveMs())) return 0;
+  const soon = Math.min(...f.seen);
+  const j = Math.max(Math.floor((had - f.dt) / step) + 1, Math.floor((at - (soon + liveMs() + 5000) - f.dt) / step) + 1);
+  return f.dt + j * step + soon - 1000;
+}
 export function busEta(city, { stops = [], route = '' } = {}) {
   const key = stops.length ? `/transit/eta?city=${encodeURIComponent(city)}&stops=${stops.map(encodeURIComponent).join(',')}` : `${city}|${route}`;
   const now = Date.now();
   const k = etaAsks.get(key);
-  if (k && now - k.got < liveMs() - 1000) return k.ask;
-  const ask = stops.length ? etaAsk(key) : routeEta(city, route);
-  etaAsks.set(key, { got: now, ask });
-  ask.catch(() => etaAsks.get(key)?.ask === ask && etaAsks.delete(key));
+  if (k && (now - k.got < liveMs() - 1000 || (k.at && now <= nextDue(city, k.at, k.dt)))) return k.ask;
+  const had = k?.at ? Math.max(1, Math.floor((now - k.at) / 1000)) : 0;
+  const ask = stops.length ? etaAsk(had ? `${key}&had=${had}` : key) : routeEta(city, route, had);
+  const x = { got: now, ask, dt: k?.dt || 0, at: k?.at || 0 };
+  etaAsks.set(key, x);
+  ask.then(
+    got => {
+      const d = newestOf(got?.rows || []);
+      const at = Math.min(Date.now(), got?.at || Date.now());
+      feedSaw(city, d, at, k?.at || 0, k?.dt || 0);
+      x.dt = Math.max(x.dt, d);
+      x.at = at;
+    },
+    () => etaAsks.get(key)?.ask === ask && etaAsks.delete(key)
+  );
   // (Only the last minute's asks are kept.)
-  if (etaAsks.size > 100) for (const [p, x] of etaAsks) if (now - x.got > 60_000) etaAsks.delete(p);
+  if (etaAsks.size > 100) for (const [p, y] of etaAsks) if (now - y.got > 60_000) etaAsks.delete(p);
   return ask;
 }
 async function etaAsk(path) {
@@ -259,28 +316,30 @@ async function etaAsk(path) {
   return { rows: Array.isArray(got) ? got : [], at: Date.now() - (meta.age || 0) * 1000 };
 }
 const ROUTES_AT_ONCE = 20;
-let routeBatch = null; // city → Map(RouteUID → [{ resolve, reject }])
-function routeEta(city, uid) {
+let routeBatch = null; // city → { had, per: Map(RouteUID → [{ resolve, reject }]) }
+function routeEta(city, uid, had = 0) {
   return new Promise((resolve, reject) => {
     if (!routeBatch) {
       const b = (routeBatch = new Map());
       setTimeout(() => {
         if (routeBatch === b) routeBatch = null;
-        for (const [c, per] of b) sendRoutes(c, per);
+        for (const [c, one] of b) sendRoutes(c, one);
       }, 20);
     }
-    if (!routeBatch.has(city)) routeBatch.set(city, new Map());
-    const per = routeBatch.get(city);
-    if (!per.has(uid)) per.set(uid, []);
-    per.get(uid).push({ resolve, reject });
+    if (!routeBatch.has(city)) routeBatch.set(city, { had: 0, per: new Map() });
+    const one = routeBatch.get(city);
+    // (Asked with the youngest copy any of them has: an older one of the Worker's is no use to it.)
+    if (had) one.had = one.had ? Math.min(one.had, had) : had;
+    if (!one.per.has(uid)) one.per.set(uid, []);
+    one.per.get(uid).push({ resolve, reject });
   });
 }
-function sendRoutes(city, per) {
+function sendRoutes(city, { had, per }) {
   const uids = [...per.keys()];
   for (let i = 0; i < uids.length; i += ROUTES_AT_ONCE) {
     const part = uids.slice(i, i + ROUTES_AT_ONCE);
     const q = part.length === 1 ? `route=${encodeURIComponent(part[0])}` : `routes=${part.map(encodeURIComponent).join(',')}`;
-    etaAsk(`/transit/eta?city=${encodeURIComponent(city)}&${q}`).then(
+    etaAsk(`/transit/eta?city=${encodeURIComponent(city)}&${q}${had ? `&had=${had}` : ''}`).then(
       ({ rows: list, at }) => {
         for (const u of part) for (const w of per.get(u)) w.resolve({ rows: part.length === 1 ? list : list.filter(r => r.RouteUID === u), at });
       },
