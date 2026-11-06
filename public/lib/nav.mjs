@@ -789,10 +789,27 @@ export function offerText(p) {
 // `follow(pos)` keeps the map on you; `onEnd()` when it's closed; `dest`:
 // the place the trip is to (Google's, for its own navigation to it).
 const END_MS = 6000;
+// A plan started (not opened again) whose own way to its first bus or train
+// (a walk, a YouBike) was timed to begin a while ago: begun now, the ride
+// keeping its time. Only where you are (GPS) ever puts those steps behind
+// you, never the clock (Jay 2026-11-06, 08:48: a plan made minutes before
+// started on 搭 快捷8號支 at 公三公園 with him still at home: "I haven't arrived
+// and it just broke it all"). A ride missed that way shows as late and the
+// usual 趕不上 follows.
+export function ownWayNow(plan, now = Date.now()) {
+  const r = plan.legs.findIndex(isRide);
+  const n = r < 0 ? plan.legs.length : r;
+  if (n === 0 || plan.legs[0].dep == null || plan.legs[0].dep >= now - 30_000) return plan;
+  const d = now - plan.legs[0].dep;
+  const legs = plan.legs.map((l, k) => (k < n ? { ...l, dep: l.dep + d, arr: l.arr + d } : l));
+  return { ...plan, legs, dep: legs[0].dep, ...(r < 0 ? { arr: legs.at(-1).arr } : {}) };
+}
+
 export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, here = null, resume = null, push = null, dest = null, swap30 = false }) {
   // Started by a tap (mostly): the iPhone's chime may sound from now on.
   primeBuzz();
   stopNav();
+  if (!resume) plan = ownWayNow(plan);
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
   // (`i`: the step shown; `reached`: the furthest step the trip has got to by itself, where you are, the arrivals, getting off: the steps before it are done, never a tap's.)
   const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min), swap30, gen: 0, settled: false, reachedPhase: 'before', lookAt: 0 };
