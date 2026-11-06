@@ -4,8 +4,8 @@
 // - busEta: the same ask within a beat (the live speed) is the one before;
 //   the routes asked within a moment go as one ask a city (routes=), each
 //   given only its own rows.
-// - routeGps: the routes asked within a moment, one ask a city (the city's
-//   RealTimeByFrequency filtered by them); one alone, its own route's ask.
+// - routeGps: the routes asked within a moment, one ask a city
+//   (/transit/gps: the Worker reads the city's whole list for them all).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -28,9 +28,9 @@ test("a plan's buses: one ask a city for its routes, each route its own rows, no
       const ids = (u.searchParams.get('routes') || u.searchParams.get('route') || '').split(',');
       return answer(ids.flatMap(id => rowsOf[id] || []));
     }
-    // (TDX's GPS: each route named in the filter, a bus on it.)
-    const p = u.searchParams.get('p') || '';
-    return answer([...p.matchAll(/RouteUID eq '([^']+)'/g)].map(([, id]) => ({ RouteUID: id, PlateNumb: `${id}-1`, Direction: 0 })));
+    // (Buses' places: each route asked, a bus on it.)
+    if (u.pathname === '/transit/gps') return answer((u.searchParams.get('routes') || '').split(',').map(id => ({ RouteUID: id, PlateNumb: `${id}-1`, Direction: 0 })));
+    return answer([]);
   };
   api.useSession({ ensureToken: async () => 'tok' });
   try {
@@ -43,18 +43,17 @@ test("a plan's buses: one ask a city for its routes, each route its own rows, no
     // Asked again within the beat: the same answer, no ask.
     assert.equal(await api.busEta('HsinchuCounty', { route: 'HSQ0748' }), b);
     assert.equal(asked.filter(x => x.startsWith('/transit/eta')).length, 2);
-    // GPS: two routes of a city at once, one filtered ask; one alone, its route's own.
+    // Buses' places: two routes of a city at once, one ask (the Worker reads the city's whole list); one alone, its own.
     const [g1, g2] = await Promise.all([routeGps({ uid: 'HSQ0747', name: '快捷8號', city: 'HsinchuCounty' }), routeGps({ uid: 'HSQ0748', name: '快捷8號支', city: 'HsinchuCounty' })]);
     assert.deepEqual([g1.map(x => x.RouteUID), g2.map(x => x.RouteUID)], [['HSQ0747'], ['HSQ0748']]);
     const lone = await routeGps({ uid: 'THB5700', name: '5700', city: 'InterCity' });
     assert.equal(lone.length, 1);
-    const gps = asked.filter(x => x.includes('RealTimeByFrequency'));
-    assert.equal(gps.length, 2);
-    assert.match(gps[0], /RealTimeByFrequency\/City\/HsinchuCounty\?\$filter=RouteUID eq 'HSQ0747' or RouteUID eq 'HSQ0748'&\$select=RouteUID,/);
-    assert.match(gps[1], /RealTimeByFrequency\/InterCity\/5700\?\$filter=RouteUID eq 'THB5700'&\$select=PlateNumb,/);
+    assert.deepEqual(asked.filter(x => x.startsWith('/transit/gps')), ['/transit/gps?city=HsinchuCounty&routes=HSQ0747,HSQ0748', '/transit/gps?city=InterCity&routes=THB5700']);
+    // Never TDX's own filtered read of them.
+    assert.equal(asked.filter(x => x.includes('RealTimeByFrequency')).length, 0);
     // And within the beat, not again.
     await routeGps({ uid: 'HSQ0747', name: '快捷8號', city: 'HsinchuCounty' });
-    assert.equal(asked.filter(x => x.includes('RealTimeByFrequency')).length, 2);
+    assert.equal(asked.filter(x => x.startsWith('/transit/gps')).length, 2);
   } finally {
     globalThis.fetch = was;
     api.useSession(null);

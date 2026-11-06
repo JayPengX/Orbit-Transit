@@ -111,11 +111,12 @@ Live: https://orbit.jaypengx.com/transit/
   Stop cards, a trip's bus, a ride aboard and the planner's live buses read
   the same fix (`bus.mjs busEtaMended`, in place of `busEta`: up to 8 lagging
   routes, never waiting past 2.5 s), so a frozen feed is felt nowhere. The
-  routes' GPS asked within a moment go as one ask a city (`routeGps`: the
-  city's RealTimeByFrequency filtered by them; one route alone, its own ask),
-  once in each 20 s of the clock (a bus sends its place each 20 s), saying
-  how old the copy is (`had=`): a stop card read TDX's GPS 24 → 17 times in
-  3 minutes (2026-11-06).
+  routes' GPS asked within a moment go as one ask a city (`routeGps`,
+  `api.mjs busGps`: the Worker's `/transit/gps` reads a city's whole list
+  once for every route and every phone, 公路客運's by its routes), once in
+  each 20 s of the clock (a bus sends its place each 20 s), saying how old
+  the copy is (`had=`): a stop card read TDX's GPS 24 → 17 times in 3
+  minutes (2026-11-06), and a crowd at different stops reads it once a city.
   Today and the next day on one line (`bus-ui.mjs` `nexts`, `doneToday`):
   the stops today's last bus has passed are the next day's (the line grey
   there, the day said once where they begin); where today's begin, that bus
