@@ -112,7 +112,10 @@ Live: https://orbit.jaypengx.com/transit/
   the same fix (`bus.mjs busEtaMended`, in place of `busEta`: up to 8 lagging
   routes, never waiting past 2.5 s), so a frozen feed is felt nowhere. The
   routes' GPS asked within a moment go as one ask a city (`routeGps`: the
-  city's RealTimeByFrequency filtered by them; one route alone, its own ask).
+  city's RealTimeByFrequency filtered by them; one route alone, its own ask),
+  once in each 20 s of the clock (a bus sends its place each 20 s), saying
+  how old the copy is (`had=`): a stop card read TDX's GPS 24 → 17 times in
+  3 minutes (2026-11-06).
   Today and the next day on one line (`bus-ui.mjs` `nexts`, `doneToday`):
   the stops today's last bus has passed are the next day's (the line grey
   there, the day said once where they begin); where today's begin, that bus
@@ -259,9 +262,10 @@ Live: https://orbit.jaypengx.com/transit/
     once a beat at most, and the routes asked within a moment as one ask a
     city (`routes=`; a plan's buses were five to ten asks, 2026-11-06); where
     a city's estimates come every 30 s (新竹, 新竹縣, 公路客運), not again
-    until the next can be there (each city's rhythm learnt from its answers),
+    until the next can be there (each city's rhythm learnt from its answers;
+    a stop whose rows sat one out, again once it's surely at TDX, 5 s on),
     and an ask says how old the phone's copy is (`had=`: the Worker reads TDX
-    then if its own is no newer); `tests/bus-asks.test.mjs`,
+    then if its own is no newer); `tests/bus-asks.test.mjs`, `bus-quiet.test.mjs`,
     `scripts/bus-rhythm.mjs` (the rule against TDX's timing, a stop card's
     asks before and after);
   - bus routes and timetables: weekly packs in R2 (`packs.mjs`);
