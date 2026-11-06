@@ -116,11 +116,13 @@ function render() {
   const seg = $('panel-train').querySelector('.ot-tq-sys');
   $('panel-train').innerHTML = `
     <div class="ot-tq-days"></div>
+    <div class="ot-tq-side">
     <section class="ot-tq">
       <div class="ot-tq-pair">${stPick('from', state.from)}${stPick('to', state.to)}<button class="ot-tq-swap" type="button" data-act="swap" aria-label="${W('對調', 'Swap')}">${icon('swap')}</button></div>
       <div class="ot-tq-when"><label class="ot-tq-pill">${icon('clock')}<b id="t-time-text">${e(timeText(date))}</b><input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}" aria-label="${W('出發時間', 'Leave at')}"></label><div class="q-seg ot-tq-sys" role="group" aria-label="${W('搭什麼', 'Trains')}">${[['all', W('全部', 'All')], ['tra', W('台鐵', 'TRA')], ['hsr', W('高鐵', 'HSR')]].map(([k, n]) => `<button type="button" data-mode="${k}" aria-pressed="${state.mode === k}">${n}</button>`).join('')}</div></div>
     </section>
     <div id="t-notices">${noticesHtml(notices)}</div>
+    </div>
     <div id="t-results">${resultsHtml()}</div>
     ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
   $('panel-train').querySelector('.ot-tq-days').replaceWith(kitUI.dayBar(dayRec, { days: trainDays(), current: date, today, follow: true, onPick: pickDay }));

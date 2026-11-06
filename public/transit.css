@@ -6203,6 +6203,24 @@ html[lang='en'] .ot-sn-tap {
   grid-column: 2;
   grid-row: 2 / span 9;
 }
+/* (The search stays in view beside a long list of trains, never a half
+   left empty once it scrolls away (layout check, 2026-11-06). Its recent
+   searches come after the trains, as on a phone.) */
+:root.q-wide #panel-train:has(#t-results:not(:empty)) > .ot-tq-side {
+  grid-row: 2 / span 9;
+  align-self: start;
+}
+/* (Under the pinned day bar; a phone on its side is too short to pin it.) */
+@media (min-height: 521px) {
+  :root.q-wide #panel-train:has(#t-results:not(:empty)) > .ot-tq-side {
+    position: sticky;
+    top: calc(var(--q-top, 0px) + 84px);
+    z-index: 1;
+  }
+}
+:root.q-wide #panel-train:has(#t-results:not(:empty)) > .ot-tq-side ~ .q-section {
+  grid-row: 11;
+}
 :root.q-wide #times-bus:has(#tb-list:not(:empty)) > #tb-list {
   grid-column: 2;
   grid-row: 1 / span 9;
