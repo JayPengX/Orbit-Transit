@@ -360,8 +360,6 @@ function turnBeam(deg) {
   beam.style.transform = `rotate(${shownTurn.toFixed(1)}deg)`;
 }
 async function locateMe() {
-  // (The compass asked here, in the tap: an iPhone asks for it only from one.)
-  askCompass();
   // (Where you were last seen, at once, however long ago: standing still, the watch has nothing new
   // to say and the fresh fix can take seconds, and a tap that waited on it looked like a dead button.)
   const was = ctx.here;
@@ -504,6 +502,10 @@ const metroMarker = ({ st, color }) => ({ id: st.key, lat: st.lat, lon: st.lon, 
 // ---- Taps ----------------------------------------------------------------------------------------
 
 function pick(it) {
+  // Your own dot: which way you face. The compass is asked only here (Jay 2026-11-06:
+  // an iPhone's home-screen app forgets the answer each launch, so asking from
+  // 我的位置 put the question up every open); walking, the GPS turns the beam unasked.
+  if (it.id === 'me') return void askCompass();
   // Navigating: the map is to look at; a tap opens nothing (it would take the trip's card and its way off the map).
   if (navFull()) return dragged();
   follows(false);

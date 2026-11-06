@@ -1,13 +1,12 @@
 // Which way the phone faces, for the beam on your dot (Jay 2026-11-03: "the
 // little my location dot need the where I am facing"). The compass first:
-// an iPhone's webkitCompassHeading (it needs a tap to ask, so the ask rides
-// on 我的位置 or the first tap anywhere once it was allowed), elsewhere
+// an iPhone's webkitCompassHeading (it needs a tap to ask), elsewhere
 // deviceorientationabsolute's alpha. Moving with no compass, the GPS's own
 // heading. Nothing known: no beam (never a guess).
-// Asked only from a tap on 我的位置, never on opening or on any other tap
-// (Jay 2026-11-06: Transit asked for direction almost every open; an iPhone's
-// home-screen app forgets the answer at each launch, so the old quiet re-ask
-// on the first tap put the question up again). A no is kept: never asked again.
+// Asked only from a tap on your own blue dot, never on opening, on 我的位置 or
+// on any other tap (Jay 2026-11-06, twice: Transit asked for direction every
+// open; an iPhone's home-screen app forgets the answer at each launch, so any
+// ask on a tap made every launch put the question up again). A no is kept.
 
 import { readJson, writeJson } from './util.mjs';
 
@@ -66,12 +65,12 @@ function listen() {
 }
 const needsAsk = () => typeof globalThis.DeviceOrientationEvent?.requestPermission === 'function';
 
-// Whether a tap on 我的位置 should put up iOS's question: only where the phone
+// Whether a tap on your dot should put up iOS's question: only where the phone
 // asks at all, not once this launch already, and never after a no.
 export function shouldAsk({ needs = needsAsk(), said = readJson(OK_KEY), askedNow = state.asked, turning = Boolean(state.at) } = {}) {
   return needs && !turning && !askedNow && said !== false;
 }
-// From a tap on 我的位置 (iOS asks only from a tap): the answer kept, a no for good.
+// From a tap on your dot (iOS asks only from a tap): the answer kept, a no for good.
 export async function askCompass() {
   listen();
   // (Already turning, as on Android, which sends it unasked: nothing to ask.)
@@ -88,7 +87,7 @@ export async function askCompass() {
 }
 // fn(heading or null) as it turns; the GPS's fixes come in by gpsFix. Never asks:
 // where nothing needs asking (Android) the compass comes; an iPhone sends nothing
-// until 我的位置 was tapped, and the GPS's heading shows meanwhile when moving.
+// until your dot was tapped, and the GPS's heading shows meanwhile when moving.
 export function watchHeading(fn) {
   state.fns.add(fn);
   listen();
