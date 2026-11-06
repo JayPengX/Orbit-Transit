@@ -146,7 +146,8 @@ export function searchFrom(t0, now, { by = 'depart', far = false, wide = false }
 // already done stands (null).
 export const missedRetry = (at, now, wide = false) => (wide ? null : at - now > FAR_AHEAD ? 'wide' : 'now');
 // `ebike`: 偏好電輔車, this trip's own (withBikes); not said, the person's own in 我的.
-export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null, wide = false, ebike = null } = {}) {
+// `chase: false`: no YouBike to a bus further on (a trip replanned under way).
+export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null, wide = false, ebike = null, chase = true } = {}) {
   ebike ??= data.prefs?.ebike === true;
   const prefs = only ? { ...data.prefs, modes: { ...data.prefs.modes, ...only } } : data.prefs;
   const modes = prefs.modes;
@@ -411,7 +412,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
             bikesNow = Promise.resolve([...new Map([...all, ...more].map(s => [s.uid, s])).values()]);
           }
           // 追公車: a bus you'd miss walking to it, caught further along its way by YouBike.
-          if (modes.bike && by !== 'arrive' && t0 - now < 60 * 60_000) list.push(...(await chases(list, from, now, Math.max(now, t0), { prefer: ebike }).catch(() => [])).filter(p => allowed(p, modes)));
+          if (chase && modes.bike && by !== 'arrive' && t0 - now < 60 * 60_000) list.push(...(await chases(list, from, now, Math.max(now, t0), { prefer: ebike }).catch(() => [])).filter(p => allowed(p, modes)));
           lap('later', t3);
           const two = await finishOff(list, 2);
           return { plans: two, sources: res.sources || {}, error: two.length ? null : stopErr() };
@@ -425,9 +426,9 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   // A deadline hours off (08:00 tomorrow) is searched again from six hours
   // before it instead: leaving now would be tonight's trains.
   const retry = by === 'arrive' && at && !first.some(inTime) ? missedRetry(at, now, wide) : null;
-  if (retry === 'wide') return planTrip(data, from, to, { at, by, modes: only, wide: true, ebike });
+  if (retry === 'wide') return planTrip(data, from, to, { at, by, modes: only, wide: true, ebike, chase });
   if (retry === 'now') {
-    const r = await planTrip(data, from, to, { modes: only, ebike });
+    const r = await planTrip(data, from, to, { modes: only, ebike, chase });
     const mark = list => list.map(p => ({ ...p, deadline: at }));
     const nowLater = r.later?.then(o => (o ? { ...o, plans: mark(o.plans) } : o)) || Promise.resolve(null);
     const after = (later || Promise.resolve(null)).then(o => (o?.plans?.some(inTime) ? o : nowLater));

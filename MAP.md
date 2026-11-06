@@ -129,8 +129,8 @@ Live: https://orbit.jaypengx.com/transit/
   card to the near stop (`adjustPlan`, `rollPlans`); found again (a replan,
   the planner's later round, on 交通 and the map's card) the stop the card
   showed keeps it unless the other is 10 minutes sooner (`steadyLead`).
-  Navigating, the same is offered once the bus you're walking to is seen
-  gone (騎車追上).
+  Never offered while navigating, and never on a replan under way
+  (`planTrip`'s `chase: false`; Jay 2026-11-06: "not force me to go further").
   YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
   the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
   A plan's price line: the planner's own fare, else our own trains at their
@@ -204,6 +204,26 @@ Live: https://orbit.jaypengx.com/transit/
   (`pickedPlan`: a later one chosen over an earlier one on the plans card or
   交通's 其他班次, 指定車次, 改搭別班; `leg.picked`), kept as chosen. A bus you can't
   make (`pastHurry`: later than you'd hurry back) says 趕不上了, never 快一點.
+  **出狀況, one card** (`lib/trouble.mjs`, Jay 2026-11-06: missed or wrong
+  bus, "not limited to bus"): a bus, train or metro you can't make or that's
+  gone shows 趕不上 X with two rows, each with when you're there: 下一班 (the
+  same line's next run from the same stop; taken by itself once the one
+  planned is gone, ticked) and 最快 (the quickest way from where you are,
+  planned whole by tab-map `navFastest`, no 追公車; dropped when it isn't a
+  minute sooner than 下一班). To be there by a time: late rows say 晚 N 分,
+  and a way gone late asks 最快 (`late`). No bike or dock within 500 m: 最快
+  (`bike`). At its stop, then moving at a bus's or train's pace away from it
+  and off its way, or on board and off its way at speed: 好像搭錯車了？
+  (`wrongRide`, `offKind`), 從這裡重新規劃 planned from the ride you're on
+  (aboard.mjs, leaving now); at a walk: 好像已經下車了？; away from it all:
+  不照這條路走了？. The card shows once it's whole, then only times move; ×
+  is never asked again for that run. Steps still move only by GPS.
+  **Replays** (`tests/navreplay.mjs`): navigation records each trip
+  (`state.trace`: the plan, every fix, steps reached, cards shown; 除錯紀錄
+  `navtrip`); `node scripts/replay-nav.mjs <log.json>` drives it again through
+  today's code (logs stay in captures/); `tests/nav-replay.test.mjs` replays
+  `tests/fixtures/trips/*.json` (made on 快捷8號's real route by
+  `scripts/trip-fixture.mjs`) against what each should do.
   A trip with stops is one trip: the chips run on past each stop, the end
   time is the last place's; on a YouBike to a stop, 到了要還車嗎 (停著 or
   還車, with which is sooner) in its last 5 minutes (`parkAsk`). Off the plan your
@@ -214,7 +234,7 @@ Live: https://orbit.jaypengx.com/transit/
   far from the stop you were waiting at counts; fresh fixes only, and a watch
   silent 10 s is started over (twice as long each time it stays silent, up to a minute);
   one that hasn't answered yet (the location ask may be up) is left a minute, never a second ask over the first. Late for an
-  arrival time → an on-time alternative offered. It resumes after the app
+  arrival time → 最快 on the 出狀況 card. It resumes after the app
   is swiped away and tells the lock screen. 編輯行程 while navigating: a stop
   added, or the one you're heading to taken off or changed, re-routes and
   starts the new directions by itself.
@@ -317,7 +337,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/board.mjs`, `board.css` | 交通's board: `boardRow` (a row of the one shape), `whenHtml` (the time at its end) |
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |
-| `lib/nav.mjs`, `navlive.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; the buzz; bus alerts |
+| `lib/nav.mjs`, `navlive.mjs`, `trouble.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; 出狀況 (missed, late, no bikes, wrong ride); the buzz; bus alerts |
 | `lib/aboard.mjs` | Already on a bus or train: which one, and the trip from its stops ahead |
 | `lib/ticket.mjs` | 指定車次: a train by its number, where to get on and off, found again for the planner |
 | `lib/service.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules |

@@ -11,7 +11,8 @@ import { sameRoute } from '../public/lib/util.mjs';
 import { etaText, etaOf, findRoutes, parseStops, etaMap, stopTimes, runsOn, stopSides, stopGroups } from '../public/lib/bus.mjs';
 import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
-import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, onTimeWay, offerText, stageView } from '../public/lib/nav.mjs';
+import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, stageView } from '../public/lib/nav.mjs';
+import { fastest, bestText } from '../public/lib/trouble.mjs';
 import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays, readSaved, UNREAD } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
@@ -2044,7 +2045,7 @@ test('in navigation, another departure taken: the ride and what follows it move,
   assert.equal(plan.arr, T('20:30'));
 });
 
-test('to be there by a time, late in navigation: how late, and the way from here that still makes it (never the ride you are headed for, never one that left)', () => {
+test('to be there by a time, late in navigation: how late, and 最快 from here (never the run 下一班 already is, never one that left)', () => {
   const P = (name, lat, lon) => ({ name, lat, lon });
   const stop = P('文興嘉興路口', 24.818, 121.022);
   const school = P('竹東高中', 24.733, 121.0882);
@@ -2061,10 +2062,11 @@ test('to be there by a time, late in navigation: how late, and the way from here
   const gone = finish({ top: true, lead: true, legs: [{ mode: 'bus', short: '5608', from: P('X', 24.81, 121.02), to: school, dep: T('06:40'), arr: T('07:30'), dur: 3000 }] });
   const late = finish({ top: true, lead: true, legs: [{ mode: 'bus', short: '5608', from: P('X', 24.81, 121.02), to: school, dep: T('07:30'), arr: T('08:20'), dur: 3000 }] });
   const now = T('07:03');
-  assert.equal(onTimeWay([same, ride], plan, 1, T('06:58')), null, 'the bus you are headed for still comes: nothing to change');
-  assert.equal(onTimeWay([gone, late, ride], plan, 1, now), ride, 'the one that left and the one too late are no way');
-  assert.equal(onTimeWay([gone, late], plan, 1, now), null);
-  assert.equal(offerText(ride), '改騎電輔車，07:55 到');
+  assert.equal(fastest([same, ride], { leg: plan.legs[1], dep: T('07:02') }, T('06:58')), null, 'the quickest is the very run 下一班 is: said alone');
+  assert.equal(fastest([gone, late, ride], { leg: plan.legs[1], dep: T('07:20') }, now), ride, 'the one that left is no way; there first wins');
+  assert.equal(fastest([gone, late], null, now), late);
+  assert.equal(bestText(ride), '電輔車');
+  assert.equal(bestText(late), '5608');
 });
 
 test('a route’s stops: a bus between two stops is where a stop’s live time drops below the one before (not one at a stop, which rides on its dot); one bus on one dot, not on every stop it reaches in 3 minutes', async () => {

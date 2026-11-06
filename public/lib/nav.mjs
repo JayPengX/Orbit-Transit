@@ -13,7 +13,7 @@ import * as kit from '#kit/orbit.mjs';
 import { watchPosition, getPosition, roadPath, liveMs } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt, seenAt, nextCatchable } from './live.mjs';
-import { chaseFrom } from './chase.mjs';
+import { troubleHtml, fastest, wrongRide, offKind } from './trouble.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
 import { canRent, canReturn } from './bike.mjs';
@@ -467,7 +467,7 @@ function bikesText(bk, plan, i, pos) {
   if (kept && park) return '';
   const out = [];
   if (bk.moved) out.push(`<span class="note warn">${icon('bike')}${e(bk.moved)}</span>`);
-  if (bk.none) out.push(`<span class="note bad">${icon('bike')}${e(bk.none)}${W('，按「換一條路」重新規劃', '. Tap Another way to replan')}</span>`);
+  if (bk.none) out.push(`<span class="note bad">${icon('bike')}${e(bk.none)}</span>`);
   const taking = !kept && (park || bk.k > i || !pos || meters(pos.lat, pos.lon, from.lat, from.lon) < 150);
   const end = taking ? 'rent' : 'return';
   // (What's left for this ride where it ends now: null without counts.)
@@ -765,26 +765,6 @@ export function retimeAlong(plan, k, frac, now = Date.now()) {
 // To be there by a time (a trip planned 抵達 by it: `plan.deadline`): how
 // late, in minutes, getting in at `eta`; 0 on time.
 export const lateBy = (plan, eta) => (plan.deadline && eta > plan.deadline + 60_000 ? Math.ceil((eta - plan.deadline) / 60_000) : 0);
-// The way to take instead, of plans made from where you are for the same
-// deadline: the best that gets there by then and sets out no earlier than
-// now; null when there's none, or it's the ride you're already headed for
-// (leg k: still catchable, nothing to change).
-export function onTimeWay(plans, plan, k, now) {
-  const ok = (plans || []).filter(p => p.lead !== false && !p.weak && p.arr <= plan.deadline + 60_000 && p.dep >= now - 60_000);
-  const best = ok.find(p => p.top) || ok[0];
-  if (!best) return null;
-  const cur = plan.legs[k];
-  const first = best.legs.find(isRide);
-  const same = cur && first && isRide(cur) && (first.short || first.name) === (cur.short || cur.name) && first.from?.lat != null && cur.from?.lat != null && meters(first.from.lat, first.from.lon, cur.from.lat, cur.from.lon) < 200;
-  return same ? null : best;
-}
-// Said of that way: what to take, when you're there (改騎電輔車，07:55 到).
-export function offerText(p) {
-  const on = rides(p);
-  const how = on.length ? W(`改搭 ${rideName(on[0])}${on.length > 1 ? ' 再轉乘' : ''}`, `Take ${rideName(on[0])}${on.length > 1 ? ' and change' : ''}`) : p.legs.some(l => l.mode === 'bike') ? (p.legs.some(l => l.ebike) ? W('改騎電輔車', 'Ride an e-bike') : W('改騎 YouBike', 'Ride a YouBike')) : W('改用走的', 'Walk');
-  return W(`${how}，${hm(p.arr)} 到`, `${how}, arrive ${hm(p.arr)}`);
-}
-
 // plan: a ranked plan; `draw(plan, i)` shows it on the map with leg i lit;
 // `follow(pos)` keeps the map on you; `onEnd()` when it's closed; `dest`:
 // the place the trip is to (Google's, for its own navigation to it).
@@ -813,6 +793,16 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   if (dest?.lat != null && !plan.dest) plan = { ...plan, dest: { name: dest.name || '', lat: dest.lat, lon: dest.lon, ...(dest.gid ? { gid: dest.gid } : {}) } };
   // (`i`: the step shown; `reached`: the furthest step the trip has got to by itself, where you are, the arrivals, getting off: the steps before it are done, never a tap's.)
   const state = { plan, i: 0, reached: 0, phase: 'before', pos: here, live: '', liveAt: new Map(), alerted: -1, wake: null, info: new Map(), push, bikes: null, done: false, ride: new Map(), where: null, next: null, ahead: null, arrAt: null, delay: 0, fresh: 0, offAt: 0, drawn: 0, track: [], paced: null, delayLive: false, away: 0, awayAt: 0, fold: readFold(), min: Boolean(resume?.min), swap30, gen: 0, settled: false, reachedPhase: 'before', lookAt: 0 };
+  // The trip as it went, for 除錯紀錄 and replaying it in a test (navTrace).
+  // (Seconds from the start with each entry; kept to the last 2000 fixes.)
+  const traceAdd = (what, x) => {
+    const list = state.trace[what];
+    list.push([Math.round((Date.now() - state.trace.t0) / 1000), ...x]);
+    if (list.length > 2000) list.splice(0, list.length - 2000);
+  };
+  const traceSave = () => kit.rec?.('navtrip', state.trace);
+  state.traceSave = traceSave;
+  state.trace = { v: 1, t0: Date.now(), here: here?.lat != null ? { lat: here.lat, lon: here.lon } : null, resume: resume ? { i: resume.i, phase: resume.phase, reached: resume.reached ?? null } : null, plan: JSON.parse(JSON.stringify(plan)), fixes: [], steps: [], trouble: [] };
   // The buses' official routes, ways and stations, then the lock screen's notices.
   const infos = plan.legs.map((l, k) => (l.mode === 'bus' && l.from?.lat ? busInfo(l).then(x => state.info.set(k, x)).catch(() => {}) : null)).filter(Boolean);
   // (Getting off: when each ride is at the stop before yours, by its stops' times now.)
@@ -912,29 +902,34 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const gm = own ? mapsLink(legEnd(plan, state.i), l.mode === 'bike' ? 'bicycling' : 'walking', state.i > state.reached ? l.from : null) : '';
     // (The title already names where: here only when, one line beside the maps button.)
     const paceText = pace.text || (own ? W(`約 ${hm(times.end[state.i])} 抵達`, `there ~${hm(times.end[state.i])}`) : '');
-    // Late for the bus or train: a new plan from here, one tap.
+    // Late for the bus or train ahead (hurrying can't make it): the one card
+    // of what to do instead (trouble.mjs), asked once for that run.
     const late = !state.done && pace.tone === 'bad';
-    // On board but well off its way twice running: got off somewhere else?
-    // Late for the deadline (to be there by a time): the way that still makes it, one tap; asked once a step.
-    if (late && plan.deadline && state.lateAsked !== state.i) {
-      state.lateAsked = state.i;
-      const k = rideOf(plan, state.i);
-      queueMicrotask(() => nav === state && onAction?.('late', { eta: null, k, ride: k >= state.i ? rideName(plan.legs[k]) : '' }));
-    }
-    // (An offer for a bus that's about to leave goes with it.)
-    if (state.offer?.until && now > state.offer.until) state.offer = null;
-    const of = !state.done && state.offer;
-    const offer = of ? `<div class="ot-nav-ask ot-nav-late"><span><b>${e(of.title)}</b>${of.sub ? `<small>${e(of.sub)}</small>` : ''}</span>${of.plan ? `<button type="button" data-nav="offer">${W('改走這條', 'Take it')}</button>` : ''}<button class="x" type="button" data-nav="offer-x" aria-label="${W('不用', 'No thanks')}">${icon('x')}</button></div>` : '';
+    const ra = rideOf(plan, state.i);
+    if (late && ra >= state.i) queueMicrotask(() => askMiss(ra, false));
+    // (Made it after all, not taken yet: the question goes.)
+    else if (state.trouble?.kind === 'miss' && !state.trouble.taken && state.trouble.k === ra) state.trouble = null;
     // On a YouBike to a stop with more after it: keep it or return it there (parkAsk).
     // (Asked in the last 5 minutes of the ride, not all the way.)
     const pa = !state.done && state.i === state.reached && left != null && rideSec(left, l.ebike) <= 5 * 60 ? parkAsk(plan, state.i) : null;
     const park = pa ? `<div class="ot-nav-ask ot-nav-late"><span><b>${W('到了要還車嗎？', 'Return it there?')}</b><small>${e(pa.text)}</small></span><button type="button" data-nav="park">${W('停著', 'Keep')}</button><button type="button" data-nav="return">${W('還車', 'Return')}</button></div>` : '';
-    const strayed = on && !state.done && state.away >= 2 && now - state.awayAt >= AWAY_MS ? `<div class="ot-nav-ask"><span>${W('好像已經下車了？', 'Got off already?')}</span><button type="button" data-nav="replan">${W('從這裡重新規劃', 'Replan from here')}</button></div>` : !on && !state.done && state.lost && state.i === state.reached ? `<div class="ot-nav-ask"><span>${W('不照這條路走了？', 'Going another way?')}</span><button type="button" data-nav="replan">${W('從這裡重新規劃', 'Replan from here')}</button></div>` : '';
+    // Whatever went wrong, one card (trouble.mjs): on board and off its way
+    // (another bus at speed, got off at a walk), heading away from it all, or
+    // what was set (missed, late, no bikes, the wrong ride).
+    const strayed = on && !state.done && state.away >= 2 && now - state.awayAt >= AWAY_MS;
+    const tr = state.done ? null : strayed ? { kind: offKind(state.fixes, state.posAt) } : troubleNow(now) || (!on && state.lost && state.i === state.reached ? { kind: 'lost' } : null);
+    const trouble = troubleHtml(tr, now, plan.deadline || 0);
+    const shownNow = trouble ? tr.kind : null;
+    if (shownNow && shownNow !== state.shownTrouble) {
+      traceAdd('trouble', [shownNow]);
+      traceSave();
+    }
+    state.shownTrouble = shownNow;
     const ri = rideOf(plan, state.i);
     const liveNow = !state.done && ri >= state.i && state.fresh && now - state.fresh < 75_000;
     // Off a bus or train a moment ago: said, with what's next.
     const prev = plan.legs[state.i - 1];
-    const off = !state.done && state.swap && now - state.swap.at < 180_000 ? `<div class="ot-nav-off">${icon('clock')}<span>${e(state.swap.text)}</span></div>` : !state.done && state.offAt && now - state.offAt < 120_000 && isRide(prev) ? `<div class="ot-nav-off">${icon('pin')}<span>${W(`已在 ${e(prev.to?.name || '')} 下車`, `Got off at ${e(prev.to?.name || '')}`)}</span></div>` : '';
+    const off = !state.done && state.swap && now - state.swap.at < 180_000 && !(trouble && state.swap.miss) ? `<div class="ot-nav-off">${icon('clock')}<span>${e(state.swap.text)}</span></div>` : !state.done && state.offAt && now - state.offAt < 120_000 && isRide(prev) ? `<div class="ot-nav-off">${icon('pin')}<span>${W(`已在 ${e(prev.to?.name || '')} 下車`, `Got off at ${e(prev.to?.name || '')}`)}</span></div>` : '';
     // On board: what comes after you get off.
     const nx = on && !state.done && state.i < last ? plan.legs[state.i + 1] : null;
     const then = nx ? `<div class="ot-nav-then"><small>${W('下車後', 'Then')}</small>${icon(nx.mode)}<span>${e(stepText(plan, state.i + 1, 'before').title)}${isRide(nx) ? `・${e(hm(state.liveAt.get(state.i + 1) ?? nx.dep))} ${nx.mode === 'bus' ? W('到站', 'due') : W('開', 'leaves')}` : `・${e(minsText(nx.dur))}`}</span></div>` : '';
@@ -954,7 +949,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const driftText = Math.abs(drift) >= 2 ? `<em class="${drift > 0 ? 'bad' : 'good'}">${drift > 0 ? W(`晚 ${drift} 分`, `${drift} min late`) : W(`早 ${-drift} 分`, `${-drift} min early`)}</em>` : '';
     const fold = state.fold;
     const topHtml = `<div class="ot-nav-top${offNext ? ' alert' : ''}${coming ? ' coming' : ''}${on ? ' aboard' : ''}${fold.top ? ' folded' : ''}" style="--c:${e(legColor(l))}">
-        ${off}${offer}${park}${strayed}
+        ${off}${trouble}${park}
         <div class="ot-nav-main">
           <span class="ot-nav-i">${icon(state.done ? 'pin' : offNext ? 'bell' : l.mode)}</span>
           <div class="ot-nav-text"><b>${titleHtml(title, plan)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>
@@ -962,7 +957,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         </div>
         ${rentLine}
         ${fold.top ? '' : `${track}${board}`}
-        ${(paceText || gm) && !(board && !fold.top && !state.live && !late) ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map(x => `<span>${e(x)}</span>`).join('')}</span>${late ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}${W('重新規劃', 'Replan')}</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
+        ${(paceText || gm) && !(board && !fold.top && !state.live && !late) ? `<div class="ot-nav-pace ${pace.text ? pace.tone : ''}${liveNow ? ' live' : ''}">${liveNow ? '<i class="ot-nav-dot"></i>' : icon(pace.tone ? 'live' : 'clock')}<span class="ot-nav-pt">${paceText.split('・').map(x => `<span>${e(x)}</span>`).join('')}</span>${late && !trouble ? `<button class="ot-nav-gm" type="button" data-nav="replan">${icon('route')}${W('重新規劃', 'Replan')}</button>` : gm ? `<a class="ot-nav-gm" href="${e(gm)}" target="_blank" rel="noopener">${icon('route')}${mapsName()}</a>` : ''}</div>` : ''}
         ${bikeLine && !fold.top ? `<div class="ot-nav-bikes">${bikeLine}</div>` : ''}
         ${fold.top ? '' : then}
         ${grip('top', fold.top)}
@@ -1039,6 +1034,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // The trip moving you on (or back on a ride you stayed on) by itself:
   // that step is where you've got to. (A tap only shows a step: go.)
   const reach = (i, phase = 'before', off = false) => {
+    traceAdd('steps', [i, phase]);
     const was = state.reached;
     state.reached = Math.max(0, Math.min(plan.legs.length - 1, i));
     state.reachedPhase = phase;
@@ -1223,6 +1219,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     onEnd?.({ arrived: plan.dest?.name || l.to?.name || W('目的地', 'destination'), plan });
   };
   const moved = p => {
+    traceAdd('fixes', [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lon * 1e6) / 1e6, Math.round(p.acc ?? 0)]);
     // A rough fix (a cell tower's, 100 m and more out) moves the dot, never
     // the trip; but for a bus or train you were waiting for, one further from
     // its stop than its own error could put you counts: pulled out (the
@@ -1282,6 +1279,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       if (on.i === state.i) {
         state.phase = 'on';
         if (state.i === state.reached) state.reachedPhase = 'on';
+        traceAdd('steps', [state.i, 'on']);
         state.where = null;
         saveNav(state);
         draw(plan, state.i);
@@ -1301,6 +1299,22 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         const name = shortPlace(to?.name || '') || W('下一站', 'the next stop');
         state.swap = { at: Date.now(), text: op.why === 'bike' ? W(`已騎上 YouBike，往 ${name}`, `On a YouBike, to ${name}`) : W(`改走去 ${name}`, `Walking to ${name} instead`) };
         return reach(op.i, op.phase);
+      }
+      // On a bus or train that isn't the one planned: at its stop a while
+      // ago, now moving at a ride's pace away from it and off its way.
+      const rk = rideOf(plan, state.i);
+      const rl = rk >= state.i && !(rk === state.i && state.phase === 'on') ? plan.legs[rk] : null;
+      if (rl?.from?.lat != null) {
+        if (meters(p.lat, p.lon, rl.from.lat, rl.from.lon) < 150) state.nearAt = { k: rk, t: state.posAt };
+        const pts = legPts(rl);
+        const a = pts && alongRoute(pts, p, routeCum(pts));
+        const onWay = Boolean(a && a.off < (ON_WAY[rl.mode] || 80));
+        const key = `wrong|${rk}`;
+        if (state.troubleNo !== key && state.trouble?.kind !== 'wrong' && wrongRide(rl, state.fixes, state.nearAt?.k === rk ? state.nearAt.t : 0, onWay, state.posAt)) {
+          state.trouble = { kind: 'wrong', k: rk, key, at: state.posAt };
+          kit.rec?.('wrong', { ride: rideName(rl), fixes: (state.fixes || []).slice(-12) });
+          buzz();
+        }
       }
     }
     // Checked again now and then by where you are alone, as when the app is
@@ -1373,6 +1387,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         if (state.phase === 'before' && l.from?.lat && leftStop && aboard(state.i, onWay ? a.d : fromStop)) {
           state.phase = 'on';
           if (state.i === state.reached) state.reachedPhase = 'on';
+          traceAdd('steps', [state.i, 'on']);
           state.where = null;
           saveNav(state);
           draw(plan, state.i);
@@ -1454,6 +1469,12 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (nav !== state) return;
     if (!alt || !moveRide(plan, k, end, alt)) {
       state.bikes = { ...(state.bikes || {}), k, moved: '', none: end === 'rent' ? W('附近 500 公尺都沒車', 'No bikes within 500 m') : W('附近 500 公尺都沒空位', 'No docks within 500 m') };
+      // (最快 from here on the trouble card, as for a bus missed.)
+      const key = `bike|${k}|${end}`;
+      if (state.troubleNo !== key && state.trouble?.key !== key) {
+        state.trouble = { kind: 'bike', end: end === 'rent' ? 'rent' : 'ret', k: end === 'rent' ? k : null, key, best: undefined };
+        onAction?.('fastest', { k, next: null });
+      }
       return render();
     }
     tried.add(alt.uid);
@@ -1466,35 +1487,90 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // The bus or train you're on your way to (or waiting for) moved to another
   // departure: picked from its times, or the next once you've missed it.
   // (`pick`: chosen by you, kept as chosen; the next after one missed is not.)
-  const takeOther = (k, opt, text, pick = false) => {
+  const takeOther = (k, opt, text, pick = false, miss = false) => {
     const late = retimeRide(plan, k, opt);
     if (pick) plan.legs[k].picked = true;
     else delete plan.legs[k].picked;
     state.gen++;
     state.delay = 0;
     for (const m of [state.ride, state.info, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
-    state.swap = { at: Date.now(), text: late ? `${text}・${W(`可能趕不上 ${late}，按「換一條路」`, `may miss ${late}; tap Another way`)}` : text };
+    state.swap = { at: Date.now(), text, miss };
     go(state.i, state.phase);
-    // (To be there by a time: in too late now? The way that still makes it.)
-    const eta = late ? Infinity : plan.arr;
-    if (lateBy(plan, eta)) onAction?.('late', { eta, k, ride: rideName(plan.legs[k]) });
+    // (A change after it now missed: moved on as any ride ahead is, by the usual rules.)
+    if (late) cascade();
+    // (To be there by a time and in late now: 最快 offered, the way the card offers it.)
+    else if (lateBy(plan, plan.arr) && !miss) askLate(k);
+  };
+  // ---- 出狀況 (trouble.mjs): one card ----
+  // `state.trouble`: { kind, k, ride, mode, next, best, taken, key }. Found
+  // whole before it shows (下一班 and 最快 both), then only its times move.
+  // `state.troubleNo`: the one dismissed (×), never asked again.
+  const troubleNow = now => {
+    const t = state.trouble;
+    if (!t) return null;
+    // (Past it, on it, or another trip: gone.)
+    if (t.k != null && (state.i > t.k || (state.i === t.k && state.phase === 'on'))) return (state.trouble = null);
+    // (最快 set out a while ago: no longer a way; the card goes with its last row.)
+    if (t.best && t.best.dep < now - 2 * 60_000) t.best = null;
+    if (t.kind === 'wrong' && now - t.at > 10 * 60_000) return (state.trouble = null);
+    return t;
+  };
+  // A ride ahead missed (`taken`: its next run already taken, the plan moved
+  // to it), or about to be (late past hurrying): its next run from the same
+  // stop, and the quickest way from here asked for (tab-map plans it, navBest
+  // answers). Once a run.
+  const askMiss = async (k, taken = false, was = '') => {
+    const l = plan.legs[k];
+    if (nav !== state || !l || !isRide(l) || state.done) return;
+    const key = `${k}|${l.dep}|${taken ? 1 : 0}`;
+    if (state.troubleNo === key || state.trouble?.key === key || state.asking === key) return;
+    state.asking = key;
+    let next = null;
+    if (taken) next = { dep: state.liveAt.get(k) ?? l.dep, arr: plan.arr, taken: true };
+    else {
+      const ready = navTimes(plan, state.i, state.phase, state.pos, new Map(), Date.now()).ready.get(k) ?? Date.now();
+      const o = (await rideOptions(l, state.info.get(k), ready).catch(() => [])).find(o => o.dep + (o.delay || 0) * 60_000 >= ready - 30_000 && o.dep > l.dep + 60_000);
+      if (o) {
+        const p = { ...plan, legs: plan.legs.map(x => ({ ...x })) };
+        retimeRide(p, k, o);
+        next = { dep: o.dep + (o.delay || 0) * 60_000, arr: p.arr + (o.delay || 0) * 60_000, opt: o, taken: false };
+      }
+    }
+    if (nav !== state || state.asking !== key) return;
+    state.asking = null;
+    state.trouble = { kind: 'miss', k, key, ride: was || rideName(l), mode: l.mode, next, taken, best: undefined };
+    onAction?.('fastest', { k, next: next ? { leg: l, dep: next.dep } : null });
+    kit.rec?.('miss', { taken, ride: rideName(l), dep: l.dep, next: next?.dep ?? null });
+  };
+  // To be there by a time and late this way: 最快 asked for.
+  const askLate = k => {
+    const key = `late|${plan.arr}`;
+    if (state.troubleNo === key || state.trouble?.key === key) return;
+    state.trouble = { kind: 'late', k, key, mins: lateBy(plan, plan.arr), best: undefined };
+    onAction?.('fastest', { k, next: null });
+  };
+  state.ask = { miss: askMiss };
+  // 最快 found (or not): the card whole now, shown (and buzzed once).
+  state.setBest = best => {
+    const t = state.trouble;
+    if (!t || t.best !== undefined) return;
+    // (No quicker than 下一班 by a minute: 下一班 is the quickest.)
+    t.best = best && !(t.next && best.arr >= t.next.arr - 60_000) ? best : null;
+    if (t.best || (t.next && !t.next.taken) || !t.next) buzz();
+    render();
   };
   // The bus you were walking to, gone before you can be there: the next you
-  // can make (the timetable's, never that one again), and a YouBike to a
-  // stop further on that still catches it, offered (chase.mjs).
+  // can make (the timetable's, never that one again) taken, and 最快 asked.
+  // (Never a YouBike to a stop further on to chase it: Jay 2026-11-06, "not
+  // force me to go further but go back to regular logic". 最快 is planned
+  // without one.)
   const goneBus = async (k, x, was, ready, seen) => {
     const l = plan.legs[k];
     if (nav !== state || state.i >= k || !l) return;
+    const name = rideName(l);
     const nx = nextCatchable(x.sched, x.way?.w, x.way?.i, seen, ready, Date.now());
-    if (nx) takeOther(k, { dep: nx.at, arr: nx.at + (l.arr - l.dep) }, W(`趕不上 ${hm(was)} 這班，改搭 ${hm(nx.at)}`, `Can’t make the ${hm(was)}; next ${hm(nx.at)}`));
-    const c = await chaseFrom(state.pos, plan.legs.slice(k), Date.now(), { prefer: plan.legs.some(y => y.ebike) }).catch(() => null);
-    if (!c || nav !== state || state.i >= k) return;
-    const b = c.legs.find(isRide);
-    // (Short enough for a 320 screen beside its button: how much sooner, then where and when you board.)
-    const gain = Math.round((plan.arr - c.arr) / 60_000);
-    state.offer = { title: W(`騎車追上，早 ${gain} 分到`, `${gain} min sooner by bike`), sub: W(`${shortPlace(b.from.name)} ${hm(b.dep)} 上車`, `Board at ${shortPlace(b.from.name)} ${hm(b.dep)}`), plan: { ...c, dest: plan.dest, then: plan.then, ...(plan.deadline ? { deadline: plan.deadline } : {}) }, until: b.dep - 60_000 };
-    buzz();
-    render();
+    if (nx) takeOther(k, { dep: nx.at, arr: nx.at + (l.arr - l.dep) }, W(`趕不上 ${hm(was)} 這班，改搭 ${hm(nx.at)}`, `Can’t make the ${hm(was)}; next ${hm(nx.at)}`), false, true);
+    askMiss(k, Boolean(nx), name);
   };
   const optText = (o, l) => (en ? `${o.train ? `${trainKind(o.train.type || '')} ${o.train.no} ` : ''}${l.mode === 'bus' ? 'due' : 'leaves'} ${hm(o.dep)}` : `${o.train ? `${o.train.type || ''} ${o.train.no} 次 ` : ''}${hm(o.dep)}${l.mode === 'bus' ? ' 到站' : ' 開'}`);
   // 改搭別班: the ride ahead's departures, one tap to take another.
@@ -1556,9 +1632,14 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.missing = k;
     const next = (await rideOptions(l, state.info.get(k)).catch(() => [])).find(o => o.dep + (o.delay || 0) * 60_000 > Date.now() + 30_000);
     state.missing = null;
-    if (!next || nav !== state || state.i !== k || state.phase === 'on') return;
-    buzz();
-    takeOther(k, next, W(`沒趕上 ${rideName(l)}，改搭 ${optText(next, l)}`, `Missed ${rideName(l)}; next: ${optText(next, l)}`));
+    if (nav !== state || state.i !== k || state.phase === 'on') return;
+    const name = rideName(l);
+    if (next) {
+      buzz();
+      takeOther(k, next, W(`沒趕上 ${rideName(l)}，改搭 ${optText(next, l)}`, `Missed ${rideName(l)}; next: ${optText(next, l)}`), false, true);
+    }
+    // (And 最快 from here, beside it: or alone when there's no next run, the metro's, the last one gone.)
+    askMiss(k, Boolean(next), name);
   };
   // Waiting at the station for a train with one there sooner still to come
   // (there early, or an earlier one running late): that one, said and
@@ -1824,9 +1905,27 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       });
     } else if (a === 'fold-top' || a === 'fold-bottom') {
       foldCard(a === 'fold-top' ? 'top' : 'bottom');
-    } else if (a === 'offer-x') {
-      state.offer = null;
+    } else if (a === 'tr-x') {
+      // (Dismissed: never asked again for that run; a 'wrong' or 'off' one until it's so again.)
+      state.troubleNo = state.trouble?.key ?? null;
+      state.trouble = null;
+      if (!state.troubleNo) state.away = 0;
       render();
+    } else if (a === 'tr-next') {
+      // 下一班: kept (taken already) or taken now.
+      const t = state.trouble;
+      state.troubleNo = t?.key ?? null;
+      state.trouble = null;
+      const l = t && plan.legs[t.k];
+      if (t?.next?.opt && !t.next.taken && l) takeOther(t.k, t.next.opt, W(`改搭 ${optText(t.next.opt, l)}`, `Switched: ${optText(t.next.opt, l)}`));
+      else render();
+    } else if (a === 'tr-best') {
+      const b = state.trouble?.best;
+      state.trouble = null;
+      if (b) onAction?.('take', b);
+    } else if (a === 'replan') {
+      // (On a bus or train that isn't the plan's: planned from that ride.)
+      onAction?.('replan', { aboard: state.shownTrouble === 'wrong' });
     } else if (a) onAction?.(a);
   };
   // Folded or opened: kept and drawn (the map fits the room left: tab-map watchCards).
@@ -2026,14 +2125,12 @@ export function stageView(plan, i, phase, me, path, ride = null) {
 export function navNow() {
   if (!nav) return null;
   const on = isRide(nav.plan.legs[nav.i]) && nav.phase === 'on';
-  return { plan: nav.plan, i: nav.i, phase: nav.phase, pos: nav.pos, ahead: nav.i > nav.reached, ride: nav.ride.get(nav.i) || null, next: nav.next, aboard: on, offSoon: on && offSoon(nav), min: nav.min, offer: nav.offer || null };
+  return { plan: nav.plan, i: nav.i, phase: nav.phase, pos: nav.pos, ahead: nav.i > nav.reached, ride: nav.ride.get(nav.i) || null, next: nav.next, aboard: on, offSoon: on && offSoon(nav), min: nav.min, trouble: nav.trouble || null };
 }
 // Said on the card (to be there by a time, late): { title, sub, plan } or null.
-export function navOffer(o) {
-  if (!nav) return;
-  nav.offer = o;
-  if (o?.plan || o?.title) buzz();
-  nav.render?.();
+// 最快 found for the trouble card (trouble.mjs fastest), or null: none quicker.
+export function navBest(best) {
+  nav?.setBest?.(best);
 }
 // Shrunk to the bar (doing something else) or back; kept for when the app's opened again.
 export function setNavMin(on) {
@@ -2124,6 +2221,7 @@ export function navRest(rest = [], after = null) {
 
 export function stopNav() {
   if (!nav) return;
+  nav.traceSave?.();
   dropNav();
   nav.push?.([]);
   document.removeEventListener('visibilitychange', nav.onShow);

@@ -22,7 +22,8 @@ import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
 import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
-import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, navLater, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateBy } from './nav.mjs';
+import { fastest } from './trouble.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
@@ -1705,7 +1706,7 @@ async function plan(from, to, opts = {}) {
     // The whole plan before the first show (its second round too: the direct
     // buses, every bus's times, 追公車; steady.mjs `settled`), the skeleton till
     // then (Jay 2026-11-06: "the first show is the final result").
-    out = onTicket || onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await settled(await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() })));
+    out = onTicket || onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await settled(await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow(), chase: !opts.noChase })));
     if (aboard && !onBoard) c.from = { ...c.from, name: start.name || HERE };
     c.plans = onBoard || onTicket ? out.plans : await walkHere(out.plans);
     c.choice = {};
@@ -2740,8 +2741,13 @@ function navAction(a, info) {
     return n && navView(n.plan, n.i);
   }
   if (a === 'more') return navMore();
-  if (a === 'replan') return replanFromHere();
-  if (a === 'late') return navLate(info);
+  if (a === 'replan') return replanFromHere(null, null, '', { now: Boolean(info?.aboard) });
+  if (a === 'fastest') return navFastest(info);
+  // 最快 tapped on the trouble card: that way, navigated on as this trip.
+  if (a === 'take' && info) {
+    const n = navNow();
+    return navigate({ ...info, dest: n?.plan.dest || info.dest, then: n?.plan.then || info.then, ...(n?.plan.deadline ? { deadline: n.plan.deadline } : {}) }, null, { swap: true });
+  }
   if (a === 'stayed') return stayedOn(info);
   if (a === 'rest') return restAfter(info);
   // Its cards grew, shrank or folded (the stops on board coming in, a fold):
@@ -2754,35 +2760,26 @@ function navAction(a, info) {
     }, 150);
     return;
   }
-  if (a === 'offer') {
-    const n = navNow();
-    if (n?.offer?.plan) navigate(n.offer.plan, null, { swap: true });
-  }
 }
-// To be there by a time and late for it (missed the bus, the next too late;
-// or late for it on the way): the ways from here for the same deadline, and
-// the best that's on time offered on the card (改騎電輔車，07:55 到), or said
-// that none is. The owner, 2026-10-12: miss the bus, still at school by 8.
-let lateBusy = false;
-async function navLate({ eta = null, k = -1, ride = '' } = {}) {
+// 最快 for the trouble card (nav.mjs, trouble.mjs): the ways from where you
+// are now, the whole plan (steady.mjs settled), never a YouBike to a bus
+// further on (Jay 2026-11-06); the quickest, unless it's the run 下一班 is.
+let fastBusy = false;
+async function navFastest({ next = null } = {}) {
   const n = navNow();
   const here = n?.pos || ctx.here;
-  if (!n?.plan.deadline || !here || lateBusy || n.plan.deadline < Date.now()) return;
-  lateBusy = true;
+  if (!n || !here || fastBusy) return navBest(null);
+  fastBusy = true;
+  let best = null;
   try {
     const from = { name: HERE, lat: here.lat, lon: here.lon };
-    const r = await planTrip(ctx.data, from, navDest(n), { at: n.plan.deadline, by: 'arrive', modes: tripModes, ebike: ebikeNow() });
-    let best = onTimeWay(r.plans, n.plan, k, Date.now());
-    if (!best && r.later) best = onTimeWay((await r.later)?.plans, n.plan, k, Date.now());
-    if (navNow()?.plan !== n.plan) return;
-    const late = eta == null ? 0 : lateBy(n.plan, eta);
-    const title = late ? W(`這樣會晚 ${late} 分到`, `This gets you there ${late} min late`) : ride ? W(`趕不上 ${ride} 的話`, `If you miss ${ride}`) : W('趕不上的話', 'If you miss it');
-    if (best) navOffer({ title, sub: offerText(best), plan: { ...best, dest: n.plan.dest, then: n.plan.then } });
-    else if (late) navOffer({ title, sub: W('沒有能準時到的走法', 'No way gets there on time') });
+    const r = await settled(await planTrip(ctx.data, from, navDest(n), { modes: tripModes, ebike: ebikeNow(), chase: false }));
+    best = fastest(r?.plans, next, Date.now());
   } catch {
   } finally {
-    lateBusy = false;
+    fastBusy = false;
   }
+  if (navNow()?.plan === n.plan) navBest(best);
 }
 const navDest = n => n.plan.dest || n.plan.legs.at(-1).to;
 // A trip's stops after its first place, at most.
@@ -2790,15 +2787,18 @@ const MAX_STOPS = 3;
 // From where you are now to the same place: the ways now, to look at while
 // this one goes on; 開始導航 on one replaces it.
 let replanTo = null;
-function replanFromHere(to = null, then = null, go = '') {
+// `now`: leaving now whatever the trip was timed by (on a ride that isn't the
+// plan's: planned from that ride, aboard.mjs, which only a now search does).
+function replanFromHere(to = null, then = null, go = '', { now = false } = {}) {
   const n = navNow();
   if (!n) return;
   replanTo = to || navDest(n);
   shrinkNav(true);
   ctx.goTab('map');
   // (To be there by a time: still by it, from here.)
-  when = n.plan.deadline > Date.now() ? { by: 'arrive', at: n.plan.deadline } : { by: 'now', at: null };
-  plan(null, replanTo, { then: then ?? n.plan.then ?? [], go });
+  when = n.plan.deadline > Date.now() && !now ? { by: 'arrive', at: n.plan.deadline } : { by: 'now', at: null };
+  // (From a trip under way: the usual ways, never a YouBike further on to chase a bus: Jay 2026-11-06.)
+  plan(null, replanTo, { then: then ?? n.plan.then ?? [], go, noChase: true });
 }
 // A row of a navigation sheet: a colour tile and what it does.
 const menuRow = (m, g, c, text) => `<button class="q-ritem chevron" type="button" data-m="${m}">${tile(g, c, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${text}</span></span></button>`;
