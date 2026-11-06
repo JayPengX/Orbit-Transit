@@ -29,7 +29,7 @@ import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor, legChips, fitLegs, journeyLine } from './ui.mjs';
 import { boardRow, whenHtml } from './board.mjs';
 import { COLOR, PLACE_COLOR, tile, tripTile, tag, section, rowCard, tick, navTitle, noticesHtml } from './look.mjs';
-import { e, hm, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson, shown as nameIn } from './util.mjs';
+import { e, hm, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson, workday, shown as nameIn } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 import { onDayOff } from '#kit/dayoff.mjs';
@@ -169,7 +169,7 @@ export function tripNow(t, here, now = Date.now()) {
 // come before the phone's copy.
 export function keptLead(w, { prefs = {}, here = null, picks = [], now = Date.now() } = {}) {
   const st = S.trips.get(w.id);
-  let plans = st?.sig === tripSig(w) && st.plans?.length ? st.plans : null;
+  let plans = st?.sig === tripSig(w) && !st.guess && st.plans?.length ? st.plans : null;
   if (!plans) {
     const kept = readTrips()[JSON.stringify([w.id, tripSig(w), prefs || {}])];
     if (!kept || replanWhy(kept, { w, here, picks, now })) return null;
@@ -235,7 +235,12 @@ async function refresh() {
     // around you every 20 s while 交通 was open is gone with it; the map has what's near.)
     jobs.push(loadNotices_());
     // The two trips that matter most get their plans at once (planned once, their times kept up: `loadTrip`).
-    for (const { w } of trips().slice(0, 2)) jobs.push(loadTrip(w));
+    // (One shown on its last ways while they're found again isn't waited for: the opening lifts onto them.)
+    for (const { w } of trips().slice(0, 2)) {
+      const job = loadTrip(w);
+      if (tripOf(w)?.guess) job.catch(() => {});
+      else jobs.push(job);
+    }
     for (const id of S.open) jobs.push(loadPlace(id));
     render();
     await Promise.all(jobs);
@@ -378,6 +383,64 @@ function keepTrip(key, kept) {
     writeJson(TRIP_CACHE, all);
   } catch {}
 }
+// A trip's last ways, a day or more on (Jay 2026-11-06: 上學 sat on 找班次… every
+// morning, its ways two hours old by then, planned again from nothing: 4–7 s and
+// about 100 reads). Each way of a saved trip keeps its last ways found, a slim
+// copy (the ways shown and their departures in the next three hours), eight
+// days. Opened again at about the same time (within 90 minutes) on the same
+// kind of day (a working day or a day off), they're shown at once, moved on by
+// whole days, said 更新中… and never navigated or notified on, while the ways
+// are found again as before; nothing found or a failure: they go. No read of
+// their own: the same planning as before, only not a blank card meanwhile.
+const LAST_CACHE = 'ot.trips.last.v1';
+const DAY_MS = 86_400_000;
+const LAST_DAYS = 8;
+const LAST_SLACK_MS = 90 * 60_000;
+const LAST_AHEAD_MS = 3 * 3_600_000;
+// The ways a card shows and their departures within three hours of `t`, their `times` pointing into the slim list.
+export function slimPlans(plans, t) {
+  const keep = new Set();
+  plans.forEach((p, i) => {
+    if (!p.lead) return;
+    keep.add(i);
+    for (const j of p.times || []) if (plans[j] && plans[j].dep < t + LAST_AHEAD_MS) keep.add(j);
+  });
+  const idx = [...keep].sort((a, b) => a - b);
+  const at = new Map(idx.map((j, k) => [j, k]));
+  return idx.map(j => {
+    const p = plans[j];
+    return p.times ? { ...p, times: p.times.filter(x => at.has(x)).map(x => at.get(x)) } : p;
+  });
+}
+// The last ways moved on to today, or null when they don't fit now (another
+// kind of day, another hour, another start, other settings, a week old, or no
+// way shown still to come). `last`: { at, t, work, from, prefs, plans }.
+export function lastGuess(last, { w, here = null, prefs = '{}', now = Date.now() }) {
+  if (!last?.plans?.length || last.prefs !== prefs) return null;
+  const from = w.from || here;
+  if (!from || !last.from || meters(from.lat, from.lon, last.from.lat, last.from.lon) > MOVED_M) return null;
+  const t = w.at || now;
+  const days = Math.round((t - last.t) / DAY_MS);
+  if (days < 0 || days > LAST_DAYS || Math.abs(t - last.t - days * DAY_MS) > LAST_SLACK_MS) return null;
+  if (workday(tw(t).date) !== last.work) return null;
+  const d = days * DAY_MS;
+  const moved = last.plans.map(p => ({ ...shiftPlan(p, d), legs: p.legs.map(l => ({ ...l, dep: l.dep + d, arr: l.arr + d, live: false })), live: false }));
+  const plans = w.by === 'arrive' ? moved : rollPlans(moved, now);
+  return plans.some(p => p.lead && p.top && !p.weak && (anytime(p) || p.dep >= now - 2 * 60_000)) ? plans : null;
+}
+const readLast = () => readJson(LAST_CACHE, {}) || {};
+function keepLast(w, { at, from, plans }) {
+  try {
+    const read = readSaved(LAST_CACHE, {});
+    if (read === UNREAD) return;
+    const all = read || {};
+    const now = Date.now();
+    for (const k of Object.keys(all)) if (now - all[k].at > LAST_DAYS * DAY_MS || !ctx.data.saved.some(t => k.startsWith(`${t.id}:`))) delete all[k];
+    const t = w.at || at;
+    all[w.id] = JSON.parse(JSON.stringify({ at, t, work: workday(tw(t).date), from, prefs: JSON.stringify(ctx.data.prefs || {}), plans: slimPlans(plans, t) }, (k, v) => (v instanceof Promise ? undefined : v)));
+    writeJson(LAST_CACHE, all);
+  } catch {}
+}
 // The kept plans as they are now: rolled on, the buses due soon timed by what they're doing.
 async function retimed(base, w) {
   const now = Date.now();
@@ -415,7 +478,9 @@ async function loadTrip(w, { force = false } = {}) {
       return render();
     }
   }
-  S.trips.set(w.id, { ...(old || {}), sig, loading: true });
+  // (Nothing of this session's to show meanwhile: the last ways, a day or more on, said 更新中….)
+  const guess = old?.plans?.length ? null : lastGuess(readLast()[w.id], { w, here, prefs: JSON.stringify(ctx.data.prefs || {}) });
+  S.trips.set(w.id, { ...(old || {}), sig, loading: true, ...(guess ? { plans: guess, guess: true } : {}) });
   render();
   try {
     const from = w.from || (here ? { name: W('目前位置', 'Here'), ...here } : null);
@@ -426,6 +491,7 @@ async function loadTrip(w, { force = false } = {}) {
     const done = plans => {
       S.trips.set(w.id, { sig, at, from, base: plans, timed: Date.now(), plans, error: '' });
       keepTrip(tripKey(w), { at, from: { lat: from.lat, lon: from.lon }, plans });
+      keepLast(w, { at, from: { lat: from.lat, lon: from.lon }, plans });
     };
     if (out.plans.length) done(out.plans);
     else S.trips.set(w.id, { sig, at, from, plans: [], error: out.error ? errorText(out.error) : W('找不到大眾運輸方案。', 'No transit route found.') });
@@ -510,7 +576,8 @@ function tripPush(now = Date.now()) {
     if (!t.date) continue;
     const w = tripNow(t, null, now);
     if (!w?.at || w.id.endsWith(':b')) continue;
-    const lead = S.trips.get(w.id)?.plans?.find(p => p.top && p.lead !== false) || keptLead(w, { prefs: ctx.data.prefs, picks: t.picks, now });
+    const st = S.trips.get(w.id);
+    const lead = (st?.guess ? null : st?.plans?.find(p => p.top && p.lead !== false)) || keptLead(w, { prefs: ctx.data.prefs, picks: t.picks, now });
     const dep = lead?.dep ?? (w.by === 'arrive' ? w.at - 60 * 60_000 : w.at);
     if (dep - LEAVE_SOON_MS < now - 60_000) continue;
     items.push({ at: dep - LEAVE_SOON_MS, title: W(`${t.name || t.to.name}：10 分鐘後出發`, `${t.name || t.to.name}: leave in 10 min`), body: W(`${hm(dep)} 出發${lead ? `，${hm(lead.arr)} 到` : ''}`, `Leave ${hm(dep)}${lead ? `, there ${hm(lead.arr)}` : ''}`), tag: `trip:${t.id}:${t.date}`, kind: 'trip', hash: 'go' });
@@ -559,7 +626,8 @@ function tripCard({ t, w }) {
   const head = boardRow({
     lead: mark,
     main: e(w.label),
-    note: warn ? `<span class="ot-warn">${e(warn)}</span>` : e(where),
+    // (The last ways moved on to today, while they're found again: said so, not where it goes.)
+    note: st.guess ? e(W('更新中…', 'Updating…')) : warn ? `<span class="ot-warn">${e(warn)}</span>` : e(where),
     when: whenHtml(p.dep, W('出發', 'Leave'), p.live),
     attrs: `data-all-trip="${e(w.id)}"`
   });
@@ -716,7 +784,8 @@ function onClick(ev) {
   if (all) {
     const w = trips().find(x => x.w.id === all.dataset.allTrip)?.w;
     // (The ways this card ranked, so the map's first is the card's.)
-    if (w) return ctx.openTrip(w.from, w.to, { at: w.at, by: w.by, plans: tripOf(w)?.plans?.length ? tripOf(w).plans : null });
+    // (Not the last ways shown while they're found again: the map finds them.)
+    if (w) return ctx.openTrip(w.from, w.to, { at: w.at, by: w.by, plans: tripOf(w)?.plans?.length && !tripOf(w).guess ? tripOf(w).plans : null });
   }
   const lt = ev.target.closest('[data-load-trip]');
   if (lt) {
@@ -727,6 +796,8 @@ function onClick(ev) {
   const nt = ev.target.closest('[data-nav-trip]');
   if (nt) {
     const x = trips().find(y => y.w.id === nt.dataset.navTrip);
+    // (A way of the last ways, shown while they're found again, is never navigated: the map finds them.)
+    if (x && tripOf(x.w)?.guess) return ctx.openTrip(x.w.from, x.w.to, { at: x.w.at, by: x.w.by, plans: null });
     const all = (x && tripOf(x.w)?.plans) || [];
     const p = all[Number(nt.dataset.i)];
     // (Not the way shown first: picked, its train kept as chosen.)
