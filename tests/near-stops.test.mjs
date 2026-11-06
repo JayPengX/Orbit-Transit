@@ -63,3 +63,41 @@ test('stops near you: the nearest by name, one ask a city for their buses, never
     api.useSession(null);
   }
 });
+
+// A trip's walks to the YouBike stations near its ends are asked from the
+// end's spot on the map's ~40 m grid (planner.mjs spotOf, tab-map fromHere):
+// planning from where you stand asked Google again for the five walks the
+// map's strip had asked from 25 m away (2026-11-06), and each fix is a new
+// point. A walk asked from the spot is the planner's walk from the end, either way round.
+test("a trip's walks from its end's spot on the map's grid: asked once a spot, found from the end", async () => {
+  const api = await import('../public/lib/api.mjs');
+  const { spotOf } = await import('../public/lib/planner.mjs');
+  const { walkLeg } = await import('../public/lib/plan.mjs');
+  // Two fixes 15 m apart, one spot; the spot within ~28 m of each.
+  const a = { lat: 24.80275, lon: 120.97035 };
+  const b = { lat: 24.80285, lon: 120.97045 };
+  assert.deepEqual(spotOf(a), spotOf(b));
+  assert.deepEqual(spotOf(a), { lat: 24.8028, lon: 120.9704 });
+  const station = { name: '新竹火車站(前站一)', lat: 24.80189, lon: 120.97099 };
+  const was = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async url => {
+    const u = new URL(url);
+    if (u.pathname.endsWith('/transit/walk')) {
+      asked.push(u.searchParams.get('from'));
+      return answer({ walks: [{ dist: 240, dur: 200 }], src: 'google' });
+    }
+    return new Response('', { status: 503 });
+  };
+  api.useSession({ ensureToken: async () => 'tok' });
+  try {
+    await api.walksTo(spotOf(a), [station]);
+    await api.walksTo(spotOf(b), [station]);
+    assert.deepEqual(asked, ['24.80280,120.97040'], 'one ask for the spot, none for the second fix');
+    assert.equal(walkLeg({ ...a, name: '' }, station, 0).dist, 240);
+    assert.equal(walkLeg(station, { ...b, name: '' }, 0).dist, 240);
+  } finally {
+    globalThis.fetch = was;
+    api.useSession(null);
+  }
+});

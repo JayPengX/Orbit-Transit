@@ -16,7 +16,7 @@ import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.
 import { railStations, metroSystems, traBoard, hsrBoard, railNetwork, stationPoint } from './raildata.mjs';
 import { OPERATORS, stationTitle } from './metro.mjs';
 import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
-import { planTrip, findAboard, planAboard, planTicket } from './planner.mjs';
+import { planTrip, findAboard, planAboard, planTicket, spotOf } from './planner.mjs';
 import { trainsNumbered, boardAlight, rideOf, ticketOf } from './ticket.mjs';
 import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { liveTimes, officialLeg } from './live.mjs';
@@ -728,9 +728,9 @@ const placeOf = c => ({ name: c.item.name || '', lat: c.item.lat ?? c.lat, lon: 
 // the proxy's month-long walks are found there (the exact fix was new at
 // each opening, and a phone drifting indoors spent Google's cap).
 let anchor = null;
-const GRID = 0.0004;
 const fromHere = h => {
-  if (!anchor || meters(anchor.lat, anchor.lon, h.lat, h.lon) > 50) anchor = { lat: Number((Math.round(h.lat / GRID) * GRID).toFixed(5)), lon: Number((Math.round(h.lon / GRID) * GRID).toFixed(5)) };
+  // (The grid is the planner's too, planner.mjs spotOf: a plan from here finds these walks.)
+  if (!anchor || meters(anchor.lat, anchor.lon, h.lat, h.lon) > 50) anchor = spotOf(h);
   return anchor;
 };
 const walkKnown = (h, p) => walkKnownAt(fromHere(h), p);
