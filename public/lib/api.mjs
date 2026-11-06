@@ -5,7 +5,7 @@
 
 import * as kit from '#kit/orbit.mjs';
 import { dev } from '#kit/orbit.mjs';
-import { WALK_M_MIN, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
+import { WALK_M_MIN, readJson, readSaved, UNREAD, writeJson, inTaiwan } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 // (api.<domain> on the family's own domain: the kit's API, kit/domain.mjs.)
@@ -46,13 +46,14 @@ async function bodyJson(res, quiet) {
 // kit orbit.mjs abroad): nothing is asked at all, and once the proxy has said
 // TW_ONLY nothing more is asked this session (no retries spent abroad).
 let twOnly = false;
-const closedAbroad = () => twOnly || Boolean(kit.abroad?.());
+// (A fix in Taiwan since the proxy said no opens it again: it then sends tw=1.)
+const closedAbroad = () => (twOnly && kit.placeSeen?.() !== true) || Boolean(kit.abroad?.());
 async function ask(path, { signal, wait = 15_000, meta = null, renew = false } = {}) {
   if (closedAbroad()) throw Object.assign(new Error('TW_ONLY'), { code: 'TW_ONLY', status: 403 });
   // (The token is waited for within `wait` too: a sign-in refresh that never answered held every ask behind it.)
   const t = await Promise.race([token(renew), sleep(wait).then(() => Promise.reject(Object.assign(new Error('network'), { code: 'TIMEOUT', status: 0 })))]);
   // (`tz`: the phone's zone, so a phone in Taiwan on a VPN abroad isn't turned away: Orbit-Core http.js abroad.)
-  const tz = kit.phoneZone?.() === 'Asia/Taipei' ? '&tz=Asia%2FTaipei' : '';
+  const tz = `${kit.phoneZone?.() === 'Asia/Taipei' ? '&tz=Asia%2FTaipei' : ''}${kit.placeSeen?.() === true ? '&tw=1' : ''}`;
   const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(t)}${tz}`;
   const timer = typeof AbortController !== 'undefined' ? new AbortController() : null;
   // (The answer's body is waited for too, not only its headers: a body that
@@ -340,6 +341,7 @@ const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.co
 const TRACK_MS = 180_000;
 const track = [];
 export const recentFixes = (now = Date.now()) => track.filter(x => x.t >= now - TRACK_MS);
+let placeNoted = 0;
 function watchDevice(nav) {
   if (geo.id != null || !nav?.geolocation?.watchPosition) return;
   geo.answered = false;
@@ -348,6 +350,19 @@ function watchDevice(nav) {
     p => {
       geo.answered = true;
       const fix = fixOf(p);
+      // (Where the fix is decides Taiwan-only for the whole family, kit notePlace: in the US
+      // behind a Taiwan clock the app closes with the kit's card, never half works. A fix
+      // vaguer than 30 km says nothing.)
+      if (!(fix.acc > 30_000)) {
+        const was = kit.placeSeen?.();
+        const here = inTaiwan(fix.lat, fix.lon);
+        // (Written when it changes, else every half hour: a fix comes each second.)
+        if (was !== here || Date.now() - placeNoted > 30 * 60_000) {
+          placeNoted = Date.now();
+          kit.notePlace?.(here);
+        }
+        if (was !== here) kit.twOnlyCheck?.('transit');
+      }
       geo.last = { fix, t: Date.now() };
       track.push({ ...fix, t: geo.last.t });
       while (track.length && track[0].t < geo.last.t - TRACK_MS) track.shift();
