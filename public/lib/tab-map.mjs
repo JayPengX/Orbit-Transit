@@ -9,7 +9,7 @@
 
 import { createMap } from './map.mjs';
 import { watchHeading, askCompass, gpsFix, unwrap } from './compass.mjs';
-import { fitNumbers, netState } from '#kit/orbit.mjs';
+import { fitNumbers, netState, rec } from '#kit/orbit.mjs';
 import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
@@ -21,7 +21,7 @@ import { trainsNumbered, boardAlight, rideOf, ticketOf } from './ticket.mjs';
 import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
-import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
+import { nearBikes as nearBikeCards } from './near-ui.mjs';
 import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateBy } from './nav.mjs';
 import { fastest } from './trouble.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
@@ -527,6 +527,8 @@ async function tap(pt, hit = null) {
   if (card) return dismissCard();
   // (The sheet half up: a tap on the map under it lowers it, as Maps does; from its lowest a tap marks the spot.)
   if (msheet.detent !== 'peek') return msheet.set('peek');
+  // (For the 除錯紀錄: a tap on no place, nor beside a pin: if it was meant for one, the zoom says how small they were.)
+  rec('spot-tap', { z: map.zoom?.() ?? null });
   openCard({ kind: 'point', item: { name: MAP_SPOT, lat: pt.lat, lon: pt.lon }, lat: pt.lat, lon: pt.lon });
   focusAbove(pt);
   try {
@@ -538,23 +540,44 @@ async function tap(pt, hit = null) {
     }
   } catch {}
 }
-// One of Google's places: a station opens ours (with its live board).
+// One of Google's places: its card at once (the name as Google gives it,
+// when it comes), or a station's ours with its live board. The station
+// lists, when they aren't in yet, are waited on a moment at most: the place's
+// card opens without them, and turns into the station's if one is there
+// (Jay 2026-11-06: a place's tap "loads slowly").
+const STATION_WAIT_MS = 250;
 async function googlePlace(p) {
   if (navFull()) return dragged();
   follows(false);
-  const rail = await railStations().catch(() => []);
-  const metro = (await metroSystems(p).catch(() => [])).flatMap(s => s.stations);
-  const st = [...rail, ...metro].map(s => [meters(p.lat, p.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0])[0];
-  if (st && st[0] < 120) return openCard({ kind: st[1].sys, item: st[1], lat: st[1].lat, lon: st[1].lon });
+  const station = (async () => {
+    const [rail, metro] = await Promise.all([railStations().catch(() => []), metroSystems(p).then(l => l.flatMap(s => s.stations), () => [])]);
+    const st = [...rail, ...metro].map(s => [meters(p.lat, p.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0])[0];
+    return st && st[0] < 120 ? st[1] : null;
+  })();
+  const asStation = st => openCard({ kind: st.sys, item: st, lat: st.lat, lon: st.lon });
+  const soon = await Promise.race([station, wait(STATION_WAIT_MS).then(() => undefined)]);
+  if (soon) return asStation(soon);
   openCard({ kind: 'place', item: { id: p.id, name: '', lat: p.lat, lon: p.lon }, lat: p.lat, lon: p.lon });
+  const mine = () => card?.kind === 'place' && card.item?.id === p.id;
+  // (Its name asked now, beside the lists still on their way.)
+  const details = placeDetails(p.id, { name: true });
+  details.catch(() => {});
+  if (soon === undefined) {
+    const st = await station;
+    if (st && mine()) return asStation(st);
+  }
+  const t0 = Date.now();
   try {
-    const d = await placeDetails(p.id, { name: true });
-    if (card?.item?.id === p.id) {
+    const d = await details;
+    // (For the 除錯紀錄: a place's tap, how long its name took, how far Google's spot was from the tap.)
+    rec('place-tap', { ms: Date.now() - t0, off: Math.round(meters(p.lat, p.lon, d.lat ?? p.lat, d.lon ?? p.lon)), z: map.zoom?.() ?? null });
+    if (mine()) {
       Object.assign(card.item, { name: d.name || W('這個地點', 'This place'), sub: d.address, lat: d.lat, lon: d.lon });
       renderCard();
     }
-  } catch {
-    if (card?.item?.id === p.id) {
+  } catch (err) {
+    rec('place-tap', { ms: Date.now() - t0, failed: String(err?.message || err).slice(0, 80) });
+    if (mine()) {
       card.item.name = W('這個地點', 'This place');
       renderCard();
     }
@@ -669,12 +692,13 @@ function refreshCard() {
 // stations beside it (Jay, 2026-10-28: the card was its name, 路線 and ☆ over
 // half a sheet of nothing). Distances are from the place, not from you.
 const AROUND_M = 450;
+// A place's or a spot's card: the YouBike stations near it, nothing else (Jay
+// 2026-11-06: its nearby bus stops "unhelpful"; no TDX ask for them either).
 async function aroundPlace(c) {
   const lat = c.item.lat ?? c.lat;
   const lon = c.item.lon ?? c.lon;
-  const [stops, bikes] = await Promise.all([nearStops({ lat, lon }, { n: 3, r: 400 }).catch(() => []), bikesAround(lat, lon).catch(() => [])]);
+  const bikes = await bikesAround(lat, lon).catch(() => []);
   return {
-    stops: stops.filter(s => s.dist <= AROUND_M),
     bikes: bikes
       .map(s => ({ ...s, d: meters(lat, lon, s.lat, s.lon) }))
       .filter(s => s.d <= AROUND_M)
@@ -684,10 +708,10 @@ async function aroundPlace(c) {
 }
 function aroundHtml(c) {
   const n = c.live;
-  const rows = nearBusRows(n ? n.stops : null, { max: 4 });
-  const bikes = n ? nearBikeCards(n.bikes) : '';
-  const body = rows || bikes ? `${rows ? `<div class="q-rowcard">${rows}</div>` : ''}${bikes}` : `<p class="ot-note">${W('附近沒有公車站或 YouBike', 'No bus stop or YouBike nearby')}</p>`;
-  return `<section class="ot-shelf ot-card-around">${kitUI.sectionHeadHtml(W('這裡附近', 'Around here'))}${body}</section>`;
+  // (Nothing yet: none drawn, no "none nearby" before the read is in.)
+  if (!n) return '';
+  const bikes = nearBikeCards(n.bikes) || `<p class="ot-note">${W('附近沒有 YouBike', 'No YouBike nearby')}</p>`;
+  return `<section class="ot-shelf ot-card-around">${kitUI.sectionHeadHtml(W('附近 YouBike', 'YouBike nearby'))}${bikes}</section>`;
 }
 
 // A card's place as a trip's end; one of Google's carries its id (Google Maps' own navigation goes to the place itself).
