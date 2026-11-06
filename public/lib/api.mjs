@@ -42,7 +42,13 @@ async function bodyJson(res, quiet) {
     text += decoder.decode(value, { stream: true });
   }
 }
+// Outside Taiwan Transit is closed (Jay 2026-11-06; the kit's card says why,
+// kit orbit.mjs abroad): nothing is asked at all, and once the proxy has said
+// TW_ONLY nothing more is asked this session (no retries spent abroad).
+let twOnly = false;
+const closedAbroad = () => twOnly || Boolean(kit.abroad?.());
 async function ask(path, { signal, wait = 15_000, meta = null, renew = false } = {}) {
+  if (closedAbroad()) throw Object.assign(new Error('TW_ONLY'), { code: 'TW_ONLY', status: 403 });
   // (The token is waited for within `wait` too: a sign-in refresh that never answered held every ask behind it.)
   const t = await Promise.race([token(renew), sleep(wait).then(() => Promise.reject(Object.assign(new Error('network'), { code: 'TIMEOUT', status: 0 })))]);
   const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(t)}`;
@@ -84,7 +90,9 @@ async function ask(path, { signal, wait = 15_000, meta = null, renew = false } =
   } finally {
     clearTimeout(stop);
   }
-  if (!res.ok) throw Object.assign(new Error(body?.code || `${res.status}`), { code: body?.code || 'HTTP', status: res.status });
+  const code = body?.code || body?.error?.code;
+  if (code === 'TW_ONLY') twOnly = true;
+  if (!res.ok) throw Object.assign(new Error(code || `${res.status}`), { code: code || 'HTTP', status: res.status });
   // How old the proxy's copy is (s): TDX slow, it answers with the copy it has.
   if (meta) meta.age = Number(res.headers?.get?.('X-Transit-Age')) || 0;
   return body;

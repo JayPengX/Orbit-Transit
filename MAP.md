@@ -272,6 +272,8 @@ Live: https://orbit.jaypengx.com/transit/
 
 ## Decisions in force
 
+- **Taiwan only** (Jay 2026-11-06: "block international user from using Taiwan only service outright"): outside Taiwan the kit's card covers the app (`twOnlyCheck`, the country of the last sign-in) and `lib/api.mjs ask` asks nothing; the proxy answers `/transit/…` with 403 `TW_ONLY` (the dev door and the showcase's demo stay open).
+
 - What isn't running comes from the operators' own notices (TDX Alert/News),
   never guessed (`service.mjs`): 台鐵's stopped trains leave the day's
   timetable (TDX's own lags: 內灣線 still listed on 2026-10-23), those run
