@@ -257,12 +257,15 @@ Live: https://orbit.jaypengx.com/transit/
   - what's near a point: worked out on the phone (`near.mjs`);
   - line shapes: `shapes.mjs` (packs and shapes read with the kit's
     `packJson`; a piece TDX draws there and back, 六家線, cut into its two tracks);
-  - the map: Google under the month's cap, else NLSC. Google's in Orbit's
-    look in light and dark (`map.mjs mapStyles`, Jay 2026-11-06): its place pins
-    (food, hotels, hospitals, temples, stations) one quiet graphite, shops
-    quieter, so the only colour is ours; its own bus stops off
-    (`tests/map-style.test.mjs`). A style only: nothing read, nothing spent;
-    Google's styles can only grey a pin, never tint or reshape it;
+  - the map: Google under the month's cap, else NLSC. Google's places keep
+    their own colours (greyed for an hour on 2026-11-06: Jay "I hate it");
+    its own bus stops off in light and dark (`map.mjs mapStyles`,
+    `tests/map-style.test.mjs`). A tap on one of its places
+    (`tab-map.mjs googlePlace`) opens its card at once, the station lists
+    waited on 250 ms at most (a station near it opens ours); its name from
+    `/transit/place` (除錯紀錄 `place-tap`: how long, `spot-tap`: a tap on
+    nothing). A place's or a spot's card shows the YouBike near it, never
+    its bus stops (Jay 2026-11-06: "unhelpful");
   - walks: Google's streets, OpenStreetMap past the cap.
 - **Offline:** covered (`onlineOnly`); never old bus times.
 - **Saved:**

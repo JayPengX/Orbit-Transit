@@ -39,34 +39,12 @@ const DARK = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6680' }] }
 ];
 
-// Google's places in Orbit's look (Jay 2026-11-06: "we already got our own
-// design for bus stop, Ubike stop… replace all the things on Google map"),
-// both looks: every pin of Google's (a restaurant, a hotel, a hospital, a
-// temple, a station) one quiet graphite, its name grey, a shop's quieter
-// still, so the only colour on the map is ours (DESIGN §7: what you can use
-// loud, the rest quiet). Google's own bus stops off: ours (each side of the
-// road, with live times) are the ones to tap. A style only: no place is read,
-// nothing is spent (a map load costs the same with it). Google's pins keep
-// their shape and their tap (our place card); its styles can't tint them a
-// colour (hue and color are ignored on a pin), only grey them.
-const PLACES = {
-  light: [
-    { featureType: 'poi', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: 15 }] },
-    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
-    { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: 45 }] },
-    { featureType: 'poi.business', elementType: 'labels.text.fill', stylers: [{ color: '#8a909b' }] },
-    { featureType: 'transit.station', elementType: 'labels.icon', stylers: [{ saturation: -100 }] }
-  ],
-  dark: [
-    { featureType: 'poi', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: -35 }] },
-    { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: -50 }] },
-    { featureType: 'poi.business', elementType: 'labels.text.fill', stylers: [{ color: '#6f7788' }] },
-    { featureType: 'transit.station', elementType: 'labels.icon', stylers: [{ saturation: -100 }, { lightness: -35 }] }
-  ]
-};
+// Google's own bus stops off, light and dark: ours (each side of the road,
+// with live times) are the ones to tap. Google's places keep their own
+// colours (Jay 2026-11-06: greyed, "I hate it").
 const NO_BUS_STOPS = { featureType: 'transit.station.bus', stylers: [{ visibility: 'off' }] };
 // The whole style for the page's look now (tests/map-style.test.mjs).
-export const mapStyles = dark => (dark ? [...DARK, ...PLACES.dark, NO_BUS_STOPS] : [...PLACES.light, NO_BUS_STOPS]);
+export const mapStyles = dark => (dark ? [...DARK, NO_BUS_STOPS] : [NO_BUS_STOPS]);
 
 function script(src) {
   return new Promise((resolve, reject) => {
