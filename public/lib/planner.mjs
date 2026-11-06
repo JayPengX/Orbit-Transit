@@ -15,7 +15,7 @@ import { routePlans, townships, walksTo, walkKnown } from './api.mjs';
 import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
-import { metroPlans } from './metroroute.mjs';
+import { metroPlans, metroMapAt, metroWarm } from './metroroute.mjs';
 import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
 import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
@@ -84,6 +84,52 @@ async function trainThenBus(plans, to, now) {
     if (tried.has(key) || tried.size >= 3) continue;
     tried.add(key);
     jobs.push(busLink(off.to, to, off.arr + 2 * 60_000, { now }).then(links => links.map(b => finish({ ...p, src: 'rail+bus', legs: [...p.legs.slice(0, k + 1), ...b.legs], live: b.live })), () => []));
+  }
+  return (await Promise.all(jobs)).flat();
+}
+
+// Our train plans into a metro's area that end far from the place (高鐵 to
+// 板橋, 台鐵 on to 松山, then a 14-minute YouBike to 台北101; Jay 2026-11-06:
+// "we can just go HSR to Taipei then Metro"): each train got off at any of
+// its stops in the area instead, and on by our metro from there (its
+// estimates; 3 minutes from the train to the metro's gates). The ranking
+// weighs them against the train's own end.
+const METRO_TRIPS = 4;
+const METRO_WAIT = 1500;
+export async function trainThenMetro(plans, net, to, { metro = metroPlans } = {}) {
+  const map = metroMapAt(to);
+  if (!net || !map) return [];
+  const jobs = [];
+  const tried = new Set();
+  for (const p of plans) {
+    const k = p.legs.findLastIndex(l => TRAINS.has(l.mode));
+    if (k < 0) continue;
+    const off = p.legs[k];
+    if (off.to?.lat == null || meters(off.to.lat, off.to.lon, to.lat, to.lon) < 1200) continue;
+    for (let i = 0; i <= k; i++) {
+      const l = p.legs[i];
+      if (!TRAINS.has(l.mode) || !l.train) continue;
+      const trip = net.trips.find(t => t.sys === l.train.sys && t.no === l.train.no && t.stops.some(s => s.dep === l.dep));
+      const a = trip?.stops.findIndex(s => s.dep === l.dep) ?? -1;
+      if (a < 0) continue;
+      const tk = `${trip.id}|${a}`;
+      if (tried.has(tk)) continue;
+      if (tried.size >= METRO_TRIPS) break;
+      tried.add(tk);
+      for (let b = a + 1; b < trip.stops.length; b++) {
+        const s = trip.stops[b];
+        const st = net.st.get(s.st);
+        if (!st || metroMapAt(st) !== map || meters(st.lat, st.lon, to.lat, to.lon) < 1200) continue;
+        const leg = trainLeg(net, { trip, from: trip.stops[a].st, to: s.st, dep: trip.stops[a].dep, arr: s.arr, stops: b - a, fromK: a });
+        const head = p.legs.slice(0, i);
+        jobs.push(
+          metro(stationPoint(st), to, s.arr + 3 * 60_000).then(
+            list => list.map(m => finish({ ...p, src: 'rail+metro', legs: [...head, leg, ...m.legs.map(x => (x.mode === 'walk' && x === m.legs[0] ? { ...x, from: leg.to } : x))], live: p.live })),
+            () => []
+          )
+        );
+      }
+    }
   }
   return (await Promise.all(jobs)).flat();
 }
@@ -183,6 +229,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const googleAsk = ask('google');
   const span = railSpan(tS, by === 'arrive' ? t0 : null);
   const netAsk = useRail ? railNetwork(span.date, span) : null;
+  if (useRail && modes.metro !== false && !metroMapAt(from)) metroWarm(to);
   netAsk?.catch(() => {});
   const findCity = await cityFinder();
   // Each point's city as it was looked up, for the 除錯紀錄 (a replay needs no township list).
@@ -216,6 +263,9 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           .then(n => railPlans((net = n), from, to, tS, { n: by === 'arrive' ? 8 : 4, bike: modes.bike, bus: modes.bus, use: useTrain }))
           // (Their fares read now, while the buses are looked at: the plans' price line.)
           .then(list => (faresIn(list, net, 0), list))
+          // (Into a metro's area: on by the metro from the trains' stops there too.)
+          // (Its network asked at the start, kept a week: never waited on past METRO_WAIT.)
+          .then(async list => [...list, ...((await Promise.race([trainThenMetro(list, net, to).catch(() => []), new Promise(r => setTimeout(r, METRO_WAIT, []))])) || [])])
           .catch(() => [])
           .finally(() => lap('trains', t)),
     // Our metro rides (板南線 then 文湖線, which the planners may leave out).

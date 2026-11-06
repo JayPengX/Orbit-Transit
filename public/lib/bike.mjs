@@ -35,7 +35,10 @@ export function mergeBikes(stations, live) {
         at: a?.UpdateTime ? Date.parse(a.UpdateTime) : null
       };
     })
-    .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon));
+    // (YouBike only: 彰化's Moovo, TDX's ServiceType 3, is another company's
+    // bikes, its own app and fares, a "station" of 350; it showed and was
+    // planned as YouBike at 彰化車站, where there's none. Jay 2026-11-06.)
+    .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && s.kind !== 'Moovo');
 }
 
 const merged = new WeakMap();

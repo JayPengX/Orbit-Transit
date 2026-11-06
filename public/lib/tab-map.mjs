@@ -1356,6 +1356,7 @@ function closeResults({ keep = false } = {}) {
 // it's the same spot (within 300 m, the same address, or one without a
 // place on the map), the first copy kept (yours, then stations, then the
 // search's). The owner, 2026-10-18: 巨城購物中心 listed over and over.
+const STATION_KINDS = new Set(['tra', 'hsr', 'metro']);
 export function uniqueResults(rows) {
   const norm = s => String(s || '').replace(/台/g, '臺').replace(/[\s()（）・·\-]/g, '').toLowerCase();
   const kept = [];
@@ -1363,6 +1364,11 @@ export function uniqueResults(rows) {
     const n = norm(r.name);
     const at = kept.findIndex(k => {
       if ((r.gid && (k.gid === r.gid || k.id === r.gid)) || (r.id && (k.id === r.id || k.gid === r.id))) return true;
+      // A station and Google's names for it (台鐵新竹車站, 新竹火車站, 新竹 at
+      // its door; Jay 2026-11-06: four rows for one station): one, the station's.
+      const st = STATION_KINDS.has(k.kind) ? k : STATION_KINDS.has(r.kind) ? r : null;
+      const other = st === k ? r : k;
+      if (st && !STATION_KINDS.has(other.kind) && Number.isFinite(other.lat) && stationKey(other.name.replace(/^(臺|台)鐵/, '')) === stationKey(st.name.replace(/^(臺|台)鐵/, '')) && meters(st.lat, st.lon, other.lat, other.lon) < 450) return true;
       // (巨城購物中心 and 巨城購物中心 Big City at the same door: one.)
       const kn = norm(k.name);
       if (kn !== n) return Number.isFinite(k.lat) && Number.isFinite(r.lat) && Math.min(kn.length, n.length) >= 3 && (kn.includes(n) || n.includes(kn)) && meters(k.lat, k.lon, r.lat, r.lon) < 150;
@@ -1372,7 +1378,7 @@ export function uniqueResults(rows) {
     if (at < 0) kept.push(r);
     // The same place twice: its full name kept (遠東巨城購物中心, not 巨城購物,
     // the owner 2026-10-18), in the first one's place; a pinned place stays yours.
-    else if (kept[at].kind !== 'place' && norm(r.name).length > norm(kept[at].name).length) kept[at] = { ...r, dist: r.dist ?? kept[at].dist };
+    else if (kept[at].kind !== 'place' && !STATION_KINDS.has(kept[at].kind) && norm(r.name).length > norm(kept[at].name).length) kept[at] = { ...r, dist: r.dist ?? kept[at].dist };
   }
   return kept;
 }
@@ -1457,6 +1463,7 @@ async function localMatches(t) {
   const trips = T ? [] : ctx.data.trips.slice(0, 5).map(x => ({ kind: 'trip', name: x.name || W('最近的目的地', 'Recent destination'), sub: W('最近', 'Recent'), lat: x.lat, lon: x.lon, gid: x.gid }));
   let stations = [];
   if (T) {
+    const said = /高鐵/.test(T) ? 'hsr' : /火車|臺鐵|車站$/.test(T) ? 'tra' : /捷運/.test(T) ? 'metro' : null;
     const rail = await railStations().catch(() => []);
     // Metro stations of the systems loaded already and those around you.
     if (ctx.here) await metroSystems(ctx.here).catch(() => []);
@@ -1466,7 +1473,8 @@ async function localMatches(t) {
     stations = [...rail, ...metro]
       .filter(s => stationKey(s.name).includes(stationKey(T)))
       .map(s => ({ s, d: c ? meters(c.lat, c.lon, s.lat, s.lon) : 0, exact: stationKey(s.name) === stationKey(T) }))
-      .sort((a, b) => b.exact - a.exact || a.d - b.d)
+      // (The railway the words name first: 新竹火車站 is 台鐵's, not 高鐵新竹 because it's nearer.)
+      .sort((a, b) => b.exact - a.exact || (b.s.sys === said) - (a.s.sys === said) || a.d - b.d)
       .map(x => ({ ...x.s, dist: c ? x.d : null }))
       .slice(0, 6)
       .map(s => ({ kind: s.sys, key: s.key, id: s.id, op: s.op, name: s.sys === 'hsr' ? W(`高鐵${s.name}站`, `HSR ${s.en || shown(s.name)}`) : s.sys === 'tra' ? W(`${s.name}車站`, `${s.en || shown(s.name)} Station`) : stationTitle(s.name), sub: s.sys === 'metro' ? OPERATORS[s.op] : s.sys === 'hsr' ? W('台灣高鐵', 'HSR') : W('台鐵', 'TRA'), lat: s.lat, lon: s.lon, dist: s.dist }));
@@ -2148,14 +2156,20 @@ function tripOf(c) {
   return ctx.data.saved.find(x => (near(x.to, c.to) && (c.fromHere ? !x.from : near(x.from, c.from))) || (x.from && near(x.from, c.to) && (c.fromHere ? !x.to : near(x.to, c.from)))) || null;
 }
 const picked = (c, p) => Boolean(tripOf(c)?.picks.includes(pickSig(p)));
-// ☆ on one plan: that way pinned on the trip (the trip saved first when it isn't), shown first in 交通.
+// ☆ on one plan: that way pinned on the trip, shown first in 交通. No trip
+// yet: a one-time trip of its own, that day and leaving then, so 交通 shows
+// this very way (this bike, this train) and lets it go after the day (Jay
+// 2026-11-06: "pin a specific plan … like a one time thing"); pinned on a
+// saved trip, every day's.
+export const oneTimeTrip = (c, p) => ({ name: c.to.name, from: c.fromHere ? null : { name: c.from.name, lat: c.from.lat, lon: c.from.lon }, to: { name: c.to.name, lat: c.to.lat, lon: c.to.lon }, date: tw(p.dep).date, time: tw(p.dep).hm, by: 'depart', picks: [] });
 function togglePick(c, p) {
   if (!p) return;
   const k = pickSig(p);
   let t = tripOf(c);
+  const fresh = !t;
   if (!t) {
     if (ctx.data.saved.length >= MAX_SAVED) return ctx.status(W(`最多 ${MAX_SAVED} 個行程`, `Up to ${MAX_SAVED} trips`));
-    t = cleanSaved({ name: c.to.name, from: c.fromHere ? null : { name: c.from.name, lat: c.from.lat, lon: c.from.lon }, to: { name: c.to.name, lat: c.to.lat, lon: c.to.lon }, picks: [] });
+    t = cleanSaved(oneTimeTrip(c, p));
     if (!t) return;
     ctx.data.saved = [...ctx.data.saved, t];
   }
@@ -2163,7 +2177,7 @@ function togglePick(c, p) {
   const next = cleanSaved({ ...t, picks: on ? t.picks.filter(x => x !== k) : [k, ...t.picks] });
   ctx.data.saved = ctx.data.saved.map(x => (x.id === t.id ? next : x));
   ctx.save();
-  ctx.status(on ? W('已取消釘選這個方案', 'Unpinned this route') : W('已釘選這個方案：「交通」會先列出它的下一班', 'Pinned: Transit lists its next ride first'));
+  ctx.status(on ? W('已取消釘選這個方案', 'Unpinned this route') : fresh ? W(`已釘選：「交通」會列出 ${hm(p.dep)} 這一趟`, `Pinned: Transit shows this ${hm(p.dep)} trip`) : W('已釘選這個方案：「交通」會先列出它的下一班', 'Pinned: Transit lists its next ride first'));
   if (card) renderCard();
   ctx.refreshTabs?.();
 }
