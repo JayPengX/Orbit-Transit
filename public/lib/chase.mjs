@@ -16,12 +16,11 @@
 //
 //   chasePlan  one plan, its first bus caught further on (pure: data given)
 //   chases     the plans' chases, the data asked for (the planner)
-//   chaseFrom  from where you are, for the bus you're walking to (navigation)
 //   chaseNow   a chase planned earlier, from now (rolled on, or null: missed)
 //   steadyLead the near stop or the further one, whichever a trip showed, kept
 
 import { meters, isRide, RAIL } from './util.mjs';
-import { bikeTrip, finish, walkLeg, pickSig, chaseHold, BUS_EARLY } from './plan.mjs';
+import { bikeTrip, finish, pickSig, chaseHold, BUS_EARLY } from './plan.mjs';
 import { rideTime, wayAt } from './live.mjs';
 import { routeEta, etaFor } from './bus.mjs';
 import { bikesAround } from './near.mjs';
@@ -178,20 +177,4 @@ export async function chases(plans, o, now = Date.now(), start = now, { prefer =
     if (c && !out.some(q => q.legs.find(isRide).dep === c.legs.find(isRide).dep && q.legs.find(isRide).from.name === c.legs.find(isRide).from.name)) out.push(c);
   }
   return out;
-}
-
-// Navigating, walking to a bus you'll now miss (or that's gone): from where
-// you are, its line caught further on by bike, the rest of the trip after it.
-// `legs`: the trip from that bus on. → a plan, or null.
-export async function chaseFrom(pos, legs, now = Date.now(), { prefer = false, eta = routeEta, way = wayAt, near = bikesAround } = {}) {
-  const l = legs[0];
-  if (l?.mode !== 'bus' || !l.route?.uid || !pos) return null;
-  const x = await way(l).catch(() => null);
-  if (!x) return null;
-  const [map, bikes] = await Promise.all([eta({ uid: l.route.uid, name: l.short || l.name, city: l.route.city }, x.w.dir).catch(() => null), bikesFor(pos, x.w, x.i, { near })]);
-  if (!map) return null;
-  const here = { name: '', lat: pos.lat, lon: pos.lon };
-  // (The walk to its stop from here: the chase is weighed against walking there now.)
-  const p = finish({ legs: [walkLeg(here, l.from, now), ...legs] });
-  return chasePlan(p, here, x, dueOf(map, l, x.w, now), bikes, now, { prefer });
 }
