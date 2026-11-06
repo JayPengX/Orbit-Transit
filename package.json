@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test",
+    "test": "node --import ./.kit/no-net.mjs --test",
     "start": "npx --yes http-server public -p 8080 -c-1",
     "pretest": "test -e .kit || ln -s ../Orbit-Core/kit .kit"
   },
