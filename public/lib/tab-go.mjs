@@ -186,10 +186,32 @@ export async function pinnedTrainsNext(c) {
   return c.data.pins.map(p => ({ p, rows: trainNext(p) }));
 }
 
-// Saved trips in the order they matter: recurring ones today first, then the rest.
+// A recurring trip whose time today has gone (over 20 minutes) while you're
+// still not there: its way now, beside the next time's (Jay 2026-11-06, 08:21
+// at home, 上學 showing only tomorrow's 06:23: "show both, the on time one for
+// tomorrow and a right now one"). For three hours after today's time; never
+// at its far end (the way back is then the trip), never a one-time trip.
+const LATE_MS = 3 * 3_600_000;
+export function tripLate(t, here, now = Date.now()) {
+  const w = tripNow(t, here, now);
+  if (!w?.at || t.date || !w.today || w.id.endsWith(':b')) return null;
+  const day = tw(now);
+  if (tw(w.at).date === day.date) return null;
+  const time = slotOf(t, day.dow).time;
+  const when = time ? twAt(day.date, time) : null;
+  if (!when || when > now || now - when > LATE_MS) return null;
+  return { ...w, id: `${t.id}:n`, at: null, by: 'depart', late: when };
+}
+
+// Saved trips in the order they matter: recurring ones today first, then the rest
+// (a trip late today: its way now first, then its next time).
 function trips(now = Date.now()) {
   return ctx.data.saved
-    .map(t => ({ t, w: tripNow(t, ctx.here, now) }))
+    .flatMap(t => {
+      const w = tripNow(t, ctx.here, now);
+      const late = tripLate(t, ctx.here, now);
+      return late ? [{ t, w: late }, { t, w }] : [{ t, w }];
+    })
     // (A one-time trip comes in as its day nears: from the day before; until then it waits in 我的.)
     .filter(x => x.w && !(x.t.date && x.t.date > addDays(tw(now).date, 1)))
     .sort((a, b) => (b.w.recurring && b.w.today) - (a.w.recurring && a.w.today));
@@ -628,7 +650,8 @@ function tripCard({ t, w }) {
     main: e(w.label),
     // (The last ways moved on to today, while they're found again: said so, not where it goes.)
     note: st.guess ? e(W('更新中…', 'Updating…')) : warn ? `<span class="ot-warn">${e(warn)}</span>` : e(where),
-    when: whenHtml(p.dep, W('出發', 'Leave'), p.live),
+    // (Another day's: its day said, 明天 出發, beside its way now.)
+    when: whenHtml(p.dep, tw(p.dep).date === tw().date ? W('出發', 'Leave') : `${dayLabel(tw(p.dep).date)}${W(' 出發', '')}`, p.live),
     attrs: `data-all-trip="${e(w.id)}"`
   });
   const now = Date.now();

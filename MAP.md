@@ -31,6 +31,9 @@ Live: https://orbit.jaypengx.com/transit/
     said 更新中… while they're found again (`lastGuess`, `ot.trips.last.v1`: a
     slim copy a way, eight days; same hour within 90 minutes, same kind of day;
     never navigated or notified on; Jay 2026-11-06: 上學 sat on 找班次…).
+    A school day's trip whose time went by (20 min to 3 h) while you're not
+    there yet: its way now as a card of its own above the next time's, that
+    one saying its day (`tripLate`, Jay 2026-11-06: "show both").
     A tap on the top opens its ways on the map,
     on a way that way ready to go; editing it is in 我的. Then 釘選: each
     pinned bus and train a row of one shape in the order you keep them (beside
