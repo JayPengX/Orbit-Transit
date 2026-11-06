@@ -1,7 +1,7 @@
 // Buses: a city's routes, a route's stops each way, and when the next bus
 // comes to a stop (TDX's N1 estimates, refreshed by the proxy every 25 s).
 
-import { packRoute } from './packs.mjs';
+import { packRoute, stationRows } from './packs.mjs';
 import { tdx, rows, busEta, busGps, liveMs } from './api.mjs';
 import { etaStops } from './near.mjs';
 import { gpsFix } from './busgps.mjs';
@@ -341,13 +341,16 @@ function etaTextOf(v, now) {
   return { main: '—', sub: '', tone: 'off' };
 }
 
-// Bus stops near a point (the map), on a ~1 km grid so the proxy shares them.
-// (Asked around the point rounded to 0.002°, shared by everyone near: TDX
-// searches 1000 m at most, so that's still about 900 m around the point.)
+// Bus stops near a point (the map, the stops near you): the stations within
+// 1000 m of it rounded to 0.002° (about 900 m around it, the same for
+// everyone near), from the station tiles kept here (packs.mjs stationRows:
+// read once for ~5 km around); TDX's own search around the point only when
+// they can't be had (an advanced ask, shared through the proxy for a day).
 export async function stationsNear(lat, lon) {
   const g = v => (Math.round(v * 500) / 500).toFixed(3);
-  const j = await tdx(`advanced/v2/Bus/Station/NearBy?$spatialFilter=nearby(${g(lat)},${g(lon)},1000)&$top=500&$select=StationUID,StationID,StationName,StationPosition,Stops,LocationCityCode,Bearing`, { fresh: 86_400_000, persist: true });
-  return rows(j)
+  const kept = await stationRows(Number(g(lat)), Number(g(lon)), 1000).catch(() => null);
+  const list = kept || rows(await tdx(`advanced/v2/Bus/Station/NearBy?$spatialFilter=nearby(${g(lat)},${g(lon)},1000)&$top=500&$select=StationUID,StationID,StationName,StationPosition,Stops,LocationCityCode,Bearing`, { fresh: 86_400_000, persist: true }));
+  return list
     .map(s => ({
       uid: s.StationUID,
       id: s.StationID,

@@ -269,7 +269,12 @@ Live: https://orbit.jaypengx.com/transit/
     then if its own is no newer); `tests/bus-asks.test.mjs`, `bus-quiet.test.mjs`,
     `scripts/bus-rhythm.mjs` (the rule against TDX's timing, a stop card's
     asks before and after);
-  - bus routes and timetables: weekly packs in R2 (`packs.mjs`);
+  - bus routes and timetables: weekly packs in R2 (`packs.mjs`); the bus
+    stations (the map's stops, the stops near you: `bus.mjs stationsNear`)
+    from weekly 0.05° tiles in R2 (`packs.mjs stationRows`, Core
+    `builders/buses.js cityStations`), never TDX's advanced search around
+    each new ~200 m, asked only when a tile can't be had
+    (`tests/map-stops.test.mjs`);
   - what's near a point: worked out on the phone (`near.mjs`); the buses at
     the stops near you (附近, `bus-ui.mjs nearStops`) and at a plan's stops
     (`etaAround`) through `/transit/eta` too, never TDX's advanced search of
