@@ -283,7 +283,9 @@ Live: https://orbit.jaypengx.com/transit/
     `/transit/place` (除錯紀錄 `place-tap`: how long, `spot-tap`: a tap on
     nothing). A place's or a spot's card shows the YouBike near it, never
     its bus stops (Jay 2026-11-06: "unhelpful");
-  - walks: Google's streets, OpenStreetMap past the cap.
+  - walks: Google's streets, OpenStreetMap past the cap; asked from a
+    spot on a ~40 m grid (`planner.mjs spotOf`, the map's `fromHere` too),
+    so a plan finds the walks the map's YouBike strip asked (a plan's 15 → 10).
 - **Offline:** covered (`onlineOnly`); never old bus times.
 - **Saved:**
   - On the Pass (`store.mjs`, `t1:`, up to 200,000 characters): groups,

@@ -37,14 +37,23 @@ import { ridesIn, onTicketTrain } from './ticket.mjs';
 // 台鐵 and 高鐵 (our own router's trains; not the metro).
 const TRAINS = new Set(['tra', 'hsr']);
 
-// The planner's YouBike stations by the streets: the walks it knows (either way round).
-useStreetWalks((a, b) => (walkKnown(a, b) || walkKnown(b, a))?.dist ?? null);
+// A trip's end's walks are from its spot on the map's ~40 m grid (tab-map
+// fromHere): planning again from home or school, or after the map's YouBike
+// strip asked from the same spot, they're the phone's (the newest 400 kept)
+// or the proxy's (kept a month), not five more of Google's for a step aside
+// (2026-11-06: a plan from where you stood asked again the five walks the map
+// had asked from 25 m away; each fix is a new point). Within ~28 m of the
+// end, as the strip's and a card's are.
+const GRID = 0.0004;
+export const spotOf = p => ({ lat: Number((Math.round(p.lat / GRID) * GRID).toFixed(5)), lon: Number((Math.round(p.lon / GRID) * GRID).toFixed(5)) });
+// The planner's YouBike stations by the streets: the walks it knows (either way round), an end's from its spot.
+useStreetWalks((a, b) => (walkKnown(spotOf(a), b) || walkKnown(spotOf(b), a) || walkKnown(a, b) || walkKnown(b, a))?.dist ?? null);
 // The walks from each end of the trip to its five nearest stations (within
 // 700 m), Google's (one ask an end), before the stations are chosen; 1.5 s
 // at most (the straight line for any not in).
 async function streetWalks(bikes, from, to) {
   const near = p => bikes.map(s => ({ s, d: meters(p.lat, p.lon, s.lat, s.lon) })).filter(x => x.d <= 700 && x.s.ok !== false).sort((a, b) => a.d - b.d).slice(0, 5).map(x => x.s);
-  const asks = [from, to].map(p => (p?.lat != null && near(p).length ? walksTo(p, near(p)).catch(() => null) : null));
+  const asks = [from, to].map(p => (p?.lat != null && near(p).length ? walksTo(spotOf(p), near(p)).catch(() => null) : null));
   await Promise.race([Promise.all(asks), new Promise(r => setTimeout(r, 1500))]);
 }
 
