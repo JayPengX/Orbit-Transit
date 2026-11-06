@@ -26,7 +26,12 @@ Live: https://orbit.jaypengx.com/transit/
     leave counting down, or why not (`tripWhy`); under it the way as one line
     (`ui.mjs journeyLine`: each ride its colour by its minutes, a change a
     ring), leave and arrive at its ends, its rides as chips; then 其他班次, the
-    next two ways in three hours. A tap on the top opens its ways on the map,
+    next two ways in three hours. Opened again the next morning (its kept ways
+    two hours old), a trip shows its last ways at once, moved on by whole days,
+    said 更新中… while they're found again (`lastGuess`, `ot.trips.last.v1`: a
+    slim copy a way, eight days; same hour within 90 minutes, same kind of day;
+    never navigated or notified on; Jay 2026-11-06: 上學 sat on 找班次…).
+    A tap on the top opens its ways on the map,
     on a way that way ready to go; editing it is in 我的. Then 釘選: each
     pinned bus and train a row of one shape in the order you keep them (beside
     the trips on a wide screen). No 附近 (Jay 2026-11-03: "basically useless";

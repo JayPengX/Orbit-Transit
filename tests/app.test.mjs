@@ -2849,3 +2849,36 @@ test('walks and YouBike rides stay on the streets', async () => {
   assert.match(src, /l\.mode === 'bike' \|\| \(l\.mode === 'walk' && !l\.poly\)\) && !l\.road/);
   assert.match(src, /dash: l\.mode === 'walk' \|\| \(l\.mode === 'bike' && !l\.road && !l\.poly && !l\.path\)/);
 });
+
+test('a saved trip’s last ways show at once the next morning, said 更新中…, while they’re found again (Jay 2026-11-06: 上學 sat on 找班次…)', async () => {
+  const { lastGuess, slimPlans } = await import('../public/lib/tab-go.mjs');
+  const D = 86_400_000;
+  const bus = (k, dep, extra = {}) => ({ legs: [{ mode: 'bus', short: k, dep: T(dep), arr: T(dep) + 1_800_000, live: true }], dep: T(dep), arr: T(dep) + 1_800_000, ...extra });
+  // 0-2 快捷8 (07:40 its card, 08:00, 11:30), 3 5608 at 07:50; 4 a way never shown.
+  const plans = [bus('快捷8', '07:40', { lead: true, top: true, live: true, times: [0, 1, 2] }), bus('快捷8', '08:00', { lead: false, times: [0, 1, 2] }), bus('快捷8', '11:30', { lead: false, times: [0, 1, 2] }), bus('5608', '07:50', { lead: true, top: true, times: [3] }), bus('5600', '07:55', { lead: false })];
+  const slim = slimPlans(plans, T('07:35'));
+  assert.deepEqual(slim.map(p => p.legs[0].short), ['快捷8', '快捷8', '5608'], 'the ways shown and their departures within three hours');
+  assert.deepEqual(slim[0].times, [0, 1], 'its times point into the slim list');
+  const home = { lat: 24.821, lon: 121.018 };
+  const w = { id: 's1:f', from: home, to: { lat: 24.733, lon: 121.088 }, at: null, by: 'depart' };
+  const work = T('07:35');
+  const { workday } = await import('../public/lib/util.mjs');
+  const twDate = ms => new Date(ms + 8 * 3_600_000).toISOString().slice(0, 10);
+  const last = { at: work, t: work, work: workday(twDate(work)), from: home, prefs: '{}', plans: slim };
+  // The next day of the same kind, a little later: moved on a day, the 07:40 gone, its 08:00 has the card.
+  let n = 1;
+  while (workday(twDate(work + n * D)) !== last.work) n++;
+  const now = work + n * D + 20 * 60_000;
+  const g = lastGuess(last, { w, now });
+  assert.ok(g, 'shown at once');
+  const lead = g.find(p => p.lead && p.legs[0].short === '快捷8');
+  assert.equal(lead.dep, T('08:00') + n * D, 'its next departure, on today');
+  assert.ok(g.every(p => !p.live && p.legs.every(l => !l.live)), 'never said live');
+  assert.equal(lastGuess(last, { w, now: work + n * D + 3 * 3_600_000 }), null, 'another hour of the day: other buses run');
+  assert.equal(lastGuess(last, { w, now: work + 9 * D }), null, 'over a week old');
+  assert.equal(lastGuess(last, { w, prefs: '{"modes":{"bus":false}}', now }), null, 'other settings');
+  assert.equal(lastGuess(last, { w: { ...w, from: null }, here: { lat: 24.9, lon: 121.1 }, now }), null, 'from somewhere else');
+  let off = 1;
+  while (workday(twDate(work + off * D)) === last.work) off++;
+  assert.equal(lastGuess(last, { w, now: work + off * D }), null, 'a day off’s buses are not a school day’s');
+});
