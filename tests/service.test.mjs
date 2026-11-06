@@ -121,6 +121,14 @@ test('no bus on the road: likely off only when the whole city is off it, by day'
   // Taipei's buses on the road (99 of 271 routes): a route between its buses is only that.
   const tpe = { routes: Object.fromEntries(Array.from({ length: 271 }, (_, i) => [`TPE${i}`, i < 99 ? 3 : 0])) };
   assert.equal(likelyOff(tpe, 'TPE200', NOW), false);
+  // From the buses' places (since 2026-11-06): only the routes with a bus listed, `total` the city's routes.
+  const gps = { routes: { HSZ0001: 1 }, total: 29, by: 'gps' };
+  assert.equal(cityIdle(gps, NOW), true);
+  assert.equal(likelyOff(gps, 'HSZ0025', NOW), true);
+  assert.equal(likelyOff(gps, 'HSZ0001', NOW), false);
+  assert.equal(cityIdle({ routes: Object.fromEntries(Array.from({ length: 99 }, (_, i) => [`TPE${i}`, 2])), total: 271, by: 'gps' }, NOW), false);
+  // Its routes not known: never idle on a guess.
+  assert.equal(cityIdle({ routes: { HSZ0001: 1 }, by: 'gps' }, NOW), false);
 });
 
 test('台鐵: a planner\'s ride our timetable has no train for, on a stopped line: stopped', () => {

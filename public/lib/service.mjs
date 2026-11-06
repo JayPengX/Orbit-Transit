@@ -408,16 +408,19 @@ export async function busNotices(cities = []) {
 
 // ---- Buses on the road --------------------------------------------------------------------------
 
-// A city's routes with a bus on the road ({ RouteUID: n stops with one
-// coming; -1 TDX's 今日未營運 }, transit.js running) → whether that city's
-// buses are, near enough, all off the road: under one route in twenty with
-// a bus, of ten or more, between 07:00 and 20:00 (when every city's buses
-// run). On 2026-10-23 at 16:00: 新竹市 0 of 29, 新竹縣 0 of 57.
+// A city's routes with a bus on the road (transit.js running: { routes: {
+// RouteUID: its buses on the road, or its stops with one coming; -1 TDX's
+// 今日未營運 }, total: the city's routes }; since 2026-11-06 from the buses'
+// places, so a route with none isn't listed) → whether that city's buses
+// are, near enough, all off the road: under one route in twenty with a bus,
+// of ten or more, between 07:00 and 20:00 (when every city's buses run). On
+// 2026-10-23 at 16:00: 新竹市 0 of 29, 新竹縣 0 of 57.
 export function cityIdle(run, now = Date.now()) {
   const list = Object.values(run?.routes || {});
+  const all = Math.max(list.length, Number(run?.total) || 0);
   const h = tw(now).min / 60;
-  if (list.length < 10 || h < 7 || h >= 20) return false;
-  return list.filter(n => n > 0).length < list.length * 0.05;
+  if (all < 10 || h < 7 || h >= 20) return false;
+  return list.filter(n => n > 0).length < all * 0.05;
 }
 // A route with no bus on the road while its city's buses are all off it:
 // likely not running, said as that (never 今日停駛, which is the operator's word).
@@ -489,7 +492,7 @@ export function routeStatus(uid, name, now = Date.now(), stopUID = '') {
   // TDX's 今日未營運 at every one of its stops: the operator's system says it, so it's off.
   if (n === -1) return { effect: 'off', label: effectLabel('off'), notice: null, why: 'tdx', notices: ns };
   // None on the road while its city's are all off it (a 公路客運 route: while yours are).
-  const idle = city ? likelyOff(run, uid, now) : n === 0 && home && cityIdle(runningIn(home), now);
+  const idle = city ? likelyOff(run, uid, now) : Boolean(run?.routes) && (n ?? 0) <= 0 && home && cityIdle(runningIn(home), now);
   if (idle) return { effect: 'likely', label: effectLabel('likely'), notice: null, why: 'idle', notices: ns };
   return ns.length ? { effect: ns[0].effect, label: effectLabel(ns[0].effect), notice: ns[0], notices: ns } : null;
 }
