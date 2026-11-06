@@ -110,7 +110,9 @@ Live: https://orbit.jaypengx.com/transit/
   got to fell from about 2 minutes to under 1).
   Stop cards, a trip's bus, a ride aboard and the planner's live buses read
   the same fix (`bus.mjs busEtaMended`, in place of `busEta`: up to 8 lagging
-  routes, never waiting past 2.5 s), so a frozen feed is felt nowhere.
+  routes, never waiting past 2.5 s), so a frozen feed is felt nowhere. The
+  routes' GPS asked within a moment go as one ask a city (`routeGps`: the
+  city's RealTimeByFrequency filtered by them; one route alone, its own ask).
   Today and the next day on one line (`bus-ui.mjs` `nexts`, `doneToday`):
   the stops today's last bus has passed are the next day's (the line grey
   there, the day said once where they begin); where today's begin, that bus
@@ -251,8 +253,11 @@ Live: https://orbit.jaypengx.com/transit/
   the Worker checks every 2 minutes while the phone is locked.
 - **Data:**
   - live: TDX through `/transit/tdx`, cached on the Worker; buses due through
-    `/transit/eta` (`api.mjs busEta`): the Worker keeps each city's whole list
-    from one TDX call and answers any stops or route from it (公路客運 by its stops);
+    `/transit/eta` (`api.mjs busEta`): the Worker answers a quiet city's stops
+    or routes from TDX's filtered read, a busy city's from one read of the
+    whole city (公路客運 always by its stops); the phone asks the same thing
+    once a beat at most, and the routes asked within a moment as one ask a
+    city (`routes=`; a plan's buses were five to ten asks, 2026-11-06);
   - bus routes and timetables: weekly packs in R2 (`packs.mjs`);
   - what's near a point: worked out on the phone (`near.mjs`);
   - line shapes: `shapes.mjs` (packs and shapes read with the kit's
@@ -379,6 +384,10 @@ node ../Orbit-Core/tools/preview.mjs transit --live --width 375
 - When changing the ranking, also run `node scripts/live.mjs --against
   HEAD` (old against new on today's data) and read what moved.
 - `scripts/replay.mjs` re-runs a 除錯紀錄 (`--why` shows the score).
+- `node scripts/timing.mjs <from> <to> --warm` times a plan and counts its
+  Worker asks by kind, on a new phone and then the same phone again
+  (`scripts/phone.mjs` keeps its storage): run it before and after a change
+  to what a plan reads.
 
 A push to `main` tests, stamps versions and deploys to Cloudflare.
 
@@ -387,6 +396,6 @@ A push to `main` tests, stamps versions and deploys to Cloudflare.
 | This | Also check |
 | --- | --- |
 | The score or ranking | The verdicts, `live.mjs --against`, `replay.mjs` |
-| A TDX path | Orbit-Core's `TDX_RULES` and cache times, the `bus` push check |
+| A TDX path | Orbit-Core's `TDX_RULES` and cache times, the `bus` push check, `scripts/timing.mjs --warm` (asks before and after) |
 | Pack formats | Orbit-Core's `builders/buses.js` |
 | Navigation steps | `ot.nav.v1` resuming, lock-screen notices (`kind: nav`) |

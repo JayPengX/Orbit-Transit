@@ -126,10 +126,52 @@ const routeRows = route => {
 // When that route's live times are from (ms), or 0.
 export const routeEtaAt = route => routeLive.get(route.uid)?.at || 0;
 // Where a route's buses are now (TDX RealTimeByFrequency: GPS, under a
-// minute old), for the ones whose estimates lag (busgps.mjs).
-export async function routeGps(route) {
-  const j = await tdx(`basic/v2/Bus/RealTimeByFrequency/${scope(route.city)}/${encodeURIComponent(route.name)}?$filter=RouteUID eq ${q(route.uid)}&$select=PlateNumb,Direction,BusPosition,GPSTime`, { fresh: 'live' });
-  return rows(j);
+// minute old), for the ones whose estimates lag (busgps.mjs). The routes
+// asked within a moment of each other go as one ask a city (a plan mended its
+// buses' times with six asks of TDX, one a route; 2026-11-06); one alone is
+// its route's own ask, as before.
+const gpsAsks = new Map(); // city|RouteUID → { got, ask }
+let gpsBatch = null; // city → Map(RouteUID → { route, waits })
+export function routeGps(route) {
+  const key = `${route.city}|${route.uid}`;
+  const now = Date.now();
+  const k = gpsAsks.get(key);
+  if (k && now - k.got < liveMs() - 1000) return k.ask;
+  const ask = new Promise((resolve, reject) => {
+    if (!gpsBatch) {
+      const b = (gpsBatch = new Map());
+      setTimeout(() => {
+        if (gpsBatch === b) gpsBatch = null;
+        for (const [city, per] of b) sendGps(city, [...per.values()]);
+      }, 20);
+    }
+    if (!gpsBatch.has(route.city)) gpsBatch.set(route.city, new Map());
+    const per = gpsBatch.get(route.city);
+    if (!per.has(route.uid)) per.set(route.uid, { route, waits: [] });
+    per.get(route.uid).waits.push({ resolve, reject });
+  });
+  gpsAsks.set(key, { got: now, ask });
+  ask.catch(() => gpsAsks.get(key)?.ask === ask && gpsAsks.delete(key));
+  if (gpsAsks.size > 100) for (const [p, x] of gpsAsks) if (now - x.got > 60_000) gpsAsks.delete(p);
+  return ask;
+}
+function sendGps(city, all) {
+  for (let i = 0; i < all.length; i += 20) {
+    const part = all.slice(i, i + 20);
+    const one = part.length === 1 ? part[0].route : null;
+    const path = one
+      ? `basic/v2/Bus/RealTimeByFrequency/${scope(city)}/${encodeURIComponent(one.name)}?$filter=RouteUID eq ${q(one.uid)}&$select=PlateNumb,Direction,BusPosition,GPSTime`
+      : `basic/v2/Bus/RealTimeByFrequency/${scope(city)}?$filter=${part.map(x => `RouteUID eq ${q(x.route.uid)}`).join(' or ')}&$select=RouteUID,PlateNumb,Direction,BusPosition,GPSTime`;
+    tdx(path, { fresh: 'live' }).then(
+      j => {
+        const list = rows(j);
+        for (const x of part) for (const w of x.waits) w.resolve(one ? list : list.filter(r => r.RouteUID === x.route.uid));
+      },
+      err => {
+        for (const x of part) for (const w of x.waits) w.reject(err);
+      }
+    );
+  }
 }
 // TDX's estimates as busEta gives them (a stop card, a trip's bus, a ride
 // aboard), each bus whose estimates lag over 2 minutes counted again from
