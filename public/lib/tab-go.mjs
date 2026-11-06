@@ -23,6 +23,7 @@ import { planTrip } from './planner.mjs';
 import { setTripPush } from './alerts.mjs';
 import { pickSig, boardEarly } from './plan.mjs';
 import { chaseOf, chaseNow, steadyLead } from './chase.mjs';
+import { steadyPlans, settled } from './steady.mjs';
 import { lateBy } from './nav.mjs';
 import { loadNotices, bikesOff, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
@@ -513,21 +514,27 @@ async function loadTrip(w, { force = false } = {}) {
     const from = w.from || (here ? { name: W('目前位置', 'Here'), ...here } : null);
     if (!from) throw Object.assign(new Error('nohere'), { code: 'NO_HERE' });
     const at = Date.now();
-    const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
+    // The whole plan before it's shown (its second round too, steady.mjs
+    // `settled`): what's on the card meanwhile (its last ways, said 更新中…) stays till then.
+    const out = await settled(await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by }));
     for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
     // (The near stop or the further one by bike, whichever the card showed, kept: chase.mjs steadyLead.)
     const shownBefore = old?.plans;
-    const done = plans => {
-      plans = steadyLead(plans, S.trips.get(w.id)?.plans || shownBefore, Date.now());
+    const done = found => {
+      // What's on screen keeps its place: each way its rank and labels, only its
+      // times new (steady.mjs; Jay 2026-11-06: "it update the trip in front of me").
+      // The phone keeps the ways as ranked (the next opening's guess ranks afresh).
+      const prev = S.trips.get(w.id)?.plans || shownBefore;
+      const plans = shown && prev?.length ? steadyPlans(prev, steadyLead(found, prev, Date.now())) : steadyLead(found, prev, Date.now());
       S.trips.set(w.id, { sig, at, from, base: plans, timed: Date.now(), plans, error: '' });
-      keepTrip(tripKey(w), { at, from: { lat: from.lat, lon: from.lon }, plans });
-      keepLast(w, { at, from: { lat: from.lat, lon: from.lon }, plans });
+      keepTrip(tripKey(w), { at, from: { lat: from.lat, lon: from.lon }, plans: found });
+      keepLast(w, { at, from: { lat: from.lat, lon: from.lon }, plans: found });
       return plans;
     };
     const firstShown = out.plans.length ? done(out.plans) : null;
     if (!firstShown) S.trips.set(w.id, { sig, at, from, plans: [], error: out.error ? errorText(out.error) : W('找不到大眾運輸方案。', 'No transit route found.') });
-    // The direct buses and every bus's times, a moment later (unless a time was picked meanwhile).
-    out.later?.then(o => {
+    // The direct buses and every bus's times, when they took longer than the wait: merged in place (unless a time was picked meanwhile).
+    out.pending?.then(o => {
       const cur = S.trips.get(w.id);
       if (!o?.plans?.length || !firstShown || cur?.plans !== firstShown || [...S.choice.keys()].some(k => k.startsWith(`${w.id}:`))) return;
       done(o.plans);
