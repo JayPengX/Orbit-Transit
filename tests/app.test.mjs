@@ -2882,3 +2882,24 @@ test('a saved trip’s last ways show at once the next morning, said 更新中�
   while (workday(twDate(work + off * D)) === last.work) off++;
   assert.equal(lastGuess(last, { w, now: work + off * D }), null, 'a day off’s buses are not a school day’s');
 });
+
+test('a school day’s trip missed while still at home: its way now beside tomorrow’s on time (Jay 2026-11-06, 08:21, only 06:23 tomorrow shown)', async () => {
+  const { tripNow, tripLate } = await import('../public/lib/tab-go.mjs');
+  const { cleanSaved } = await import('../public/lib/store.mjs');
+  const home = { name: '家', lat: 24.821, lon: 121.018 };
+  const school = { name: '學校', lat: 24.733, lon: 121.088 };
+  // Monday 2026-10-05, weekdays at 06:20.
+  const t = cleanSaved({ id: 's9', name: '上學', from: home, to: school, days: [1, 2, 3, 4, 5], time: '06:20' });
+  const at821 = T('08:21');
+  assert.equal(tripNow(t, home, at821).at, twAt('2026-10-06', '06:20'), 'its next time: tomorrow');
+  const late = tripLate(t, home, at821);
+  assert.ok(late, 'and the way now');
+  assert.equal(late.id, 's9:n');
+  assert.equal(late.at, null, 'leaving now');
+  assert.equal(late.by, 'depart');
+  assert.equal(tripLate(t, home, T('06:30')), null, 'not yet 20 minutes gone: the trip itself is now');
+  assert.equal(tripLate(t, home, T('09:30')), null, 'three hours on: the day has moved on');
+  assert.equal(tripLate(t, school, at821), null, 'already there: the way back is the trip');
+  assert.equal(tripLate(t, home, twAt('2026-10-10', '08:21')), null, 'a Saturday: not one of its days');
+  assert.equal(tripLate(cleanSaved({ ...t, date: '2026-10-05', days: [] }), home, at821), null, 'a one-time trip: over');
+});
