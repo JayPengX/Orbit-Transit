@@ -1,12 +1,13 @@
-// Taiwan's bus routes and timetables, built each night by Shared-Data
-// (github.com/JayPengX/Shared-Data) and kept on the phone a day: a city's
+// Taiwan's bus routes and timetables, built each week by the proxy's bus
+// builder (Orbit-Core builders/buses.js) and kept on the phone a day: a city's
 // routes in one pack (新竹市, 新竹縣…), the 公路客運 in squares of 0.25°
 // (only the squares a trip is in). A route's stops and timetable come from
 // here, in TDX's own shape, so nothing else changes; a route not in its pack
-// (or no pack to be had) is asked of TDX as before.
+// (or no pack to be had) is asked of TDX as before. The bus stations too
+// (stationRows), in tiles of 0.05°.
 
 import * as kit from '#kit/orbit.mjs';
-import { TDX_DAYS } from './util.mjs';
+import { TDX_DAYS, meters } from './util.mjs';
 
 const SQUARE = 0.25;
 export const squareOf = (lat, lon) => `${(Math.floor(lat / SQUARE) * SQUARE).toFixed(2)}_${(Math.floor(lon / SQUARE) * SQUARE).toFixed(2)}`;
@@ -68,4 +69,49 @@ export async function packRoute(route, near = null) {
   const routes = expanded.get(p);
   if (!routes.has(route.uid)) routes.set(route.uid, expand(p, route.uid));
   return routes.get(route.uid);
+}
+
+// The bus stations within r metres of a point, nearest first (500 at most),
+// as TDX's search around a point gives them (StationUID, StationID,
+// StationName, StationPosition, Stops, LocationCityCode, Bearing): from the
+// builder's tiles (station/<City>/<lat>_<lon>.json, each city's listed in
+// station/index.json), read once and kept, never TDX's search around each
+// spot (an advanced ask, 7.5 basic ones' points, at each new ~200 m the map
+// was moved to; 2026-11-06). null when any can't be had (TDX is asked).
+const tilesOf = new WeakMap();
+const N2 = (zh, en) => (en ? { Zh_tw: zh, En: en } : { Zh_tw: zh || '' });
+export async function stationRows(lat, lon, r = 1000, { read = name => kit.packJson(name, { ttl: FRESH }) } = {}) {
+  const list = await read('station/index.json').catch(() => null);
+  if (list?.v !== 1 || !list.cities || !(list.tile > 0)) return null;
+  if (!tilesOf.has(list)) tilesOf.set(list, Object.entries(list.cities).map(([city, tiles]) => [city, new Set(tiles)]));
+  const T = list.tile;
+  const dLat = r / 111_000;
+  const dLon = r / (111_000 * Math.cos((lat * Math.PI) / 180));
+  const near = [];
+  for (let i = Math.floor((lat - dLat) / T); i <= Math.floor((lat + dLat) / T); i++)
+    for (let j = Math.floor((lon - dLon) / T); j <= Math.floor((lon + dLon) / T); j++) near.push(`${(i * T).toFixed(2)}_${(j * T).toFixed(2)}`);
+  const names = tilesOf.get(list).flatMap(([city, has]) => near.filter(k => has.has(k)).map(k => `station/${city}/${k}.json`));
+  const files = await Promise.all(names.map(n => read(n).catch(() => null)));
+  if (files.some(f => !Array.isArray(f?.stations))) return null;
+  const out = [];
+  for (const f of files)
+    for (const s of f.stations) {
+      if (Math.abs(s[4] - lat) > dLat) continue;
+      const d = meters(lat, lon, s[4], s[5]);
+      if (d > r) continue;
+      out.push({
+        d,
+        StationUID: s[0],
+        StationID: s[1],
+        StationName: N2(s[2], s[3]),
+        StationPosition: { PositionLat: s[4], PositionLon: s[5] },
+        Stops: s[8].map(([stop, route]) => ({ StopUID: stop, RouteUID: route, RouteName: N2(...(f.routes?.[route] || [])) })),
+        LocationCityCode: s[6],
+        Bearing: s[7]
+      });
+    }
+  return out
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 500)
+    .map(({ d, ...row }) => row);
 }
