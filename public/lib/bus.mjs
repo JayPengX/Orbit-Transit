@@ -130,13 +130,20 @@ export const routeEtaAt = route => routeLive.get(route.uid)?.at || 0;
 // asked within a moment of each other go as one ask a city (a plan mended its
 // buses' times with six asks of TDX, one a route; 2026-11-06); one alone is
 // its route's own ask, as before.
+// A bus sends its place each 20 s (TDX A1's GPSTime, 2026-11-06), so a
+// route's is asked once in each 20 s of the clock, every route of a city
+// in the same ask (a stop card asked at each beat, a new ask whenever its
+// late routes changed: two TDX reads for one fix), with how old the copy
+// here is (`had`): the Worker reads TDX then, not answering with its copy a
+// step old.
+const GPS_STEP = 20_000;
 const gpsAsks = new Map(); // city|RouteUID → { got, ask }
 let gpsBatch = null; // city → Map(RouteUID → { route, waits })
 export function routeGps(route) {
   const key = `${route.city}|${route.uid}`;
   const now = Date.now();
   const k = gpsAsks.get(key);
-  if (k && now - k.got < liveMs() - 1000) return k.ask;
+  if (k && (now - k.got < liveMs() - 1000 || Math.floor(k.got / GPS_STEP) === Math.floor(now / GPS_STEP))) return k.ask;
   const ask = new Promise((resolve, reject) => {
     if (!gpsBatch) {
       const b = (gpsBatch = new Map());
@@ -162,7 +169,7 @@ function sendGps(city, all) {
     const path = one
       ? `basic/v2/Bus/RealTimeByFrequency/${scope(city)}/${encodeURIComponent(one.name)}?$filter=RouteUID eq ${q(one.uid)}&$select=PlateNumb,Direction,BusPosition,GPSTime`
       : `basic/v2/Bus/RealTimeByFrequency/${scope(city)}?$filter=${part.map(x => `RouteUID eq ${q(x.route.uid)}`).join(' or ')}&$select=RouteUID,PlateNumb,Direction,BusPosition,GPSTime`;
-    tdx(path, { fresh: 'live' }).then(
+    tdx(path, { fresh: 'live', had: true }).then(
       j => {
         const list = rows(j);
         for (const x of part) for (const w of x.waits) w.resolve(one ? list : list.filter(r => r.RouteUID === x.route.uid));

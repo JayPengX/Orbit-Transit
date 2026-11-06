@@ -156,7 +156,8 @@ export async function tdx(path, opts = {}) {
   ask.catch(() => {});
   return Promise.race([ask, sleep(opts.late).then(() => (stale.set(path, last.at), last.data))]);
 }
-async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr = 0, max = 200_000 } = {}) {
+// `had`: say how old the copy here is (the Worker reads TDX when its own is no newer: a bus's place).
+async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr = 0, max = 200_000, had = false } = {}) {
   if (fresh === 'live') fresh = liveMs() - 1000;
   else if (fresh === 'bike') fresh = bikeMs() - 1000;
   const now = Date.now();
@@ -183,7 +184,8 @@ async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr
   const p = (async () => {
     try {
       const meta = {};
-      const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}`, { meta });
+      const age = had && mem ? Math.max(1, Math.floor((Date.now() - mem.at) / 1000)) : 0;
+      const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}${age ? `&had=${age}` : ''}`, { meta });
       // When the data is from (the proxy's copy can be older): its "N 秒前更新", and asked again sooner.
       memory.set(path, { at: Date.now() - meta.age * 1000, data });
       stale.delete(path);
@@ -240,8 +242,10 @@ export const config = () => get('/transit/config');
 // until the next estimate can be there (a second sooner, DataTime being to
 // the second): one ask an estimate, not three, and none later than asking
 // every beat would have shown it. A stop or route whose rows sat one out
-// (none of them new in it) waits for the next once it's surely there (a beat
-// and 5 s on). Where the step is no longer than a beat (Taipei; or rows with
+// (none of them new in it) waits for the next once it's surely there (5 s
+// on: TDX has a city's estimates 5 to 10 s after their time; a beat more
+// asked a quiet stop's three times an estimate, each one TDX's, 2026-11-06).
+// Where the step is no longer than a beat (Taipei; or rows with
 // no DataTime), every beat asks as before. And an ask says how old the
 // phone's copy is (`had`): the Worker reads TDX then if its own copy is no
 // newer, not answering with it and reading behind (each phone saw the
@@ -268,12 +272,13 @@ function feedSaw(city, d, at, was, had) {
 // When the first estimate an answer (data from `at`, newest `had`) hasn't
 // had can be there: one newer than its newest, and not surely there by
 // then (its rows sat that one out). 0: the city's rhythm not known yet.
+const SURE_MS = 5000;
 function nextDue(city, at, had) {
   const f = feeds.get(city);
   const step = f ? stepOf(f) : 0;
   if (!f?.seen.length || !f.dt || !(step > liveMs())) return 0;
   const soon = Math.min(...f.seen);
-  const j = Math.max(Math.floor((had - f.dt) / step) + 1, Math.floor((at - (soon + liveMs() + 5000) - f.dt) / step) + 1);
+  const j = Math.max(Math.floor((had - f.dt) / step) + 1, Math.floor((at - (soon + SURE_MS) - f.dt) / step) + 1);
   return f.dt + j * step + soon - 1000;
 }
 export function busEta(city, { stops = [], route = '' } = {}) {

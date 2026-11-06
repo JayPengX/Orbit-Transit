@@ -134,3 +134,37 @@ test("a route's next beat says how old the phone's copy is, its city's routes to
     api.useSession(null);
   }
 });
+
+// A bus sends its place each 20 s (TDX A1's GPSTime, 2026-11-06): a route's
+// is asked once in each 20 s of the clock, not at each 10 s beat (a stop card
+// read TDX twice for each fix), saying how old the copy here is (`had`: the
+// Worker reads TDX then, not answering with its own copy a step old).
+test("buses' places: once in each 20 s of the clock, saying how old the copy is", async () => {
+  const api = await import('../public/lib/api.mjs');
+  const { routeGps } = await import('../public/lib/bus.mjs');
+  const was = { fetch: globalThis.fetch, now: Date.now };
+  const t0 = Date.parse('2026-11-06T06:00:00Z');
+  let clock = t0;
+  Date.now = () => clock;
+  const asked = [];
+  globalThis.fetch = async url => {
+    const u = new URL(url);
+    asked.push({ at: (clock - t0) / 1000, had: Number(u.searchParams.get('had')) || 0 });
+    return answer([{ RouteUID: 'HSQ0090', PlateNumb: 'KKA-0090', Direction: 0 }]);
+  };
+  api.useSession({ ensureToken: async () => 'tok' });
+  try {
+    // A stop card's beat (10 s) for a minute.
+    for (let s = 0; s < 60; s += 10) {
+      clock = t0 + s * 1000;
+      const got = await routeGps({ uid: 'HSQ0090', name: '90', city: 'HsinchuCounty' });
+      assert.equal(got.length, 1);
+    }
+    assert.deepEqual(asked.map(x => x.at), [0, 20, 40]);
+    assert.deepEqual(asked.map(x => x.had), [0, 20, 20]);
+  } finally {
+    globalThis.fetch = was.fetch;
+    Date.now = was.now;
+    api.useSession(null);
+  }
+});
