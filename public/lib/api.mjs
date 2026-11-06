@@ -51,7 +51,9 @@ async function ask(path, { signal, wait = 15_000, meta = null, renew = false } =
   if (closedAbroad()) throw Object.assign(new Error('TW_ONLY'), { code: 'TW_ONLY', status: 403 });
   // (The token is waited for within `wait` too: a sign-in refresh that never answered held every ask behind it.)
   const t = await Promise.race([token(renew), sleep(wait).then(() => Promise.reject(Object.assign(new Error('network'), { code: 'TIMEOUT', status: 0 })))]);
-  const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(t)}`;
+  // (`tz`: the phone's zone, so a phone in Taiwan on a VPN abroad isn't turned away: Orbit-Core http.js abroad.)
+  const tz = kit.phoneZone?.() === 'Asia/Taipei' ? '&tz=Asia%2FTaipei' : '';
+  const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(t)}${tz}`;
   const timer = typeof AbortController !== 'undefined' ? new AbortController() : null;
   // (The answer's body is waited for too, not only its headers: a body that
   // stalled on a weak link, a city's YouBike list, half a megabyte, never
