@@ -176,6 +176,17 @@ Live: https://orbit.jaypengx.com/transit/
   (no fixes underground) as before; never a trip started by itself.
 - **Speed:** the first plans wait at most 1.5 s on the buses' live times
   (`planner.mjs FIRST_WAIT`), the rest come with the second round.
+- **What's shown stays** (`lib/steady.mjs`; Jay 2026-11-06: "it update the
+  trip in front of me which is bad", "the first show is the final result"):
+  the plans card and 交通's trip cards wait for the second round before their
+  first show (`settled`, up to 6 s past the first round, the skeleton or the
+  trip's last ways meanwhile); ways set aside as gone and a trip's later
+  stretches before it too. Anything found after that (a slow second round,
+  the real ways over a trip's last ways) is merged in place (`steadyPlans`):
+  each way shown keeps its place, rank and labels, only its times change; a
+  new way comes in quietly at the end, never 推薦; the way open stays open
+  (`samePlanAt`). The phone keeps the ways as ranked, so the next opening ranks
+  afresh (`tests/steady-plans.test.mjs`).
 - **Planned once:** a saved trip's ways are kept and re-timed live. The
   billed planners are asked again only when the ways could differ.
 - **Ranking** (`plan.mjs rank`), in two steps:

@@ -29,6 +29,7 @@ import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
 import { steadyLead } from './chase.mjs';
+import { steadyPlans, samePlanAt, settled, SETTLE_MS } from './steady.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, iconName, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { wentTo } from './learn.mjs';
@@ -1701,7 +1702,10 @@ async function plan(from, to, opts = {}) {
     // (A saved trip's ways from 交通, as its card ranked them: not found again.)
     const onBoard = onTicket ? null : aboard && dest.lat != null ? await planAboard(ctx.data, aboard, dest, { modes: tripModes, ebike: ebikeNow() }).catch(() => null) : null;
     if (aboard && !onBoard) c.aboard = null;
-    out = onTicket || onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() }));
+    // The whole plan before the first show (its second round too: the direct
+    // buses, every bus's times, 追公車; steady.mjs `settled`), the skeleton till
+    // then (Jay 2026-11-06: "the first show is the final result").
+    out = onTicket || onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await settled(await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow() })));
     if (aboard && !onBoard) c.from = { ...c.from, name: start.name || HERE };
     c.plans = onBoard || onTicket ? out.plans : await walkHere(out.plans);
     c.choice = {};
@@ -1711,35 +1715,43 @@ async function plan(from, to, opts = {}) {
     c.error = errorText(err);
     c.plans = [];
   }
+  // (A way whose bus is gone before you're at its stop: set aside before the
+  // first show, never taken off after; the stretches after a trip's stops too.)
+  if (card === c && c.plans?.length) await Promise.race([dropGone(c, { draw: false }), wait(1500)]);
+  if (card === c && (c.then.length || c.have) && c.plans?.length) await Promise.race([(c.restP = planRest(c, { draw: false })), wait(SETTLE_MS)]);
   if (card === c) {
+    c.drawn = Boolean(c.plans);
     renderCard();
-    dropGone(c);
     // The best plan drawn on the map at once; its steps open with a tap.
     if (c.plans.length) {
-      // (The card's first: a saved trip's kept list has gone departures ahead of it.)
-      const best = opts.plans ? c.plans.find(p => p.top && p.lead !== false && !p.gone) || c.plans[0] : c.plans[0];
+      // (The card's first: a saved trip's kept list has gone departures ahead of
+      // it, and a way kept leading by steadyLead isn't first in the list.)
+      const best = c.plans.filter(p => p.top && p.lead !== false && !p.gone).sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0] || c.plans[0];
       drawPlan(best, { fit: false });
       // (Its buses along their stops and its rides along the streets, not straight across town.)
       roadLegs(best, { roads: 'bike' });
     }
     if (opts.nav && c.plans[opts.index || 0]) navigate(c.plans[opts.index || 0]);
-    const rest = (c.then.length || c.have) && c.plans.length ? (c.restP = planRest(c)) : null;
+    const rest = (c.then.length || c.have) && c.plans.length ? c.restP : null;
     if (opts.go) goBest(c, rest, opts.go);
   }
-  // The direct buses and every bus's times come a moment later: the list
-  // ranked again, the plan open (if one is) kept open, unless a time was picked.
-  out?.later?.then(o => {
+  // The direct buses and every bus's times, when they took longer than the
+  // wait: merged into what's shown (steady.mjs: each way shown keeps its place,
+  // rank and labels, only its times new; a new way quietly at the end), the
+  // plan open (if one is) kept open, unless a time was picked.
+  out?.pending?.then(o => {
     if (!o?.plans?.length || card !== c || navFull() || Object.keys(c.choice || {}).length) return;
     const open = c.plans[c.sel];
     // (The near stop or the further one by bike, whichever the card showed first, kept: chase.mjs steadyLead.)
-    c.plans = walkHereNow(steadyLead(o.plans, c.plans));
+    const shownNow = c.plans.filter(p => p !== c.keepPlan);
+    c.plans = walkHereNow(steadyPlans(shownNow, steadyLead(o.plans, shownNow)));
+    // (The whole-trip YouBike stays where it was: first when it's 推薦.)
     if (c.keepPlan?.tags.includes('推薦')) {
       for (const q of c.plans) q.tags = (q.tags || []).filter(t => t !== '推薦');
       c.plans.unshift(c.keepPlan);
     } else if (c.keepPlan) c.plans.push(c.keepPlan);
-    c.sel = open ? c.plans.findIndex(p => pickSig(p) === pickSig(open) && Math.abs(p.dep - open.dep) < 60_000) : -1;
+    c.sel = open ? (open === c.keepPlan ? c.plans.indexOf(open) : samePlanAt(c.plans, open)) : -1;
     renderCard();
-    dropGone(c);
     if (c.sel < 0 && c.plans.length) {
       // (The card's first: a way kept leading by steadyLead isn't first in the list.)
       const best = c.plans.filter(p => p.top && p.lead !== false && !p.gone).sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0] || c.plans[0];
@@ -1767,7 +1779,7 @@ async function goBest(c, rest, said) {
 // recommended way gets you to its start, so every way on the card is the
 // whole trip (the owner, 2026-10-15: planned to the first stop alone, a 3′
 // walk was the trip). Navigating, each stretch is planned again once there.
-async function planRest(c) {
+async function planRest(c, { draw = true } = {}) {
   c.rest = [];
   let prev = c.to;
   for (const x of c.then) {
@@ -1803,7 +1815,8 @@ async function planRest(c) {
     if (k) {
       const whole = restOf(c, first);
       // (The recommendation unless a stop is far or it's all a short walk: keepWins.)
-      const wins = c.have || keepWins(k, whole && [first, ...whole]);
+      // (Found after the card was first shown: it comes in under the ways shown, never over them.)
+      const wins = c.have || (!c.drawn && keepWins(k, whole && [first, ...whole]));
       const p = { ...k[0], later: k.slice(1), lead: true, weak: false, times: [], tags: wins ? ['推薦', '全程 YouBike'] : ['全程 YouBike'] };
       p.top = wins || !whole || k.at(-1).arr < (whole.at(-1) || first).arr;
       c.keepPlan = p;
@@ -1814,7 +1827,7 @@ async function planRest(c) {
       } else c.plans.push(p);
     }
   } catch {}
-  if (card !== c) return;
+  if (card !== c || !(draw || c.drawn)) return;
   renderCard();
   drawPlan(c.plans[c.sel >= 0 ? c.sel : 0], { fit: false });
 }
@@ -2485,7 +2498,7 @@ export function busGone(p, times, now = Date.now()) {
   if (times.some(t => t.at >= ready - 60_000 && t.at <= l.dep + 25 * 60_000)) return false;
   return times.some(t => Math.abs(t.at - l.dep) <= 6 * 60_000 && t.at < ready - 60_000);
 }
-async function dropGone(c) {
+async function dropGone(c, { draw = true } = {}) {
   const soon = (c.plans || []).filter(p => {
     const l = p.legs.find(x => x.mode !== 'walk');
     return !p.aboard && l?.mode === 'bus' && l.from?.lat && l.dep < Date.now() + 20 * 60_000;
@@ -2499,7 +2512,7 @@ async function dropGone(c) {
       if (gone !== Boolean(p.gone)) (p.gone = gone), (changed = true);
     } catch {}
   }));
-  if (changed && card === c && !navFull()) renderCard();
+  if (draw && changed && card === c && !navFull()) renderCard();
 }
 
 // ---- Navigation ---------------------------------------------------------------------------------------
