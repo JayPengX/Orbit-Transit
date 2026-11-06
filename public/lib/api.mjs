@@ -156,8 +156,7 @@ export async function tdx(path, opts = {}) {
   ask.catch(() => {});
   return Promise.race([ask, sleep(opts.late).then(() => (stale.set(path, last.at), last.data))]);
 }
-// `had`: say how old the copy here is (the Worker reads TDX when its own is no newer: a bus's place).
-async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr = 0, max = 200_000, had = false } = {}) {
+async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr = 0, max = 200_000 } = {}) {
   if (fresh === 'live') fresh = liveMs() - 1000;
   else if (fresh === 'bike') fresh = bikeMs() - 1000;
   const now = Date.now();
@@ -184,8 +183,7 @@ async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr
   const p = (async () => {
     try {
       const meta = {};
-      const age = had && mem ? Math.max(1, Math.floor((Date.now() - mem.at) / 1000)) : 0;
-      const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}${age ? `&had=${age}` : ''}`, { meta });
+      const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}`, { meta });
       // When the data is from (the proxy's copy can be older): its "N 秒前更新", and asked again sooner.
       memory.set(path, { at: Date.now() - meta.age * 1000, data });
       stale.delete(path);
@@ -303,6 +301,14 @@ export function busEta(city, { stops = [], route = '' } = {}) {
   // (Only the last minute's asks are kept.)
   if (etaAsks.size > 100) for (const [p, y] of etaAsks) if (now - y.got > 60_000) etaAsks.delete(p);
   return ask;
+}
+// Where routes' buses are (/transit/gps: the Worker reads a city's whole list
+// once for every route and every phone, 公路客運's by its routes), `had`: how
+// old the phone's copy is (s), as busEta's. → { rows, at } (when the copy is from).
+export async function busGps(city, routes, had = 0) {
+  const meta = {};
+  const got = await get(`/transit/gps?city=${encodeURIComponent(city)}&routes=${routes.map(encodeURIComponent).join(',')}${had ? `&had=${had}` : ''}`, { meta, wait: 8000 });
+  return { rows: Array.isArray(got) ? got : [], at: Date.now() - (meta.age || 0) * 1000 };
 }
 async function etaAsk(path) {
   const meta = {};

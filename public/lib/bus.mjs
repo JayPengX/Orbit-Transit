@@ -2,7 +2,7 @@
 // comes to a stop (TDX's N1 estimates, refreshed by the proxy every 25 s).
 
 import { packRoute } from './packs.mjs';
-import { tdx, rows, busEta, liveMs } from './api.mjs';
+import { tdx, rows, busEta, busGps, liveMs } from './api.mjs';
 import { etaStops } from './near.mjs';
 import { gpsFix } from './busgps.mjs';
 import { routeLines } from './shapes.mjs';
@@ -135,15 +135,18 @@ export const routeEtaAt = route => routeLive.get(route.uid)?.at || 0;
 // in the same ask (a stop card asked at each beat, a new ask whenever its
 // late routes changed: two TDX reads for one fix), with how old the copy
 // here is (`had`): the Worker reads TDX then, not answering with its copy a
-// step old.
+// step old. Through /transit/gps (api.mjs busGps): the Worker reads a city's
+// whole list once for every route and every phone (a crowd at different
+// stops was a TDX read a stop each 20 s), 公路客運's by its routes.
 const GPS_STEP = 20_000;
-const gpsAsks = new Map(); // city|RouteUID → { got, ask }
-let gpsBatch = null; // city → Map(RouteUID → { route, waits })
+const gpsAsks = new Map(); // city|RouteUID → { got, ask, at (its data's time) }
+let gpsBatch = null; // city → Map(RouteUID → { route, waits, had: its copy's time, mine: its gpsAsks entries })
 export function routeGps(route) {
   const key = `${route.city}|${route.uid}`;
   const now = Date.now();
   const k = gpsAsks.get(key);
   if (k && (now - k.got < liveMs() - 1000 || Math.floor(k.got / GPS_STEP) === Math.floor(now / GPS_STEP))) return k.ask;
+  const mine = { got: now, ask: null, at: 0 };
   const ask = new Promise((resolve, reject) => {
     if (!gpsBatch) {
       const b = (gpsBatch = new Map());
@@ -154,10 +157,12 @@ export function routeGps(route) {
     }
     if (!gpsBatch.has(route.city)) gpsBatch.set(route.city, new Map());
     const per = gpsBatch.get(route.city);
-    if (!per.has(route.uid)) per.set(route.uid, { route, waits: [] });
+    if (!per.has(route.uid)) per.set(route.uid, { route, waits: [], had: k?.at || 0, mine: [] });
     per.get(route.uid).waits.push({ resolve, reject });
+    per.get(route.uid).mine.push(mine);
   });
-  gpsAsks.set(key, { got: now, ask });
+  mine.ask = ask;
+  gpsAsks.set(key, mine);
   ask.catch(() => gpsAsks.get(key)?.ask === ask && gpsAsks.delete(key));
   if (gpsAsks.size > 100) for (const [p, x] of gpsAsks) if (now - x.got > 60_000) gpsAsks.delete(p);
   return ask;
@@ -165,14 +170,18 @@ export function routeGps(route) {
 function sendGps(city, all) {
   for (let i = 0; i < all.length; i += 20) {
     const part = all.slice(i, i + 20);
-    const one = part.length === 1 ? part[0].route : null;
-    const path = one
-      ? `basic/v2/Bus/RealTimeByFrequency/${scope(city)}/${encodeURIComponent(one.name)}?$filter=RouteUID eq ${q(one.uid)}&$select=PlateNumb,Direction,BusPosition,GPSTime`
-      : `basic/v2/Bus/RealTimeByFrequency/${scope(city)}?$filter=${part.map(x => `RouteUID eq ${q(x.route.uid)}`).join(' or ')}&$select=RouteUID,PlateNumb,Direction,BusPosition,GPSTime`;
-    tdx(path, { fresh: 'live', had: true }).then(
-      j => {
-        const list = rows(j);
-        for (const x of part) for (const w of x.waits) w.resolve(one ? list : list.filter(r => r.RouteUID === x.route.uid));
+    // (Asked with the youngest copy any of them has: an older one of the Worker's is no use to it.)
+    const ages = part.filter(x => x.had).map(x => Math.max(1, Math.floor((Date.now() - x.had) / 1000)));
+    busGps(
+      city,
+      part.map(x => x.route.uid),
+      ages.length ? Math.min(...ages) : 0
+    ).then(
+      ({ rows: list, at }) => {
+        for (const x of part) {
+          for (const m of x.mine) m.at = at;
+          for (const w of x.waits) w.resolve(list.filter(r => r.RouteUID === x.route.uid));
+        }
       },
       err => {
         for (const x of part) for (const w of x.waits) w.reject(err);
