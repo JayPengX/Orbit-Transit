@@ -7,7 +7,7 @@
 import { emptyNote, saidRows } from './look.mjs';
 import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
-import { errorText, tdx, rows, dataAt, liveMs } from './api.mjs';
+import { errorText, dataAt, liveMs, busEta } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
@@ -27,35 +27,59 @@ export const hours = times => [...times.reduce((m, t) => m.set(t.slice(0, 2), [.
 let ctx = null;
 export const useBusCtx = c => (ctx = c);
 
-// ---- The stops around a point: every bus due (one TDX ask) -----------------------------------------
+// ---- The stops around a point: every bus due ---------------------------------------------------
 
 // → [{ name, dist, lat, lon, rows: [{ route, uid, city, dir, stopUID, v }] }], nearest stop first.
+// The stops from TDX's stations around you (stationsNear: kept a day, the
+// same answer for everyone within ~200 m), their buses from the proxy's copy
+// of each city's estimates (api busEta: one ask a city, a basic read, the
+// city's one copy when many ask). TDX's own search of the buses around a
+// point was an advanced ask, 7.5 times a basic one's points, made again for
+// each ~100 m and every 20 s, never shared: most of what a phone on the map spent.
 export async function nearStops(h, { r = 350, n = 6 } = {}) {
-  const at = p => (Math.round(p * 1000) / 1000).toFixed(3);
-  const [j, stations] = await Promise.all([
-    tdx(`advanced/v2/Bus/EstimatedTimeOfArrival/NearBy?$spatialFilter=nearby(${at(h.lat)},${at(h.lon)},${r})&$select=StopUID,StopName,RouteUID,RouteName,Direction,EstimateTime,StopStatus,NextBusTime,IsLastBus,Estimates,DataTime&$top=300`, { fresh: 'live' }),
-    stationsNear(h.lat, h.lon).catch(() => [])
-  ]);
-  const where = name => {
-    const list = stations.filter(s => s.name === name).map(s => [meters(h.lat, h.lon, s.lat, s.lon), s]).sort((a, b) => a[0] - b[0]);
-    return list[0] ? { dist: list[0][0], lat: list[0][1].lat, lon: list[0][1].lon } : { dist: Infinity };
-  };
-  const byStop = new Map();
-  for (const r0 of rows(j)) {
-    const name = zh(r0.StopName);
-    if (!byStop.has(name)) byStop.set(name, new Map());
+  const stations = await stationsNear(h.lat, h.lon);
+  // By name: a street's two sides and its signs are one stop, at its nearest sign.
+  const byName = new Map();
+  for (const s of stations) {
+    const d = meters(h.lat, h.lon, s.lat, s.lon);
+    if (d > r) continue;
+    if (!byName.has(s.name)) byName.set(s.name, { name: s.name, dist: Infinity, lat: s.lat, lon: s.lon, stops: [] });
+    const x = byName.get(s.name);
+    if (d < x.dist) Object.assign(x, { dist: d, lat: s.lat, lon: s.lon });
+    x.stops.push(...s.stops);
+  }
+  // (One more than wanted: a stop with no bus said is left out, as TDX's search left it.)
+  const near = [...byName.values()].sort((a, b) => a.dist - b.dist).slice(0, n + 1);
+  const of = new Map();
+  for (const x of near) for (const st of x.stops) if (!of.has(st.stopUID)) of.set(st.stopUID, x);
+  // (One ask a city, TDX's own times as its search gave them: a lagging bus is counted again from its
+  // GPS on its card, not here, where the GPS and the route's line were more asks and downloads a beat.)
+  const scopes = new Map();
+  for (const uid of [...of.keys()].sort()) {
+    const sc = routeCity(uid);
+    if (!scopes.has(sc)) scopes.set(sc, []);
+    scopes.get(sc).push(uid);
+  }
+  const asks = [];
+  for (const [sc, uids] of scopes) for (let i = 0; i < uids.length; i += 300) asks.push(busEta(sc, { stops: uids.slice(i, i + 300) }));
+  const got = (await Promise.all(asks)).flatMap(x => x?.rows || []);
+  const byStop = new Map(near.map(x => [x.name, new Map()]));
+  for (const r0 of got) {
+    const x = of.get(r0.StopUID);
+    if (!x) continue;
+    const m = byStop.get(x.name);
     const key = `${r0.RouteUID}|${r0.Direction}`;
     const v = etaOf(r0);
-    const old = byStop.get(name).get(key);
+    const old = m.get(key);
     if (!old || (v.sec != null && (old.v.sec == null || v.sec < old.v.sec))) {
       const code = /^[A-Z]{3}/.exec(r0.RouteUID || '')?.[0];
-      byStop.get(name).set(key, { route: zh(r0.RouteName), uid: r0.RouteUID, city: CITY_CODES[code] || INTERCITY, dir: Number(r0.Direction) || 0, stopUID: r0.StopUID, stop: name, v });
+      m.set(key, { route: zh(r0.RouteName), uid: r0.RouteUID, city: CITY_CODES[code] || INTERCITY, dir: Number(r0.Direction) || 0, stopUID: r0.StopUID, stop: x.name, v });
     }
   }
   // Soonest first at each stop; buses that aren't running today last.
-  return [...byStop]
-    .map(([name, m]) => ({ name, ...where(name), rows: [...m.values()].sort((a, b) => etaRank(a.v) - etaRank(b.v)) }))
-    .sort((a, b) => a.dist - b.dist)
+  return near
+    .map(x => ({ name: x.name, dist: x.dist, lat: x.lat, lon: x.lon, rows: [...byStop.get(x.name).values()].sort((a, b) => etaRank(a.v) - etaRank(b.v)) }))
+    .filter(x => x.rows.length)
     .slice(0, n);
 }
 

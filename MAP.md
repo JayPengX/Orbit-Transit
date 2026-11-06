@@ -265,7 +265,13 @@ Live: https://orbit.jaypengx.com/transit/
     `scripts/bus-rhythm.mjs` (the rule against TDX's timing, a stop card's
     asks before and after);
   - bus routes and timetables: weekly packs in R2 (`packs.mjs`);
-  - what's near a point: worked out on the phone (`near.mjs`);
+  - what's near a point: worked out on the phone (`near.mjs`); the buses at
+    the stops near you (附近, `bus-ui.mjs nearStops`) and at a plan's stops
+    (`etaAround`) through `/transit/eta` too, never TDX's advanced search of
+    the buses around a point (7.5 basic asks' points, made each ~100 m and
+    20 s, never shared: most of a phone's TDX points on 2026-11-06;
+    `tests/near-stops.test.mjs`); the map's shelves aren't read while a card
+    or the search's results cover them (`tab-map.mjs shelvesShown`);
   - line shapes: `shapes.mjs` (packs and shapes read with the kit's
     `packJson`; a piece TDX draws there and back, 六家線, cut into its two tracks);
   - the map: Google under the month's cap, else NLSC. Google's places keep
