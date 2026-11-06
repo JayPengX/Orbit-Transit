@@ -14,7 +14,12 @@ Live: https://orbit.jaypengx.com/transit/
 - **Tabs** (地圖 first, where the app opens; Jay 2026-11-03: "map should be the first tab"):
   - **地圖:** YouBike stations (the five nearest along the bottom), every
     bus stop with live times, train and metro stations, search, pins, and
-    a trip planned from anywhere. A stop's signs a few metres apart are one
+    a trip planned from anywhere. Search lists a station once (`uniqueResults`:
+    Google's 台鐵新竹車站, 新竹火車站, 新竹 at its door fold into it), the
+    railway the words name first (火車站 台鐵, 高鐵 高鐵). YouBike only
+    (`bike.mjs mergeBikes`: 彰化's Moovo, ServiceType 3, isn't shown or planned on).
+    釘選這個方案 on a way with no trip saved yet makes a one-time trip that day,
+    leaving then, the way first (`oneTimeTrip`; Jay 2026-11-06). A stop's signs a few metres apart are one
     stop (`stopGroups`).
   - **交通:** one board (`lib/board.mjs`, `board.css`; Jay 2026-11-03 found
     the old green focus card "kind of useless": half a screen for one item,
@@ -146,6 +151,11 @@ Live: https://orbit.jaypengx.com/transit/
   Nothing within three hours (a place in the country past its station, no bus
   on from it and no YouBike there: 台北 → 池上's 伯朗大道): the trains with a
   walk up to 6 km at the end (`RAIL_FAR_WALK_M`), beside tomorrow's ways.
+  Into a metro's area (台北・新北, 桃園, 台中, 高雄), our trains go on by our
+  metro router from each of their stops there (`planner.mjs trainThenMetro`:
+  高鐵 to 台北 then the 淡水信義線 to 101, over 高鐵 to 板橋, 區間 to 松山 and a
+  YouBike; Jay 2026-11-06), ranked with the rest; the metro's network asked at
+  the start (`metroWarm`), never waited on past 1.5 s (`tests/train-metro.test.mjs`).
   A 高鐵 ridden past the place and back by another train (0149 skips 台南: to
   左營, back by 自強) is dropped when a way that doesn't ride past gets in
   within 15 minutes of it (`plan.mjs overshoots`, `dropOvershoots`).

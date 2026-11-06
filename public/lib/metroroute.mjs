@@ -211,10 +211,18 @@ function toPlan(net, x, o, d, at, endM) {
   return finish({ src: 'metro', legs });
 }
 
+// The metro map whose area a point is in (or none).
+export const metroMapAt = p => (p?.lat == null ? null : MAPS.find(m => p.lat >= m.box[0] && p.lat <= m.box[2] && p.lon >= m.box[1] && p.lon <= m.box[3]) || null);
 // The metro rides for a trip, when both ends are in one map's area.
 export async function metroPlans(o, d, at) {
-  const map = MAPS.find(m => [o, d].every(p => p.lat >= m.box[0] && p.lat <= m.box[2] && p.lon >= m.box[1] && p.lon <= m.box[3]));
-  if (!map) return [];
+  const map = metroMapAt(o);
+  if (!map || metroMapAt(d) !== map) return [];
   return metroRoutes(await metroNet(map), o, d, at);
 }
+// Its network asked for now (a long trip into the area: our trains go on by
+// it, trainThenMetro), so it's in by the time the trains are.
+export const metroWarm = p => {
+  const map = metroMapAt(p);
+  if (map) metroNet(map).catch(() => {});
+};
 

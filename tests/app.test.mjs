@@ -389,6 +389,8 @@ test('YouBike: regular bikes and 電輔車 apart, the name without its prefix', 
     [{ StationUID: 'HSZ1', ServiceStatus: 1, AvailableRentBikes: 7, AvailableReturnBikes: 23, AvailableRentBikesDetail: { GeneralBikes: 5, ElectricBikes: 2 } }]
   );
   assert.deepEqual({ ...list[0], at: null }, { uid: 'HSZ1', name: '新竹火車站(東站)', lat: 24.8, lon: 120.97, cap: 30, kind: 'YouBike 2.0', bikes: 5, ebike: 2, ret: 23, ok: true, at: null });
+  // (Moovo, 彰化's other bikes, isn't YouBike: not shown or planned on.)
+  assert.deepEqual(mergeBikes([{ StationUID: 'CHA1', StationName: { Zh_tw: '彰化火車站' }, StationPosition: { PositionLat: 24.08, PositionLon: 120.54 }, BikesCapacity: 400, ServiceType: 3 }], [{ StationUID: 'CHA1', ServiceStatus: 1, AvailableRentBikes: 350 }]), []);
   assert.equal(bikeName('YouBike2.0E_竹北'), '竹北');
   assert.equal(bikeLevel({ bikes: 0, ebike: 0 }), 'none');
   assert.equal(bikeLevel({ bikes: 1, ebike: 1 }), 'few');
@@ -1809,6 +1811,18 @@ test('search results: one row a place (the same name at the same spot, or the sa
   // (The full name kept in the first one's place: 巨城購物中心 Big City.)
   assert.deepEqual(rows.map(r => r.id || r.kind), ['g2', 'g3', 'g4', 'g5', 'g6']);
   assert.deepEqual(uniqueResults([{ kind: 'geo', id: 'a', name: '巨城購物', lat: 24.8096, lon: 120.9748 }, { kind: 'geo', id: 'b', name: 'Big City遠東巨城購物中心', lat: 24.8094, lon: 120.9751 }, { kind: 'place', name: '巨城', lat: 24.8096, lon: 120.9748 }]).map(r => r.name), ['Big City遠東巨城購物中心', '巨城']);
+  // A station and Google's names for it at its door are one row, the station's (Jay 2026-11-06, 新竹火車站:
+  // 台鐵新竹車站, 新竹火車站 and 新竹 beside the station); another station of the name (高鐵新竹) stays.
+  const hsinchu = uniqueResults([
+    { kind: 'tra', key: 'tra:1210', name: '新竹車站', lat: 24.8016, lon: 120.9716 },
+    { kind: 'hsr', key: 'hsr:1030', name: '高鐵新竹站', lat: 24.8081, lon: 121.0403 },
+    { kind: 'geo', id: 'a', name: '台鐵新竹車站', sub: '新竹市東區中華路二段', lat: 24.8017, lon: 120.9717 },
+    { kind: 'geo', id: 'b', name: '新竹火車站', sub: '新竹市東區', lat: 24.8031, lon: 120.9699 },
+    { kind: 'geo', id: 'c', name: '新竹', sub: '新竹市東區中華路二段445號', lat: 24.8015, lon: 120.9714 },
+    { kind: 'geo', id: 'd', name: '新竹', sub: '新竹縣竹北市高鐵七路6號', lat: 24.808, lon: 121.0405 },
+    { kind: 'geo', id: 'e', name: '竹北火車站', sub: '新竹縣竹北市和平街59號', lat: 24.8392, lon: 121.0095 }
+  ]);
+  assert.deepEqual(hsinchu.map(r => `${r.kind}:${r.name}`), ['tra:新竹車站', 'hsr:高鐵新竹站', 'geo:竹北火車站']);
   const { shortAddress } = await import('../public/lib/tab-map.mjs');
   assert.equal(shortAddress('新竹市東區復中里中央路229 號4 樓'), '新竹市東區中央路229號4樓');
   assert.equal(shortAddress('新竹市東區南市里西大路323號'), '新竹市東區西大路323號');
@@ -2904,4 +2918,16 @@ test('a school day’s trip missed while still at home: its way now beside tomor
   assert.equal(tripLate(t, school, at821), null, 'already there: the way back is the trip');
   assert.equal(tripLate(t, home, twAt('2026-10-10', '08:21')), null, 'a Saturday: not one of its days');
   assert.equal(tripLate(cleanSaved({ ...t, date: '2026-10-05', days: [] }), home, at821), null, 'a one-time trip: over');
+});
+
+test('a way pinned with no trip yet: a one-time trip that day, leaving then, the way first (Jay 2026-11-06)', async () => {
+  const { oneTimeTrip } = await import('../public/lib/tab-map.mjs');
+  const { pickSig } = await import('../public/lib/plan.mjs');
+  const { tripOver } = await import('../public/lib/store.mjs');
+  const dep = Date.UTC(2026, 10, 7, 0, 7); // 08:07 in Taiwan
+  const p = { dep, legs: [{ mode: 'tra', short: '普悠瑪 107', from: { name: '新竹' }, to: { name: '彰化' }, dep, arr: dep + 3_660_000 }] };
+  const c = { fromHere: true, from: { name: '目前位置', lat: 24.8, lon: 121 }, to: { name: '彰化扇形車庫', lat: 24.083, lon: 120.537 } };
+  const t = cleanSaved({ ...oneTimeTrip(c, p), picks: [pickSig(p)] });
+  assert.deepEqual([t.date, t.time, t.by, t.days, t.from, t.picks], ['2026-11-07', '08:07', 'depart', [], null, ['tra:新竹>彰化']]);
+  assert.ok(!tripOver(t, dep) && tripOver(t, dep + 86_400_000), 'gone after its day');
 });
