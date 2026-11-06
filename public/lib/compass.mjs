@@ -4,6 +4,10 @@
 // on 我的位置 or the first tap anywhere once it was allowed), elsewhere
 // deviceorientationabsolute's alpha. Moving with no compass, the GPS's own
 // heading. Nothing known: no beam (never a guess).
+// Asked only from a tap on 我的位置, never on opening or on any other tap
+// (Jay 2026-11-06: Transit asked for direction almost every open; an iPhone's
+// home-screen app forgets the answer at each launch, so the old quiet re-ask
+// on the first tap put the question up again). A no is kept: never asked again.
 
 import { readJson, writeJson } from './util.mjs';
 
@@ -38,7 +42,7 @@ export function unwrap(prev, next) {
   return prev + d;
 }
 
-const state = { compass: null, at: 0, gps: null, fns: new Set(), on: false };
+const state = { compass: null, at: 0, gps: null, fns: new Set(), on: false, asked: false };
 const screenAngle = () => globalThis.screen?.orientation?.angle ?? globalThis.orientation ?? 0;
 function emit() {
   const c = state.compass != null && Date.now() - state.at < COMPASS_MS ? state.compass : null;
@@ -62,36 +66,32 @@ function listen() {
 }
 const needsAsk = () => typeof globalThis.DeviceOrientationEvent?.requestPermission === 'function';
 
-// From a tap (iOS asks only then): the compass allowed, and kept in mind so
-// the next opening asks again quietly on the first tap.
+// Whether a tap on 我的位置 should put up iOS's question: only where the phone
+// asks at all, not once this launch already, and never after a no.
+export function shouldAsk({ needs = needsAsk(), said = readJson(OK_KEY), askedNow = state.asked, turning = Boolean(state.at) } = {}) {
+  return needs && !turning && !askedNow && said !== false;
+}
+// From a tap on 我的位置 (iOS asks only from a tap): the answer kept, a no for good.
 export async function askCompass() {
   listen();
   // (Already turning, as on Android, which sends it unasked: nothing to ask.)
   if (!needsAsk() || state.at) return true;
+  if (!shouldAsk()) return false;
+  state.asked = true;
   try {
     const ok = (await globalThis.DeviceOrientationEvent.requestPermission()) === 'granted';
     writeJson(OK_KEY, ok);
-    if (ok) listen();
     return ok;
   } catch {
     return false;
   }
 }
-// fn(heading or null) as it turns; the GPS's fixes come in by gpsFix.
+// fn(heading or null) as it turns; the GPS's fixes come in by gpsFix. Never asks:
+// where nothing needs asking (Android) the compass comes; an iPhone sends nothing
+// until 我的位置 was tapped, and the GPS's heading shows meanwhile when moving.
 export function watchHeading(fn) {
   state.fns.add(fn);
-  // (Listened to at once: where nothing needs asking it comes; an iPhone sends nothing until allowed.)
-  const asked = state.on;
   listen();
-  if (!asked && needsAsk() && readJson(OK_KEY) === true) {
-    const once = () => {
-      document.removeEventListener('touchend', once, true);
-      document.removeEventListener('click', once, true);
-      if (!state.at) askCompass();
-    };
-    document.addEventListener('touchend', once, true);
-    document.addEventListener('click', once, true);
-  }
   return () => state.fns.delete(fn);
 }
 export function gpsFix(fix) {
