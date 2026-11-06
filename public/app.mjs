@@ -251,6 +251,13 @@ async function boot() {
   const P = ctx.data.prefs?.modes;
   if (!P || P.tra || P.hsr) setTimeout(() => (window.requestIdleCallback || (f => f()))(() => warmRail()), 2500);
 }
+// A notice tapped while the app is open (kit goNotice): its tab, a ride
+// being navigated (#nav) on the map. (Opening, the same: boot's `asked`.)
+window.addEventListener('hashchange', () => {
+  const m = /^#(map|go|times|me|nav)\b/.exec(location.hash);
+  const id = m && (m[1] === 'nav' ? 'map' : m[1]);
+  if (id && bar && bar.current !== id) select(id);
+});
 q.on('active', live => live && ctx.data.t && q.write({ payload: encodeData(ctx.data) }).catch(() => {}));
 if (!gated) boot();
 
