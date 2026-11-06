@@ -51,8 +51,10 @@ test('our own trains are priced from the fares, a bus beside them makes it a flo
   assert.deepEqual(planFare(toTainan, net, price), { fare: 1387, more: false });
   assert.equal(fareOf(toTainan, null, planFare(toTainan, net, price)).text, 'NT$1387');
   assert.match(fareOf(withBus, null, planFare(withBus, net, price)).text, /^NT\$843 起$|^from NT\$843$/);
-  // A planner's own fare stands; a TPASS line stands; no train, no line.
-  assert.equal(planFare({ fare: 500, legs: toTainan.legs }, net, price), null);
+  // A planner's fare for trains alone gives way to the trains' own (Google's 普悠瑪 107 新竹 → 彰化
+  // was the 區間's NT$213, 查時刻's NT$331; Jay 2026-11-06); with a bus it stands; a TPASS line stands; no train, no line.
+  assert.equal(fareOf({ fare: 500, legs: toTainan.legs }, null, planFare({ fare: 500, legs: toTainan.legs }, net, price)).text, 'NT$1387');
+  assert.equal(fareOf({ fare: 900, legs: withBus.legs }, null, planFare({ fare: 900, legs: withBus.legs }, net, price)).text, 'NT$900');
   assert.equal(fareOf(toTainan, { all: true }, planFare(toTainan, net, price)).text.includes('TPASS'), true);
   assert.equal(planFare({ legs: [{ mode: 'bus' }] }, net, price), null);
 });

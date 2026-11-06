@@ -2076,7 +2076,7 @@ function plansHtml(c) {
     const all = [p, ...(later || [])];
     const arr = all.at(-1).arr;
     const sum = k => all.reduce((a, q) => a + (q[k] || 0), 0);
-    // (The price before the walk: at 320 px the line ends in …, and a walk of a few hundred metres matters less.)
+    // (The price before the walk, which matters less. The line wraps between facts, never inside one: at 320 px it ended in … and the walk was lost; Jay 2026-11-06.)
     const facts = !c.then?.length
       ? [leaveText(p), p.ticket ? '' : p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.fareText || (p.fare ? `NT$${p.fare}` : ''), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '']
       : !later
@@ -2090,7 +2090,7 @@ function plansHtml(c) {
     return `<button class="ot-plan${on ? ' on' : ''}${mini ? ' mini' : ''}" type="button" data-plan="${i}">
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="${W('釘選的方案', 'Pinned route')}">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText((arr - p.dep) / 1000))}</b><span class="ot-plan-time">${e(timeRange(p.dep, arr))}</span></div>
         <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="${W(`第 ${k} 站`, `Stop ${k}`)}">${k}</span>` : ''}${chips(q)}`).join('')}</div>${on ? deps(lead, i) : ''}
-        ${mini ? '' : `<div class="ot-plan-sub">${p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').slice(0, 1).map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(tagText(t))}</span> · `).join('')}${facts.filter(Boolean).map(e).join(' · ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then.length ? W('騎著的這台，到這裡還', 'Return the bike you’re on here') : bikeSwap(ctx.data.prefs) ? W('同一台騎到底，快滿 30 分鐘時在站旁換一台', 'Keep riding; swap at a dock near 30 minutes') : W('同一台騎到最後才還，停留時也在計費', 'Keep one bike to the end; stops are charged too')}</div>` : ''}
+        ${mini ? '' : `<div class="ot-plan-sub facts">${[...p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').slice(0, 1).map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${e(tagText(t))}</span>`), ...facts.filter(Boolean).map(e)].map((h, k) => `<span class="ot-plan-fact">${k ? '· ' : ''}${h}</span>`).join(' ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then.length ? W('騎著的這台，到這裡還', 'Return the bike you’re on here') : bikeSwap(ctx.data.prefs) ? W('同一台騎到底，快滿 30 分鐘時在站旁換一台', 'Keep riding; swap at a dock near 30 minutes') : W('同一台騎到最後才還，停留時也在計費', 'Keep one bike to the end; stops are charged too')}</div>` : ''}
         ${!mini && (p.miss || p.off || p.late || lateBy(p, p.arr) || p.note || p.rivers?.length) ? `<div class="ot-plan-sub${p.miss || p.off || p.late || lateBy(p, p.arr) ? ' warn' : ' note'}">${e(p.off || p.miss || p.late || (lateBy(p, p.arr) ? W(`比 ${hm(p.deadline)} 晚 ${lateBy(p, p.arr)} 分到`, `${lateBy(p, p.arr)} min after ${hm(p.deadline)}`) : '') || p.note || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')} (road bridge)`))}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
@@ -2247,7 +2247,8 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
   // route's road, a train or the metro its track), else a bus through its
   // stops; never a straight line across town.
   const buses = p.legs.filter(l => l.mode === 'bus' && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
-  const rails = p.legs.filter(l => (l.mode === 'tra' || l.mode === 'hsr' || l.mode === 'metro') && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
+  // (A train with a planner's shape too: checked against its own stops once, below.)
+  const rails = p.legs.filter(l => (l.mode === 'tra' || l.mode === 'hsr' || l.mode === 'metro') && (l.mode !== 'metro' ? !l.stopsChecked : !l.poly) && !l.path && l.from?.lat != null && l.to?.lat != null);
   if (!todo.length && !buses.length && !rails.length) return;
   await Promise.all([
     ...buses.map(async l => {
@@ -2256,10 +2257,25 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
       if (path?.length > 1) l.path = path;
     }),
     ...rails.map(async l => {
-      let path = await railWay(l).catch(() => null);
-      // (A train the shape can't carry the whole way: by its own stops, a hop at a time.)
-      if (!path && l.mode !== 'metro') path = await railWayByStops(l.mode, await trainStops(l).catch(() => null)).catch(() => null);
-      if (path?.length > 1) l.path = path;
+      // A train that stops between: by its own stops, a hop at a time (the
+      // shortest way along the track took 普悠瑪 107 新竹 → 彰化 by the 海線; it
+      // runs the 山線 by 台中, Jay 2026-11-06). Else, or a train the stops
+      // can't place, the shortest way along its line.
+      const stops = l.mode === 'metro' ? null : await trainStops(l).catch(() => null);
+      if (l.mode !== 'metro') l.stopsChecked = true;
+      // (A planner's shape that passes a stop of the train's by more than 1.5 km is the wrong line: by the stops.)
+      if (l.poly) {
+        const pts = legPath(l);
+        const off = (stops || []).slice(1, -1).some(([a, b]) => !pts.some(([x, y]) => meters(a, b, x, y) < 1500));
+        if (!off) return;
+      }
+      let path = stops?.length > 2 ? await railWayByStops(l.mode, stops).catch(() => null) : null;
+      path ||= await railWay(l).catch(() => null);
+      if (!path && stops) path = await railWayByStops(l.mode, stops).catch(() => null);
+      if (path?.length > 1) {
+        l.path = path;
+        delete l.poly;
+      }
     }),
     ...todo.map(async l => {
       // A walk: the one walk (walkTo, Google's streets), from where you are

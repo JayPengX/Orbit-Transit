@@ -2931,3 +2931,10 @@ test('a way pinned with no trip yet: a one-time trip that day, leaving then, the
   assert.deepEqual([t.date, t.time, t.by, t.days, t.from, t.picks], ['2026-11-07', '08:07', 'depart', [], null, ['tra:新竹>彰化']]);
   assert.ok(!tripOver(t, dep) && tripOver(t, dep + 86_400_000), 'gone after its day');
 });
+
+test('a train kind said once: TDX’s 普悠瑪(普悠瑪) is 普悠瑪, 自強(3000) kept (Jay 2026-11-06)', async () => {
+  const { trainKind } = await import('../public/lib/ui.mjs');
+  assert.equal(trainKind('普悠瑪(普悠瑪)'), '普悠瑪');
+  assert.equal(trainKind('自強(3000)'), '自強(3000)');
+  assert.equal(trainKind('區間'), '區間');
+});

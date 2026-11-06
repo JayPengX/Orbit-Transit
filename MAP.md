@@ -47,7 +47,9 @@ Live: https://orbit.jaypengx.com/transit/
     has what's near).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
     station picked by search, a nearby or recent one, or on a county's line
-    map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), bus
+    map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`); 查車次, a
+    台鐵 or 高鐵 number, the day's trains with it and a tap its every stop and
+    time (`tab-train.mjs trainNoSheet`, `ticket.mjs trainsNumbered`; Jay 2026-11-06), bus
     routes by number or stop, stop timetables, and 捷運: each city's metro
     as a metro map (`metromap.mjs`: the lines straightened to the eight
     directions from TDX's real stations, worked out ahead by
@@ -144,10 +146,15 @@ Live: https://orbit.jaypengx.com/transit/
   (`planTrip`'s `chase: false`; Jay 2026-11-06: "not force me to go further").
   YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
   the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
-  A plan's price line: the planner's own fare, else our own trains at their
-  real fares (`raildata.mjs planFare`, TDX's ODFare as 查時刻's, read while the
+  A plan's price line: our own trains at their real fares when it's trains
+  alone, the planner's never then (Google priced 普悠瑪 107 新竹 → 彰化 at the
+  區間's NT$213, 查時刻 NT$331; Jay 2026-11-06), else the planner's own fare, else
+  ours (`raildata.mjs planFare`, `tpass.mjs fareOf`, TDX's ODFare as 查時刻's, read while the
   buses are looked at; a bus or the metro beside them unpriced makes it
   `NT$… 起`); the ranking still costs trains by distance (`tests/cross-county.test.mjs`).
+  The facts line under a plan wraps between facts, never inside one.
+  A train is drawn through its own stops when it stops between (`roadLegs`:
+  a planner's shape passing a stop by 1.5 km is replaced; 普悠瑪 107 by the 山線, not the 海線).
   Nothing within three hours (a place in the country past its station, no bus
   on from it and no YouBike there: 台北 → 池上's 伯朗大道): the trains with a
   walk up to 6 km at the end (`RAIL_FAR_WALK_M`), beside tomorrow's ways.

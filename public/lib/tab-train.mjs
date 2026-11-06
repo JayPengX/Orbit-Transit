@@ -5,7 +5,7 @@
 // where to change and how long you wait, the fare, and today's delays.
 
 import { railStations, railNetwork, railSpan, traDelays, legFare, stationPoint } from './raildata.mjs';
-import { ticketOf } from './ticket.mjs';
+import { ticketOf, trainsNumbered } from './ticket.mjs';
 import { journeys, findStations } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { cityShort } from './city.mjs';
@@ -124,6 +124,7 @@ function render() {
     <div id="t-notices">${noticesHtml(notices)}</div>
     </div>
     <div id="t-results">${resultsHtml()}</div>
+    ${rowCard(`<button class="q-ritem chevron" type="button" data-act="train-no">${tile('search', COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${W('查車次', 'Find a train')}</span><small>${W('輸入車次號碼，看停靠站和時間', 'By its number: its stops and times')}</small></span></button>`)}
     ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
   $('panel-train').querySelector('.ot-tq-days').replaceWith(kitUI.dayBar(dayRec, { days: trainDays(), current: date, today, follow: true, onPick: pickDay }));
   if (seg) {
@@ -367,6 +368,7 @@ function onClick(ev) {
     state.everyTrain = act === 'all-trains';
     return search();
   }
+  if (act === 'train-no') return trainNoSheet();
   if (act === 'swap') {
     [state.from, state.to] = [state.to, state.from];
     state.results = null;
@@ -396,6 +398,64 @@ function onClick(ev) {
 // jumped; then 北中南東 too broad, back to counties.)
 
 const CITY_KEY = 'orbit-transit.st-city';
+// 查車次 (Jay 2026-11-06: "search for specific train using number"): a 台鐵
+// or 高鐵 number, the day's trains with it (the day's timetable the page
+// already reads: no read of its own), a tap its every stop and time.
+function trainNoSheet() {
+  const date = state.date || tw().date;
+  const d = sheet(`${sheetHead(W('查車次', 'Find a train'), date === tw().date ? '' : timeText(date))}
+    <label class="q-search ot-search-in"><input id="tn-q" type="search" inputmode="numeric" enterkeyhint="search" placeholder="${W('車次號碼，例如 107', 'Train number, e.g. 107')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
+    <div id="tn-list"></div>`, 'ot-tall-sheet ot-ticket-sheet');
+  const input = d.querySelector('#tn-q');
+  const list = d.querySelector('#tn-list');
+  const kind = t => (t.sys === 'hsr' ? W('高鐵', 'HSR') : trainKind(t.typeFull || t.type));
+  const stName = (n, key) => {
+    const s = n.st.get(key);
+    return s ? stationLabel(s) : key;
+  };
+  let found = [];
+  let n = null;
+  let seq = 0;
+  const draw = async () => {
+    const q = input.value.trim();
+    const my = ++seq;
+    if (!q) return (list.innerHTML = '');
+    try {
+      n = await railNetwork(date, { next: false, prev: false });
+    } catch (err) {
+      if (my === seq) list.innerHTML = `<p class="ot-note bad">${e(errorText(err))}</p>`;
+      return;
+    }
+    if (my !== seq) return;
+    found = trainsNumbered(n, q);
+    list.innerHTML = found.length
+      ? rowCard(found.map((t, i) => `<button class="q-ritem chevron" type="button" data-tn="${i}">${tile(t.sys, t.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(kind(t))} ${e(t.no)}</span><small>${e(stName(n, t.stops[0].st))} ${e(hm(t.stops[0].dep))} → ${e(stName(n, t.stops.at(-1).st))} ${e(hm(t.stops.at(-1).arr))}</small></span></button>`).join(''))
+      : `<p class="ot-note">${W('這天沒有這個車次', 'No train with that number that day')}</p>`;
+  };
+  // A train's stops: the time it leaves each (arrives at the last), its delay if 台鐵 says one.
+  const stops = t => {
+    const late = delayOf(t);
+    const now = Date.now();
+    list.innerHTML = `<p class="ot-note"><b>${e(kind(t))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${late ? ` <span class="ot-warn">${W(`晚 ${late} 分`, `${late} min late`)}</span>` : late === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}</p>
+      <ol class="ot-steps">${t.stops.map((x, k) => `<li style="--c:${trainColor(t)}"${(k === t.stops.length - 1 ? x.arr : x.dep) < now ? ' class="past"' : ''}><span class="ot-step-time">${e(hm(k === t.stops.length - 1 ? x.arr : x.dep))}</span><span class="ot-step-i">${icon(k === t.stops.length - 1 ? 'pin' : t.sys)}</span><span class="ot-step-what"><b>${e(stName(n, x.st))}</b></span></li>`).join('')}</ol>`;
+  };
+  let timer = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(draw, 200);
+  });
+  d.querySelector('.q-search-clear').addEventListener('click', () => {
+    input.value = '';
+    draw();
+    input.focus();
+  });
+  list.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-tn]');
+    if (b && found[Number(b.dataset.tn)]) stops(found[Number(b.dataset.tn)]);
+  });
+  setTimeout(() => input.focus(), 50);
+}
+
 async function pickStation(which) {
   let city = '';
   let list = [];

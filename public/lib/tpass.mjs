@@ -147,6 +147,8 @@ export function fareOf(plan, cov, own = null) {
   const cost = fare || trainCost(plan);
   if (cov?.all) return { text: W('TPASS 涵蓋', 'TPASS covers it'), cost: 0 };
   if (cov?.some) return { text: fare ? W(`NT$${fare}（部分 TPASS）`, `NT$${fare} (part TPASS)`) : W('部分 TPASS', 'Part TPASS'), cost: Math.round(cost / 2) };
+  // (Only trains: their own fares, the planner's not (Google's 普悠瑪 at the 區間's price).)
+  if (own?.fare && !own.more) return { text: `NT$${own.fare}`, cost };
   if (!fare && own?.fare) return { text: own.more ? W(`NT$${own.fare} 起`, `from NT$${own.fare}`) : `NT$${own.fare}`, cost };
   return { text: fare ? `NT$${fare}` : '', cost };
 }
