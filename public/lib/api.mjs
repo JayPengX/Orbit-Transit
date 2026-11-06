@@ -229,13 +229,65 @@ export const rows = j => (Array.isArray(j) ? j : j && typeof j === 'object' ? Ob
 // ---- The rest of the proxy -------------------------------------------------------------------
 
 export const config = () => get('/transit/config');
-// The buses due at these stops (or on one route) from the Worker's copy of
-// the whole city's estimates (transit.js etaRows: one TDX call a city for
-// everyone): → { rows, at } (when the copy is from).
-export async function busEta(city, { stops = [], route = '' } = {}) {
+// The buses due at these stops (or on one route) from the Worker (transit.js
+// etaRows: a busy city's from one TDX call for everyone, a quiet one's from
+// TDX's read of those stops): → { rows, at } (when the copy is from).
+// The same ask while one is on its way, or within the live speed of the last,
+// is that one: a trip's ways asked their buses' route up to five times in one
+// plan, each a Worker request for the same rows (2026-11-06). Asked again at
+// each beat as before (a beat is the live speed, this a second under it).
+// And the routes asked within a moment of each other go as one ask a city
+// (`routes=`, 20 at most), each route given its own rows: a plan's buses were
+// five to ten asks, one a route.
+const etaAsks = new Map(); // address (or city|route) → { got, ask }
+export function busEta(city, { stops = [], route = '' } = {}) {
+  const key = stops.length ? `/transit/eta?city=${encodeURIComponent(city)}&stops=${stops.map(encodeURIComponent).join(',')}` : `${city}|${route}`;
+  const now = Date.now();
+  const k = etaAsks.get(key);
+  if (k && now - k.got < liveMs() - 1000) return k.ask;
+  const ask = stops.length ? etaAsk(key) : routeEta(city, route);
+  etaAsks.set(key, { got: now, ask });
+  ask.catch(() => etaAsks.get(key)?.ask === ask && etaAsks.delete(key));
+  // (Only the last minute's asks are kept.)
+  if (etaAsks.size > 100) for (const [p, x] of etaAsks) if (now - x.got > 60_000) etaAsks.delete(p);
+  return ask;
+}
+async function etaAsk(path) {
   const meta = {};
-  const got = await get(`/transit/eta?city=${encodeURIComponent(city)}&${stops.length ? `stops=${stops.map(encodeURIComponent).join(',')}` : `route=${encodeURIComponent(route)}`}`, { meta, wait: 8000 });
+  const got = await get(path, { meta, wait: 8000 });
   return { rows: Array.isArray(got) ? got : [], at: Date.now() - (meta.age || 0) * 1000 };
+}
+const ROUTES_AT_ONCE = 20;
+let routeBatch = null; // city → Map(RouteUID → [{ resolve, reject }])
+function routeEta(city, uid) {
+  return new Promise((resolve, reject) => {
+    if (!routeBatch) {
+      const b = (routeBatch = new Map());
+      setTimeout(() => {
+        if (routeBatch === b) routeBatch = null;
+        for (const [c, per] of b) sendRoutes(c, per);
+      }, 20);
+    }
+    if (!routeBatch.has(city)) routeBatch.set(city, new Map());
+    const per = routeBatch.get(city);
+    if (!per.has(uid)) per.set(uid, []);
+    per.get(uid).push({ resolve, reject });
+  });
+}
+function sendRoutes(city, per) {
+  const uids = [...per.keys()];
+  for (let i = 0; i < uids.length; i += ROUTES_AT_ONCE) {
+    const part = uids.slice(i, i + ROUTES_AT_ONCE);
+    const q = part.length === 1 ? `route=${encodeURIComponent(part[0])}` : `routes=${part.map(encodeURIComponent).join(',')}`;
+    etaAsk(`/transit/eta?city=${encodeURIComponent(city)}&${q}`).then(
+      ({ rows: list, at }) => {
+        for (const u of part) for (const w of per.get(u)) w.resolve({ rows: part.length === 1 ? list : list.filter(r => r.RouteUID === u), at });
+      },
+      err => {
+        for (const u of part) for (const w of per.get(u)) w.reject(err);
+      }
+    );
+  }
 }
 // Which of a city's bus routes have a bus on the road now: { at, routes: { RouteUID: n } } (transit.js running).
 export const busesRunning = city => get(`/transit/running?city=${encodeURIComponent(city)}`);
