@@ -22,7 +22,7 @@ import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { etaNear, liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround } from './near.mjs';
 import { nearBusRows, nearBikes as nearBikeCards } from './near-ui.mjs';
-import { startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, navLater, onTimeWay, offerText, lateBy } from './nav.mjs';
+import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navOffer, navLater, onTimeWay, offerText, lateBy } from './nav.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
@@ -2547,6 +2547,8 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   // The stops after this one ride with the plan (kept with it on the phone: on after the app is reopened).
   // And the stretches after them as planned: the whole trip navigated as one
   // (the owner, 2026-11-03), filled in once they're planned.
+  // (Its own way to the first ride begun now, not by a clock gone past it: nav.mjs ownWayNow.)
+  if (!resume) p = ownWayNow(p);
   if (c?.then?.length) p = { ...p, then: c.then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) })), later: restOf(c, p) || null };
   if (p.then?.length && !p.later?.length) {
     const base = p;

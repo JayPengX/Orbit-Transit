@@ -164,3 +164,24 @@ test('steady: found again, the stop the card showed keeps it unless the other is
   // The chase gone from what's found: the near stop, as found.
   assert.equal(steadyLead([{ ...walk, lead: true, top: true }], [{ ...c, lead: true, top: true }], t0)[0].lead, true);
 });
+
+test('started late, a plan’s own walk and ride are begun now, never put behind you by the clock (Jay 2026-11-06 08:48)', async () => {
+  const { ownWayNow } = await import('../public/lib/nav.mjs');
+  const t0 = t('08:20');
+  const c = chasePlan(walkPlan(t('08:57')), HOME, X, dueAt(), bikes, t0);
+  const b = busOf(c);
+  // Started a quarter of an hour later, still at home: as navigation picks its first step, the walk to the YouBike.
+  const now = t('08:35');
+  assert.ok(c.legs.findIndex(l => l.arr > now - MIN) === c.legs.indexOf(b), 'as planned, the clock had put the walk and ride behind');
+  const p = ownWayNow(c, now);
+  assert.equal(p.legs.findIndex(l => l.arr > now - MIN), 0, 'the first step: the walk');
+  assert.equal(p.dep, now);
+  assert.equal(busOf(p).dep, b.dep, 'the bus keeps its time (now late for it: 晚, then 趕不上)');
+  assert.ok(p.legs[p.legs.indexOf(busOf(p)) - 1].arr > b.dep);
+  // A plan on time, or one starting on a ride, as it is.
+  assert.equal(ownWayNow(c, t0), c);
+  const ride = { legs: [b], dep: b.dep, arr: b.arr };
+  assert.equal(ownWayNow(ride, now), ride);
+  // And 交通 never hands that chase on: it can't be made from home at 08:35.
+  assert.equal(chaseNow(c, now), null);
+});
