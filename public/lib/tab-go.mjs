@@ -22,6 +22,7 @@ import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
 import { setTripPush } from './alerts.mjs';
 import { pickSig, boardEarly } from './plan.mjs';
+import { chaseOf, chaseNow, steadyLead } from './chase.mjs';
 import { lateBy } from './nav.mjs';
 import { loadNotices, bikesOff, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
@@ -352,9 +353,11 @@ const shiftPlan = (p, d) => ({ ...p, dep: p.dep + d, arr: p.arr + d, legs: p.leg
 // place among the recommendations, its tags, its times) to its next
 // departure; a way you can leave on whenever leaves now. The list keeps its
 // order (a card's times point into it).
+// A YouBike to catch the bus further on (chase.mjs) leaves now while it can
+// still be made, and is gone once it can't (or the bus's times say so: `lost`).
 export function rollPlans(plans, now = Date.now()) {
-  const gone = p => p.dep < now - 2 * 60_000;
-  const out = plans.map(p => (anytime(p) && p.dep < now ? shiftPlan(p, now - p.dep) : p));
+  const gone = p => p.lost || p.dep < now - 2 * 60_000;
+  const out = plans.map(p => (anytime(p) && p.dep < now ? shiftPlan(p, now - p.dep) : chaseOf(p) && !p.lost ? chaseNow(p, now) || { ...p, lost: true } : p));
   out.forEach((p, i) => {
     if (!p.lead || !gone(p)) return;
     // (Its times: the departures its card offers.)
@@ -470,9 +473,11 @@ async function retimed(base, w) {
   // (From when you can set out: now, or the trip's time; by an arrival time, as planned.)
   const start = w.by === 'arrive' ? null : Math.max(now, w.at || now);
   const plans = w.by === 'arrive' ? base : rollPlans(base, now);
-  const out = await Promise.all(plans.map(p => (p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000 && l.dep >= now - 2 * 60_000) ? adjustPlan(p, now, { start }).catch(() => p) : p)));
-  // (At the stop a few minutes early, by the bus's time now.)
-  return out.map(p => boardEarly(p, start ?? now));
+  const out = await Promise.all(plans.map(p => (!p.lost && p.legs.some(l => l.mode === 'bus' && l.dep < now + 90 * 60_000 && l.dep >= now - 2 * 60_000) ? adjustPlan(p, now, { start }).catch(() => p) : p)));
+  // (At the stop a few minutes early, by the bus's time now; a chase its bus's
+  // times say can't be made any more hands its card on, as a gone one does.)
+  const timed = out.map(p => boardEarly(p, start ?? now));
+  return timed.some(p => p.lost) && w.by !== 'arrive' ? rollPlans(timed, now) : timed;
 }
 
 async function loadTrip(w, { force = false } = {}) {
@@ -510,17 +515,21 @@ async function loadTrip(w, { force = false } = {}) {
     const at = Date.now();
     const out = await planTrip(ctx.data, from, w.to, { at: w.at, by: w.by });
     for (const k of [...S.choice.keys()]) if (k.startsWith(`${w.id}:`)) S.choice.delete(k);
+    // (The near stop or the further one by bike, whichever the card showed, kept: chase.mjs steadyLead.)
+    const shownBefore = old?.plans;
     const done = plans => {
+      plans = steadyLead(plans, S.trips.get(w.id)?.plans || shownBefore, Date.now());
       S.trips.set(w.id, { sig, at, from, base: plans, timed: Date.now(), plans, error: '' });
       keepTrip(tripKey(w), { at, from: { lat: from.lat, lon: from.lon }, plans });
       keepLast(w, { at, from: { lat: from.lat, lon: from.lon }, plans });
+      return plans;
     };
-    if (out.plans.length) done(out.plans);
-    else S.trips.set(w.id, { sig, at, from, plans: [], error: out.error ? errorText(out.error) : W('找不到大眾運輸方案。', 'No transit route found.') });
+    const firstShown = out.plans.length ? done(out.plans) : null;
+    if (!firstShown) S.trips.set(w.id, { sig, at, from, plans: [], error: out.error ? errorText(out.error) : W('找不到大眾運輸方案。', 'No transit route found.') });
     // The direct buses and every bus's times, a moment later (unless a time was picked meanwhile).
     out.later?.then(o => {
       const cur = S.trips.get(w.id);
-      if (!o?.plans?.length || cur?.plans !== out.plans || [...S.choice.keys()].some(k => k.startsWith(`${w.id}:`))) return;
+      if (!o?.plans?.length || !firstShown || cur?.plans !== firstShown || [...S.choice.keys()].some(k => k.startsWith(`${w.id}:`))) return;
       done(o.plans);
       render();
     });

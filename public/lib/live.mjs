@@ -12,7 +12,7 @@
 import { tdx, rows, busEta } from './api.mjs';
 import { routeStops, routeSchedule, stopTimes, routeCity, runsOn, busEtaMended } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
-import { finish, walkLeg } from './plan.mjs';
+import { finish, walkLeg, chaseHold } from './plan.mjs';
 import { stoppedNow, ensureBus, routeStatus } from './service.mjs';
 import { meters, walkSec, zh, tw, twAt, addDays, etaAge, etaOld, ETA_GHOST, routeNorm, sameRoute, isRide, RAIL } from './util.mjs';
 
@@ -317,6 +317,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
   let off = '';
   // (Not running all day, not only its last bus gone: no plan at all, planner.mjs.)
   let dead = false;
+  let lost = false;
   let done = 0;
   // Both buses' stops asked at once (one ask a city, not one a bus, one after
   // the other); a second bus moved past the 90 minutes just isn't used.
@@ -349,7 +350,14 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     const before = legs.slice(0, i).reduce((a, x) => a + (x.dur || 0) * 1000, 0);
     // When you can be at the stop: now plus the walk (or ride) to it, else after the leg before.
     const ready = i === first ? Math.max(now, start ?? legs[0].dep ?? now) + before : (legs[i - 1]?.arr ?? l.dep) + 30_000;
-    let bus = times.find(t => t.at >= ready - 30_000);
+    // A bus caught further on by bike (chase.mjs): that very bus seen, still
+    // with room to be there before it (chaseHold), or no chase any more (`lost`).
+    const hold = l.chase ? chaseHold(l) : 0;
+    let bus = l.chase ? times.find(t => !t.planned && t.at >= ready + hold && t.at <= l.dep + 3 * MIN) : times.find(t => t.at >= ready - 30_000);
+    if (l.chase && !bus) {
+      lost = true;
+      continue;
+    }
     // None you can be there for, and the bus this ride was timed for is one
     // TDX sees coming sooner (its timetable's 17:30 due at 17:22): that one's
     // gone for you; the timetable's next run that isn't it.
@@ -396,6 +404,7 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
   if (miss) out.miss = miss;
   if (off) out.off = off;
   if (dead) out.stopped = true;
+  if (lost) out.lost = true;
   const said = legs.filter(x => x.mode === 'bus' && x.route?.uid).map(x => [x, routeStatus(x.route.uid, x.short || x.name, now, x.route.stopUID)]).find(([, st]) => st && st.effect !== 'off' && st.effect !== 'likely');
   if (said && !off) out.note = `${said[0].short || said[0].name} ${said[1].label}`;
   return out;
