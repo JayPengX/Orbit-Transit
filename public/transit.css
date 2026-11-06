@@ -1061,7 +1061,7 @@ body.tab-map {
   }
   /* (Right of the tab rail, wherever the kit stands it.) */
   html.q-tabrail .ot-map-panel {
-    --ot-side-l: calc(var(--q-tabrail-x, calc(var(--q-inset-l, 0px) + 12px)) + 80px);
+    --ot-side-l: calc(var(--q-tabrail-x, calc(var(--q-inset-l, 0px) + 12px)) + var(--q-tabrail-w, 80px));
   }
   .ot-msheet {
     right: auto;
