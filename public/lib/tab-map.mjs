@@ -28,6 +28,7 @@ import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapD
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { bikeSwap } from './tpass.mjs';
 import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
+import { steadyLead } from './chase.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, iconName, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { wentTo } from './learn.mjs';
@@ -1730,7 +1731,8 @@ async function plan(from, to, opts = {}) {
   out?.later?.then(o => {
     if (!o?.plans?.length || card !== c || navFull() || Object.keys(c.choice || {}).length) return;
     const open = c.plans[c.sel];
-    c.plans = walkHereNow(o.plans);
+    // (The near stop or the further one by bike, whichever the card showed first, kept: chase.mjs steadyLead.)
+    c.plans = walkHereNow(steadyLead(o.plans, c.plans));
     if (c.keepPlan?.tags.includes('推薦')) {
       for (const q of c.plans) q.tags = (q.tags || []).filter(t => t !== '推薦');
       c.plans.unshift(c.keepPlan);
@@ -1739,8 +1741,10 @@ async function plan(from, to, opts = {}) {
     renderCard();
     dropGone(c);
     if (c.sel < 0 && c.plans.length) {
-      drawPlan(c.plans[0], { fit: false });
-      roadLegs(c.plans[0], { roads: 'bike' });
+      // (The card's first: a way kept leading by steadyLead isn't first in the list.)
+      const best = c.plans.filter(p => p.top && p.lead !== false && !p.gone).sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0] || c.plans[0];
+      drawPlan(best, { fit: false });
+      roadLegs(best, { roads: 'bike' });
     } else if (c.sel >= 0) roadLegs(c.plans[c.sel]); // (The open plan is a new one now: its streets again, kept answers, not a straight line.)
   });
 }

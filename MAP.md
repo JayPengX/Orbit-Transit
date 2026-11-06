@@ -119,9 +119,18 @@ Live: https://orbit.jaypengx.com/transit/
   only once it's out). 今天已收班 only when no stop has a run still to come.
 - **追公車** (`lib/chase.mjs`): a plan's first bus, walked to, due within the
   hour: a YouBike to a stop further along its way (within 4.5 km of you)
-  where TDX sees a bus ahead of the one you'd make, there 2 minutes before
-  it, listed when it gets you in 3+ minutes sooner. Navigating, the same is
-  offered once the bus you're walking to is seen gone (騎車追上).
+  where TDX sees a bus ahead of the one you'd make (a stopped feed never
+  counts), there with room to spare (`chaseSlack`: 2 minutes, 15% of the
+  trip there and 10% of the bus's countdown, 4 at least), listed only when it
+  gets you in clearly sooner (`chaseGain`: 8+ minutes and half the riding),
+  ranked with a 4-point `race` (Jay 2026-11-06: it flipped and was too tight).
+  Steady: a chase leaves now while it keeps room (`chaseNow`); re-timed, it
+  keeps that very bus with `chaseHold` to spare or is `lost` and hands its
+  card to the near stop (`adjustPlan`, `rollPlans`); found again (a replan,
+  the planner's later round, on 交通 and the map's card) the stop the card
+  showed keeps it unless the other is 10 minutes sooner (`steadyLead`).
+  Navigating, the same is offered once the bus you're walking to is seen
+  gone (騎車追上).
   YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
   the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
   A plan's price line: the planner's own fare, else our own trains at their

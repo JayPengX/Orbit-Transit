@@ -208,7 +208,11 @@ export function tidy(p) {
 // time"): 5 minutes before a timetable's time (or a planner's), 2 before a
 // bus TDX sees on its way (its countdown is the bus itself).
 export const BUS_EARLY = { sched: 5 * 60_000, live: 2 * 60_000 };
-export const busEarly = l => (l?.live && !l.live.planned && Math.abs(l.live.at - l.dep) < 60_000 ? BUS_EARLY.live : BUS_EARLY.sched);
+// A bus caught further on by bike (chase.mjs): the room its chase planned.
+export const busEarly = l => (l?.chase?.slack ? l.chase.slack : l?.live && !l.live.planned && Math.abs(l.live.at - l.dep) < 60_000 ? BUS_EARLY.live : BUS_EARLY.sched);
+// The least room a chase keeps once offered (a minute more than any bus seen
+// live, and most of what it planned): less, and it's no longer offered.
+export const chaseHold = l => Math.max(BUS_EARLY.live + 60_000, 0.6 * (l?.chase?.slack || 0));
 // A plan whose first ride is a bus: the way to its stop set out so as to be
 // there busEarly before it, never before `floor` (now, or the time asked)
 // unless the plan already did. Shown, not scored: the ranking's own `board`
@@ -679,6 +683,8 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   const first = ridden[0];
   if (o && first?.prev?.lat != null && first.from?.lat != null && meters(o.lat, o.lon, first.prev.lat, first.prev.lon) < meters(o.lat, o.lon, first.from.lat, first.from.lon)) add('chase', 6);
   add('fare', fare / 12);
+  // A bus caught further on by bike: a race against a bus's guess, worth it only clearly sooner.
+  if (ridden.some(l => l.chase)) add('race', 4);
   if (p.miss) add('miss', 25);
   if (p.off) add('off', 120);
   return out;

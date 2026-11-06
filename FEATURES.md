@@ -21,7 +21,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - Bus arrival alerts — `public/lib/alerts.mjs`: `startAlerts`
 - At a bus stop 5 minutes before its timetable time, 2 before a bus seen live; trains as timed — `public/lib/plan.mjs`, `public/lib/planner.mjs`, `public/lib/tab-go.mjs`: `boardEarly`, `BUS_EARLY`
 - A bus seen gone is never planned or shown again; 趕不上了, never 快一點, when hurrying can't make it — `public/lib/live.mjs`, `public/lib/nav.mjs`: `seenAt`, `nextCatchable`, `pastHurry`, `趕不上了`
-- 追公車: a YouBike to a stop further along the bus's way, planned and offered while navigating — `public/lib/chase.mjs`, `public/lib/planner.mjs`, `public/lib/nav.mjs`: `chasePlan`, `chases(`, `chaseFrom`, `騎車追上`
+- 追公車: a YouBike to a stop further along the bus's way, planned and offered while navigating — `public/lib/chase.mjs`, `public/lib/planner.mjs`, `public/lib/nav.mjs`: `chasePlan`, `chases(`, `chaseFrom`, `騎車追上`; kept steady and safe — `chaseSlack`, `chaseGain`, `chaseNow`, `steadyLead`
 - A trip with stops navigated as one: the stops and what's after them in the chips, the last place's time — `public/lib/nav.mjs`, `public/lib/tab-map.mjs`: `laterEnd`, `navLater`, `ot-nav-chip stop`, `全程剩`
 - 停著 or 還車 at a stop, with which is sooner — `public/lib/nav.mjs`: `parkAsk`, `到了要還車嗎`
 - 附近換車 from 25 minutes on a YouBike with the free half hour — `public/lib/nav.mjs`: `附近換車`, `splitRide`
