@@ -1063,6 +1063,11 @@ body.tab-map {
   html.q-tabrail .ot-map-panel {
     --ot-side-l: calc(var(--q-tabrail-x, calc(var(--q-inset-l, 0px) + 12px)) + var(--q-tabrail-w, 80px));
   }
+  /* A computer: the map beside the kit's side bar, never under it; the panel at the map's left edge (Jay 2026-11-06, his laptop). */
+  html.q-tabrail.q-desk .ot-map-panel {
+    left: var(--q-desk-w, 224px);
+    --ot-side-l: 12px;
+  }
   .ot-msheet {
     right: auto;
     left: var(--ot-side-l);
@@ -6172,7 +6177,7 @@ html[lang='en'] .ot-sn-tap {
    查時刻 the question left and its trains right (one column until there are
    any), a bus search beside its routes. */
 :root.q-wide {
-  --q-page-max: 1180px;
+  --q-page-max: var(--q-wide-max, 1180px);
 }
 :root.q-wide #panel-times .ot-page:has(> #panel-train:not([hidden]) #t-results:not(:empty)) .ot-times-seg,
 :root.q-wide #panel-times .ot-page:has(> #times-bus:not([hidden]) #tb-list:not(:empty)) .ot-times-seg,
