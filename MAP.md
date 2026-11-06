@@ -257,7 +257,12 @@ Live: https://orbit.jaypengx.com/transit/
   - what's near a point: worked out on the phone (`near.mjs`);
   - line shapes: `shapes.mjs` (packs and shapes read with the kit's
     `packJson`; a piece TDX draws there and back, 六家線, cut into its two tracks);
-  - the map: Google under the month's cap, else NLSC;
+  - the map: Google under the month's cap, else NLSC. Google's in Orbit's
+    look in light and dark (`map.mjs mapStyles`, Jay 2026-11-06): its place pins
+    (food, hotels, hospitals, temples, stations) one quiet graphite, shops
+    quieter, so the only colour is ours; its own bus stops off
+    (`tests/map-style.test.mjs`). A style only: nothing read, nothing spent;
+    Google's styles can only grey a pin, never tint or reshape it;
   - walks: Google's streets, OpenStreetMap past the cap.
 - **Offline:** covered (`onlineOnly`); never old bus times.
 - **Saved:**
@@ -345,7 +350,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `tripCard` (tab-go) | 交通: a trip's card, its own icon (`look.mjs tripTile`: the place it ends at, else its name; never a bus's badge), its way as one line, the next two ways in three hours; a tap on a way shows it on the map ready to go |
 | `trimEnds` (tab-map) | A walk's or YouBike ride's line cut where it stops coming nearer its end (no detour past a station and back) |
 | `declutter` (tab-map) | A trip's marks never in a heap: by the map's zoom the end, start, boarding and YouBike marks win their spot in that order, one covering a more important one waits for a closer zoom, your stop's name drops where it would run over one (`tests/declutter.test.mjs`) |
-| `lib/tab-*.mjs`, `map.mjs` | Each tab; Google or Leaflet+NLSC behind one interface |
+| `lib/tab-*.mjs`, `map.mjs` | Each tab; Google or Leaflet+NLSC behind one interface; `mapStyles` Google's look |
 | `lib/store.mjs` | The Pass's data |
 
 ## Run and test
