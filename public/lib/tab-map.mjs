@@ -19,8 +19,8 @@ import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
 import { planTrip, findAboard, planAboard, planTicket } from './planner.mjs';
 import { trainsNumbered, boardAlight, rideOf, ticketOf } from './ticket.mjs';
 import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
-import { etaNear, liveTimes, officialLeg } from './live.mjs';
-import { stationEta, bikesAround } from './near.mjs';
+import { liveTimes, officialLeg } from './live.mjs';
+import { stationEta, bikesAround, etaAround } from './near.mjs';
 import { nearBikes as nearBikeCards } from './near-ui.mjs';
 import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateBy } from './nav.mjs';
 import { fastest } from './trouble.mjs';
@@ -295,10 +295,13 @@ let nearRun = 0;
 // (Settled once the strip is drawn, or a newer one is: the loading screen waits on it.)
 let nearDone = Promise.resolve();
 function nearBikes() {
-  // (The sheet's shelves are read with them: the loading screen lifts onto both.)
-  nearDone = Promise.all([nearBikesNow(), home?.refresh()]);
+  // (The sheet's shelves are read with them: the loading screen lifts onto both. Not while a card or the
+  // search's results cover them (TDX's stops near you, an advanced ask, every 30 s under a stop card):
+  // read again as they show, sync below.)
+  nearDone = Promise.all([nearBikesNow(), shelvesShown() ? home?.refresh() : null]);
   return nearDone;
 }
+const shelvesShown = () => ($('msheet')?.dataset.shows || 'home') === 'home';
 async function nearBikesNow() {
   const h = ctx.here;
   if (!h || !ctx.data.layers.bike) return void home?.setBikes([]);
@@ -1198,6 +1201,8 @@ function buildSheet() {
       if (liftedFor && msheet.detent === 'medium' && mode === 'home') msheet.set('peek');
       liftedFor = false;
     }
+    // (The shelves showing again: read now if their last read is past its 20 s; kept as they were under the card.)
+    if (mode === 'home' && was) home?.refresh();
   };
   const mo = new MutationObserver(sync);
   for (const el of [$('card'), $('results')]) mo.observe(el, { attributes: true, attributeFilter: ['hidden'] });
@@ -2496,14 +2501,16 @@ export function liveLegText(l, times, off, ready, now = Date.now()) {
 }
 
 // A plan's buses: the one you'd catch, when you'll be at its stop (the
-// plan's time there), not the one that happens to be coming now.
+// plan's time there), not the one that happens to be coming now. (Each
+// stop's buses as a trip reads them, one ask a city for every plan at once,
+// not TDX's search around each stop: an advanced ask apiece, never shared.)
 async function liveLegs(p) {
   for (const [k, l] of p.legs.entries()) {
     if (l.mode !== 'bus' || !l.from?.lat) continue;
     if (l.dep > Date.now() + 90 * 60_000) break;
     try {
       const name = l.short || l.name;
-      const { times, off } = liveTimes(await etaNear(l.from.lat, l.from.lon, 150), name);
+      const { times, off } = liveTimes(await etaAround(l.from.lat, l.from.lon, 150), name);
       const text = liveLegText(l, times, off, Math.max(Date.now(), k ? p.legs[k - 1].arr : l.dep - 60_000));
       const el = document.querySelector(`[data-live="${CSS.escape(`${l.mode}|${name}|${l.from.lat}|${l.from.lon}`)}"]`);
       if (el && text) el.innerHTML = `${icon('live')} ${e(text)}`;
@@ -2532,7 +2539,7 @@ async function dropGone(c, { draw = true } = {}) {
   await Promise.all(soon.slice(0, 8).map(async p => {
     try {
       const l = p.legs.find(x => x.mode !== 'walk');
-      const { times } = liveTimes(await etaNear(l.from.lat, l.from.lon, 150), l.short || l.name);
+      const { times } = liveTimes(await etaAround(l.from.lat, l.from.lon, 150), l.short || l.name);
       const gone = busGone(p, times);
       if (gone !== Boolean(p.gone)) (p.gone = gone), (changed = true);
     } catch {}
