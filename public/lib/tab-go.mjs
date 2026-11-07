@@ -27,7 +27,7 @@ import { steadyPlans, settled } from './steady.mjs';
 import { lateBy } from './nav.mjs';
 import { loadNotices, bikesOff, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
-import { cleanPin, slotOf, MAX_PINS, PLACE_ICONS } from './store.mjs';
+import { cleanPin, slotOf, tripOver, MAX_PINS, PLACE_ICONS } from './store.mjs';
 import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor, legChips, fitLegs, journeyLine } from './ui.mjs';
 import { boardRow, whenHtml } from './board.mjs';
 import { COLOR, PLACE_COLOR, tile, tripTile, tag, section, rowCard, tick, navTitle, noticesHtml } from './look.mjs';
@@ -108,8 +108,9 @@ const NEAR_END_M = 800;
 // way back already; the owner, 2026-10-13).
 export function tripNow(t, here, now = Date.now()) {
   const day = tw(now);
-  // A one-time trip: only on its day, nothing once that's over.
-  if (t.date && t.date < day.date) return null;
+  // A one-time trip: only on its day, nothing once that's over or its time
+  // is 20 minutes gone (store.mjs tripOver).
+  if (tripOver(t, now)) return null;
   const today = slotOf(t, day.dow);
   const span = t.from && t.to ? meters(t.from.lat, t.from.lon, t.to.lat, t.to.lon) : 0;
   const d = p => meters(here.lat, here.lon, p.lat, p.lon);

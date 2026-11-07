@@ -712,7 +712,7 @@ test('a saved trip’s way now: out from home, back from its far end, the time t
   assert.equal(tripNow(t, home, T('09:00')).at, twAt('2026-10-06', '07:30'), 'past today: tomorrow’s');
 });
 
-test('a one-time trip: its day only, weeks ahead too, and let go once the day is over', async () => {
+test('a one-time trip: its day only, weeks ahead too, and let go once its time is gone', async () => {
   const { tripNow } = await import('../public/lib/tab-go.mjs');
   const { tripOver } = await import('../public/lib/store.mjs');
   const home = { name: '家', lat: 24.821, lon: 121.018 };
@@ -725,7 +725,15 @@ test('a one-time trip: its day only, weeks ahead too, and let go once the day is
   assert.equal(tripNow(far, home, T('08:00')).at, twAt('2026-11-20', '09:00'), 'weeks ahead');
   assert.equal(tripNow(t, home, twAt('2026-10-25', '08:00')), null, 'over');
   assert.ok(tripOver(t, twAt('2026-10-25', '00:30')));
-  assert.ok(!tripOver(t, twAt('2026-10-24', '23:30')));
+  // (Its time 20 minutes gone, not the day's end: Jay 2026-11-07, riding the
+  // train he'd pinned, 交通 kept it and offered other trains from 新竹.)
+  assert.ok(!tripOver(t, twAt('2026-10-24', '09:15')), 'just gone: still news');
+  assert.ok(tripOver(t, twAt('2026-10-24', '09:21')));
+  assert.equal(tripNow(t, home, twAt('2026-10-24', '09:30')), null, 'gone by then, never planned again from where it set out');
+  // (A day out and back: kept till the way back's time.)
+  const both = cleanSaved({ ...t, back: '17:00' });
+  assert.ok(!tripOver(both, twAt('2026-10-24', '12:00')));
+  assert.ok(tripOver(both, twAt('2026-10-24', '17:30')));
 });
 
 test('交通’s card and 所有方案 rank alike: a way rolled on to its next departure keeps its rank', async () => {

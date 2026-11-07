@@ -6,7 +6,7 @@
 // planner may use. The newer copy (by `t`) wins; this device keeps one too,
 // so it opens at once.
 
-import { uid, pinSig, TAIWAN_BOX, tw } from './util.mjs';
+import { uid, pinSig, TAIWAN_BOX, tw, twAt } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 export const MAX_GROUPS = 12;
@@ -120,8 +120,18 @@ function cleanAlt(list) {
   }
   return out;
 }
-// A one-time trip whose day is over: let go.
-export const tripOver = (t, now = Date.now()) => Boolean(t?.date) && t.date < tw(now).date;
+// A one-time trip whose day is over, or whose last time that day is 20
+// minutes gone (gone out: the trip's under way or missed, not to be planned
+// again from where it set out; Jay 2026-11-07, on 普悠瑪 107 pinned as a
+// one-time trip, 交通 kept it and offered him other trains from 新竹): let go.
+export const ONE_TIME_GRACE = 20 * 60_000;
+export const tripOver = (t, now = Date.now()) => {
+  if (!t?.date) return false;
+  const day = tw(now).date;
+  if (t.date !== day) return t.date < day;
+  const last = [t.time, t.back].filter(Boolean).sort().at(-1);
+  return Boolean(last) && twAt(t.date, last) < now - ONE_TIME_GRACE;
+};
 // A saved trip's times on a day of the week: that day's own, else the usual.
 export function slotOf(t, dow) {
   const a = t.alt?.find(x => x.days.includes(dow));

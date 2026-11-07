@@ -2248,7 +2248,8 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
   // stops; never a straight line across town.
   const buses = p.legs.filter(l => l.mode === 'bus' && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
   // (A train with a planner's shape too: checked against its own stops once, below.)
-  const rails = p.legs.filter(l => (l.mode === 'tra' || l.mode === 'hsr' || l.mode === 'metro') && (l.mode !== 'metro' ? !l.stopsChecked : !l.poly) && !l.path && l.from?.lat != null && l.to?.lat != null);
+  // (A train's way drawn before the track was whole, straight between far stops, drawn again: TRACK_V.)
+  const rails = p.legs.filter(l => (l.mode === 'tra' || l.mode === 'hsr' || l.mode === 'metro') && (l.mode !== 'metro' ? l.track !== TRACK_V : !l.poly && !l.path) && l.from?.lat != null && l.to?.lat != null);
   if (!todo.length && !buses.length && !rails.length) return;
   await Promise.all([
     ...buses.map(async l => {
@@ -2262,7 +2263,7 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
       // runs the 山線 by 台中, Jay 2026-11-06). Else, or a train the stops
       // can't place, the shortest way along its line.
       const stops = l.mode === 'metro' ? null : await trainStops(l).catch(() => null);
-      if (l.mode !== 'metro') l.stopsChecked = true;
+      if (l.mode !== 'metro') l.track = TRACK_V;
       // (A planner's shape that passes a stop of the train's by more than 1.5 km is the wrong line: by the stops.)
       if (l.poly) {
         const pts = legPath(l);
@@ -2687,6 +2688,8 @@ async function navigate(p, resume = null, { swap = false } = {}) {
 }
 // The way being navigated on the map, the step you're on lit; in view, that
 // stage of the trip (nav.mjs stageView: a walk close up, a ride to its end).
+// A train's way as drawn now (its stops along OpenStreetMap's track, 2026-11-07): one drawn before is drawn again.
+const TRACK_V = 2;
 function navDraw(plan, i) {
   if (!map) return;
   // (Following first: the marks are drawn for the map's own view, never left as a finger's.)
@@ -2697,7 +2700,7 @@ function navDraw(plan, i) {
   // has lost its line: found again along the track, never left a straight
   // line across the country (Jay 2026-11-07: 自強 105 drawn 新竹 → 彰化 straight,
   // his dot on the 海線 km off it, the trip didn't see him on board).
-  if (plan.legs.some(l => (l.mode === 'tra' || l.mode === 'hsr') && !l.path && !l.poly && !l.stopsChecked && l.from?.lat != null && l.to?.lat != null))
+  if (plan.legs.some(l => (l.mode === 'tra' || l.mode === 'hsr') && l.track !== TRACK_V && l.from?.lat != null && l.to?.lat != null))
     roadLegs(plan)
       .then(() => {
         const n = navNow();

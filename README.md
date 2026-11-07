@@ -64,7 +64,7 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 | App | Plain JavaScript (ES modules), HTML and CSS; no framework, no build step, no dependencies |
 | Platform | Installable web app with a service worker; location and vibration for navigation, lock-screen notices while it runs |
 | Shared | Look, Orbit Pass, notices and data reads from the kit in [Orbit-Core](https://github.com/JayPengX/Orbit-Core) |
-| Data | TDX (Taiwan's transport data exchange) through the Orbit proxy on Cloudflare Workers; weekly bus packs and line shapes in Cloudflare R2 |
+| Data | TDX (Taiwan's transport data exchange) through the Orbit proxy on Cloudflare Workers; weekly bus packs and line shapes in Cloudflare R2; 台鐵's track © OpenStreetMap contributors (ODbL), `public/rail-tra.json` |
 | Maps | Google Maps under the month's cap, else Leaflet with NLSC's tiles; walks on Google's streets, else OpenStreetMap |
 | Routing | Our own 台鐵/高鐵 router (Connection Scan) and metro router, beside Google's and TDX's planners |
 | Tests | `node --test`, including navigation driven fix by fix and the owner's verdicts on real trips |

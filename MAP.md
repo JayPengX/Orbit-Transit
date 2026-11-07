@@ -261,7 +261,13 @@ Live: https://orbit.jaypengx.com/transit/
   nearest running by its clock out to 15 km (an express drawn straight between
   far stops; Jay 2026-11-07, 普悠瑪 107 past 香山 taken for 自強 105 at 新竹:
   `tests/nav-woke-aboard.test.mjs`); a train changed mid-trip moves what follows
-  by its arrival and its line is found again (`tab-map navDraw`); fresh fixes only, and a watch
+  by its arrival and its line is found again (`tab-map navDraw`). 台鐵's track is
+  OpenStreetMap's (`public/rail-tra.json`, 25 KB, `node scripts/rail-osm.mjs`;
+  ODbL, credited in README: no source named on screen, TRUTH §7), tried before TDX's broken pieces (`shapes.mjs
+  railPack`, `railGroups().first`); a train's way drawn before it is drawn again
+  (`tab-map TRACK_V`). A one-time trip goes 20 minutes after its time
+  (`store.mjs tripOver`; Jay 2026-11-07, it stayed all day offering other trains
+  while he rode the one pinned); fresh fixes only, and a watch
   silent 10 s is started over (twice as long each time it stays silent, up to a minute);
   one that hasn't answered yet (the location ask may be up) is left a minute, never a second ask over the first. Late for an
   arrival time → 最快 on the 出狀況 card. It resumes after the app

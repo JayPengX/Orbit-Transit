@@ -690,7 +690,7 @@ export function retimeRide(plan, k, opt) {
     delete l.poly;
     delete l.path;
     // (Its line found again for the train it is now: tab-map navDraw.)
-    delete l.stopsChecked;
+    delete l.track;
   }
   let m = k + 1;
   for (; m < plan.legs.length && !(isRide(plan.legs[m]) && plan.legs[m].mode !== 'bus'); m++) Object.assign(plan.legs[m], { dep: plan.legs[m].dep + delta, arr: plan.legs[m].arr + delta });
