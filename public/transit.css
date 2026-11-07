@@ -3550,7 +3550,8 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
 .ot-nav-chip.on .ot-i {
   color: #fff;
 }
-/* A trip with stops: each stop, then the stretch after it as planned (not a tap yet). */
+/* A trip with stops: each stop, then the stretch after it as planned, each step a tap to look at
+   it on the map, as the steps before the stop (Jay 2026-11-07: greyed, "can't be viewed"). */
 .ot-nav-chip.stop {
   padding: 0 4px 0 6px;
   background: none;
@@ -3559,9 +3560,6 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
 }
 .ot-nav-chip.stop .ot-i {
   color: var(--q-red);
-}
-.ot-nav-chip.later {
-  opacity: 0.6;
 }
 
 /* Shrunk, or on another tab: one glass bar above the tab bar. */

@@ -946,7 +946,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       .map((x, k) => `<button class="ot-nav-chip${k < state.reached ? ' done' : k === state.i ? ' on' : ''}" type="button"${k < state.reached ? ' disabled' : ` data-nav-go="${k}"`} style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`)
       .join('') +
       // (The stretches after each stop, as they're planned: the whole trip in one row.)
-      (plan.later || []).map((q, n) => `<span class="ot-nav-chip stop">${icon('pin')}<span>${e(shortPlace([plan.dest, ...(plan.then || [])][n]?.name || ''))}</span></span>${q.legs.map(x => `<span class="ot-nav-chip later" style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></span>`).join('')}`).join('');
+      (plan.later || []).map((q, n) => `<span class="ot-nav-chip stop">${icon('pin')}<span>${e(shortPlace([plan.dest, ...(plan.then || [])][n]?.name || ''))}</span></span>${q.legs.map((x, j) => `<button class="ot-nav-chip later" type="button" data-nav-peek="${n}:${j}" style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`).join('')}`).join('');
     // (A trip with stops: there at the last place, 全程剩 its minutes; the next stop's time is the step's.)
     const whole = plan.later?.length ? laterEnd(plan, times.eta) : times.eta;
     const minsLeft = Math.max(0, Math.round((whole - now) / 60_000));
@@ -1890,6 +1890,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (ev.target.closest('[data-nav="times"]')) return state.pickTimes();
     const end = ev.target.closest('[data-nav-bike]')?.dataset.navBike;
     if (end) return swapStation(end);
+    // A step after a stop: looked at on the map (tab-map 'peek'), the step you're at kept.
+    const peek = ev.target.closest('[data-nav-peek]')?.dataset.navPeek;
+    if (peek) {
+      const [n, j] = peek.split(':').map(Number);
+      const leg = plan.later?.[n]?.legs?.[j];
+      return leg && onAction?.('peek', leg);
+    }
     const k = ev.target.closest('[data-nav-go]')?.dataset.navGo;
     // The step you're on tapped: it stays as it is (go() started it over: the card lost the
     // stop you're coming to and showed the distance until the next fix; Jay 2026-11-03),
@@ -2197,8 +2204,9 @@ export function navRetarget(dest, then = []) {
   nav.render?.();
 }
 // The stretches after each stop, once they're planned (a trip with stops started before they were).
-export function navLater(later) {
-  if (!nav || !later?.length || nav.plan.later?.length) return;
+// (`replace`: those planned by an older app, planned again after an update: the trip under way gets the new planning.)
+export function navLater(later, { replace = false } = {}) {
+  if (!nav || !later?.length || (nav.plan.later?.length && !replace)) return;
   nav.plan.later = later;
   saveNav(nav);
   nav.render?.();

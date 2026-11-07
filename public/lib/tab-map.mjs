@@ -1876,6 +1876,18 @@ async function planRest(c, { draw = true } = {}) {
 // A way on a card with stops, the whole trip: its later stretches (null
 // while they're being planned, or nothing gets there).
 const restOf = (c, p) => (p.keep ? p.later : c?.then?.length && c.rest?.length === c.then.length ? chainOn(p, c.rest) : null);
+// How the stretches after a stop are planned: one planned by an older way is
+// planned again when a trip under way is opened (raise it with a change to
+// how they're planned: 2, 2026-11-07, YouBike stations by the roads).
+const PLAN_V = 2;
+const laterNow = later => (later ? Object.assign(later.map(q => ({ ...q, planV: PLAN_V })), later.short != null ? { short: later.short } : {}) : null);
+// Stretches planned in for the trip under way, and drawn on their roads at once
+// (navLater only redraws the cards: the map kept them straight until the next step).
+function laterIn(later, opts) {
+  navLater(laterNow(later), opts);
+  const n = navNow();
+  if (n && navFull() && !n.min) navDraw(n.plan, n.i);
+}
 // The stretches after a navigated trip's stops, planned with no card (its
 // places changed on the way): each from when the one before gets in, its
 // recommended way. → [plan…], or null when one finds nothing.
@@ -2414,13 +2426,13 @@ const COUNT_ZOOM = 16;
 function navLook(p, lit) {
   const nv = lit >= 0 ? navNow() : null;
   const riding = Boolean(nv?.aboard);
-  const nextRide = p.legs.findIndex((l, k) => k > lit && isRide(l));
   const bare = riding && (navFollow || (map?.zoom?.() ?? 0) < COUNT_ZOOM);
   return {
     riding,
     bare,
-    // Your own YouBike stations: on a ride, the ones after it up to the next ride; else all ahead.
-    bikeLegs: riding ? p.legs.slice(lit + 1, nextRide < 0 ? p.legs.length : nextRide) : p.legs,
+    // Your own YouBike stations: on a ride, every one after it, to the trip's last place (Jay
+    // 2026-11-07, on 自強 116: those after the next train and after the stop had gone); else all.
+    bikeLegs: riding ? p.legs.slice(lit + 1) : p.legs,
     // Where each ride (and a YouBike of your own) starts: on a ride, only where you got on.
     boards: riding ? [p.legs[lit]] : p.legs.filter((l, k) => k >= Math.max(0, lit))
   };
@@ -2644,12 +2656,24 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   // (the owner, 2026-11-03), filled in once they're planned.
   // (Its own way to the first ride begun now, not by a clock gone past it: nav.mjs ownWayNow.)
   if (!resume) p = ownWayNow(p);
-  if (c?.then?.length) p = { ...p, then: c.then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) })), later: restOf(c, p) || null };
+  if (c?.then?.length) p = { ...p, then: c.then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) })), later: laterNow(restOf(c, p)) };
   if (p.then?.length && !p.later?.length) {
     const base = p;
     (c?.restP || Promise.resolve())
       .then(() => restOf(c, base) || laterFor(base))
-      .then(later => navNow()?.plan?.legs === base.legs && navLater(later))
+      .then(later => navNow()?.plan?.legs === base.legs && laterIn(later))
+      .catch(() => {});
+  }
+  // A trip under way whose stretches after a stop were planned by an older app
+  // (Jay 2026-11-07, on 自強 116 after the fix: "I want my current trip to get
+  // the update"): planned again now, as a new trip's would be; never a kept
+  // YouBike's (its stretches are one ride).
+  const stale = resume && !p.keep && p.then?.length && p.later?.length && p.later.some(q => q.planV !== PLAN_V);
+  if (stale) {
+    const base = p;
+    laterFor(base)
+      // (Still this trip: its stop the same, though a ride may have been re-timed meanwhile.)
+      .then(later => later?.length && navNow()?.plan?.dest?.lat === base.dest?.lat && navNow()?.plan?.dest?.lon === base.dest?.lon && laterIn(later, { replace: true }))
       .catch(() => {});
   }
   startNav(p, {
@@ -2744,6 +2768,19 @@ function navDraw(plan, i) {
 }
 // Between the card on top and the one at the bottom: the stage you're at, you on it.
 let viewAt = 0;
+// The room on the map between navigation's cards.
+function navPad() {
+  const box = $('map').getBoundingClientRect();
+  const tr = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect();
+  const br = $('nav').querySelector('.ot-nav-bottom')?.getBoundingClientRect();
+  // (On a wide screen both cards stand at the map's left: the trip goes right of them.)
+  const side = sideMode() && (tr?.width || br?.width);
+  const top = tr?.bottom;
+  const bottom = br?.top;
+  return side
+    ? { top: 48, bottom: 48, left: Math.max(tr?.right || 0, br?.right || 0) - box.left + 36, right: 48 }
+    : { top: Math.max(60, (top || box.top + 170) - box.top + 24), bottom: Math.max(60, box.bottom - (bottom || box.bottom - 150) + 24), left: 36, right: 36 };
+}
 function navView(plan, i, tries = 0) {
   // (Not while the app is away: no size to fit into.)
   if (document.visibilityState !== 'visible') return;
@@ -2752,16 +2789,7 @@ function navView(plan, i, tries = 0) {
   // (A step ahead looked at: that step alone, not you far off on another; the owner, 2026-10-28.)
   const pts = stageView(plan, i, n?.phase, n?.ahead ? null : n?.pos || ctx.here, legPath, n?.ride ? { ...n.ride, next: n.next } : null);
   if (!pts.length) return;
-  const box = $('map').getBoundingClientRect();
-  const tr = $('nav').querySelector('.ot-nav-top')?.getBoundingClientRect();
-  const br = $('nav').querySelector('.ot-nav-bottom')?.getBoundingClientRect();
-  // (On a wide screen both cards stand at the map's left: the trip goes right of them.)
-  const side = sideMode() && (tr?.width || br?.width);
-  const top = tr?.bottom;
-  const bottom = br?.top;
-  const done = map.fit(pts, side
-    ? { top: 48, bottom: 48, left: Math.max(tr?.right || 0, br?.right || 0) - box.left + 36, right: 48 }
-    : { top: Math.max(60, (top || box.top + 170) - box.top + 24), bottom: Math.max(60, box.bottom - (bottom || box.bottom - 150) + 24), left: 36, right: 36 });
+  const done = map.fit(pts, navPad());
   // (No room yet, the page still laying out: again in a moment, never zoomed out to the island.)
   if (done === false && tries < 6) setTimeout(() => {
     const m = navNow();
@@ -2850,6 +2878,19 @@ function navAction(a, info) {
     const n = navNow();
     viewAt = 0;
     return n && navView(n.plan, n.i);
+  }
+  // A step after a stop tapped (Jay 2026-11-07: "trip after my stop … can't be viewed"):
+  // the map on it, its YouBike stations with their counts, as a finger moving the map
+  // would (back on the trip by itself 10 s later); navigation stays on the step you're at.
+  if (a === 'peek' && info) {
+    const pts = [info.from, ...legPath(info).map(([lat, lon]) => ({ lat, lon })), info.to].filter(x => x?.lat != null);
+    if (!pts.length || !navFull()) return;
+    dragged();
+    viewAt = Date.now();
+    // (Its roads, if it was still a straight line.)
+    const n = navNow();
+    if (n && needsRoad(info)) roadLegs(n.plan).then(() => navNow() === n && !navFollow && drawPlan(n.plan, { fit: false, lit: n.i })).catch(() => {});
+    return map.fit(pts, navPad());
   }
   if (a === 'more') return navMore();
   if (a === 'replan') return replanFromHere(null, null, '', { now: Boolean(info?.aboard) });
@@ -2985,7 +3026,7 @@ function editTripSheet() {
       navRetarget(first, list.slice(1));
       // (The stretches after it planned again, the trip still one.)
       const np = navNow()?.plan;
-      if (np?.then?.length) laterFor(np).then(later => navNow()?.plan === np && navLater(later)).catch(() => {});
+      if (np?.then?.length) laterFor(np).then(later => navNow()?.plan === np && laterIn(later)).catch(() => {});
       return ctx.status(said);
     }
     const now = navNow();

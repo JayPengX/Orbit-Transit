@@ -261,7 +261,13 @@ Live: https://orbit.jaypengx.com/transit/
   from the end's) and every leg after it its roads, as the first stretch's
   (`tab-map roadLegs` over `tripLegs`, a road kept by its ends for the
   stretch's re-timed copies, `roadsKnown`; Jay 2026-11-07: "after that
-  destination it's all straight line"; `tests/stop-roads.test.mjs`); on a YouBike to a stop, 到了要還車嗎 (停著 or
+  destination it's all straight line"; `tests/stop-roads.test.mjs`); each
+  step after a stop a tap that shows it on the map (`peek`, the step you're
+  at kept), and on a ride the trip's own YouBike stations to its last place
+  (`navLook`); a trip under way whose stretches after a stop came from an
+  older way of planning has them planned again when it's opened (`PLAN_V`,
+  `laterIn`; Jay 2026-11-07: "I want my current trip to get the update";
+  `tests/nav-later-peek.test.mjs`); on a YouBike to a stop, 到了要還車嗎 (停著 or
   還車, with which is sooner) in its last 5 minutes (`parkAsk`). Off the plan your
   own way (`offPlan`): a bike's pace on a walk → on the YouBike step; heading
   for a later walk's end or the next stop → that step; heading nowhere on it →
