@@ -11,12 +11,12 @@
 //      inside your TPASS's area only by what the pass takes.
 // Only the ways of moving the person allows (我的 → 交通偏好) are used.
 
-import { routePlans, townships, walksTo, walkKnown } from './api.mjs';
+import { routePlans, townships, walksTo, walkKnown, bikeRides, rideKnown } from './api.mjs';
 import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans, metroMapAt, metroWarm } from './metroroute.mjs';
-import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, ARRIVE_WINDOW } from './plan.mjs';
+import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, useStreetRides, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
 import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
@@ -51,11 +51,17 @@ useStreetWalks((a, b) => (walkKnown(spotOf(a), b) || walkKnown(spotOf(b), a) || 
 // The walks from each end of the trip to its five nearest stations (within
 // 700 m), Google's (one ask an end), before the stations are chosen; 1.5 s
 // at most (the straight line for any not in).
+// And the rides by the roads from the stations near the start to those near
+// the end and to the end itself (one ask of OpenStreetMap's bike router), so
+// the station a bike is left at is the one that's really quicker.
 async function streetWalks(bikes, from, to) {
   const near = p => bikes.map(s => ({ s, d: meters(p.lat, p.lon, s.lat, s.lon) })).filter(x => x.d <= 700 && x.s.ok !== false).sort((a, b) => a.d - b.d).slice(0, 5).map(x => x.s);
   const asks = [from, to].map(p => (p?.lat != null && near(p).length ? walksTo(spotOf(p), near(p)).catch(() => null) : null));
+  const [a, b] = [from, to].map(p => (p?.lat != null ? near(p) : []));
+  if (a.length && b.length && meters(from.lat, from.lon, to.lat, to.lon) > 700) asks.push(bikeRides(a, [...b, to]).catch(() => null));
   await Promise.race([Promise.all(asks), new Promise(r => setTimeout(r, 1500))]);
 }
+useStreetRides(rideKnown);
 
 // A point's TDX city, from the townships list (loaded once, kept a month).
 let towns = null;
