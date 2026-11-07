@@ -220,6 +220,8 @@ const LOOK_MS = 20_000;
 // each start that brings none waits twice as long (a train's weak sky can
 // take a while for a first fix, never cut off again and again), up to a minute.
 const SILENT_MS = 10_000;
+// A fix older than this by its own stamp is the past, not where you are.
+const STALE_FIX_MS = 30_000;
 const SILENT_MAX = 60_000;
 // Off a ride this long before it asks if you got off (a fix or two off it is the phone, not you).
 const AWAY_MS = 30_000;
@@ -677,13 +679,18 @@ export function pickedPlan(p, others = []) {
 // it would now miss, or ''.
 export function retimeRide(plan, k, opt) {
   const l = plan.legs[k];
-  const delta = opt.dep - l.dep;
+  // (What follows moves with when it gets in, not when it leaves: 自強 105 for
+  // 普悠瑪 107 leaves 15 minutes later and gets in 33 later; the walk after it
+  // had said 09:33 and the trip 晚 19 分. Jay 2026-11-07.)
+  const delta = (opt.arr ?? opt.dep) - (l.arr ?? l.dep);
   Object.assign(l, { dep: opt.dep, arr: opt.arr, dur: Math.round((opt.arr - opt.dep) / 1000) });
   if (opt.train) {
     l.train = { ...(l.train || {}), ...opt.train };
     l.short = `${opt.train.type || ''} ${opt.train.no}`.trim();
     delete l.poly;
     delete l.path;
+    // (Its line found again for the train it is now: tab-map navDraw.)
+    delete l.stopsChecked;
   }
   let m = k + 1;
   for (; m < plan.legs.length && !(isRide(plan.legs[m]) && plan.legs[m].mode !== 'bus'); m++) Object.assign(plan.legs[m], { dep: plan.legs[m].dep + delta, arr: plan.legs[m].arr + delta });
@@ -719,7 +726,7 @@ export function shiftDays(plan, k, now = Date.now()) {
 // station for it when it has one) is nearest you, within 2.5 km (stations on
 // a branch line are kilometres apart). → { dep, arr, delay, train } (a
 // rideOptions row), or null.
-export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.now()) {
+export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.now(), within = 2500) {
   const byKey = new Map(stations.map(s => [s.key, s]));
   const near = pt => new Set(stations.filter(s => s.sys === l.mode && s.lat != null && meters(pt.lat, pt.lon, s.lat, s.lon) < 800).map(s => s.key));
   const [from, to] = [near(l.from), near(l.to)];
@@ -750,7 +757,7 @@ export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.n
     // TDX's own word on where it is: at (or just left) a station near you counts too.
     const ls = lv?.st && byKey.get(lv.st);
     if (ls && t.stops.slice(a, b + 1).some(s => s.st === lv.st)) d = Math.min(d, meters(pos.lat, pos.lon, ls.lat, ls.lon) + 300);
-    if (d < 2500 && (!best || d < best.d)) best = { d, opt: { dep: st[a].dep, arr: st[b].arr, live: Boolean(lv), delay: delay / 60_000, train: { sys: t.sys, no: t.no, type: t.type, code: t.code } } };
+    if (d < within && (!best || d < best.d)) best = { d, opt: { dep: st[a].dep, arr: st[b].arr, live: Boolean(lv), delay: delay / 60_000, train: { sys: t.sys, no: t.no, type: t.type, code: t.code } } };
   }
   return best?.opt || null;
 }
@@ -1220,6 +1227,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   };
   const moved = p => {
     traceAdd('fixes', [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lon * 1e6) / 1e6, Math.round(p.acc ?? 0)]);
+    // An old fix handed over as new (an iPhone back from the background, the
+    // last one it had: api.mjs `at`) moves nothing: you're not where you were
+    // (Jay 2026-11-07: on 普悠瑪 107 past 香山, his fix at 新竹 from before
+    // took him for still there, missed it, waiting for 自強 105).
+    if (p.at != null && Date.now() - p.at > STALE_FIX_MS) return;
     // A rough fix (a cell tower's, 100 m and more out) moves the dot, never
     // the trip; but for a bus or train you were waiting for, one further from
     // its stop than its own error could put you counts: pulled out (the
@@ -1629,6 +1641,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const gone = l.mode === 'bus' ? !state.liveAt.has(k) && Date.now() > l.dep + 2 * 60_000 : Date.now() > l.dep + state.delay * 60_000 + 150_000;
     if (state.missing === k) return;
     if (!gone) return sooner(k);
+    // (Seen there after it left, not only before: a phone quiet since on board
+    // has its last fix at the stop. Jay 2026-11-07, 普悠瑪 107 taken as missed.)
+    if (state.posAt < l.dep + (l.mode === 'bus' ? 0 : state.delay * 60_000) + 60_000) return;
     state.missing = k;
     const next = (await rideOptions(l, state.info.get(k)).catch(() => [])).find(o => o.dep + (o.delay || 0) * 60_000 > Date.now() + 30_000);
     state.missing = null;
@@ -1725,6 +1740,12 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       try {
         const [trips, sts, lv] = await Promise.all([rail.dayTrips(tw(now).date), rail.railStations(), l.mode === 'tra' ? rail.traLive().catch(() => new Map()) : new Map()]);
         t = trainNow(trips, sts, l, p, lv, now);
+        // The train planned can't be it (not yet left where it boards, you
+        // kilometres on): of those running now, the nearest by its clock,
+        // further off (an express is put on a straight line between its
+        // stops: 普悠瑪 107 新竹 → 臺中 is 6 km off it past 香山; Jay 2026-11-07).
+        const late = (lv.get(String(l.train?.no ?? ''))?.delay ?? state.delay ?? 0) * 60_000;
+        if (!t && now < l.dep + late - 60_000 && l.from?.lat != null && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 2000) t = trainNow(trips, sts, l, p, lv, now, 15_000);
       } catch {
         // (No timetable to go by: where you are says it.)
         return true;

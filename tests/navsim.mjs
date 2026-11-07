@@ -43,8 +43,8 @@ function fakeEl() {
   });
 }
 export const box = fakeEl();
-// A fix (accuracy in metres).
-export const pos = (p, acc = 10) => watcher?.({ coords: { latitude: p.lat, longitude: p.lon, accuracy: acc, heading: null } });
+// A fix (accuracy in metres; `at`: the device's own stamp, for one taken earlier and handed over now).
+export const pos = (p, acc = 10, at = undefined) => watcher?.({ coords: { latitude: p.lat, longitude: p.lon, accuracy: acc, heading: null }, timestamp: at });
 // The second-by-second timers and the timeouts due, for `ms`.
 export function tick(ms = 1000) {
   const end = NOW + ms;
