@@ -145,7 +145,14 @@ Live: https://orbit.jaypengx.com/transit/
   Never offered while navigating, and never on a replan under way
   (`planTrip`'s `chase: false`; Jay 2026-11-06: "not force me to go further").
   YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
-  the nearest bridge (`rivers.mjs`). TPASS counts as free (`tpass.mjs`).
+  the nearest bridge (`rivers.mjs`). Which station: the walks by the streets
+  and the rides by the roads (`api.mjs bikeRides`: OpenStreetMap's bike
+  router, one table ask from the stations near the start to those near the
+  end and the end itself, inside the planner's 1.5 s for the walks; a ride's
+  length then the roads', `rideLeg`); the straight line and its guess at a
+  station past the door (`back`) only where they aren't in (Jay 2026-11-07:
+  博愛街 → 成功九街 back at 新竹縣體育場, 400 m from the door, over 綠41公園,
+  250 m, which rides the same; `tests/bike-roads.test.mjs`). TPASS counts as free (`tpass.mjs`).
   A plan's price line: our own trains at their real fares when it's trains
   alone, the planner's never then (Google priced 普悠瑪 107 新竹 → 彰化 at the
   區間's NT$213, 查時刻 NT$331; Jay 2026-11-06), else the planner's own fare, else
@@ -248,7 +255,11 @@ Live: https://orbit.jaypengx.com/transit/
   `tests/fixtures/trips/*.json` (made on 快捷8號's real route by
   `scripts/trip-fixture.mjs`) against what each should do.
   A trip with stops is one trip: the chips run on past each stop, the end
-  time is the last place's; on a YouBike to a stop, 到了要還車嗎 (停著 or
+  time is the last place's; each stop has its pin on the map (a size down
+  from the end's) and every leg after it its roads, as the first stretch's
+  (`tab-map roadLegs` over `tripLegs`, a road kept by its ends for the
+  stretch's re-timed copies, `roadsKnown`; Jay 2026-11-07: "after that
+  destination it's all straight line"; `tests/stop-roads.test.mjs`); on a YouBike to a stop, 到了要還車嗎 (停著 or
   還車, with which is sooner) in its last 5 minutes (`parkAsk`). Off the plan your
   own way (`offPlan`): a bike's pace on a walk → on the YouBike step; heading
   for a later walk's end or the next stop → that step; heading nowhere on it →

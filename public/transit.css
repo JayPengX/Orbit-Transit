@@ -1851,6 +1851,12 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   color: #fff;
   box-shadow: 0 3px 10px rgb(0 0 0 / 0.45);
 }
+/* A stop on the way: the same pin, a size down from where the trip ends. */
+.ot-mk.dest.stop i {
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+}
 .ot-mk.dest .ot-i {
   width: 17px;
   height: 17px;

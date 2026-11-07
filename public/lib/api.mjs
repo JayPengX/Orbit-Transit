@@ -571,6 +571,49 @@ async function askWalks(from, tos, need, line) {
 }
 export const walkTo = (from, to, opts) => walksTo(from, [to], opts).then(r => r[0]);
 
+// ---- YouBike rides by the roads ------------------------------------------------------------------
+// The metres a YouBike rides between stations (and from a station to a
+// trip's end), by OpenStreetMap's bike router: one table ask, the stations
+// near a trip's start to those near its end. The station to leave a bike at
+// is chosen on these, never on the straight line (Jay 2026-11-07: from 竹北's
+// 博愛街 to 成功九街 the straight line made 新竹縣體育場, 400 m from the door,
+// look quicker than 綠41公園, 250 m; by the roads they ride the same).
+// Kept on the phone, the newest 400. → nothing; rideKnown(a, b) → metres or null.
+const RIDES_KEY = 'orbit-transit.rides';
+const ridesRead = readSaved(RIDES_KEY, []);
+const ridesKept = new Map(Array.isArray(ridesRead) ? ridesRead.filter(Array.isArray) : []);
+let ridesSave = 0;
+export const rideKnown = (a, b) => ridesKept.get(walkKey(a, b)) ?? null;
+const riding = new Map(); // a table's key → its ask
+export function bikeRides(froms, tos) {
+  const need = froms.filter(a => tos.some(b => ridesKept.get(walkKey(a, b)) == null));
+  if (!need.length || !tos.length) return Promise.resolve();
+  const k = `${need.map(p5).join(';')}>${tos.map(p5).join(';')}`;
+  if (riding.has(k)) return riding.get(k);
+  const pts = [...need, ...tos].map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
+  const src = need.map((_, i) => i).join(';');
+  const dst = tos.map((_, i) => need.length + i).join(';');
+  const job = fetch(`${OSRM.bike}/table/v1/driving/${pts}?sources=${src}&destinations=${dst}&annotations=distance`, { signal: AbortSignal.timeout?.(8000) })
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => {
+      // (Each end's metres to the nearest road, which the table leaves out, added.)
+      const snap = x => Number(x?.distance) || 0;
+      need.forEach((a, i) =>
+        tos.forEach((b, n) => {
+          const d = j?.distances?.[i]?.[n];
+          if (d != null) ridesKept.set(walkKey(a, b), Math.round(d + snap(j.sources?.[i]) + snap(j.destinations?.[n])));
+        })
+      );
+      if (ridesRead === UNREAD) return;
+      clearTimeout(ridesSave);
+      ridesSave = setTimeout(() => writeJson(RIDES_KEY, [...ridesKept].slice(-400)), 1000);
+    })
+    .catch(() => {})
+    .finally(() => riding.delete(k));
+  riding.set(k, job);
+  return job;
+}
+
 // ---- The roads a walk or a YouBike ride takes ------------------------------------------------
 // OpenStreetMap's routers (FOSSGIS's OSRM, open to all, light use only:
 // a plan's legs when it's opened), kept for the session.

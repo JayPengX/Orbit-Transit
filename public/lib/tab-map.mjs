@@ -1870,6 +1870,8 @@ async function planRest(c, { draw = true } = {}) {
   if (card !== c || !(draw || c.drawn)) return;
   renderCard();
   drawPlan(c.plans[c.sel >= 0 ? c.sel : 0], { fit: false });
+  // (The stretches after the stops on their roads too, as the first one's.)
+  roadLegs(c.plans[c.sel >= 0 ? c.sel : 0], { roads: c.sel >= 0 ? true : 'bike' });
 }
 // A way on a card with stops, the whole trip: its later stretches (null
 // while they're being planned, or nothing gets there).
@@ -2242,14 +2244,19 @@ function selectPlan(i) {
 // (`roads: 'bike'`: the buses' stops and the rides' streets (OpenStreetMap's free bike router), for the
 // plan drawn before any is opened; the walks' streets (Google's, billed) wait for a plan opened.)
 async function roadLegs(p, { lit = -1, roads = true } = {}) {
-  const todo = !roads ? [] : p.legs.filter(l => (l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
+  // (A trip with stops: its stretches after each stop too, never left straight
+  // past the first stop; Jay 2026-11-07, 彰化 → 墨竹亭 → 成功九街: "after that
+  // destination it's all straight line".)
+  const legs = tripLegs(p);
+  legs.forEach(knownRoad);
+  const todo = !roads ? [] : legs.filter(l => (l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) && !l.road && l.from?.lat != null && l.to?.lat != null && (l.dist || 0) > 120);
   // A ride the planner gave no shape: along its line (shapes.mjs: a bus its
   // route's road, a train or the metro its track), else a bus through its
   // stops; never a straight line across town.
-  const buses = p.legs.filter(l => l.mode === 'bus' && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
+  const buses = legs.filter(l => l.mode === 'bus' && !l.poly && !l.path && l.from?.lat != null && l.to?.lat != null);
   // (A train with a planner's shape too: checked against its own stops once, below.)
   // (A train's way drawn before the track was whole, straight between far stops, drawn again: TRACK_V.)
-  const rails = p.legs.filter(l => (l.mode === 'tra' || l.mode === 'hsr' || l.mode === 'metro') && (l.mode !== 'metro' ? l.track !== TRACK_V : !l.poly && !l.path) && l.from?.lat != null && l.to?.lat != null);
+  const rails = legs.filter(l => (l.mode === 'tra' || l.mode === 'hsr' || l.mode === 'metro') && (l.mode !== 'metro' ? l.track !== TRACK_V : !l.poly && !l.path) && l.from?.lat != null && l.to?.lat != null);
   if (!todo.length && !buses.length && !rails.length) return;
   await Promise.all([
     ...buses.map(async l => {
@@ -2290,9 +2297,10 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
       l.fmt = '';
       // (Its length too: the streets' walking distance, not the straight line's guess.)
       l.dist = r.dist;
+      roadsKnown.set(roadKey(l), { poly: r.poly, dist: r.dist });
     })
   ]);
-  p.walk = p.legs.filter(l => l.mode === 'walk').reduce((a, l) => a + (l.dist || 0), 0);
+  for (const q of [p, ...stretchesAfter(p)]) q.walk = q.legs.filter(l => l.mode === 'walk').reduce((a, l) => a + (l.dist || 0), 0);
   if (card?.plans?.includes(p) && (card.plans[card.sel] === p || (card.sel < 0 && card.plans[0] === p) || navFull())) {
     // (Navigating: the trip as navigation draws it, the step you're at lit, never the plan's own look over it.)
     const n = navFull() ? navNow() : null;
@@ -2305,6 +2313,24 @@ async function roadLegs(p, { lit = -1, roads = true } = {}) {
     roadLegs(card.plans[card.sel >= 0 ? card.sel : 0], { roads: card.sel >= 0 ? true : 'bike' });
   }
 }
+// The roads found for a walk or a ride, by its ends: a stretch after a stop
+// is a fresh copy each time it's timed on (chainOn), and keeps its road.
+const roadsKnown = new Map();
+const roadKey = l => `${l.mode}:${l.from.lat.toFixed(5)},${l.from.lon.toFixed(5)}>${l.to.lat.toFixed(5)},${l.to.lon.toFixed(5)}`;
+function knownRoad(l) {
+  if ((l.mode !== 'walk' && l.mode !== 'bike') || l.road || (l.mode === 'walk' && l.poly) || l.from?.lat == null || l.to?.lat == null) return;
+  const r = roadsKnown.get(roadKey(l));
+  if (r) Object.assign(l, { road: true, poly: r.poly, fmt: '', dist: r.dist });
+}
+// A way's stretches after its stops: navigating, those it carries; on the
+// plans card, those planned on from it (restOf).
+const stretchesAfter = p => (p.later?.length ? p.later : card?.plans?.includes(p) ? restOf(card, p) || [] : []);
+// Every leg of the trip, to its last place.
+const tripLegs = p => [p, ...stretchesAfter(p)].flatMap(q => q.legs);
+// A leg drawn as a straight line that has a road or a line to follow (roadLegs would find it).
+// (Asked once a leg while navigating: a walk no router can draw isn't asked again at every step.)
+const roadTried = new WeakSet();
+const needsRoad = l => !roadTried.has(l) && l.from?.lat != null && l.to?.lat != null && ((l.mode === 'bike' || (l.mode === 'walk' && !l.poly)) ? !l.road && (l.dist || 0) > 120 : l.mode === 'bus' ? !l.poly && !l.path : (l.mode === 'tra' || l.mode === 'hsr') && l.track !== TRACK_V);
 // A leg's way on the map: its shape; no shape from the planner, through its
 // own stops when navigation has them (nav.mjs), else a straight line. → [[lat, lon]…]
 function legPath(l) {
@@ -2455,12 +2481,15 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   // A way on a card with stops: the whole trip, to its last place.
   // (Navigating one: its stretches after each stop, drawn after it.)
   const later = lit < 0 && card?.plans?.includes(p) ? restOf(card, p) : lit >= 0 ? p.later : null;
+  // (Each stop on the way marked too, as the end is: Jay 2026-11-07, 墨竹亭 had no mark.)
+  const stops = later?.length ? (lit >= 0 ? [p.dest, ...(p.then || [])] : [card.to, ...card.then]).slice(0, later.length).filter(x => x?.lat != null) : [];
   if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: lit >= 0 ? p.then?.[later.length - 1] || p.dest : card.then[later.length - 1] };
   // (Its own YouBike stations, only: drawLayers.)
   if (!navFull()) drawLayers();
   const lines = [];
   const pts = [];
   for (const [k, l] of p.legs.entries()) {
+    knownRoad(l);
     const path = legPath(l);
     if (!path.length) continue;
     // Navigating: the whole trip in its colours, the step you're on the boldest, the steps behind you faint.
@@ -2482,6 +2511,7 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   const marks = live => [
     ...(start?.lat != null ? [{ id: 'from', lat: start.lat, lon: start.lon, cls: 'end from', z: 30, html: '<i></i>' }] : []),
     ...(end?.lat != null && !marked ? [{ id: 'to', lat: end.lat, lon: end.lon, cls: 'dest', z: 32, html: `<i aria-label="${e(end.name || W('目的地', 'Destination'))}">${icon('pin')}</i>` }] : []),
+    ...stops.map((x, k) => ({ id: `stop${k}`, lat: x.lat, lon: x.lon, cls: 'dest stop', z: 31, html: `<i aria-label="${e(x.name || W('停留點', 'Stop'))}">${icon('pin')}</i>` })),
     // (On a ride: where you got on stays marked, the line never left dangling: the owner, 2026-10-22.)
     ...look.boards.filter(l => l.mode !== 'walk' && l.from?.lat && !(l.mode === 'bike' && (l.rent?.uid || l.kept))).map((l, k) => ({ id: `b${k}`, lat: l.from.lat, lon: l.from.lon, cls: 'board', z: 20, html: `<i style="--c:${e(legColor(l))}">${icon(l.mode)}</i>` })),
     ...bikes.map(b => planBikeMarker(b, live?.get(b.st.uid), bare)),
@@ -2700,13 +2730,17 @@ function navDraw(plan, i) {
   // has lost its line: found again along the track, never left a straight
   // line across the country (Jay 2026-11-07: 自強 105 drawn 新竹 → 彰化 straight,
   // his dot on the 海線 km off it, the trip didn't see him on board).
-  if (plan.legs.some(l => (l.mode === 'tra' || l.mode === 'hsr') && l.track !== TRACK_V && l.from?.lat != null && l.to?.lat != null))
+  // (And the stretches after a stop, planned once navigation had begun: their roads, never straight.)
+  const need = tripLegs(plan).filter(needsRoad);
+  if (need.length) {
+    need.forEach(l => roadTried.add(l));
     roadLegs(plan)
       .then(() => {
         const n = navNow();
         if (n?.plan === plan && !n.min) drawPlan(plan, { fit: false, lit: n.i });
       })
       .catch(() => {});
+  }
 }
 // Between the card on top and the one at the bottom: the stage you're at, you on it.
 let viewAt = 0;

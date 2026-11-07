@@ -68,6 +68,13 @@ const roadM = (a, b) => {
 // line ×1.3 then).
 let streetM = () => null;
 export const useStreetWalks = f => (streetM = f);
+// A YouBike ride by the roads where it's known (api bikeRides: OpenStreetMap's
+// bike router, the stations near a trip's start to those near its end; either
+// way round): a station's ride and walk are then both measured, so one past
+// the door or behind you is no longer guessed at (`back`). → metres or null.
+let streetRide = () => null;
+export const useStreetRides = f => (streetRide = f);
+const rideM = (a, b) => streetRide(a, b) ?? streetRide(b, a) ?? null;
 // 偏好電輔車 (`prefer`, a trip's own choice): a station with 電輔車 there now
 // ridden at their pace, one without counted PREFER_SEC worse, so of two
 // stations about as near the one with 電輔車 is taken (the owner, 2026-10-29).
@@ -85,7 +92,10 @@ function bestStation(pt, list, other, ebike, prefer = false) {
     // 光明九路停車場 511 m on foot was taken over 新竹縣體育場 151 m to save a
     // few minutes' riding; the owner, 2026-10-13.)
     const e = ebike || (prefer && hasEbike(x.s));
-    return walkSec(walk + 2 * back(x)) + slowWalk(walk * 1.3) * 60 * 2 + rideSec(roadM(x.s, other) / 1.25, e) + (prefer && !e ? PREFER_SEC : 0);
+    // (The ride by the roads: what riding past the door, or back from behind you, really costs is in it and in the walk.)
+    const ride = rideM(x.s, other);
+    const behind = ride != null && road != null ? 0 : back(x);
+    return walkSec(walk + 2 * behind) + slowWalk(walk * 1.3) * 60 * 2 + rideSec((ride ?? roadM(x.s, other)) / 1.25, e) + (prefer && !e ? PREFER_SEC : 0);
   };
   return list.reduce((a, b) => (cost(b) < cost(a) ? b : a)).s;
 }
@@ -118,7 +128,7 @@ export const walkLeg = (from, to, dep) => {
 
 // One ride from station to station, leaving at t.
 export const rideLeg = (rent, ret, t, ebike = false) => {
-  const dist = Math.round(roadM(rent, ret));
+  const dist = Math.round(rideM(rent, ret) ?? roadM(rent, ret));
   const dur = rideSec(dist / 1.25, ebike) + 2 * DOCK_SEC;
   return { mode: 'bike', ebike, name: ebike ? W('YouBike 電輔車', 'YouBike E-bike') : 'YouBike', from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon }, dur, dist, dep: t, arr: t + dur * 1000, rent, ret };
 };

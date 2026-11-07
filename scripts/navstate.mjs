@@ -1,4 +1,4 @@
-// node scripts/navstate.mjs <walk|wait|on|train|coast|bike|long|liujia|late|wenxing|stops|miss|wrong> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
+// node scripts/navstate.mjs <walk|wait|on|train|coast|bike|long|liujia|late|wenxing|stops|stop-roads|miss|wrong> → an ot.nav.v1 value: a navigation to preview (preview.mjs transit --store "ot.nav.v1=…")
 const now = Date.now(), m = x => now + x * 60_000;
 const here = { lat: 24.8026, lon: 120.9702 };
 const stop = { name: '新竹車站(中正路)', lat: 24.8026, lon: 120.9702 };
@@ -65,7 +65,16 @@ if (sc === 'stops') {
   var then = [hs];
   var later = [{ legs: [{ mode: 'walk', from: shop, to: st, dep: m(15), arr: m(17), dur: 120 }, { ...bus(st, 19), to: P('竹東高中', 24.7333, 121.0879) }, { mode: 'walk', from: P('竹東高中', 24.7333, 121.0879), to: hs, dep: m(49), arr: m(51), dur: 120 }], dep: m(15), arr: m(51) }];
 }
+// Jay 2026-11-07 in 竹北 (--geo 24.8352,121.0079): a walk to a stop on the way (墨竹亭, on 博愛街),
+// then a walk to the YouBike, a ride home to 成功九街: the stop has its pin, and every leg after it its roads.
+if (sc === 'stop-roads') {
+  const P = (name, lat, lon) => ({ name, lat, lon });
+  const shop = P('墨竹亭 燃麵本家 竹北博愛店', 24.8334, 121.008), dock = P('文信爬蟲兩棲公園', 24.83231, 121.00963), park = P('綠41公園', 24.81614, 121.0171), home = P('成功九街', 24.8176, 121.0165);
+  legs = [{ mode: 'walk', from: P('', 24.8352, 121.0079), to: shop, dep: m(0), arr: m(3), dur: 180, dist: 230 }];
+  var then = [home];
+  var later = [{ legs: [{ mode: 'walk', from: shop, to: dock, dep: m(33), arr: m(37), dur: 240, dist: 252 }, { mode: 'bike', name: 'YouBike', from: dock, to: park, dep: m(37), arr: m(50), dur: 780, dist: 2624, rent: { uid: 'r', ...dock, bikes: 3, ebike: 5 }, ret: { uid: 's', ...park, ret: 8 } }, { mode: 'walk', from: park, to: home, dep: m(50), arr: m(53), dur: 180, dist: 250 }], dep: m(33), arr: m(53) }];
+}
 // (liujia: waiting at 竹中 for the 六家線, its ride along the track.)
 if (sc === 'liujia') i = 4;
-const plan = { tags: [], transfers: 0, walk: 400, legs, dep: legs[0].dep, arr: legs.at(-1).arr, dur: (legs.at(-1).arr - legs[0].dep) / 1000, dest: { name: legs.at(-1).to.name, lat: legs.at(-1).to.lat, lon: legs.at(-1).to.lon }, ...(sc === 'late' ? { deadline: m(70) } : {}), ...(sc === 'stops' ? { then, later } : {}) };
+const plan = { tags: [], transfers: 0, walk: 400, legs, dep: legs[0].dep, arr: legs.at(-1).arr, dur: (legs.at(-1).arr - legs[0].dep) / 1000, dest: { name: legs.at(-1).to.name, lat: legs.at(-1).to.lat, lon: legs.at(-1).to.lon }, ...(sc === 'late' ? { deadline: m(70) } : {}), ...(sc === 'stops' || sc === 'stop-roads' ? { then, later } : {}) };
 process.stdout.write(JSON.stringify({ plan, i, phase, at: now }));
