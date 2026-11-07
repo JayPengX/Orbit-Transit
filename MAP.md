@@ -254,7 +254,14 @@ Live: https://orbit.jaypengx.com/transit/
   for a later walk's end or the next stop → that step; heading nowhere on it →
   從這裡重新規劃 asked. Where you are is checked again every 20 s as on opening
   half way (a late train boarded after it was taken as missed); a rough fix
-  far from the stop you were waiting at counts; fresh fixes only, and a watch
+  far from the stop you were waiting at counts; a fix stamped over 30 s old
+  (an iPhone back from sleep hands over its last one) moves nothing (`api.mjs
+  fixAt`); a ride is missed only when you're seen at its stop a minute after it
+  left; a train you're found on while the planned one hasn't left yet is the
+  nearest running by its clock out to 15 km (an express drawn straight between
+  far stops; Jay 2026-11-07, 普悠瑪 107 past 香山 taken for 自強 105 at 新竹:
+  `tests/nav-woke-aboard.test.mjs`); a train changed mid-trip moves what follows
+  by its arrival and its line is found again (`tab-map navDraw`); fresh fixes only, and a watch
   silent 10 s is started over (twice as long each time it stays silent, up to a minute);
   one that hasn't answered yet (the location ask may be up) is left a minute, never a second ask over the first. Late for an
   arrival time → 最快 on the 出狀況 card. It resumes after the app

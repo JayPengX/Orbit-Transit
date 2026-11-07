@@ -2693,6 +2693,17 @@ function navDraw(plan, i) {
   navFollow = true;
   drawPlan(plan, { fit: false, lit: i });
   navView(plan, i);
+  // A train changed on the way (another run taken, the one you're on found)
+  // has lost its line: found again along the track, never left a straight
+  // line across the country (Jay 2026-11-07: 自強 105 drawn 新竹 → 彰化 straight,
+  // his dot on the 海線 km off it, the trip didn't see him on board).
+  if (plan.legs.some(l => (l.mode === 'tra' || l.mode === 'hsr') && !l.path && !l.poly && !l.stopsChecked && l.from?.lat != null && l.to?.lat != null))
+    roadLegs(plan)
+      .then(() => {
+        const n = navNow();
+        if (n?.plan === plan && !n.min) drawPlan(plan, { fit: false, lit: n.i });
+      })
+      .catch(() => {});
 }
 // Between the card on top and the one at the bottom: the stage you're at, you on it.
 let viewAt = 0;

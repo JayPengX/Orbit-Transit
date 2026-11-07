@@ -395,7 +395,12 @@ async function readTownships() {
 const UNANSWERED_MS = 60_000;
 const geo = { id: null, last: null, fns: new Set(), waiting: new Set(), answered: false, at: 0 };
 const restartable = () => geo.answered || Date.now() - geo.at > UNANSWERED_MS;
-const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading, speed: p.coords.speed });
+// (`at`: when the device took it, by its own stamp: an iPhone back from the
+// background can hand over the last fix it had, minutes old, as if new; Jay
+// 2026-11-07, on 普悠瑪 107 past 香山, the trip took his fix at 新竹 as him still
+// there and said he'd missed it. A stamp a day off or ahead isn't believed.)
+const fixAt = (p, now = Date.now()) => (Number.isFinite(p?.timestamp) && p.timestamp <= now + 60_000 && p.timestamp > now - 86_400_000 ? Math.min(now, p.timestamp) : now);
+const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading, speed: p.coords.speed, at: fixAt(p) });
 // The last three minutes of fixes, for telling whether you're on a bus or train (aboard.mjs).
 const TRACK_MS = 180_000;
 const track = [];
@@ -408,9 +413,12 @@ function watchDevice(nav) {
     p => {
       geo.answered = true;
       const fix = fixOf(p);
-      geo.last = { fix, t: Date.now() };
-      track.push({ ...fix, t: geo.last.t });
-      while (track.length && track[0].t < geo.last.t - TRACK_MS) track.shift();
+      // (One taken a while ago, handed over late: never the last, nor in the track.)
+      if (!geo.last || Date.now() - fix.at <= 30_000) {
+        geo.last = { fix, t: fix.at };
+        track.push({ ...fix, t: fix.at });
+      }
+      while (track.length && track[0].t < Date.now() - TRACK_MS) track.shift();
       for (const f of [...geo.fns]) f(fix);
       for (const w of [...geo.waiting]) w(fix);
     },

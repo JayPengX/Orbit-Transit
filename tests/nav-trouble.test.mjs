@@ -50,7 +50,8 @@ test('a train missed at the station: the next one taken by itself, then one card
   nav.navBest(quick(T(8, 50), dest));
   assert.match(topHtml(), /class="ot-trouble"/);
   assert.match(topText(), /趕不上 台鐵 區間 1001 次/);
-  assert.match(topText(), /下一班 08:40 開 08:57 到/);
+  // (08:56: 1003 gets to D站 at 08:51:30 by its timetable, the walk 5 minutes after it.)
+  assert.match(topText(), /下一班 08:40 開 08:56 到/);
   assert.match(topHtml(), /ot-trouble-row on/, 'the one taken ticked');
   assert.match(topText(), /最快・2 08:50 到/);
   assert.doesNotMatch(topText(), /沒趕上 台鐵/, 'said once, on the card');
