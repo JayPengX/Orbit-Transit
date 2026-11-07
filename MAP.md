@@ -151,8 +151,10 @@ Live: https://orbit.jaypengx.com/transit/
   end and the end itself, inside the planner's 1.5 s for the walks; a ride's
   length then the roads', `rideLeg`); the straight line and its guess at a
   station past the door (`back`) only where they aren't in (Jay 2026-11-07:
-  博愛街 → 成功九街 back at 新竹縣體育場, 400 m from the door, over 綠41公園,
-  250 m, which rides the same; `tests/bike-roads.test.mjs`). TPASS counts as free (`tpass.mjs`).
+  博愛街 → 成功九街 back at 新竹縣體育場 where 成功國中 is by the door: Google's
+  walk matrix answered 403, so the walk was OpenStreetMap's 460 m round the
+  school, not Google's 267 by the lane; the proxy now asks Compute Routes a walk
+  each then; `tests/bike-roads.test.mjs`). TPASS counts as free (`tpass.mjs`).
   A plan's price line: our own trains at their real fares when it's trains
   alone, the planner's never then (Google priced 普悠瑪 107 新竹 → 彰化 at the
   區間's NT$213, 查時刻 NT$331; Jay 2026-11-06), else the planner's own fare, else
