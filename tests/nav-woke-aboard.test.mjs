@@ -123,9 +123,76 @@ test('another train taken: what follows moves by when it gets in (105 for 107: t
   nav.retimeRide(plan, 1, { dep: D('08:22'), arr: D('09:41'), train: { sys: 'tra', no: '105', type: '自強' } });
   assert.equal(plan.legs[2].dep, D('09:41'));
   assert.equal(plan.arr, D('09:51'));
-  plan.legs[1].stopsChecked = true;
+  plan.legs[1].track = 2;
   nav.retimeRide(plan, 1, { dep: D('08:07'), arr: D('09:08'), train: { sys: 'tra', no: '107', type: '普悠瑪' } });
   assert.equal(plan.arr, D('09:18'));
-  assert.ok(!plan.legs[1].path && !plan.legs[1].stopsChecked, 'its line to be found again (tab-map navDraw), never the old train’s nor a straight one');
+  assert.ok(!plan.legs[1].path && !plan.legs[1].track, 'its line to be found again (tab-map navDraw), never the old train’s nor a straight one');
+  nav.useRail({});
+});
+
+// Then (08:43, past 三義) the trip started again from the pinned trip: its
+// 107 rolled to tomorrow's, the card counting down 1404 分 to it, and the ride
+// drawn straight 新竹 → 臺中 (TDX's track can't be followed on the 山線) far off
+// him. Now the ride is OpenStreetMap's track (public/rail-tra.json) and he's
+// found on today's 107 from where he is.
+const { readFileSync } = await import('node:fs');
+const { railGroups, railWayIn } = await import('../public/lib/shapes.mjs');
+const osm = JSON.parse(readFileSync(new URL('../public/rail-tra.json', import.meta.url), 'utf8'));
+const groups = railGroups({ lines: [], osm }, 'tra');
+const P = id => [ST[id][1], ST[id][2]];
+const M = (a, b) => Math.hypot((a[0] - b[0]) * 111_000, (a[1] - b[1]) * 101_000);
+// (To the line between its points, not only its points: a straight stretch has few.)
+const nearLine = (w, p) => {
+  let best = Infinity;
+  for (let k = 1; k < w.length; k++) {
+    const [ax, ay, bx, by, px, py] = [w[k - 1][1] * 101_000, w[k - 1][0] * 111_000, w[k][1] * 101_000, w[k][0] * 111_000, p[1] * 101_000, p[0] * 111_000];
+    const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+    const t = len ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len)) : 0;
+    best = Math.min(best, Math.hypot(px - (ax + t * dx), py - (ay + t * dy)));
+  }
+  return best;
+};
+const SAN = { 三義: [24.42066, 120.77393], 泰安: [24.33146, 120.74181], 苗栗: [24.57001, 120.82233], 竹南: [24.68654, 120.88041] };
+
+test('the 山線 drawn along the track: 新竹 → 臺中 by 竹南, 苗栗, 三義 and 泰安, about 87 km, never straight', () => {
+  const w = railWayIn(groups, P(1210), P(3300));
+  assert.ok(w?.length > 50, 'a way along the track');
+  const km = w.reduce((s, p, k) => (k ? s + M(w[k - 1], p) : s), 0) / 1000;
+  assert.ok(km > 80 && km < 100, `${km} km`);
+  for (const [name, p] of Object.entries(SAN)) assert.ok(nearLine(w, p) < 600, `${name}: ${Math.round(nearLine(w, p))} m off`);
+});
+
+test('started again at 08:42 past 三義 on a plan timed for tomorrow’s 107: on today’s 107, no 搭錯車, there 09:18 today', async () => {
+  const line = [P(1210), P(3300), P(3360)].reduce((w, p, k, all) => (k ? [...w, ...railWayIn(groups, all[k - 1], p).slice(1)] : [p]), []);
+  const DAY = 86_400_000;
+  const plan = trip();
+  plan.legs = plan.legs.slice(1);
+  for (const l of plan.legs) (l.dep += DAY), (l.arr += DAY);
+  plan.legs[0].path = line;
+  Object.assign(plan, { dep: plan.legs[0].dep, arr: plan.legs.at(-1).arr });
+  // 107 along the track by the clock: 新竹 08:07, 臺中 08:54.
+  const toTc = railWayIn(groups, P(1210), P(3300));
+  const cum = toTc.map((p, k) => (k ? toTc.slice(0, k + 1).reduce((s, q, n) => (n ? s + M(toTc[n - 1], q) : s), 0) : 0));
+  const on = t => {
+    const want = ((t - D('08:07')) / (47 * 60e3)) * cum.at(-1);
+    const k = Math.max(1, cum.findIndex(c => c >= want));
+    const f = (want - cum[k - 1]) / (cum[k] - cum[k - 1] || 1);
+    return { lat: toTc[k - 1][0] + (toTc[k][0] - toTc[k - 1][0]) * f, lon: toTc[k - 1][1] + (toTc[k][1] - toTc[k - 1][1]) * f };
+  };
+  clock.set(D('08:42'));
+  const { st: s } = start(plan, { here: { ...on(D('08:42')), at: D('08:42') } });
+  await settle();
+  for (let t = D('08:42'); t <= D('08:45'); t += 5000) {
+    clock.set(t);
+    pos(on(t), 20);
+    tick(1000);
+    await settle();
+  }
+  assert.deepEqual(show(s), { i: 0, phase: 'on', reached: 0 });
+  assert.equal(s.plan.legs[0].dep, D('08:07'), 'today’s');
+  assert.equal(s.plan.arr, D('09:18'));
+  s.render();
+  assert.match(topText(), /坐到 彰化 下車/);
+  assert.doesNotMatch(topText(), /搭錯車|1404/);
   nav.useRail({});
 });

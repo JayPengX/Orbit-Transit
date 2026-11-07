@@ -17,6 +17,28 @@ import { squareOf } from './packs.mjs';
 
 // A shape pack ('rail', 'bus/Hsinchu'), as every app reads the family's data (the kit's packJson). null: none.
 const shapePack = name => kit.packJson(`shape/${name}.json`, { ttl: 6 * 86_400_000 }).catch(() => null);
+// 台鐵's track from OpenStreetMap, with the app (scripts/rail-osm.mjs): TDX's
+// is in broken pieces (the 山線 竹南 → 臺中 can't be followed: Jay 2026-11-07,
+// 普悠瑪 107 drawn straight, km off him on it). Tried first; TDX's after it.
+let traTrack = null;
+const traOsm = () =>
+  (traTrack ||= fetch(new URL('../rail-tra.json', import.meta.url))
+    .then(r => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .then(j => {
+      if (!j?.lines) traTrack = null;
+      return j;
+    }));
+// The rail pack with OSM's 台鐵 track beside it (`osm`).
+let merged = null;
+async function railPack(sys) {
+  const [pack, osm] = await Promise.all([shapePack('rail'), sys === 'tra' ? traOsm() : null]);
+  if (!pack?.lines && !osm?.lines) return null;
+  if (!osm?.lines) return pack;
+  // (The same object while neither changes: its graphs are kept with it.)
+  if (merged?.pack !== pack || merged?.osm !== osm) merged = { pack, osm, v: { ...(pack || {}), lines: pack?.lines || [], osm } };
+  return merged.v;
+}
 
 // ---- The way along the pieces --------------------------------------------------------------
 
@@ -202,11 +224,15 @@ export function railGroups(pack, sys) {
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(...pieces);
     }
-    by[sys] = { lines: [...groups.values()], all: [...groups.values()].flat() };
+    // (OpenStreetMap's track, its own pieces, first: `first`.)
+    const first = sys === 'tra' && pack.osm?.lines ? pack.osm.lines.map(x => decodeLine(x.line)).filter(p => p.length > 1) : null;
+    by[sys] = { lines: [...groups.values()], all: [...groups.values()].flat(), first };
   }
   return by[sys];
 }
 export function railWayIn(groups, a, b) {
+  const own = groups.first?.length ? wayAlong(groups.first, a, b) : null;
+  if (own) return own;
   let best = null;
   for (const g of groups.lines) {
     const w = wayAlong(g, a, b);
@@ -217,7 +243,7 @@ export function railWayIn(groups, a, b) {
 export async function railWay(l) {
   const sys = SYS[l?.mode];
   if (!sys || l.from?.lat == null || l.to?.lat == null) return null;
-  const pack = await shapePack('rail');
+  const pack = await railPack(sys);
   if (!pack?.lines) return null;
   return railWayIn(railGroups(pack, sys), [l.from.lat, l.from.lon], [l.to.lat, l.to.lon]);
 }
@@ -229,7 +255,7 @@ export async function railWay(l) {
 export async function railWayByStops(mode, stops) {
   const sys = SYS[mode];
   if (!sys || !(stops?.length > 1)) return null;
-  const pack = await shapePack('rail');
+  const pack = await railPack(sys);
   const groups = pack?.lines ? railGroups(pack, sys) : null;
   const way = [stops[0]];
   for (let k = 1; k < stops.length; k++) {
