@@ -14,6 +14,7 @@ import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, road
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard, railNetwork, stationPoint } from './raildata.mjs';
+import { canBook, bookHtml, openBooking } from './book.mjs';
 import { OPERATORS, stationTitle } from './metro.mjs';
 import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
 import { planTrip, findAboard, planAboard, planTicket, spotOf } from './planner.mjs';
@@ -875,6 +876,9 @@ async function cardClick(ev) {
   // A step's Google (or Apple) Maps link sits inside its plan's button: it opens the app, never selects the plan.
   const gm = ev.target.closest('[data-maps]');
   if (gm) return void window.open(gm.dataset.maps, '_blank', 'noopener');
+  // 高鐵訂票: 高鐵's own booking, the ride filled in (book.mjs).
+  const book = ev.target.closest('[data-book]');
+  if (book) return void openBooking(JSON.parse(book.dataset.book), m => ctx.status(m));
   const act = ev.target.closest('[data-card]')?.dataset.card;
   const bell = ev.target.closest('[data-alert]');
   if (bell && card?.kind === 'bus') return alertSheet(card, JSON.parse(bell.dataset.alert));
@@ -2220,7 +2224,7 @@ function stepItems(legs, from = 0) {
           ? W(`步行 ${distText(l.dist)}${l.to?.name ? `到 ${e(shown(l.to.name))}` : ''}`, `Walk ${distText(l.dist)}${l.to?.name ? ` to ${e(shown(l.to.name))}` : ''}`)
           : l.mode === 'bike'
             ? `<b>${l.swap ? W('換一台，', 'Swap, ') : ''}${W('騎', 'ride')} ${l.ebike ? W('YouBike 電輔車', 'YouBike e-bike') : 'YouBike'} ${e(distText(l.dist))}</b>${l.to?.lat != null ? `<span class="ot-step-gm" role="link" data-maps="${e(mapsLink(l.to, 'bicycling', l.from))}">${icon('route')}${mapsName()}</span>` : ''}${bikeEnd(l.kept ? W('騎', 'On') : W('借', 'Rent'), l.from.name, l.rent ? (l.ebike ? [[`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike]] : [[`${icon('bike')}${W('一般', 'bikes')}`, l.rent.bikes], [`${icon('bolt')}${W('電輔', 'e')}`, l.rent.ebike || 0]]) : [])}${bikeEnd(l.park ? W('停', 'Park') : W('還', 'Return'), l.to.name, l.ret ? [[W('空位', 'docks'), l.ret.ret]] : [])}`
-            : `<b>${e(MODE_NAME[l.mode])} ${e(l.mode === 'tra' ? trainKind(l.short || l.name) : l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${l.aboard ? W('在車上', 'On board') : e(shown(l.from.name))} → ${e(shown(l.to.name))}${l.stops ? ` · ${W(`${l.stops} 站`, `${l.stops} stops`)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>`;
+            : `<b>${e(MODE_NAME[l.mode])} ${e(l.mode === 'tra' ? trainKind(l.short || l.name) : l.short || l.name)}</b>${wayText(l) ? ` ${e(wayText(l))}` : ''}<small class="ot-step-line" title="${e(l.agency || '')}">${l.aboard ? W('在車上', 'On board') : e(shown(l.from.name))} → ${e(shown(l.to.name))}${l.stops ? ` · ${W(`${l.stops} 站`, `${l.stops} stops`)}` : ''}</small><span class="ot-live" data-live="${e(`${l.mode}|${l.short || l.name}|${l.from.lat}|${l.from.lon}`)}"></span>${canBook(l) ? bookHtml(l) : ''}`;
       // (The ride you're on: from now, not from the station it left.)
       const t0 = l.aboard ? l.aboard.at : l.dep;
       return `<li style="--c:${e(c)}" data-leg="${from + k}"><span class="ot-step-time">${e(hm(t0))}${l.live ? `<i class="ot-livedot" title="${W('即時', 'Live')}"></i>` : ''}</span>${l.mode === 'bike' ? '<span class="ot-step-i ot-logo"><img src="./img/youbike.png" alt="" width="28" height="28" decoding="async"></span>' : `<span class="ot-step-i">${icon(l.mode)}</span>`}<span class="ot-step-what">${what}<small class="ot-step-dur">${e(minsText(l.aboard ? (l.arr - t0) / 1000 : l.dur))}</small></span></li>`;
