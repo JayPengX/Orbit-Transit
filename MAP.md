@@ -256,8 +256,12 @@ Live: https://orbit.jaypengx.com/transit/
   today's code (logs stay in captures/); `tests/nav-replay.test.mjs` replays
   `tests/fixtures/trips/*.json` (made on 快捷8號's real route by
   `scripts/trip-fixture.mjs`) against what each should do.
-  A trip with stops is one trip: the chips run on past each stop, the end
-  time is the last place's; each stop has its pin on the map (a size down
+  A trip with stops is one trip: the chips run on past each stop; the
+  bottom bar's time is the next stop's (`到 墨竹亭 還要 …`, `stopShort`; Jay
+  2026-11-07: "full trip length should be about when I arrive my first
+  stop"); a step ahead tapped shows its own length and time, the trip's
+  times kept from the step you're at (`state.reached`; Jay 2026-11-07: "when
+  I click walk it though I gonna walk from where I am now"); each stop has its pin on the map (a size down
   from the end's) and every leg after it its roads, as the first stretch's
   (`tab-map roadLegs` over `tripLegs`, a road kept by its ends for the
   stretch's re-timed copies, `roadsKnown`; Jay 2026-11-07: "after that

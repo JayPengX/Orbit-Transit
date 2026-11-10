@@ -362,6 +362,11 @@ const titleHtml = (title, plan) => {
 // What to do on a leg, before (or while) doing it: one short line, and what's said under it.
 // A place's name without its bracket (陽明交通大學(六家校區) → 陽明交通大學): the
 // card's lines stay one line each at any width (Jay, 2026-10-22).
+// A stop's name, short enough for the bottom bar at 320: its first word (墨竹亭 燃麵本家 竹北博愛店 → 墨竹亭), 8 characters at most.
+export const stopShort = n => {
+  const w = shortPlace(n).split(/\s+/)[0] || '';
+  return [...w].length > 8 ? `${[...w].slice(0, 7).join('')}…` : w;
+};
 export const shortPlace = n => String(n || '').replace(/\s*[（(][^）)]*[）)]\s*/g, '').trim() || String(n || '');
 function stepText(plan, i, phase) {
   const l = plan.legs[i];
@@ -850,10 +855,19 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const on = ride && state.phase === 'on';
     const rs = ride ? state.ride.get(state.i) : null;
     const t = stepText(plan, state.i, state.phase);
-    const times = navTimes(plan, state.i, state.phase, state.pos, state.liveAt, now, on ? (state.arrAt ?? (rs ? state.paced?.get(rs.j) : null) ?? null) : null);
+    // (A step looked ahead to: the trip's times still from the step you're at,
+    // where you are; never that step as if you set out on it from here: Jay
+    // 2026-11-07, on 自強 116 the walk to 墨竹亭 said 34.8 公里 and 21:29.)
+    const ahead = state.i > state.reached;
+    const at = ahead ? state.reached : state.i;
+    const atPhase = ahead ? state.reachedPhase || 'before' : state.phase;
+    const atOn = isRide(plan.legs[at]) && atPhase === 'on';
+    const atRs = atOn ? state.ride.get(at) : null;
+    const times = navTimes(plan, at, atPhase, state.pos, state.liveAt, now, atOn ? (state.arrAt ?? (atRs ? state.paced?.get(atRs.j) : null) ?? null) : null);
     const pace = state.done ? { text: W(`${hm(now)} 抵達`, `Arrived ${hm(now)}`), tone: 'good' } : paceOf(plan, state.i, state.phase, times, state.liveAt, now, state.live);
     // What's left: along its road when it has one (where you are on it), else as the crow flies.
-    const left = state.pos && l.to?.lat ? (state.leftAlong ?? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon)) : null;
+    // (A step looked ahead to: its own length, from its own start.)
+    const left = ahead ? (l.to?.lat != null && l.from?.lat != null ? (l.dist ?? Math.round(meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) * 1.3)) : null) : state.pos && l.to?.lat ? (state.leftAlong ?? meters(state.pos.lat, state.pos.lon, l.to.lat, l.to.lon)) : null;
     let title = state.done ? W(`已抵達 ${plan.legs.at(-1).to?.name || '目的地'}`, `Arrived at ${plan.legs.at(-1).to?.name || 'your destination'}`) : t.title;
     let sub = state.done ? (plan.then?.length ? W(`接著去 ${plan.then[0].name || '下一站'}`, `Next: ${plan.then[0].name || 'the next stop'}`) : '') : t.sub;
     // On a bike with the timer running: how long you've had it (and with TPASS, the free minutes left).
@@ -947,9 +961,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       .join('') +
       // (The stretches after each stop, as they're planned: the whole trip in one row.)
       (plan.later || []).map((q, n) => `<span class="ot-nav-chip stop">${icon('pin')}<span>${e(shortPlace([plan.dest, ...(plan.then || [])][n]?.name || ''))}</span></span>${q.legs.map((x, j) => `<button class="ot-nav-chip later" type="button" data-nav-peek="${n}:${j}" style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`).join('')}`).join('');
-    // (A trip with stops: there at the last place, 全程剩 its minutes; the next stop's time is the step's.)
-    const whole = plan.later?.length ? laterEnd(plan, times.eta) : times.eta;
+    // (A trip with stops: there at the next stop, how long till then.)
+    // (A trip with stops: the time is when you're at the next stop, the one you're
+    // heading for now; after it, how long you stay is yours (Jay 2026-11-07:
+    // "full trip length should be about when I arrive my first stop so it's more real").
+    const whole = times.eta;
     const minsLeft = Math.max(0, Math.round((whole - now) / 60_000));
+    const stopName = plan.later?.length ? stopShort(plan.dest?.name || l.to?.name || '') : '';
     // Later or sooner than the plan said, by what's live now.
     // (Only while a bus or train is still ahead: the rest by bike or on foot is at your own pace, nothing to be early or late for.)
     const drift = state.done || !plan.legs.slice(state.i).some(isRide) ? 0 : Math.round((times.eta - plan.arr) / 60_000);
@@ -970,7 +988,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         ${grip('top', fold.top)}
       </div>`;
     const etaHtml = `<div class="ot-nav-eta">
-          <span><b>${e(hm(state.done && !plan.later?.length ? now : whole))}</b><small>${state.done && !plan.later?.length ? W('已抵達', 'Arrived') : plan.later?.length ? `${driftText ? `${driftText}・` : ''}${W('全程剩 ', 'trip: ')}${leftText(minsLeft)}` : driftText ? `${driftText}・${W('剩 ', '')}${leftText(minsLeft)}` : `${W('抵達・還要 ', 'arrive・')}${leftText(minsLeft)}`}</small></span>
+          <span><b>${e(hm(state.done && !plan.later?.length ? now : whole))}</b><small>${state.done && !plan.later?.length ? W('已抵達', 'Arrived') : plan.later?.length ? `${driftText ? `${driftText}・` : ''}${W(`到 ${e(stopName)} 還要 `, `${e(stopName)} in `)}${leftText(minsLeft)}` : driftText ? `${driftText}・${W('剩 ', '')}${leftText(minsLeft)}` : `${W('抵達・還要 ', 'arrive・')}${leftText(minsLeft)}`}</small></span>
           <button class="q-icon-btn" type="button" data-nav="more" aria-label="${W('更多：縮小、改下車站、重新規劃、改目的地', 'More: shrink, change stop, replan, change destination')}">${icon('more')}</button>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">${W('結束', 'End')}</button>
         </div>`;
