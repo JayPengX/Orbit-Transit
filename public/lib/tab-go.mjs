@@ -654,8 +654,12 @@ const WAYS_MS = 3 * 3600_000;
 // then the recommendations best first, then the rest), those leaving within
 // three hours of the way shown, not of now: a trip at 16:45 opened at 14:05
 // lost 快捷8號支 at 17:07, past 17:05, while the map listed it (Jay 2026-11-10).
+// Every recommendation the map shows (up to 3 under the one on top), the rest
+// only to make two (a card with a 4th 推薦 way left it off: "different result").
 export function otherWays(first, rest, p, n = 2) {
-  return [...first, ...rest].filter(q => q !== p && q.dep < p.dep + WAYS_MS).slice(0, n);
+  const near = q => q !== p && q.dep < p.dep + WAYS_MS;
+  const tops = first.filter(near);
+  return [...tops, ...rest.filter(near)].slice(0, Math.max(n, tops.length));
 }
 function tripCard({ t, w }) {
   const st = tripOf(w);
