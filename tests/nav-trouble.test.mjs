@@ -171,3 +171,35 @@ test('never pushed further on: navigation offers no YouBike to a stop further on
   assert.match(map.slice(map.indexOf('async function navFastest')), /chase: false/);
   assert.match(src('planner.mjs'), /if \(chase && modes\.bike/);
 });
+
+// Jay 2026-11-09 at 新竹: 區間 1198 16 minutes late, the step not yet told so
+// (its live board read before the train was on it), taken as missed at 12:56
+// and "replaced" by itself: 沒趕上 台鐵 區間 1198 次，改搭 區間 1198 次 12:54.
+test('a train late by its live board, the step not told yet: still to come, never missed and never swapped for itself', async () => {
+  const { plan } = trainTrip();
+  // (Its departures hear the delay; the step's own read of the board hasn't yet.)
+  const late = new Map([['1001', { delay: 16 }]]);
+  nav.useRail({ dayTrips: async () => [run('1001', T(8, 10) - 30e3), run('1003', T(8, 40) - 30e3)], railStations: async () => sts, traLive: async () => (/rideOptions/.test(new Error().stack) ? late : new Map()) });
+  nav.stopNav();
+  clock.set(T(8, 13));
+  const { st: s } = start(plan, { resume: { i: 1, phase: 'before', reached: 1 } });
+  pos(off(sts[0], 20, 0));
+  await settle();
+  s.render();
+  assert.equal(String(s.plan.legs[1].train.no), '1001', 'the same train kept');
+  assert.equal(s.plan.legs[1].dep, T(8, 10));
+  assert.doesNotMatch(topText(), /沒趕上|趕不上/);
+  assert.equal(s.delay, 16);
+  nav.useRail({});
+});
+
+test('sameRun and runDelay: the very run by its number (else its time), its delay read from its departures', () => {
+  const l = { mode: 'tra', dep: T(12, 54), train: { no: '1198' } };
+  assert.equal(nav.sameRun({ dep: T(12, 54), train: { no: '1198' } }, l), true);
+  assert.equal(nav.sameRun({ dep: T(12, 54), train: { no: '2198' } }, l), false, 'another train at the same minute');
+  assert.equal(nav.sameRun({ dep: T(13, 10), train: { no: '1198' } }, l), false, 'by its timetable time, not with its delay');
+  assert.equal(nav.sameRun({ dep: T(12, 54) }, { mode: 'bus', dep: T(12, 54) }), true, 'a bus by its time');
+  assert.equal(nav.runDelay([{ dep: T(12, 54), live: true, delay: 16, train: { no: '1198' } }], l), 16);
+  assert.equal(nav.runDelay([{ dep: T(12, 54), live: false, delay: 0, train: { no: '1198' } }], l), null, 'not on the live board: unknown');
+  assert.equal(nav.runDelay([{ dep: T(12, 54), live: true, delay: 0 }], { mode: 'bus', dep: T(12, 54) }), null, 'trains only');
+});
