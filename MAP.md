@@ -55,8 +55,9 @@ Live: https://orbit.jaypengx.com/transit/
     map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), each train a
     card that opens in place, sliding, the tapped card kept under the finger
     (`toggleCard`; later reads, delays and fares, patch the cards: `freshen`),
-    every 台鐵 train today 準點, 晚 N 分 or 未發車 (`trainNow`: the live board
-    lists only trains on their way; read again a minute on; Jay 2026-11-10);
+    every 台鐵 train today 準點, 晚 N 分 or 未發車 (`trainNow`: the boards of the
+    two stations asked, `traDelays`, give a delay only to trains on their way;
+    read again a minute on; Jay 2026-11-10);
     查車次, a search bar at the top (Jay 2026-11-10), a
     台鐵 or 高鐵 number, the day's trains with it and a tap its every stop and
     time (`tab-train.mjs trainNoSheet`, `ticket.mjs trainsNumbered`; Jay 2026-11-06), bus
@@ -226,7 +227,8 @@ Live: https://orbit.jaypengx.com/transit/
   on a bus or train plans from it, never from the point on the track. A train:
   the last 2½ minutes of fixes (`api.mjs recentFixes`) at a train's pace and
   today's train where you are going your way (`trainAboard`: timetable plus
-  TDX's delay). A bus: faster than a bike between two fixes, every fix along a
+  the delays of the three trains that could be it, `trainsNear`, each its own
+  read, `traTrain`, those in by 1½ s). A bus: faster than a bike between two fixes, every fix along a
   route's stops going its way, and TDX's estimate of that route's bus at the
   stop just ahead matching when you'll be there (`busesAboard`); two routes
   that fit are chips to pick. The ride to the stop nearest the place (and one
@@ -259,8 +261,11 @@ Live: https://orbit.jaypengx.com/transit/
   each step moving on by itself (on board only once two fixes say so; a
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
   chime on iPhone) before yours. A 台鐵 train followed: its own delay alone
-  (`raildata.mjs traTrain`, 台鐵's own 車次查詢 through the Worker, no TDX;
-  every train at once, for plans and 查時刻, is TDX's). On board, where you are along the ride
+  (`raildata.mjs traTrain`, 台鐵's own 車次查詢 through the Worker, no TDX).
+  Never every 台鐵 train at once (TDX's whole board: off TDX, 2026-11-10): a
+  ride's, a pin's and 查時刻's delays come from the boards of the stations
+  they leave from and get to (`traLive(ids)`, 台鐵's own 車站時刻 through the
+  Worker; a station's map card the same, with no platforms). On board, where you are along the ride
   (`navlive.mjs rideAlong`, `rideOn`) is looked for only near where it last
   had you: a route that comes back past itself (a loop, out one street and
   back on its pair) never has you off early or back at stops passed. Missed bus → the next; on an earlier

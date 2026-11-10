@@ -59,9 +59,31 @@ const dot = (u, v) => u.x * v.x + u.y * v.y;
 export const trainPace = m => Boolean(m) && (m.avg >= TRAIN_MS.avg || m.top >= TRAIN_MS.top);
 export const busPace = m => Boolean(m) && m.avg >= BUS_MS.avg && m.top >= BUS_MS.top;
 
-// The train you're on, of today's (`trips`, raildata dayTrips; `live`: TDX's
-// board by train number): where each running one is by its timetable with
-// its delay, the nearest you (within 2.5 km, 6 for 高鐵) going your way.
+// The 台鐵 trains that could be the one you're on (`m`, motion's): those
+// that by their timetable, up to half an hour late, would be within 3 km of
+// you now; their numbers, nearest first (`n` at most), for their delays to
+// be read (each train's own: there's no board of every train at once).
+export function trainsNear(trips, stations, m, now = Date.now(), n = 3) {
+  if (!m) return [];
+  const byKey = new Map(stations.map(s => [s.key, s]));
+  const out = [];
+  for (const t of trips || []) {
+    if (t.sys !== 'tra' || !t.stops?.length) continue;
+    const st = t.stops.map(s => ({ ...s, p: byKey.get(s.st), dep: s.dep ?? s.arr, arr: s.arr ?? s.dep }));
+    if (st[0].dep > now + MIN || st.at(-1).arr < now - 31 * MIN) continue;
+    let d = Infinity;
+    for (const late of [0, 5, 10, 15, 20, 25, 30]) {
+      const at = clockAt(st, now - late * MIN);
+      if (at) d = Math.min(d, meters(m.lat, m.lon, at.lat, at.lon));
+    }
+    if (d < 3000) out.push({ no: String(t.no), d });
+  }
+  return out.sort((a, b) => a.d - b.d).slice(0, n).map(x => x.no);
+}
+
+// The train you're on, of today's (`trips`, raildata dayTrips; `live`: the
+// delays read, by train number): where each running one is by its timetable
+// with its delay, the nearest you (within 2.5 km, 6 for 高鐵) going your way.
 // → { mode, train, delay, at (the stop index it left last), stops (the trip's,
 // each with its place and its times with the delay) } or null.
 export function trainAboard(trips, stations, m, live = new Map(), now = Date.now()) {

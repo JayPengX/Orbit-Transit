@@ -155,12 +155,13 @@ function tickLeave() {
   const box = $('t-results');
   if (state.live && Date.now() - delaysAt > 60_000 && box.offsetParent && document.visibilityState === 'visible') readDelays();
 }
-// Today's 台鐵 delays (the live board), then the cards told in place.
+// Today's 台鐵 delays (the two stations' boards), then the cards told in place.
 let delaysAt = 0;
 function readDelays() {
   delaysAt = Date.now();
   const day = state.date || tw().date;
-  traDelays()
+  // (The boards of the two stations asked: every train through each, its delay now.)
+  traDelays([state.from, state.to].filter(s => s?.sys === 'tra').map(s => s.id))
     .then(m => {
       if ((state.date || tw().date) !== day || day !== tw().date) return;
       state.delays = m;
