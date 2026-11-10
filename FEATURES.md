@@ -16,6 +16,9 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - Operators' notices: 今日停駛, 可能停駛 — `public/lib/service.mjs`, `public/lib/near-ui.mjs`: `可能停駛`, `今日停駛`
 - 附近 waits for nearby — `public/lib/near-ui.mjs`: `NEAR_WAIT_MS`
 - 查時刻: TPASS-only trains, said so — `public/lib/tab-train.mjs`: `passOnly`, `只列 TPASS`
+- 捷運: each city's metro map, straight lines, big and full screen; pinch, drag, two taps in — `public/lib/metromap.mjs`, `public/lib/tab-metro.mjs`: `straighten`, `mountMap`, `placeNames`, `mm-full`
+- 捷運: 搜尋車站 across all nine systems by name, English name or code (BL12), with 最近查看, 附近, 轉乘站 — `public/lib/tab-metro.mjs`: `findMetro`, `findSheet`, `最近查看`
+- 捷運: a station tapped on the map is ringed and opens its next trains — `public/lib/metromap.mjs`, `public/lib/tab-metro.mjs`: `select(node)`, `view?.select(n)`, `stationSheet`
 - 高鐵訂票: a 高鐵 ride (a trip's step, 查時刻) opens 高鐵's own booking with it filled in — `public/lib/book.mjs`, `public/lib/tab-map.mjs`, `public/lib/tab-train.mjs`: `openBooking`, `canBook`, `data-book`
 - A trip short enough to walk is always a walk, Google's planner or not (OpenStreetMap's streets and line past Google's 100 trips a day) — `public/lib/planner.mjs`: `walkPlan`, `WALK_TRIP_M`, `allWalk`
 - A route's 票價: on and off at any two stops, 全票 and each other rider (學生, 孩童, 敬老, 愛心, those at one price together; 刷卡 when it differs), by sections crossed (buffer zones counted), stop to stop or by stage, as the operator publishes them — `public/lib/fare.mjs`, `public/lib/bus-ui.mjs`: `fareBetween`, `fareRows`, `fareGroups`, `data-fare-on`, `data-fare-off`

@@ -4333,17 +4333,54 @@ html[data-look='native'] .ot-tn-bar {
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-/* 捷運: the city's metro map in a rounded card (our own drawing, or 實景 the real map), its lines' chips along the bottom. */
+/* 捷運: the city's metro map, from under 火車/公車/捷運 down to the tabs (Jay
+   2026-11-10: "so small hard to navigate"), drawn on a canvas (metromap.mjs:
+   its colours below). On it: the cities and full screen along the top, 搜尋車站
+   under them, 實景 and you (and + − with a mouse) down the right, the lines
+   along the foot; a tap on a line brings it forward. */
 .ot-metro-view {
   --mm-bg: var(--q-surface);
+  --mm-ink: var(--q-label);
+  --mm-pick: var(--q-accent);
+  --mm-you: var(--q-blue);
+  --mm-glass: rgba(250, 250, 252, 0.96);
+  --mm-t: 10px;
+  --mm-r: 10px;
+  --mm-b: 10px;
+  --mm-l: 10px;
   position: relative;
   margin-top: 12px;
   overflow: hidden;
-  /* (The page's height less the title, the tabs, the city row and the lines under it: the
-     map never runs under the tab bar, the lines never sit on it; Jay 2026-11-03.) */
-  height: clamp(340px, calc(100svh - var(--q-nav, 0px) - var(--q-top, 0px) - 400px), 760px);
+  /* (--mm-top: where it starts on the page, set by tab-metro.mjs fitHeight.) */
+  height: max(360px, calc(100svh - var(--mm-top, 320px) - var(--q-nav, 0px) - 12px));
   border-radius: var(--q-r-card, 20px);
   background: var(--mm-bg);
+  isolation: isolate;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ot-metro-view {
+    --mm-glass: rgba(44, 44, 48, 0.96);
+  }
+}
+:root[data-theme='dark'] .ot-metro-view {
+  --mm-glass: rgba(44, 44, 48, 0.96);
+}
+/* Full screen: over the tabs and the title, its buttons inside the phone's safe edges. */
+.ot-metro-view.mm-full {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  height: auto;
+  margin: 0;
+  border-radius: 0;
+  --mm-t: calc(env(safe-area-inset-top, 0px) + 10px);
+  --mm-r: calc(env(safe-area-inset-right, 0px) + 10px);
+  --mm-b: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  --mm-l: calc(env(safe-area-inset-left, 0px) + 10px);
+}
+html.mm-fulled,
+html.mm-fulled body {
+  overflow: hidden;
 }
 .ot-metro-view .ot-map,
 .mm-box {
@@ -4352,212 +4389,263 @@ html[data-look='native'] .ot-tn-bar {
 }
 .mm-box {
   overflow: hidden;
+  outline: none;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-box:focus-visible {
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--q-accent) 60%, transparent);
 }
 .mm-box[hidden],
 .ot-metro-view .ot-map[hidden] {
   display: none;
 }
-.mm-svg {
+.mm-canvas {
   display: block;
-  width: 100%;
-  height: 100%;
 }
-.mm-line {
-  fill: none;
-  stroke: var(--c);
-  stroke-width: 7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: opacity 0.2s;
-}
-.mm-st {
-  fill: var(--mm-bg);
-  stroke: var(--c);
-  stroke-width: 3;
-}
-.mm-x {
-  fill: var(--mm-bg);
-  stroke: var(--q-label);
-  stroke-width: 3.2;
-}
-.mm-name {
-  fill: var(--q-label);
-  font: 500 12px var(--q-font);
-  dominant-baseline: central;
-  paint-order: stroke;
-  stroke: var(--mm-bg);
-  stroke-width: 4px;
-  stroke-linejoin: round;
-  transition: opacity 0.2s;
-}
-.mm-name.big {
-  font-weight: 700;
-}
-/* Far out: the interchanges' and the ends' names only. */
-.mm-far .mm-name:not(.big, .end) {
-  display: none;
-}
-/* One line forward. */
-.mm-focus .mm-line:not(.on) {
-  opacity: 0.16;
-}
-.mm-focus :is(.mm-st, .mm-x, .mm-name):not(.on) {
-  opacity: 0.3;
-}
-.mm-train rect {
-  fill: var(--c);
-  stroke: var(--mm-bg);
-  stroke-width: 2;
-}
-.mm-train path {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.mm-you {
-  fill: var(--q-blue);
-  stroke: var(--mm-bg);
-  stroke-width: 2.5;
-}
-.mm-you-ring {
-  fill: color-mix(in srgb, var(--q-blue) 18%, transparent);
-}
-/* 路線圖 or 實景, and the nearest station, over the map's top. */
-.mm-tools {
+.mm-top {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  z-index: 500;
+  top: var(--mm-t);
+  right: var(--mm-r);
+  left: var(--mm-l);
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   pointer-events: none;
 }
-.mm-tools > * {
+.mm-side {
+  position: absolute;
+  top: calc(var(--mm-t) + 52px);
+  right: var(--mm-r);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.mm-top > *,
+.mm-side > * {
   pointer-events: auto;
 }
-/* The map's edges fade into the card, so a name running past one reads as going on. */
-.ot-metro-view::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 400;
-  pointer-events: none;
-  background: linear-gradient(90deg, var(--mm-bg), transparent 18px, transparent calc(100% - 18px), var(--mm-bg));
+.mm-cities,
+.mm-fab,
+.mm-pill,
+.mm-find,
+.mm-zoom,
+.mm-legend > * {
+  border: 0;
+  background: var(--mm-glass);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
 }
-.mm-mode,
-.mm-fab {
-  background: var(--q-glass-strong);
-  -webkit-backdrop-filter: var(--q-glass-blur);
-  backdrop-filter: var(--q-glass-blur);
-  box-shadow: var(--q-glass-drop);
-}
-.mm-mode {
+/* The cities: one capsule, the one shown filled. */
+.mm-cities {
   display: flex;
+  min-width: 0;
+  overflow-x: auto;
   padding: 3px;
   border-radius: 999px;
+  scrollbar-width: none;
 }
-.mm-mode button {
-  min-width: 64px;
-  height: 32px;
-  padding: 0 12px;
+.mm-cities::-webkit-scrollbar {
+  display: none;
+}
+.mm-cities button {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: none;
   color: var(--q-label-2);
-  font: 600 13px/1 var(--q-font);
+  font: 600 15px/1 var(--q-font);
   white-space: nowrap;
   cursor: pointer;
 }
-.mm-mode button[aria-pressed='true'] {
+.mm-cities button[aria-pressed='true'] {
   background: var(--q-label);
   color: var(--mm-bg);
 }
+/* (A 320 phone: the four beside full screen, none under it.) */
+@media (max-width: 359px) {
+  .mm-cities button {
+    padding: 0 11px;
+  }
+}
 .mm-fab {
   display: grid;
+  flex: none;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 0;
+  width: 42px;
+  height: 42px;
+  padding: 0;
   border-radius: 50%;
-  color: var(--q-blue);
+  color: var(--q-label);
   cursor: pointer;
 }
-.mm-fab svg {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
+.mm-fab[data-locate] {
+  color: var(--q-blue);
 }
-/* The lines under the map, every one whole (they sat on the tab bar, cut at the edge; Jay
-   2026-11-03): even columns, a dot in its colour and its name; a tap brings it forward. */
-.ot-metro-legend {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 2px 8px;
-  margin-top: 10px;
-  padding: 6px 8px;
-  border-radius: var(--q-r-card, 20px);
-  background: var(--q-surface);
+.mm-fab .ot-i,
+.mm-find .ot-i,
+.mm-zoom .ot-i {
+  width: 21px;
+  height: 21px;
 }
-.ot-metro-legend:empty {
+.mm-full .mm-grow,
+.ot-metro-view:not(.mm-full) .mm-shrink {
   display: none;
 }
-.ot-metro-legend > * {
+.mm-pill {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--q-label);
+  font: 600 14px/1 var(--q-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mm-geo .mm-to-geo,
+.ot-metro-view:not(.mm-geo) .mm-to-schem {
+  display: none;
+}
+/* 搜尋車站: a field-shaped button under the cities (the search itself in a sheet). */
+.mm-find {
+  position: absolute;
+  top: calc(var(--mm-t) + 52px);
+  left: var(--mm-l);
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  min-height: 40px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 12px;
-  background: none;
-  color: var(--q-label);
-  font: 500 15px/20px var(--q-font);
+  width: min(320px, calc(100% - var(--mm-l) - var(--mm-r) - 96px));
+  height: 42px;
+  padding: 0 16px 0 13px;
+  border-radius: 999px;
+  color: var(--q-label-2);
+  font: 500 16px/1 var(--q-font);
   text-align: left;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
 }
-.ot-metro-legend i {
+.mm-find span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-find .ot-i {
+  flex: none;
+  color: var(--q-label);
+}
+/* + and −: with a mouse only (fingers pinch). */
+.mm-zoom {
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 21px;
+}
+.mm-zoom button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 40px;
+  border: 0;
+  background: none;
+  color: var(--q-label);
+  cursor: pointer;
+}
+.mm-zoom button + button {
+  border-top: var(--q-hairline, 0.5px) solid var(--q-sep);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mm-zoom {
+    display: flex;
+  }
+}
+.mm-geo :is(.mm-zoom, .mm-legend) {
+  display: none;
+}
+/* The lines along the foot, a chip each (sideways when they don't all fit); a tap brings one forward. */
+.mm-legend {
+  position: absolute;
+  right: 0;
+  bottom: var(--mm-b);
+  left: 0;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px var(--mm-r) 4px var(--mm-l);
+  scrollbar-width: none;
+  pointer-events: none;
+}
+.mm-legend::-webkit-scrollbar {
+  display: none;
+}
+.mm-legend:empty {
+  display: none;
+}
+.mm-legend > * {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px 0 11px;
+  border-radius: 999px;
+  color: var(--q-label);
+  font: 600 14px/1 var(--q-font);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.mm-legend i {
   flex: none;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: var(--c, var(--q-blue));
 }
-.ot-metro-legend > [aria-pressed='true'] {
-  background: color-mix(in srgb, var(--c) 18%, transparent);
-  font-weight: 600;
+.mm-legend > [aria-pressed='true'] {
+  background: var(--c);
+  color: var(--ink, #fff);
+}
+.mm-legend > [aria-pressed='true'] i {
+  background: var(--ink, #fff);
 }
 .ot-metro-msg {
   position: absolute;
-  top: 58px;
+  top: calc(var(--mm-t) + 104px);
   left: 50%;
-  z-index: 500;
+  z-index: 3;
   max-width: calc(100% - 20px);
   margin: 0;
   padding: 6px 12px;
   border-radius: 999px;
-  background: var(--q-glass-strong);
-  -webkit-backdrop-filter: var(--q-glass-blur);
-  backdrop-filter: var(--q-glass-blur);
+  background: var(--mm-glass);
   font: 500 13px/18px var(--q-font);
   white-space: nowrap;
   transform: translateX(-50%);
 }
 .ot-metro-msg:empty {
   display: none;
+}
+/* 搜尋車站's rows: the station, its line codes under it, its city when it's another. */
+.mf-codes {
+  margin: 5px 0 0;
+}
+.mf-codes .mm-code,
+.mf-codes .mm-code b {
+  font-size: 12px;
+}
+.mf-codes .mm-code b {
+  padding: 4px 6px;
 }
 
 /* A metro station: its line codes as its signs show them, the next trains counting down, first and last, exits. */
@@ -6333,11 +6421,6 @@ html[lang='en'] .ot-sn-tap {
   max-width: 720px;
   margin-inline: auto;
 }
-@media (min-height: 521px) {
-  :root.q-wide .ot-metro-view {
-    height: max(420px, calc(100svh - var(--q-nav, 0px) - var(--q-top, 0px) - 220px));
-  }
-}
 /* (A column's first heading level with the other column's top, not a section's gap below it.) */
 :root.q-wide :is(.ot-cols > div, #t-results, #tb-list) > .q-section:first-child {
   margin-top: 0;
@@ -6353,9 +6436,9 @@ html[lang='en'] .ot-sn-tap {
   margin-inline: 0;
   padding-inline: 0;
 }
-/* A phone on its side: the metro map fills the screen once scrolled to. */
+/* A phone on its side: the metro map fills the screen once scrolled to (or full screen, its button). */
 @media (max-height: 520px) {
-  .ot-metro-view {
+  .ot-metro-view:not(.mm-full) {
     height: max(300px, calc(100svh - 24px));
   }
 }

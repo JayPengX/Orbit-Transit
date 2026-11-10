@@ -61,11 +61,21 @@ Live: https://orbit.jaypengx.com/transit/
     台鐵 or 高鐵 number, the day's trains with it and a tap its every stop and
     time (`tab-train.mjs trainNoSheet`, `ticket.mjs trainsNumbered`; Jay 2026-11-06), bus
     routes by number or stop, stop timetables, and 捷運: each city's metro
-    as a metro map (`metromap.mjs`: the lines straightened to the eight
-    directions from TDX's real stations, worked out ahead by
-    `scripts/metro-maps.mjs`, a phone redraws only when the network
-    changes), pinch and drag, the trains arriving now on it, 實景 for the
-    real map. A station: its line codes, the next trains each way counting
+    as a metro map (`metromap.mjs`: from TDX's real stations, relaxed, then
+    `straighten` by least squares onto the eight directions with even gaps
+    and no station on another line's track; worked out ahead by
+    `scripts/metro-maps.mjs` into `metro-drawings.mjs`, which starts from
+    the kept drawing; a phone redraws only when the network changes, kept
+    as `metro-map-v2/<city>`). `mountMap` draws it on a canvas filling the
+    screen down to the tabs (`--mm-top`) or full screen (`.mm-full`, moved
+    to `body`): pinch, drag that coasts, two taps in, two fingers out, the
+    wheel and keys; lines widen and names grow gently with zoom, names
+    placed per zoom step so none overlap (`placeNames`); lines sharing a
+    track run side by side; the trains arriving now beside their track.
+    Over it: the cities (雙北, 桃園, 台中, 高雄), 搜尋車站 across all nine
+    systems by name, English name or code (`findMetro`; 最近查看, 附近,
+    轉乘站), 實景 for the real map, 定位, the lines to focus. A station
+    tapped is ringed, and opens: its line codes, the next trains each way counting
     down (live where the operator sends them, else the timetable, else how
     often the line runs), first and last trains, exits (`metro-ui.mjs`).
   - **建議** (on 交通, `lib/suggest.mjs`): each trip planned keeps its time

@@ -265,9 +265,11 @@ export const hsrNotice = () => tdx('basic/v2/Rail/THSR/AlertInfo', { fresh: NOTI
 // The systems TDX has notices for.
 const METRO_ALERTS = new Set(['TRTC', 'TRTCMG', 'TYMC', 'TMRT', 'KRTC', 'KLRT']);
 // TDX Metro Alert → [{ title, text, stop }] when not 正常營運 (`stop`: the system closed).
+// (貓空纜車 says 「目前全線正常營運」 with its hours: running as usual too, never a notice.)
+const RUNNING = /^(目前)?(全線)?正常(營運|行駛)(中)?$/;
 export function metroNoticesOf(j) {
   return rows(j?.Alerts ? j.Alerts : j)
-    .filter(a => a.Title && !/^正常營運$/.test(zh(a.Title).trim()))
+    .filter(a => a.Title && !(RUNNING.test(zh(a.Title).trim()) && Number(a.Status) !== 0))
     .map(a => ({ title: zh(a.Title).trim(), text: zh(a.Description).trim(), stop: Number(a.Status) === 0 || /暫停營運|全線停駛|不營業/.test(`${zh(a.Title)} ${zh(a.Description)}`) }));
 }
 export async function metroNotices(systems) {

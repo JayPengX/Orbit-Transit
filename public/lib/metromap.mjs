@@ -2,7 +2,8 @@
 // operators draw them (straight runs at right angles and 45°, the stations
 // evenly spaced, an interchange a ring), worked out from TDX's real station
 // places, so a new line or station draws itself. `schematic` lays it out
-// (no DOM: tested), `metroSvg` draws it, `panZoom` moves it under a finger.
+// (no DOM: tested), `mountMap` draws it on a canvas and moves it under a
+// finger: the drawing scales, its names and marks stay a size you can read.
 
 import { interchanges, lineRuns } from './metro.mjs';
 import { e, meters, shown } from './util.mjs';
@@ -92,6 +93,7 @@ export function schematic(systems, { rounds = 600, preset = null, seed = 0, fish
       }
     }
     relax(nodes, edges, rounds, hold);
+    straighten(nodes, edges);
   }
   // Tidy: the corner of the drawing at 0, whole positions to half a gap.
   const live = nodes.filter(n => n.lines.length);
@@ -334,134 +336,517 @@ function relax(nodes, edges, rounds, hold) {
   }
 }
 
+// The relaxed drawing made exact (Jay 2026-11-10: "so ugly"): every gap at
+// one of the eight directions, a straight run's stations evenly spaced, by
+// least squares from where relaxing left them: each gap held to its nearest
+// direction (hard) and its run's even length (soft), stations a gap apart
+// and off others' track (added where a round finds them too near), all kept
+// near where they were. A drawing already exact comes out the same.
+export function straighten(nodes, edges, rounds = 4) {
+  const live = nodes.filter(n => n.lines.length);
+  const idx = new Map(live.map((n, i) => [n.i, i]));
+  const N = live.length;
+  if (!N) return;
+  const uniq = [];
+  const seen = new Set();
+  for (const [a, b] of edges) {
+    const id = a < b ? `${a},${b}` : `${b},${a}`;
+    if (!seen.has(id)) seen.add(id), uniq.push([a, b]);
+  }
+  const adj = new Map();
+  for (const [a, b] of uniq) {
+    (adj.get(a) || adj.set(a, []).get(a)).push(b);
+    (adj.get(b) || adj.set(b, []).get(b)).push(a);
+  }
+  // The runs between interchanges, forks and ends.
+  const anchor = n => (adj.get(n.i)?.length || 0) !== 2 || n.lines.length > 1 || n.st.length > 1;
+  const eid = (a, b) => (a < b ? `${a},${b}` : `${b},${a}`);
+  const done = new Set();
+  const runs = [];
+  const walk = (from, to) => {
+    const run = [from, to];
+    done.add(eid(from, to));
+    let cur = to;
+    while (!anchor(nodes[cur])) {
+      const nx = adj.get(cur).find(q => !done.has(eid(cur, q)));
+      if (nx == null) break;
+      done.add(eid(cur, nx));
+      run.push(nx);
+      cur = nx;
+    }
+    return run;
+  };
+  for (const n of live) if (anchor(n)) for (const m of adj.get(n.i) || []) if (!done.has(eid(n.i, m))) runs.push(walk(n.i, m));
+  for (const [a, b] of uniq) if (!done.has(eid(a, b))) runs.push(walk(a, b));
+  const home = live.map(n => [n.x, n.y]);
+  const apart = [];
+  for (let round = 0; round < rounds; round++) {
+    // Each gap's direction: the nearest of the eight, never two gaps out of a station the same way
+    // (the busiest stations choose first). Kept from the smaller station's end.
+    const dir = new Map();
+    const m8 = d => ((d % 8) + 8) % 8;
+    for (const n of live.slice().sort((p, q) => adj.get(q.i).length - adj.get(p.i).length)) {
+      const taken = new Set();
+      const free = [];
+      for (const m of adj.get(n.i)) {
+        const k = eid(n.i, m);
+        if (dir.has(k)) taken.add(m8(n.i < m ? dir.get(k) : dir.get(k) + 4));
+        else {
+          const a = Math.atan2(nodes[m].y - n.y, nodes[m].x - n.x) / STEP;
+          free.push({ m, a, d: Math.round(a) });
+        }
+      }
+      for (const o of free.sort((p, q) => Math.abs(p.a - p.d) - Math.abs(q.a - q.d))) {
+        let d = o.d;
+        const alt = o.a > o.d ? d + 1 : d - 1;
+        if (taken.has(m8(d)) && !taken.has(m8(alt))) d = alt;
+        taken.add(m8(d));
+        dir.set(eid(n.i, o.m), n.i < o.m ? d : d + 4);
+      }
+    }
+    const terms = [];
+    for (const run of runs) {
+      const ds = [];
+      for (let j = 1; j < run.length; j++) {
+        const [a, b] = [run[j - 1], run[j]];
+        const d = dir.get(eid(a, b));
+        ds.push(a < b ? d : d + 4);
+      }
+      // A straight's stations evenly along it, a gap beside an interchange room for its name.
+      for (let s = 0; s < ds.length; ) {
+        let e = s;
+        while (e + 1 < ds.length && (((ds[e + 1] - ds[s]) % 8) + 8) % 8 === 0) e++;
+        let len = 0;
+        for (let j = s; j <= e; j++) len += Math.hypot(nodes[run[j + 1]].x - nodes[run[j]].x, nodes[run[j + 1]].y - nodes[run[j]].y);
+        for (let j = s; j <= e; j++) {
+          const big = nodes[run[j]].lines.length > 1 || nodes[run[j + 1]].lines.length > 1;
+          terms.push([run[j], run[j + 1], ds[j] * STEP, Math.max(big ? 1.5 : 1, len / (e - s + 1))]);
+        }
+        s = e + 1;
+      }
+    }
+    const M = 2 * N;
+    const A = Array.from({ length: M }, () => new Float64Array(M));
+    const rhs = new Float64Array(M);
+    // (A row Σ c·v = t at weight w, into the normal equations.)
+    const add = (cs, t, w) => {
+      for (const [i, ci] of cs) {
+        rhs[i] += w * ci * t;
+        for (const [j, cj] of cs) A[i][j] += w * ci * cj;
+      }
+    };
+    // (b − a)·(cx, cy) = t
+    const along = (a, b, cx, cy, t, w) => add([[2 * b, cx], [2 * b + 1, cy], [2 * a, -cx], [2 * a + 1, -cy]], t, w);
+    for (const [a, b, th, L] of terms) {
+      const [cx, cy] = [Math.cos(th), Math.sin(th)];
+      along(idx.get(a), idx.get(b), -cy, cx, 0, 60);
+      along(idx.get(a), idx.get(b), cx, cy, L, 1);
+    }
+    for (const [a, b, cx, cy, t] of apart) along(idx.get(a), idx.get(b), cx, cy, t, 8);
+    for (let i = 0; i < N; i++) {
+      add([[2 * i, 1]], home[i][0], 0.02);
+      add([[2 * i + 1, 1]], home[i][1], 0.02);
+    }
+    const x = solve(A, rhs);
+    live.forEach((n, i) => {
+      n.x = x[2 * i];
+      n.y = x[2 * i + 1];
+    });
+    if (round === rounds - 1) break;
+    // Too near another station, or on another line's track: held off it next round.
+    for (let i = 0; i < N; i++)
+      for (let j = i + 1; j < N; j++) {
+        const [P, Q] = [live[i], live[j]];
+        const d = Math.hypot(Q.x - P.x, Q.y - P.y);
+        if (d < 1) apart.push([P.i, Q.i, (Q.x - P.x) / (d || 1), (Q.y - P.y) / (d || 1), 1.15]);
+      }
+    for (const n of live)
+      for (const [a, b] of uniq) {
+        if (a === n.i || b === n.i) continue;
+        const [P, Q] = [nodes[a], nodes[b]];
+        const vx = Q.x - P.x;
+        const vy = Q.y - P.y;
+        const l = Math.hypot(vx, vy) || 1;
+        const t = ((n.x - P.x) * vx + (n.y - P.y) * vy) / (l * l);
+        if (t < -0.05 || t > 1.05) continue;
+        const d = ((n.x - P.x) * -vy + (n.y - P.y) * vx) / l;
+        if (Math.abs(d) < 0.6) apart.push([a, n.i, -vy / l, vx / l, Math.sign(d || 1) * 0.85]);
+      }
+  }
+}
+
+// A x = b for the normal equations (symmetric, positive definite: elimination as is).
+function solve(A, b) {
+  const n = b.length;
+  for (let c = 0; c < n; c++) {
+    const piv = A[c][c] || 1e-12;
+    for (let r = c + 1; r < n; r++) {
+      const f = A[r][c] / piv;
+      if (!f) continue;
+      const [Ar, Ac] = [A[r], A[c]];
+      for (let k = c; k < n; k++) Ar[k] -= f * Ac[k];
+      b[r] -= f * b[c];
+    }
+  }
+  const x = new Float64Array(n);
+  for (let r = n - 1; r >= 0; r--) {
+    let s = b[r];
+    for (let k = r + 1; k < n; k++) s -= A[r][k] * x[k];
+    x[r] = s / (A[r][r] || 1e-12);
+  }
+  return x;
+}
 // ---- Drawing -----------------------------------------------------------------------------------------
 
+// Drawing pixels a station gap at zoom 1.
 export const PX = 54;
-// Where a station's name goes: the side its tracks leave free, then the side clear of others' names.
+// The marks and names on screen, by the zoom: the drawing grows as you pinch
+// in, its lines and names much less (readable far out, never huge close in).
+export const sizes = k => {
+  const line = Math.min(12, Math.max(3.4, 7 * k ** 0.55));
+  return { line, dot: line * 0.5 + 1.6, ring: line * 0.42, x: line * 0.78 + 3.4, font: Math.min(16.5, Math.max(11.5, 13 * k ** 0.28)) };
+};
+// Where a name goes from its station: right, left, above, below, then the corners.
 const SIDES = [
-  [1, 0, 'start'],
-  [-1, 0, 'end'],
-  [0, -1, 'middle'],
-  [0, 1, 'middle'],
-  [0.75, -0.75, 'start'],
-  [0.75, 0.75, 'start'],
-  [-0.75, -0.75, 'end'],
-  [-0.75, 0.75, 'end']
+  [1, 0, 0],
+  [-1, 0, 0.15],
+  [0, -1, 0.5],
+  [0, 1, 0.5],
+  [0.72, -0.72, 0.3],
+  [0.72, 0.72, 0.3],
+  [-0.72, -0.72, 0.4],
+  [-0.72, 0.72, 0.4]
 ];
-export function labels(map) {
+// The zoom steps names are placed at (a quarter of a doubling apart): placed once a step, kept.
+const LEVEL = 4;
+export const levelOf = k => Math.round(Math.log2(k) * LEVEL);
+
+// Each line's track, edge by edge, in drawing pixels: an edge two lines share
+// is drawn side by side (`off`: how many line widths from its middle).
+export function tracks(map) {
+  const { nodes, edges, lines } = map;
+  const share = new Map();
+  for (const [a, b, key] of edges) {
+    const id = a < b ? `${a},${b}` : `${b},${a}`;
+    const list = share.get(id) || share.set(id, []).get(id);
+    if (!list.includes(key)) list.push(key);
+  }
+  return lines.map(l => ({
+    key: l.key,
+    color: l.color,
+    segs: edges
+      .filter(ed => ed[2] === l.key)
+      .map(([a, b]) => {
+        const list = share.get(a < b ? `${a},${b}` : `${b},${a}`);
+        return { a, b, pts: [nodes[a], nodes[b]].map(n => [n.x * PX, n.y * PX]), off: list.indexOf(l.key) - (list.length - 1) / 2 };
+      })
+  }));
+}
+
+// Where each station's name goes at zoom k, in screen pixels from its station:
+// node i → { dx, dy, align, w, h, big } (none: no room at this zoom). The
+// interchanges choose first, then the ends, then the rest along their lines;
+// a name never over another name or another station, kept off the track
+// where it can. `measure(text, font)` → its width.
+export function placeNames(map, k, measure, { first = [] } = {}) {
   const { nodes, edges } = map;
-  const font = 12;
+  const sz = sizes(k);
+  const live = nodes.filter(n => n.lines.length);
+  const at = n => [n.x * PX * k, n.y * PX * k];
+  const segs = edges.map(([a, b]) => [...at(nodes[a]), ...at(nodes[b])]);
+  const marks = live.map(n => [...at(n), (n.big ? sz.x : sz.dot) + 2, n.i]);
+  const ends = new Set(live.filter(n => n.end).map(n => n.i));
+  const pri = n => (first.includes(n.i) ? 100 : 0) + (n.big ? 10 + n.lines.length : 0) + (ends.has(n.i) ? 5 : 0);
+  const order = live.slice().sort((a, b) => pri(b) - pri(a) || a.i - b.i);
   const boxes = [];
-  const segs = edges.map(([a, b]) => [nodes[a].x * PX, nodes[a].y * PX, nodes[b].x * PX, nodes[b].y * PX]);
   const out = new Map();
-  const pts = nodes.filter(n => n.lines.length).map(n => ({ i: n.i, x: n.x * PX, y: n.y * PX }));
-  const order = nodes.filter(n => n.lines.length).sort((a, b) => Number(b.big) - Number(a.big) || Number(b.end) - Number(a.end));
   for (const n of order) {
-    const w = [...n.name].reduce((a, c) => a + (c.charCodeAt(0) > 255 ? font : font * 0.6), 0);
-    const h = font + 2;
-    const r = n.big ? 10 : 7;
+    const big = n.big || ends.has(n.i);
+    const font = big ? sz.font + 0.5 : sz.font;
+    const w = measure(n.name, font, big);
+    const h = font * 1.25;
+    const [px, py] = at(n);
+    const r = (n.big ? sz.x : sz.dot) + 4;
     let best = null;
-    for (const [sx, sy, anchor] of SIDES) {
-      const ax = n.x * PX + sx * (r + 3);
-      const ay = n.y * PX + sy * (r + 3);
-      const x0 = anchor === 'start' ? ax : anchor === 'end' ? ax - w : ax - w / 2;
-      const y0 = sy < 0 ? ay - h : sy > 0 ? ay : ay - h / 2;
-      const box = [x0 - 2, y0 - 1, x0 + w + 2, y0 + h + 1];
-      let cost = 0;
-      for (const b of boxes) if (overlap(box, b)) cost += 10;
-      for (const s of segs) if (segHits(box, s)) cost += 3;
-      // Never over another station (whose name it would seem to be).
-      for (const o of pts) if (o.i !== n.i && o.x > box[0] - 9 && o.x < box[2] + 9 && o.y > box[1] - 9 && o.y < box[3] + 9) cost += 8;
-      // Sideways reads best.
-      cost += sy === 0 ? 0 : sx === 0 ? 0.6 : 0.3;
-      if (!best || cost < best.cost) best = { cost, box, x: anchor === 'start' ? x0 : anchor === 'end' ? x0 + w : x0 + w / 2, y: y0 + h / 2, anchor };
-      if (cost === 0) break;
+    for (const [sx, sy, pref] of SIDES) {
+      const ax = px + sx * r;
+      const ay = py + sy * r;
+      const x0 = sx > 0.1 ? ax : sx < -0.1 ? ax - w : ax - w / 2;
+      const y0 = sy < -0.1 ? ay - h : sy > 0.1 ? ay : ay - h / 2;
+      const box = [x0 - 2, y0, x0 + w + 2, y0 + h];
+      let cost = pref;
+      if (boxes.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) continue;
+      if (marks.some(([mx, my, mr, i]) => i !== n.i && mx + mr > box[0] && mx - mr < box[2] && my + mr > box[1] && my - mr < box[3])) continue;
+      for (const s of segs) if (segHits(box, s)) cost += 2;
+      if (!best || cost < best.cost) best = { cost, box, dx: x0 - px, dy: y0 + h / 2 - py, w, h, font, big };
+      if (cost === pref && pref === 0) break;
     }
+    if (!best) continue;
     boxes.push(best.box);
     out.set(n.i, best);
   }
   return out;
 }
-const overlap = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 function segHits(box, [x1, y1, x2, y2]) {
-  // Sampled along the gap: enough at a station's spacing.
-  for (let t = 0.12; t < 0.9; t += 0.12) {
-    const x = x1 + (x2 - x1) * t;
-    const y = y1 + (y2 - y1) * t;
+  if (Math.max(x1, x2) < box[0] || Math.min(x1, x2) > box[2] || Math.max(y1, y2) < box[1] || Math.min(y1, y2) > box[3]) return false;
+  const n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 6));
+  for (let i = 0; i <= n; i++) {
+    const x = x1 + ((x2 - x1) * i) / n;
+    const y = y1 + ((y2 - y1) * i) / n;
     if (x > box[0] && x < box[2] && y > box[1] && y < box[3]) return true;
   }
   return false;
 }
 
-// The map as SVG (a string): the lines, then the stations, then their names;
-// each station a `data-node` to tap. Its colours are CSS variables (light and dark).
-// → { svg, w, h, at: node i → [x, y] in the drawing }.
-export function metroSvg(map, { pad = 24 } = {}) {
-  const { nodes, lines } = map;
-  const live = nodes.filter(n => n.lines.length);
-  const lab = labels(map);
-  const boxes = [...lab.values()].map(l => l.box).concat(live.map(n => [n.x * PX - 12, n.y * PX - 12, n.x * PX + 12, n.y * PX + 12]));
-  const x0 = Math.min(...boxes.map(b => b[0])) - pad;
-  const y0 = Math.min(...boxes.map(b => b[1])) - pad;
-  const W = Math.max(...boxes.map(b => b[2])) - x0 + pad;
-  const H = Math.max(...boxes.map(b => b[3])) - y0 + pad;
-  const at = new Map(live.map(n => [n.i, [n.x * PX - x0, n.y * PX - y0]]));
-  const P = n => at.get(n.i).map(v => v.toFixed(1)).join(',');
-  const colorOf = new Map(lines.map(l => [l.key, l.color]));
-  const track = lines.map(l => l.runs.map(r => `<polyline class="mm-line" data-line="${e(l.key)}" style="--c:${e(l.color)}" points="${r.map(i => P(nodes[i])).join(' ')}"/>`).join('')).join('');
-  const dots = live
-    .map(n => {
-      const [cx, cy] = at.get(n.i).map(v => v.toFixed(1));
-      return n.big ? `<circle class="mm-x" data-node="${n.i}" cx="${cx}" cy="${cy}" r="8"/>` : `<circle class="mm-st" data-node="${n.i}" cx="${cx}" cy="${cy}" r="5" style="--c:${e(colorOf.get(n.lines[0]))}"/>`;
-    })
-    .join('');
-  const names = live
-    .map(n => {
-      const l = lab.get(n.i);
-      return `<text class="mm-name${n.big ? ' big' : ''}${n.end ? ' end' : ''}" data-node="${n.i}" x="${(l.x - x0).toFixed(1)}" y="${(l.y - y0).toFixed(1)}" text-anchor="${l.anchor}">${e(shown(n.name))}</text>`;
-    })
-    .join('');
-  return { w: W, h: H, at, svg: `<svg class="mm-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}"><g class="mm-tracks">${track}</g><g class="mm-trains"></g><g class="mm-dots">${dots}</g><g class="mm-names">${names}</g><g class="mm-here"></g></svg>` };
-}
-
 // ---- On screen ---------------------------------------------------------------------------------------
 
-// The drawing in `box`, moved by a finger (one drags, two pinch), the
-// wheel, a double tap; a tap on a station → onTap(node). It stays sharp at
-// any zoom (the SVG's own viewBox moves, never a scaled picture).
-// → { view(node, k), fit(), focus(lineKey | null), trains([{ node, toward, color }]), here(node | null), destroy() }.
+// The drawing in `box`, on a canvas: a finger drags it (and it coasts when
+// let go), two pinch it about their middle, two taps zoom in there, a tap with
+// two fingers out; the wheel and the keys too. The lines grow as you zoom,
+// the names stay a size you can read, as many as fit. A tap on a station (or
+// its name) → onTap(node). Colours from CSS: --mm-bg, --mm-ink, --mm-pick.
+// → { view(node, k), fit(lineKey), focus(lineKey), select(node), trains([…]), here(node), zoomBy(f), resize(), zoom(), fitZoom(), destroy() }.
 export function mountMap(box, map, { onTap = () => {}, onMove = () => {} } = {}) {
-  const drawn = metroSvg(map);
-  box.innerHTML = drawn.svg;
-  const svg = box.querySelector('svg');
-  svg.removeAttribute('width');
-  svg.removeAttribute('height');
+  const { nodes, edges } = map;
+  const live = nodes.filter(n => n.lines.length);
+  const lines = tracks(map);
+  const colorOf = new Map(map.lines.map(l => [l.key, l.color]));
+  const P = n => [n.x * PX, n.y * PX];
+  const xs = live.map(n => n.x * PX);
+  const ys = live.map(n => n.y * PX);
+  // The drawing's extent, a little room round it for the names.
+  const ext = [Math.min(...xs) - 60, Math.min(...ys) - 40, Math.max(...xs) + 60, Math.max(...ys) + 40];
+  const W = ext[2] - ext[0];
+  const H = ext[3] - ext[1];
+  const canvas = document.createElement('canvas');
+  canvas.className = 'mm-canvas';
+  canvas.setAttribute('aria-hidden', 'true');
+  box.replaceChildren(canvas);
+  box.tabIndex = 0;
+  const g = canvas.getContext('2d');
   let cw = box.clientWidth || 1;
   let ch = box.clientHeight || 1;
-  // The view: the drawing's point at the box's corner, and pixels a drawing unit.
-  let x = 0;
-  let y = 0;
+  let dpr = 1;
+  // The view: the drawing's point at the box's top left, and screen pixels a drawing pixel.
+  let x = ext[0];
+  let y = ext[1];
   let k = 1;
-  const minK = () => Math.min(cw / drawn.w, ch / drawn.h, 0.5);
-  const MAXK = 2.6;
+  const MAXK = 3.2;
+  const minK = () => Math.min(0.9, Math.min(cw / W, ch / H) * 0.9);
+  // Never lost: a drawing smaller than the view stays in it; a bigger one keeps 40% of the view.
+  const keep = (v, lo, hi, span) => (hi - lo < span ? Math.min(Math.max(v, hi - span), lo) : Math.min(Math.max(v, lo - span * 0.4), hi - span * 0.6));
   const clamp = () => {
     k = Math.min(MAXK, Math.max(minK(), k));
-    const vw = cw / k;
-    const vh = ch / k;
-    // Never lost off the drawing: at least a third of the box stays on it.
-    x = Math.min(Math.max(x, -vw * 0.66), drawn.w - vw * 0.34);
-    y = Math.min(Math.max(y, -vh * 0.66), drawn.h - vh * 0.34);
+    x = keep(x, ext[0], ext[2], cw / k);
+    y = keep(y, ext[1], ext[3], ch / k);
   };
+  // Colours, read again when the phone turns light or dark (each through a probe: the browser's own resolved colour).
+  let ink = {};
+  const probe = document.createElement('i');
+  probe.hidden = true;
+  box.append(probe);
+  const readInk = () => {
+    const v = (name, d) => {
+      probe.style.color = d;
+      probe.style.color = `var(${name}, ${d})`;
+      return getComputedStyle(probe).color || d;
+    };
+    ink = { bg: v('--mm-bg', '#fff'), ink: v('--mm-ink', '#111'), pick: v('--mm-pick', '#0a84ff'), you: v('--mm-you', '#0a84ff'), family: getComputedStyle(box).fontFamily || 'system-ui, sans-serif' };
+    widths.clear();
+    placed.clear();
+  };
+  // Names' widths (measured once a size) and where they go (once a zoom step).
+  const widths = new Map();
+  const font = (size, big) => `${big ? 650 : 500} ${size.toFixed(1)}px ${ink.family}`;
+  const measure = (text, size, big) => {
+    const id = `${big ? 1 : 0}|${size.toFixed(1)}|${text}`;
+    if (!widths.has(id)) {
+      g.font = font(size, big);
+      widths.set(id, g.measureText(text).width);
+    }
+    return widths.get(id);
+  };
+  // (The names as the page's language shows them.)
+  const named = { ...map, nodes: nodes.map(n => ({ ...n, name: shown(n.name) })) };
+  const placed = new Map();
+  let firstNames = [];
+  // [[node i, place]…], the ordinary names before the interchanges' (one font at a time).
+  const namesAt = lvl => {
+    if (!placed.has(lvl)) placed.set(lvl, [...placeNames(named, 2 ** (lvl / LEVEL), measure, { first: firstNames })].sort((a, b) => Number(a[1].big) - Number(b[1].big)));
+    return placed.get(lvl);
+  };
+
+  let focused = null;
+  let picked = null;
+  let you = null;
+  let trainList = [];
+  const size = () => {
+    dpr = Math.min(3, window.devicePixelRatio || 1);
+    cw = box.clientWidth || cw;
+    ch = box.clientHeight || ch;
+    canvas.width = Math.round(cw * dpr);
+    canvas.height = Math.round(ch * dpr);
+    canvas.style.width = `${cw}px`;
+    canvas.style.height = `${ch}px`;
+  };
+
+  // ---- Painting
   let frame = 0;
   const paint = () => {
     frame = 0;
     clamp();
-    svg.setAttribute('viewBox', `${x.toFixed(2)} ${y.toFixed(2)} ${(cw / k).toFixed(2)} ${(ch / k).toFixed(2)}`);
-    // Far out: only the interchanges and the ends named.
-    box.classList.toggle('mm-far', k < 0.62);
+    const sz = sizes(k);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, cw, ch);
+    const sx = px => (px - x) * k;
+    const sy = py => (py - y) * k;
+    const pad = 40;
+    const onScreen = (X, Y) => X > -pad && X < cw + pad && Y > -pad && Y < ch + pad;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    // The lines: each over a thin edge of the card's colour, so crossings part cleanly.
+    const order = focused ? lines.filter(l => l.key !== focused).concat(lines.filter(l => l.key === focused)) : lines;
+    for (const l of order) {
+      g.globalAlpha = focused && l.key !== focused ? 0.16 : 1;
+      g.beginPath();
+      for (const s of l.segs) {
+        const [[ax, ay], [bx, by]] = s.pts;
+        let [x1, y1, x2, y2] = [sx(ax), sy(ay), sx(bx), sy(by)];
+        if (Math.max(x1, x2) < -pad || Math.min(x1, x2) > cw + pad || Math.max(y1, y2) < -pad || Math.min(y1, y2) > ch + pad) continue;
+        if (s.off) {
+          const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+          const ox = (-(y2 - y1) / len) * s.off * sz.line * 1.05;
+          const oy = ((x2 - x1) / len) * s.off * sz.line * 1.05;
+          [x1, y1, x2, y2] = [x1 + ox, y1 + oy, x2 + ox, y2 + oy];
+        }
+        g.moveTo(x1, y1);
+        g.lineTo(x2, y2);
+      }
+      g.strokeStyle = ink.bg;
+      g.lineWidth = sz.line + 3;
+      g.stroke();
+      g.strokeStyle = l.color;
+      g.lineWidth = sz.line;
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+    // The trains due now: a capsule on the track just before their station, pointing on.
+    for (const t of trainList) {
+      const a = nodes[t.node];
+      const b = t.from == null ? null : nodes[t.from];
+      if (!a?.lines.length) continue;
+      const f = t.min ? 0.55 : 0.3;
+      const [ax, ay] = P(a);
+      const [bx, by] = b ? P(b) : [ax, ay];
+      const X = sx(ax + (bx - ax) * f);
+      const Y = sy(ay + (by - ay) * f);
+      if (!onScreen(X, Y)) continue;
+      g.globalAlpha = focused && !a.lines.includes(focused) ? 0.2 : 1;
+      g.save();
+      g.translate(X, Y);
+      g.rotate(b ? Math.atan2(ay - by, ax - bx) : 0);
+      const L = sz.line * 1.5 + 6;
+      const R = sz.line * 0.55 + 3;
+      // (Beside the track on its right, as the trains keep: two passing on one gap both seen.)
+      g.translate(0, R * 0.9);
+      g.beginPath();
+      if (g.roundRect) g.roundRect(-L, -R, L * 2, R * 2, R);
+      else g.rect(-L, -R, L * 2, R * 2);
+      g.fillStyle = t.color;
+      g.fill();
+      g.lineWidth = 2;
+      g.strokeStyle = ink.bg;
+      g.stroke();
+      g.beginPath();
+      g.moveTo(L * 0.15, -R * 0.5);
+      g.lineTo(L * 0.55, 0);
+      g.lineTo(L * 0.15, R * 0.5);
+      g.strokeStyle = '#fff';
+      g.lineWidth = 1.8;
+      g.stroke();
+      g.restore();
+    }
+    g.globalAlpha = 1;
+    // The stations: a ring in the line's colour; an interchange a bigger ring in ink.
+    for (const n of live) {
+      const [px, py] = P(n);
+      const X = sx(px);
+      const Y = sy(py);
+      if (!onScreen(X, Y)) continue;
+      g.globalAlpha = focused && !n.lines.includes(focused) ? 0.25 : 1;
+      g.beginPath();
+      if (n.big) {
+        g.arc(X, Y, sz.x, 0, Math.PI * 2);
+        g.fillStyle = ink.bg;
+        g.fill();
+        g.lineWidth = Math.max(2.2, sz.ring * 1.15);
+        g.strokeStyle = ink.ink;
+        g.stroke();
+      } else {
+        g.arc(X, Y, sz.dot, 0, Math.PI * 2);
+        g.fillStyle = ink.bg;
+        g.fill();
+        g.lineWidth = Math.max(1.8, sz.ring);
+        g.strokeStyle = colorOf.get(focused && n.lines.includes(focused) ? focused : n.lines[0]);
+        g.stroke();
+      }
+    }
+    g.globalAlpha = 1;
+    // You, and the station chosen.
+    const ring = (n, color, r, fill) => {
+      const [px, py] = P(n);
+      g.beginPath();
+      g.arc(sx(px), sy(py), r, 0, Math.PI * 2);
+      if (fill) {
+        g.fillStyle = fill;
+        g.fill();
+      }
+      g.lineWidth = 3;
+      g.strokeStyle = color;
+      g.stroke();
+    };
+    if (you) {
+      const [px, py] = P(you);
+      g.beginPath();
+      g.arc(sx(px), sy(py), sz.x + 9, 0, Math.PI * 2);
+      g.globalAlpha = 0.2;
+      g.fillStyle = ink.you;
+      g.fill();
+      g.globalAlpha = 1;
+      ring(you, ink.bg, 6.5, ink.you);
+    }
+    if (picked) ring(picked, ink.pick, (picked.big ? sz.x : sz.dot) + 5);
+    // The names: as many as fit at this zoom, each on a halo of the card's colour.
+    const names = namesAt(levelOf(k));
+    g.textBaseline = 'middle';
+    g.textAlign = 'left';
+    g.lineWidth = 4;
+    g.strokeStyle = ink.bg;
+    for (const pass of ['halo', 'text']) {
+      let set = '';
+      for (const [i, l] of names) {
+        const n = nodes[i];
+        const [px, py] = P(n);
+        // (Placed at the step's zoom: the offsets held, the station where it is now.)
+        const X = sx(px) + l.dx;
+        const Y = sy(py) + l.dy;
+        if (X > cw + 4 || X + l.w < -4 || Y < -l.h || Y > ch + l.h) continue;
+        g.globalAlpha = focused && !n.lines.includes(focused) ? 0.3 : 1;
+        const f = font(l.font, l.big);
+        if (f !== set) g.font = set = f;
+        if (pass === 'halo') g.strokeText(named.nodes[i].name, X, Y);
+        else {
+          g.fillStyle = n === picked ? ink.pick : ink.ink;
+          g.fillText(named.nodes[i].name, X, Y);
+        }
+      }
+    }
+    g.globalAlpha = 1;
     onMove({ k });
   };
   const draw = () => frame || (frame = requestAnimationFrame(paint));
+
+  // ---- Moving
   const zoomAt = (px, py, nk) => {
     const cx = x + px / k;
     const cy = y + py / k;
@@ -470,210 +855,273 @@ export function mountMap(box, map, { onTap = () => {}, onMove = () => {} } = {})
     y = cy - py / k;
     draw();
   };
-  // A smooth move to a view (the drawing's centre point and zoom).
   let anim = 0;
-  const glide = (tx, ty, tk, ms = 320) => {
+  const stop = () => {
     cancelAnimationFrame(anim);
+    anim = 0;
+  };
+  // A smooth move to a view (the drawing's point in the middle, and the zoom).
+  const glide = (tx, ty, tk, ms = 360) => {
+    stop();
+    tk = Math.min(MAXK, Math.max(minK(), tk));
     const [fx, fy, fk] = [x + cw / k / 2, y + ch / k / 2, k];
     const t0 = performance.now();
-    const step = now => {
+    const tick = now => {
       const t = Math.min(1, (now - t0) / ms);
       const s = 1 - (1 - t) ** 3;
-      k = fk + (tk - fk) * s;
+      // (The zoom eased in its own scale, so a long zoom feels even.)
+      k = fk * (tk / fk) ** s;
       x = fx + (tx - fx) * s - cw / k / 2;
       y = fy + (ty - fy) * s - ch / k / 2;
       paint();
-      if (t < 1) anim = requestAnimationFrame(step);
+      anim = t < 1 ? requestAnimationFrame(tick) : 0;
     };
-    anim = requestAnimationFrame(step);
+    anim = requestAnimationFrame(tick);
   };
-
-  // Fingers.
+  const local = ev => {
+    const r = box.getBoundingClientRect();
+    return [ev.clientX - r.left, ev.clientY - r.top];
+  };
   const ptrs = new Map();
-  let start = null;
-  let lastTap = 0;
-  let vel = [0, 0];
-  let lastMove = null;
+  let pinch = null;
+  let tap = null;
+  let lastTap = null;
+  let trail = [];
   box.addEventListener('pointerdown', ev => {
-    cancelAnimationFrame(anim);
-    box.setPointerCapture?.(ev.pointerId);
-    ptrs.set(ev.pointerId, [ev.clientX, ev.clientY]);
-    if (ptrs.size === 1) start = { at: performance.now(), px: ev.clientX, py: ev.clientY, moved: 0, target: ev.target };
-    else start && (start.moved = 99);
-    vel = [0, 0];
-    lastMove = { t: performance.now(), x: ev.clientX, y: ev.clientY };
+    if (ev.button > 0) return;
+    stop();
+    try {
+      box.setPointerCapture?.(ev.pointerId);
+    } catch {}
+    ptrs.set(ev.pointerId, local(ev));
+    trail = [];
+    if (ptrs.size === 1) tap = { at: performance.now(), p: local(ev), moved: 0, fingers: 1 };
+    else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()];
+      pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], k, x, y };
+      if (tap) tap.fingers = 2;
+    }
   });
   box.addEventListener('pointermove', ev => {
     if (!ptrs.has(ev.pointerId)) return;
     const prev = ptrs.get(ev.pointerId);
-    if (ptrs.size === 1) {
-      const dx = ev.clientX - prev[0];
-      const dy = ev.clientY - prev[1];
-      x -= dx / k;
-      y -= dy / k;
-      if (start) start.moved += Math.abs(dx) + Math.abs(dy);
-      const now = performance.now();
-      const dt = Math.max(1, now - lastMove.t);
-      vel = [(ev.clientX - lastMove.x) / dt, (ev.clientY - lastMove.y) / dt];
-      lastMove = { t: now, x: ev.clientX, y: ev.clientY };
-      ptrs.set(ev.pointerId, [ev.clientX, ev.clientY]);
-      draw();
-    } else if (ptrs.size === 2) {
+    const p = local(ev);
+    ptrs.set(ev.pointerId, p);
+    if (tap) tap.moved += Math.abs(p[0] - prev[0]) + Math.abs(p[1] - prev[1]);
+    if (ptrs.size >= 2 && pinch) {
       const [a, b] = [...ptrs.values()];
-      const other = a === prev ? b : a;
-      const d0 = Math.hypot(prev[0] - other[0], prev[1] - other[1]);
-      ptrs.set(ev.pointerId, [ev.clientX, ev.clientY]);
-      const d1 = Math.hypot(ev.clientX - other[0], ev.clientY - other[1]);
-      const r = box.getBoundingClientRect();
-      // The middle of the two fingers stays put while they spread.
-      const m0 = [(prev[0] + other[0]) / 2 - r.left, (prev[1] + other[1]) / 2 - r.top];
-      const m1 = [(ev.clientX + other[0]) / 2 - r.left, (ev.clientY + other[1]) / 2 - r.top];
-      x -= (m1[0] - m0[0]) / k;
-      y -= (m1[1] - m0[1]) / k;
-      if (d0 > 0) zoomAt(m1[0], m1[1], k * (d1 / d0));
-      else draw();
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1;
+      const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      // The drawing's point under the fingers' middle when they landed stays under it.
+      const cx = pinch.x + pinch.m[0] / pinch.k;
+      const cy = pinch.y + pinch.m[1] / pinch.k;
+      k = Math.min(MAXK, Math.max(minK(), pinch.k * (d / pinch.d)));
+      x = cx - m[0] / k;
+      y = cy - m[1] / k;
+      draw();
+    } else if (ptrs.size === 1) {
+      x -= (p[0] - prev[0]) / k;
+      y -= (p[1] - prev[1]) / k;
+      const now = performance.now();
+      trail.push([now, p[0], p[1]]);
+      while (trail.length > 2 && now - trail[0][0] > 90) trail.shift();
+      draw();
     }
   });
   const up = ev => {
     if (!ptrs.has(ev.pointerId)) return;
     ptrs.delete(ev.pointerId);
-    if (ptrs.size) return;
-    const s = start;
-    start = null;
-    if (s && s.moved < 10 && performance.now() - s.at < 400) {
-      const r = box.getBoundingClientRect();
-      const now = performance.now();
-      // Two taps: in, about there.
-      if (now - lastTap < 300) {
-        lastTap = 0;
-        const px = ev.clientX - r.left;
-        const py = ev.clientY - r.top;
-        return glide(x + px / k, y + py / k, Math.min(MAXK, k * 1.8), 260);
-      }
-      lastTap = now;
-      const hit = nodeNear(ev.clientX - r.left, ev.clientY - r.top);
-      if (hit != null) onTap(map.nodes[hit]);
+    if (ptrs.size === 1) {
+      // One finger left of a pinch: it drags on from here.
+      pinch = null;
+      trail = [];
       return;
     }
-    // Let go while moving: it coasts.
-    if (Math.hypot(...vel) > 0.25 && performance.now() - (lastMove?.t || 0) < 80) {
-      let [vx, vy] = vel;
-      const coast = () => {
-        x -= (vx * 16) / k;
-        y -= (vy * 16) / k;
-        vx *= 0.92;
-        vy *= 0.92;
+    if (ptrs.size) return;
+    pinch = null;
+    const t = tap;
+    tap = null;
+    const now = performance.now();
+    if (t && t.moved < 12 && now - t.at < 380) {
+      const [px, py] = local(ev);
+      if (t.fingers === 2) return glide(x + px / k, y + py / k, k / 1.8, 280);
+      const hit = nodeAt(px, py);
+      if (hit && ev.type === 'pointerup') {
+        lastTap = null;
+        return onTap(hit);
+      }
+      // Two taps on the map's empty ground: in, about there.
+      if (lastTap && now - lastTap.at < 320 && Math.hypot(px - lastTap.p[0], py - lastTap.p[1]) < 40) {
+        lastTap = null;
+        return glide(x + px / k, y + py / k, k * 2, 280);
+      }
+      lastTap = { at: now, p: [px, py] };
+      return;
+    }
+    // Let go while moving: it coasts, slowing as iOS's lists do.
+    if (trail.length >= 2 && now - trail.at(-1)[0] < 60) {
+      const [t0, x0, y0] = trail[0];
+      const [t1, x1, y1] = trail.at(-1);
+      let vx = (x1 - x0) / Math.max(8, t1 - t0);
+      let vy = (y1 - y0) / Math.max(8, t1 - t0);
+      if (Math.hypot(vx, vy) < 0.25) return;
+      let last = performance.now();
+      const coast = at => {
+        const dt = Math.min(40, at - last);
+        last = at;
+        x -= (vx * dt) / k;
+        y -= (vy * dt) / k;
+        const f = Math.exp(-dt / 300);
+        vx *= f;
+        vy *= f;
         paint();
-        if (Math.hypot(vx, vy) > 0.02) anim = requestAnimationFrame(coast);
+        anim = Math.hypot(vx, vy) > 0.02 ? requestAnimationFrame(coast) : 0;
       };
       anim = requestAnimationFrame(coast);
     }
   };
   box.addEventListener('pointerup', up);
   box.addEventListener('pointercancel', up);
+  box.addEventListener('lostpointercapture', up);
   box.addEventListener(
     'wheel',
     ev => {
       ev.preventDefault();
-      const r = box.getBoundingClientRect();
-      zoomAt(ev.clientX - r.left, ev.clientY - r.top, k * Math.exp(-ev.deltaY / (ev.ctrlKey ? 100 : 400)));
+      stop();
+      const [px, py] = local(ev);
+      // (A trackpad's pinch comes as the wheel with ctrl held: finer steps.)
+      const dy = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+      zoomAt(px, py, k * Math.exp(-dy / (ev.ctrlKey ? 100 : 300)));
     },
     { passive: false }
   );
-  // The station nearest a tap (a finger's width), in the box's pixels.
-  const nodeNear = (px, py) => {
+  box.addEventListener('keydown', ev => {
+    const pan = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
+    if (pan) {
+      ev.preventDefault();
+      glide(x + cw / k / 2 + (pan[0] * cw * 0.3) / k, y + ch / k / 2 + (pan[1] * ch * 0.3) / k, k, 200);
+    } else if (ev.key === '+' || ev.key === '=') api.zoomBy(1.6);
+    else if (ev.key === '-' || ev.key === '_') api.zoomBy(1 / 1.6);
+  });
+  // The station under a tap: its mark within a finger's width, else its name.
+  const nodeAt = (px, py) => {
     const cx = x + px / k;
     const cy = y + py / k;
     let best = null;
-    let bd = 24 / Math.min(k, 1);
-    for (const [i, [nx, ny]] of drawn.at) {
+    let bd = 24 / k;
+    for (const n of live) {
+      const [nx, ny] = P(n);
       const d = Math.hypot(nx - cx, ny - cy);
-      if (d < bd) [best, bd] = [i, d];
+      if (d < bd) [best, bd] = [n, d];
     }
-    if (best == null) {
-      // A tap on a station's name.
-      const t = document.elementFromPoint(px + box.getBoundingClientRect().left, py + box.getBoundingClientRect().top)?.closest?.('[data-node]');
-      if (t) best = Number(t.dataset.node);
+    if (best) return best;
+    for (const [i, l] of namesAt(levelOf(k))) {
+      const [nx, ny] = P(nodes[i]);
+      const X = (nx - x) * k + l.dx;
+      const Y = (ny - y) * k + l.dy;
+      if (px > X - 6 && px < X + l.w + 6 && py > Y - l.h / 2 - 6 && py < Y + l.h / 2 + 6) return nodes[i];
     }
-    return best;
+    return null;
   };
 
-  const layer = name => svg.querySelector(`.mm-${name}`);
-  const fitting = lineKey => {
-    const pts = lineKey ? map.edges.filter(ed => ed[2] === lineKey).flatMap(ed => [drawn.at.get(ed[0]), drawn.at.get(ed[1])]) : [...drawn.at.values()];
-    if (!pts.length) return null;
-    const xs = pts.map(p => p[0]);
-    const ys = pts.map(p => p[1]);
-    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    return [x0, x1, y0, y1, Math.min(MAXK, Math.max(minK(), Math.min((cw - 60) / Math.max(1, x1 - x0), (ch - 90) / Math.max(1, y1 - y0))))];
+  // The view a set of stations fits (with room for the map's buttons along its edges).
+  const fitting = list => {
+    if (!list.length) return null;
+    const px = list.map(n => n.x * PX);
+    const py = list.map(n => n.y * PX);
+    const [x0, x1, y0, y1] = [Math.min(...px), Math.max(...px), Math.min(...py), Math.max(...py)];
+    const fk = Math.min((cw - 110) / Math.max(1, x1 - x0), (ch - 150) / Math.max(1, y1 - y0));
+    return [(x0 + x1) / 2, (y0 + y1) / 2, Math.min(MAXK, Math.max(minK(), fk))];
   };
+  const onLine = key => live.filter(n => n.lines.includes(key));
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => api.resize()) : null;
+  ro?.observe(box);
+  const dark = matchMedia('(prefers-color-scheme: dark)');
+  const reink = () => {
+    readInk();
+    draw();
+  };
+  dark.addEventListener?.('change', reink);
+  // (A look chosen on the Pass: the page's own light or dark.)
+  const mo = typeof MutationObserver === 'function' ? new MutationObserver(reink) : null;
+  mo?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-look'] });
   const api = {
-    // Centre on a station at zoom k (or where it is).
+    // Centre on a station at zoom nk (or the zoom now).
     view(node, nk = k, { now = false } = {}) {
-      const p = drawn.at.get(node?.i ?? node);
-      if (!p) return;
+      const n = typeof node === 'number' ? nodes[node] : node;
+      if (!n?.lines?.length) return;
+      const [px, py] = P(n);
       if (now) {
+        stop();
         k = Math.min(MAXK, Math.max(minK(), nk));
-        x = p[0] - cw / k / 2;
-        y = p[1] - ch / k / 2;
+        x = px - cw / k / 2;
+        y = py - ch / k / 2;
         paint();
-      } else glide(p[0], p[1], nk);
+      } else glide(px, py, nk);
     },
     // The whole drawing, or a line's stations.
     fit(lineKey = null, { now = false } = {}) {
-      const f = fitting(lineKey);
+      const f = fitting(lineKey ? onLine(lineKey) : live);
       if (!f) return;
-      const [x0, x1, y0, y1, nk] = f;
       if (now) {
-        k = nk;
-        x = (x0 + x1) / 2 - cw / k / 2;
-        y = (y0 + y1) / 2 - ch / k / 2;
+        stop();
+        k = f[2];
+        x = f[0] - cw / k / 2;
+        y = f[1] - ch / k / 2;
         paint();
-      } else glide((x0 + x1) / 2, (y0 + y1) / 2, nk);
+      } else glide(...f);
     },
     // One line bright, the rest faded (null: all).
     focus(lineKey) {
-      svg.classList.toggle('mm-focus', Boolean(lineKey));
-      for (const el of svg.querySelectorAll('[data-line]')) el.classList.toggle('on', el.dataset.line === lineKey);
-      const on = new Set(lineKey ? map.nodes.filter(n => n.lines.includes(lineKey)).map(n => String(n.i)) : []);
-      for (const el of svg.querySelectorAll('[data-node]')) el.classList.toggle('on', on.has(el.dataset.node));
+      focused = lineKey || null;
+      draw();
     },
-    // The trains now at (or a minute from) a station: a capsule on the track just before it.
+    // The station chosen: ringed, its name first wherever it is.
+    select(node) {
+      picked = node == null ? null : typeof node === 'number' ? nodes[node] : nodes[node.i];
+      firstNames = [picked?.i, you?.i].filter(i => i != null);
+      placed.clear();
+      draw();
+    },
+    // The trains at (or a minute from) a station: [{ node, from, min, color }].
     trains(list) {
-      layer('trains').innerHTML = list
-        .map(t => {
-          const a = drawn.at.get(t.node);
-          const b = drawn.at.get(t.from);
-          if (!a) return '';
-          const f = t.min ? 0.55 : 0.3;
-          const [px, py] = b ? [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f] : a;
-          const ang = b ? (Math.atan2(a[1] - b[1], a[0] - b[0]) * 180) / Math.PI : 0;
-          return `<g class="mm-train" transform="translate(${px.toFixed(1)} ${py.toFixed(1)}) rotate(${ang.toFixed(0)})" style="--c:${e(t.color)}"><rect x="-9" y="-5" width="18" height="10" rx="5"/><path d="M3 -2.6 6 0 3 2.6"/></g>`;
-        })
-        .join('');
+      trainList = list || [];
+      draw();
     },
     // You: a dot at your station.
     here(node) {
-      const p = node == null ? null : drawn.at.get(node.i ?? node);
-      layer('here').innerHTML = p ? `<circle class="mm-you-ring" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="17"/><circle class="mm-you" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="6"/>` : '';
+      you = node == null ? null : nodes[node.i ?? node];
+      firstNames = [picked?.i, you?.i].filter(i => i != null);
+      placed.clear();
+      draw();
+    },
+    zoomBy(f) {
+      glide(x + cw / k / 2, y + ch / k / 2, k * f, 260);
     },
     resize() {
       const cx = x + cw / k / 2;
       const cy = y + ch / k / 2;
-      cw = box.clientWidth || cw;
-      ch = box.clientHeight || ch;
+      const [w0, h0] = [cw, ch];
+      size();
+      if (cw === w0 && ch === h0 && canvas.width) return draw();
       x = cx - cw / k / 2;
       y = cy - ch / k / 2;
       paint();
     },
     zoom: () => k,
-    // The zoom the whole drawing fits the box at (an iPad's: names and all).
-    fitZoom: () => fitting(null)?.[4] || 0,
+    // The zoom the whole drawing fits the box at.
+    fitZoom: () => fitting(live)?.[2] || 0,
     destroy() {
-      cancelAnimationFrame(anim);
-      box.innerHTML = '';
+      stop();
+      cancelAnimationFrame(frame);
+      ro?.disconnect();
+      mo?.disconnect();
+      dark.removeEventListener?.('change', reink);
+      box.replaceChildren();
     }
   };
+  readInk();
+  size();
   paint();
   return api;
 }
