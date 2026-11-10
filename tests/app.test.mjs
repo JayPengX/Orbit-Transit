@@ -1164,7 +1164,7 @@ test('the route sheet’s 時刻表 at a stop past the first: the first stop’s
   const at2 = stopTable(first, w, 2, '2026-11-09', 1);
   assert.equal(at2.guess, true);
   assert.equal(at2.times.length, 3);
-  assert.ok(at2.times[1] > '06:40' && at2.times[2] > '07:40' && at2.times[0] < '01:00', 'later by the ride, past midnight wrapped');
+  assert.ok(at2.times[0] > '06:40' && at2.times[1] > '07:40' && at2.times[2] > '24:00', 'later by the ride, past midnight last (24:xx)');
   // (Every stop at the first stop's time, 公路客運's way: the same.)
   assert.equal(stopTable(trips([[['A', '08:00'], ['B', '08:00'], ['C', '08:00']]]), w, 1, '2026-11-09', 1).guess, true);
   // A stop timed itself: its own times.

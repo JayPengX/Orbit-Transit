@@ -176,7 +176,8 @@ export function stopTable(sched, w, i, date, dow) {
     const first = at(0).times;
     if (first.length && guessedAt(here.times, first)) {
       const shift = Math.round(rideTime(w, 0, i) / 60);
-      const hhmm = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      // (Past midnight as 24:13: tonight's last runs stay at the end, still to come.)
+      const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
       const times = [...new Set(first.map(t => hhmm(Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) + shift)))].sort();
       return { times, every: here.every, guess: true };
     }
