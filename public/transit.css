@@ -458,8 +458,12 @@ html[data-look='native'] .ot-hc-field input::placeholder {
   min-width: 0;
   overflow: hidden;
 }
+/* (max-width: its box the row's room, not its words', so fitStrips can
+   shrink a long name to fit; without it the box grew with the words and
+   nothing was ever shrunk, only cut.) */
 .ot-strip-what b {
   display: inline-block;
+  max-width: 100%;
   font: 500 16px/21px var(--q-font);
   white-space: nowrap;
 }
@@ -470,6 +474,7 @@ html[data-look='native'] .ot-hc-field input::placeholder {
 }
 .ot-strip-note small {
   display: inline-block;
+  max-width: 100%;
   color: var(--q-label-2);
   font: 400 13px/18px var(--q-font);
   white-space: nowrap;

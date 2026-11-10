@@ -224,16 +224,25 @@ const where = r => (r.city === INTERCITY ? W('公路客運', 'Intercity') : city
 // the way it goes, and when); with no position, or none found, where it runs
 // between. Still being asked: the strip in its place with bars (no row
 // changes shape or pops in on its own).
+// A route's two ends (no bus asked): a loop once (基隆轉運站 循環), and a
+// long pair without its brackets (臺中轉運中心(G月台)-右環 → 臺中轉運中心-右環;
+// the route's sheet has them whole) so it fits a phone's row.
+const bare = x => x.replace(/\s*[（(][^()（）]*[)）]\s*/g, '').trim() || x;
+function ends(r) {
+  if (!r.from || !r.to) return e(r.to ? `${W('往', 'to')} ${r.to}` : where(r));
+  if (bare(r.from) === bare(r.to)) return `${e(r.from.length > 10 ? bare(r.from) : r.from)} ${W('循環', 'loop')}`;
+  const [a, b] = r.from.length + r.to.length > 16 ? [bare(r.from), bare(r.to)] : [r.from, r.to];
+  return `${e(a)}<i>↔</i>${e(b)}`;
+}
 const row = r => {
-  if (far(r)) return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `${W('往', 'to')} ${r.to}` : where(r)), attrs: `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}" data-far="1"` })}</div>`;
+  if (far(r)) return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: ends(r), attrs: `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}" data-far="1"` })}</div>`;
   const n = next.get(r.uid);
   const attrs = `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"`;
   // (全部 says each route's city: a 1 is 新竹市's or 新竹縣's.)
   const city = bus.city === ALL ? `${e(where(r))} · ` : '';
   if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `${city}${W('往', 'to')} ${e(shown(n.x.headsign))}`, main: e(shown(n.x.stop)), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
   if (ctx.here && !n?.at) return `<div class="ot-strip">${strip({ no: r.name, wait: true, attrs })}</div>`;
-  const ends = r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `${W('往', 'to')} ${r.to}` : where(r));
-  return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: ends, attrs })}</div>`;
+  return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: ends(r), attrs })}</div>`;
 };
 // Each route's next bus, asked for the strips on screen (a search's 60
 // routes aren't 60 asks), kept 25 s like the route's sheet. The strips that

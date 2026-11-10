@@ -16,9 +16,11 @@ import { INTERCITY } from './bus.mjs';
 
 const scope = city => (city === INTERCITY ? 'InterCity' : `City/${city}`);
 
-// TDX's codes (as its rail fares': TicketType 1 一般票, 3 電子票證; FareClass 1 成人 …).
+// TDX's codes (as its rail fares': TicketType 1 一般票, 3 電子票證; FareClass 1 成人 …;
+// 10 半票, as the 公路客運 and 新竹's publish their one fare for 孩童, 敬老 and
+// 愛心, named so: 「半票_不分時段_四排座」). Any other class isn't said.
 export const TICKET = { 1: 'cash', 3: 'card' };
-export const WHO = { 1: 'adult', 2: 'student', 3: 'child', 4: 'elder', 5: 'care' };
+export const WHO = { 1: 'adult', 2: 'student', 3: 'child', 4: 'elder', 5: 'care', 10: 'half' };
 
 // The route's fare rows (v3's Tainan answers in an object: rows()).
 export async function routeFares(route) {
@@ -55,7 +57,7 @@ function forWay(list, way) {
   const sub = idOf(way.sub);
   const own = list.filter(r => sub && (r.SubRouteUID === way.sub || String(r.SubRouteID || '') === sub));
   if (own.length) return own;
-  const all = list.filter(r => r.IsForAllSubRoutes !== false);
+  const all = list.filter(r => r.IsForAllSubRoutes !== false && r.IsForAllSubRoutes !== 0);
   return all.length ? all : list;
 }
 
@@ -94,7 +96,10 @@ export function fareBetween(list, way, a, b) {
       const stage = k => starts.filter(x => x <= k).at(-1);
       const [sa, sb] = [stage(ia), stage(ib)];
       if (sa == null || sb == null) continue;
-      const hit = sts.find(x => at(stops, x.OriginStage) === sa && at(stops, x.DestinationStage) === sb) || sts.find(x => at(stops, x.OriginStage) === sb && at(stops, x.DestinationStage) === sa);
+      let hit = sts.find(x => at(stops, x.OriginStage) === sa && at(stops, x.DestinationStage) === sb) || sts.find(x => at(stops, x.OriginStage) === sb && at(stops, x.DestinationStage) === sa);
+      // Inside one stage (seldom published: 新竹站 to 民生路口 on 5608): the
+      // way's least fare, its 基本票價.
+      if (!hit && sa === sb) hit = sts.map(x => [Math.min(...priceList(x.Fares).filter(f => f.who === 'adult').map(f => f.price)), x]).sort((x, y) => x[0] - y[0])[0]?.[1];
       if (hit) return { kind: 'stage', fares: priceList(hit.Fares) };
     }
   }
@@ -103,7 +108,7 @@ export function fareBetween(list, way, a, b) {
 
 // Each kind of rider once, its single ticket and (when it differs) its card
 // fare: [{ who, cash, card }], 成人 first.
-const ORDER = ['adult', 'student', 'child', 'elder', 'care'];
+const ORDER = ['adult', 'student', 'child', 'elder', 'care', 'half'];
 export function fareRows(fares) {
   const out = [];
   for (const who of ORDER) {
