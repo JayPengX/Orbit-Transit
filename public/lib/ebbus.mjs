@@ -1,16 +1,18 @@
-// 臺中's and 桃園's buses read by the phone itself, from the cities' own bus
-// sites (one maker's GraphQL, open to any page, no key), with the kit's
-// reader (kit/ebus-read.mjs), the one the proxy reads them with: Jay
-// 2026-11-10, "Everything in our apps that could be read from our phone
-// should be read from our phone to minimize pressure for the cloudflare".
-// Rows are TDX's, as the proxy answers them. Whatever the site can't answer
-// (a stop or route it doesn't know, too many asked, an older kit) is the
-// proxy's; once an ask of the site fails, the proxy's alone for 5 minutes.
+// 臺中's, 桃園's and 臺南's buses read by the phone itself, from the cities'
+// own bus sites (臺中's and 桃園's one maker's GraphQL, 臺南's its own; all
+// open to any page, no key), with the kit's reader (kit/ebus-read.mjs), the
+// one the proxy reads them with: Jay 2026-11-10, "Everything in our apps
+// that could be read from our phone should be read from our phone to
+// minimize pressure for the cloudflare". Rows are TDX's, as the proxy
+// answers them. Whatever the site can't answer (a stop or route it doesn't
+// know, too many asked, an older kit) is the proxy's; once an ask of the
+// site fails, the proxy's alone for 5 minutes.
 
 import * as eb from '#kit/ebus-read.mjs';
 import { pack } from './packs.mjs';
 
-export const EB_CITIES = new Set(['Taichung', 'Taoyuan']);
+export const EB_CITIES = new Set(['Taichung', 'Taoyuan', 'Tainan']);
+const TNN = 'Tainan';
 const DOWN_MS = 5 * 60_000;
 const WAIT = 6000; // (an ask of the site; the proxy's after)
 const keep = typeof eb.keeper === 'function' ? eb.keeper(800) : null;
@@ -18,8 +20,17 @@ const downAt = new Map(); // city → when an ask of its site last failed
 const indexes = new WeakMap(); // a city's pack → its index
 export const resetEb = () => (keep?.clear(), downAt.clear());
 export const ebDown = (city, now = Date.now()) => now - (downAt.get(city) ?? -Infinity) < DOWN_MS;
+// A city's reader in the kit (null in an older kit): { eta({ stops, routes }, deps), gps(routes, deps) }.
+const readerOf = city =>
+  city === TNN
+    ? typeof eb.tnEta === 'function' && typeof eb.tnGps === 'function'
+      ? { eta: (q, d) => eb.tnEta(q, d), gps: (r, d) => eb.tnGps(r, d) }
+      : null
+    : typeof eb.ebEta === 'function' && typeof eb.ebGps === 'function'
+      ? { eta: (q, d) => eb.ebEta(city, q, d), gps: (r, d) => eb.ebGps(city, r, d) }
+      : null;
 // Whether the phone reads this city's buses itself (now).
-export const ebPhone = (city, now = Date.now()) => EB_CITIES.has(city) && Boolean(keep && eb.ebEta && eb.ebGps) && !ebDown(city, now);
+export const ebPhone = (city, now = Date.now()) => EB_CITIES.has(city) && Boolean(keep && readerOf(city)) && !ebDown(city, now);
 
 async function packOf(city) {
   const p = await pack(city);
@@ -28,18 +39,24 @@ async function packOf(city) {
   return indexes.get(p.raw);
 }
 const DEPS = { fetchFn: (...a) => fetch(...a), pack: packOf };
-// (Each ask of the site watched: a failure, or an HTTP error, puts the city down.)
+// (Each ask of the site watched: a failure, or an HTTP error, puts the city
+// down. 臺南's site fails a route it doesn't know as it would fail down (a
+// 500 no page may read): its city is down only when none of an ask's reads
+// was answered, `settle()` after the ask.)
 function depsOf(city, deps) {
   const d = { ...DEPS, now: Date.now(), ...deps };
+  const seen = { ok: 0, bad: 0 };
+  const bad = () => (seen.bad++, city === TNN || downAt.set(city, d.now));
   const fetchFn = (...a) =>
     Promise.resolve(d.fetchFn(...a)).then(
-      res => (res.ok || downAt.set(city, d.now), res),
+      res => (res.ok ? seen.ok++ : bad(), res),
       err => {
-        downAt.set(city, d.now);
+        bad();
         throw err;
       }
     );
-  return { ...d, fetchFn, heldMany: keep.heldMany, ms: WAIT };
+  const settle = () => seen.bad && !seen.ok && downAt.set(city, d.now);
+  return { ...d, fetchFn, held: keep.held, heldMany: keep.heldMany, ms: WAIT, settle };
 }
 
 // A city's stops' or a route's estimates → { rows, at, missing: [the stops or the route the proxy's to answer] }
@@ -48,7 +65,9 @@ export async function ebEta(city, { stops = [], route = '' } = {}, deps = {}) {
   if (!ebPhone(city, deps.now)) throw new Error(`${city}: the proxy's`);
   if (!stops.length) return route ? routeBatch(city, route, deps) : { rows: [], at: Date.now(), missing: [] };
   const d = depsOf(city, deps);
-  const got = await eb.ebEta(city, { stops }, d);
+  const got = await readerOf(city)
+    .eta({ stops }, d)
+    .finally(d.settle);
   return { rows: got.rows, at: d.now - got.age, missing: got.missing.stops };
 }
 let batch = null; // city → { deps, per: Map(route → [{ resolve, reject }]) }
@@ -70,7 +89,9 @@ async function readRoutes(city, { deps, per }) {
   const routes = [...per.keys()];
   try {
     const d = depsOf(city, deps);
-    const got = await eb.ebEta(city, { routes }, d);
+    const got = await readerOf(city)
+      .eta({ routes }, d)
+      .finally(d.settle);
     const at = d.now - got.age;
     for (const u of routes) for (const w of per.get(u)) w.resolve({ rows: got.rows.filter(r => r.RouteUID === u), at, missing: got.missing.routes.includes(u) ? [u] : [] });
   } catch (err) {
@@ -81,6 +102,8 @@ async function readRoutes(city, { deps, per }) {
 export async function ebGps(city, routes = [], deps = {}) {
   if (!ebPhone(city, deps.now)) throw new Error(`${city}: the proxy's`);
   const d = depsOf(city, deps);
-  const got = await eb.ebGps(city, routes, d);
+  const got = await readerOf(city)
+    .gps(routes, d)
+    .finally(d.settle);
   return { rows: got.rows, at: d.now - got.age, missing: got.missing };
 }
