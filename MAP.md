@@ -426,6 +426,11 @@ Live: https://orbit.jaypengx.com/transit/
   everywhere and never planned, unless a bus is seen on the road. A notice
   that says 部分, 減班, a time of day and the like is shown, never a stop.
   The banner rows (交通, 火車, 公車, 捷運) open to the notice as written.
+  臺中's and 高雄's bus notices the phone reads itself from the cities' own bus
+  sites (`ebnotice.mjs`, loaded only when asked; 高雄's answers only Taiwan's
+  networks, and asks a route at a time when its site wants that), worded as the
+  proxy words them (kit `ebus.mjs`); the Worker's for what they can't answer and
+  for 5 minutes after one fails (`tests/ebnotice.test.mjs`).
 
 - Judged by how the owner really travels. Every real choice is shown, with
   official names, times and live data first.
@@ -495,7 +500,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/nav.mjs`, `navlive.mjs`, `trouble.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; 出狀況 (missed, late, no bikes, wrong ride); the buzz; bus alerts |
 | `lib/aboard.mjs` | Already on a bus or train: which one, and the trip from its stops ahead |
 | `lib/ticket.mjs` | 指定車次: a train by its number, where to get on and off, found again for the planner |
-| `lib/service.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules |
+| `lib/service.mjs`, `ebnotice.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules; 臺中's and 高雄's bus notices read by the phone |
 | `lib/compass.mjs` | Which way the phone faces, for the soft beam on your dot (`.ot-beam`): the compass (an iPhone asks only from a tap on your own dot, once a launch, never after a no; never on opening or 我的位置), else the GPS's heading when moving; none known, or riding a bus or train (`navNow().aboard`, or a bus's or train's pace), no beam |
 | `tripCard` (tab-go) | 交通: a trip's card, its own icon (`look.mjs tripTile`: the place it ends at, else its name; never a bus's badge), its way as one line, the next two ways in three hours; a tap on a way shows it on the map ready to go |
 | `trimEnds` (tab-map) | A walk's or YouBike ride's line cut where it stops coming nearer its end (no detour past a station and back) |
