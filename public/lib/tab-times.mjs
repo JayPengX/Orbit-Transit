@@ -18,6 +18,7 @@ import { loadNotices } from './service.mjs';
 import { e, meters, distText, readJson, readSaved, UNREAD, writeJson, shown } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
+import * as kitUI from '#kit/ui.mjs';
 const $ = id => document.getElementById(id);
 const KEY = 'orbit-transit.times';
 const VIEWS = ['train', 'bus', 'metro'];
@@ -79,8 +80,16 @@ function pick(v) {
 // with its two ends (and TPASS when your pass takes it).
 
 const NEAR = 'near';
+// 全部 (Jay 2026-11-10): every city's and county's routes and the 公路客運 in
+// one search, no city to pick first; each found route says where it runs.
+const ALL = 'all';
 const RECENT = 'orbit-transit.routes';
-const bus = { city: NEAR, list: [], failed: '', loaded: '', around: null };
+const bus = { city: NEAR, list: [], failed: '', loaded: '', around: null, left: 0 };
+// Your city, its neighbours and the 公路客運: 附近's routes, and 全部's first.
+const nearCities = () => {
+  const home = ctx.city || 'Taipei';
+  return [home, ...(NEAR_CITIES[home] || []), INTERCITY];
+};
 const routesIn = r => (Array.isArray(r) ? r.filter(x => x?.uid && x.name).slice(0, 8) : []);
 const recentRoutes = () => routesIn(readJson(RECENT, []));
 function rememberRoute(r) {
@@ -131,7 +140,7 @@ function busInit() {
 let ticking = 0;
 // The bus notices of the city chosen (附近: yours) today, above its routes.
 function busNotices() {
-  const city = bus.city === NEAR || !bus.city ? ctx.city || 'Taipei' : bus.city;
+  const city = bus.city === NEAR || bus.city === ALL || !bus.city ? ctx.city || 'Taipei' : bus.city;
   loadNotices({ kinds: ['bus'], cities: city === INTERCITY ? [] : [city] })
     .then(n => {
       const box = $('tb-notices');
@@ -176,24 +185,52 @@ async function aroundRoutes() {
 }
 async function busLoad() {
   const home = ctx.city || 'Taipei';
-  bus.loaded = `${bus.city}:${home}`;
+  const key = (bus.loaded = `${bus.city}:${home}`);
   bus.list = [];
   bus.failed = '';
+  bus.left = 0;
   busDraw();
-  const want = bus.city === NEAR ? [home, ...(NEAR_CITIES[home] || []), INTERCITY] : [bus.city];
-  const got = await Promise.all(want.map(c => cityRoutes(c).catch(err => ((bus.failed = errorText(err)), []))));
-  bus.list = got.flat();
-  busDraw();
+  if (bus.city !== ALL) {
+    const want = bus.city === NEAR ? nearCities() : [bus.city];
+    const got = await Promise.all(want.map(c => cityRoutes(c).catch(err => ((bus.failed = errorText(err)), []))));
+    if (bus.loaded !== key) return;
+    bus.list = got.flat();
+    return busDraw();
+  }
+  // 全部: yours and around first (附近's, already kept), then the rest of the
+  // island four at a time (each city's list one read, kept a day), the
+  // routes found drawn as each city's come in.
+  const near = nearCities();
+  const rest = CITIES.map(([k]) => k).filter(k => !near.includes(k));
+  bus.left = near.length + rest.length;
+  const take = async c => {
+    const got = await cityRoutes(c).catch(err => ((bus.failed = errorText(err)), []));
+    if (bus.loaded !== key) return;
+    bus.list = bus.list.concat(got);
+    bus.left--;
+    drawSoon();
+  };
+  await Promise.all(near.map(take));
+  for (let i = 0; i < rest.length && bus.loaded === key; i += 4) await Promise.all(rest.slice(i, i + 4).map(take));
 }
+// (Cities coming in one after another: drawn once for those in the same moment.)
+let soon = 0;
+const drawSoon = () => (soon ||= setTimeout(() => ((soon = 0), busDraw()), 120));
+// 全部's routes far from you: where they run, no next bus asked (it would read
+// that city's whole bus pack for a route you're nowhere near).
+const far = r => bus.city === ALL && !nearCities().includes(r.city);
 const where = r => (r.city === INTERCITY ? W('公路客運', 'Intercity') : cityShort(r.city));
 // A route as a strip: its next bus at its stop nearest you (that stop, over
 // the way it goes, and when); with no position, or none found, where it runs
 // between. Still being asked: the strip in its place with bars (no row
 // changes shape or pops in on its own).
 const row = r => {
+  if (far(r)) return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `${W('往', 'to')} ${r.to}` : where(r)), attrs: `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}" data-far="1"` })}</div>`;
   const n = next.get(r.uid);
   const attrs = `data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}"`;
-  if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `${W('往', 'to')} ${e(shown(n.x.headsign))}`, main: e(shown(n.x.stop)), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
+  // (全部 says each route's city: a 1 is 新竹市's or 新竹縣's.)
+  const city = bus.city === ALL ? `${e(where(r))} · ` : '';
+  if (n?.x) return `<div class="ot-strip">${strip({ no: r.name, note: `${city}${W('往', 'to')} ${e(shown(n.x.headsign))}`, main: e(shown(n.x.stop)), eta: busWhen(n.x.v, n.x.planned), attrs: `${attrs} data-stop="${e(n.x.stopUID)}" data-stop-name="${e(n.x.stop)}"` })}</div>`;
   if (ctx.here && !n?.at) return `<div class="ot-strip">${strip({ no: r.name, wait: true, attrs })}</div>`;
   const ends = r.from && r.to ? `${e(r.from)}<i>↔</i>${e(r.to)}` : e(r.to ? `${W('往', 'to')} ${r.to}` : where(r));
   return `<div class="ot-strip">${strip({ no: r.name, note: e(where(r)), main: ends, attrs })}</div>`;
@@ -233,13 +270,13 @@ async function askNext(els) {
 function watchRows() {
   seen?.disconnect();
   seen = new IntersectionObserver(list => askNext(list.filter(x => x.isIntersecting).map(x => x.target)));
-  for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]')) seen.observe(el);
+  for (const el of $('tb-list').querySelectorAll('.ot-strip-main[data-r]:not([data-far])')) seen.observe(el);
 }
 // A stop near you: its name and distance, its routes as numbers to tap.
 const nearStop = s => `<div class="q-ritem ot-stop-row">${tile('bus', COLOR.bus, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(shown(s.name))}</span><span class="ot-bus-nos">${s.routes.map(r => `<button class="ot-bus-no" type="button" data-r="${e(`${r.city}|${r.uid}`)}" data-name="${e(r.name)}" data-stop-name="${e(s.name)}"${r.stopUID ? ` data-stop="${e(r.stopUID)}"` : ''}>${e(shown(r.name))}</button>`).join('')}</span></span><span class="q-ritem-value">${e(distText(s.dist))}</span></div>`;
 function busDraw() {
   const home = ctx.city || 'Taipei';
-  $('tb-city').innerHTML = [[NEAR, W(`${cityShort(home)}附近`, `Near ${cityShort(home)}`)], [INTERCITY, W('公路客運', 'Intercity')], ...CITIES.map(([k]) => [k, cityShort(k)])]
+  $('tb-city').innerHTML = [[NEAR, W(`${cityShort(home)}附近`, `Near ${cityShort(home)}`)], [ALL, W('全部', 'All')], [INTERCITY, W('公路客運', 'Intercity')], ...CITIES.map(([k]) => [k, cityShort(k)])]
     .map(([k, n]) => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === bus.city}">${e(n)}</button>`)
     .join('');
   const t = $('tb-q').value;
@@ -251,12 +288,19 @@ function busDraw() {
       (around.length ? section(W('附近站牌', 'Stops near you'), rowCard(around.map(nearStop).join(''))) : bus.around ? '' : `<p class="ot-note">${W('找附近的站牌…', 'Finding stops near you…')}</p>`) +
       (bus.failed && !bus.list.length ? `<p class="ot-note bad">${e(bus.failed)}</p>` : '');
   } else {
-    const found = findRoutes(bus.list, t);
+    // (全部: the same name in many places, yours and around first, then north to south.)
+    const order = [...nearCities(), ...CITIES.map(([k]) => k)];
+    const found = findRoutes(bus.list, t, 60, bus.city === ALL ? r => order.indexOf(r.city) : null);
+    const more = bus.left ? `<p class="ot-note">${W(`還在讀其他 ${bus.left} 個縣市的路線…`, `Still reading routes in ${bus.left} more places…`)}</p>` : '';
+    // Not found in one place: the whole island a tap away, what's typed kept.
+    const wider = bus.city !== ALL ? kitUI.emptyHtml({ title: W('沒有符合的路線', 'No matching route'), body: W('在全部縣市和公路客運找找看', 'Try every city, county and intercity'), action: { label: W('找全部', 'Search all'), data: { city: ALL } } }) : emptyNote(W('沒有符合的路線', 'No matching route'));
     $('tb-list').innerHTML = !bus.list.length
       ? `<p class="ot-note${bus.failed ? ' bad' : ''}">${e(bus.failed || W('載入路線中…', 'Loading routes…'))}</p>`
       : found.length
-        ? section(W(`${found.length} 條路線`, `${found.length} routes`), rowCard(found.map(row).join('')))
-        : emptyNote(W('沒有符合的路線', 'No matching route'));
+        ? `${section(W(`${found.length} 條路線`, `${found.length} routes`), rowCard(found.map(row).join('')))}${more}`
+        : bus.left
+          ? more
+          : wider;
   }
   fitStrips($('tb-list'));
   watchRows();

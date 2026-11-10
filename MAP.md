@@ -65,7 +65,11 @@ Live: https://orbit.jaypengx.com/transit/
     查車次, a search bar at the top (Jay 2026-11-10), a
     台鐵 or 高鐵 number, the day's trains with it and a tap its every stop and
     time (`tab-train.mjs trainNoSheet`, `ticket.mjs trainsNumbered`; Jay 2026-11-06), bus
-    routes by number or stop, stop timetables, and 捷運: each city's metro
+    routes by number or stop (附近: your city, its neighbours and the 公路客運;
+    全部: every place's, `cityRoutes` each, those around you first and the rest
+    four at a time, found routes ranked yours first, `findRoutes` `rank`, each
+    saying its city; one far from you not asked for its next bus, `far`; Jay
+    2026-11-10), stop timetables, and 捷運: each city's metro
     as a metro map (`metromap.mjs`: from TDX's real stations, relaxed, then
     `straighten` by least squares onto the eight directions with even gaps
     and no station on another line's track; worked out ahead by
