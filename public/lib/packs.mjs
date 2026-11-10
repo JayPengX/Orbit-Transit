@@ -1,5 +1,5 @@
-// Taiwan's bus routes and timetables, built each week by the proxy's bus
-// builder (Orbit-Core builders/buses.js) and kept on the phone a day: a city's
+// Taiwan's bus routes and timetables, built each week from TDX's free GTFS
+// (Orbit-Core tools/gtfs-buses.mjs, builders/gtfs.js) and kept on the phone a day: a city's
 // routes in one pack (新竹市, 新竹縣…), the 公路客運 in squares of 0.25°
 // (only the squares a trip is in). A route's stops and timetable come from
 // here, in TDX's own shape, so nothing else changes; a route not in its pack

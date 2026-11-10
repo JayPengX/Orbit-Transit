@@ -336,8 +336,12 @@ Live: https://orbit.jaypengx.com/transit/
     then if its own is no newer); `tests/bus-asks.test.mjs`, `bus-quiet.test.mjs`,
     `scripts/bus-rhythm.mjs` (the rule against TDX's timing, a stop card's
     asks before and after);
-  - bus routes and timetables: weekly packs in R2 (`packs.mjs`; 新北's ways
+  - bus routes and timetables: weekly packs in R2 (`packs.mjs`, built from
+    TDX's free GTFS on GitHub: Core `tools/gtfs-buses.mjs`; 新北's ways
     TDX doesn't time filled from 新北's own route list, Core `builders/ntpc.js`).
+    The metros' maps and timetables, 高鐵's days, a city's route list and the
+    rail stations are the Worker's copies in R2 too (Core `transit-free.js`),
+    asked the same way through `/transit/tdx`: nothing here changed for them.
     A route sheet's 時刻表 at a stop not timed itself (most of 台北, 新北,
     桃園, 台中 list only the first stop) is the first stop's plus the ride,
     said 依起站…推估 (`live.mjs stopTable`; 988, Jay 2026-11-09); the bus
