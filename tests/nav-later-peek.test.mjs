@@ -54,3 +54,35 @@ test('the trip under way is planned again when its stretches after a stop came f
   assert.match(src, /laterIn\(later, \{ replace: true \}\)/);
   assert.match(src, /function laterIn\(later, opts\) \{\n  navLater\(laterNow\(later\), opts\);[^}]*navDraw\(n\.plan, n\.i\)/);
 });
+
+// Jay 2026-11-07 12:23 on the train: tapping the walk to 墨竹亭 said 走到 34.8 公里,
+// 約 21:29 抵達 and moved the trip's end to 21:48: the step was timed from where he was.
+test('a step looked ahead to shows its own length; the trip’s time stays as it was', async () => {
+  const { pos, tick } = await import('./navsim.mjs');
+  clock.set(T(8, 0));
+  const p = trip();
+  // Far off (on a train 30 km away) before the first step.
+  p.legs = [{ mode: 'walk', from: P('', 24.6, 120.9), to: P('', 24.601, 120.9), dep: T(8, 0), arr: T(8, 2), dur: 120, dist: 120 }, { mode: 'walk', from: P('', 24.8352, 121.0079), to: shop, dep: T(8, 2), arr: T(8, 5), dur: 180, dist: 230 }];
+  p.arr = T(8, 5);
+  start(p);
+  pos(P('', 24.6, 120.9));
+  tick(1000);
+  const eta = () => box.querySelector('.ot-nav-etaw').innerHTML;
+  const before = eta();
+  box.onclick({ target: { closest: q => (q === '[data-nav-go]' ? { dataset: { navGo: '1' } } : null) } });
+  const top = box.querySelector('.ot-nav-topw').innerHTML;
+  assert.match(top, /<b>230<\/b><small>公尺/);
+  assert.doesNotMatch(top, /公里/);
+  assert.equal(eta(), before);
+});
+
+test('a trip with a stop: the bottom bar is when you are at the stop, not the whole trip', () => {
+  clock.set(T(8, 0));
+  start(trip());
+  const eta = box.querySelector('.ot-nav-etaw').innerHTML;
+  assert.match(eta, /到 墨竹亭 還要 /);
+  assert.doesNotMatch(eta, /全程剩/);
+  assert.match(eta, /<b>08:0[0-9]<\/b>/);
+  assert.equal(nav.stopShort('墨竹亭 燃麵本家 竹北博愛店'), '墨竹亭');
+  assert.equal(nav.stopShort('國立陽明交通大學光復校區'), '國立陽明交通大…');
+});
