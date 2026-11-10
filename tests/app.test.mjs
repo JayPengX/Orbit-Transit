@@ -894,6 +894,10 @@ test('交通’s 其他班次 are the map’s ways around the trip’s own time,
   const soon = [P('A', '14:10', 10, true), P('B', '17:20', 20, true), P('C', '14:30', 30, true)];
   const s = tripPlans(soon, [], now);
   assert.deepEqual(otherWays(s.first, s.rest, s.first[0]).map(p => p.legs[0].short), ['C']);
+  // Four recommendations, as the map lists them: all three under the first, none left off.
+  const four = [P('A', '16:59', 88, true), P('B', '16:57', 89, true), P('C', '17:20', 90, true), P('D', '16:45', 144, true), P('E', '17:03', 75, false)];
+  const f4 = tripPlans(four, [], now);
+  assert.deepEqual(otherWays(f4.first, f4.rest, f4.first[0]).map(p => p.legs[0].short), ['B', 'C', 'D']);
 });
 
 test('the day’s trains kept compact: the same trips back', async () => {
