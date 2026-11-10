@@ -629,6 +629,22 @@ test('每 30 分鐘換車: a long ride cut at a station half way, each part unde
   assert.deepEqual(swapRides(whole, [a, b]).length, whole.length, 'no station on the way: the ride stays whole');
 });
 
+test('每 30 分鐘換車: any station on the way, not only one by the 26-minute point (Jay 2026-11-10: 竹東高中 → 竹北 stayed 46′)', () => {
+  // The only station on the way is well short of the 26-minute point (over 700 m from it).
+  const a = { uid: 'y1', name: '起點', lat: 24.80, lon: 120.97, bikes: 3, ebike: 0, ret: 3, ok: true };
+  const mid = { uid: 'y2', name: '上員', lat: 24.802, lon: 121.006, bikes: 2, ebike: 0, ret: 2, ok: true };
+  const b = { uid: 'y3', name: '終點', lat: 24.80, lon: 121.05, bikes: 2, ebike: 0, ret: 5, ok: true };
+  const cut = bikeTrip(a, b, [a, mid, b], T('16:45'), { swap: true }).filter(l => l.mode === 'bike');
+  assert.equal(cut.length, 2, 'cut at the station on the way');
+  assert.equal(cut[0].to.name, '上員');
+  assert.ok(cut.every(l => l.dur <= 33 * 60), 'each part within the half hour');
+  // Off the way (2 km to the side), or with no bike to take again: the ride stays whole.
+  const off = { ...mid, uid: 'y4', lat: 24.82 };
+  assert.equal(bikeTrip(a, b, [a, off, b], T('16:45'), { swap: true }).filter(l => l.mode === 'bike').length, 1);
+  const empty = { ...mid, bikes: 0, ebike: 0 };
+  assert.equal(bikeTrip(a, b, [a, empty, b], T('16:45'), { swap: true }).filter(l => l.mode === 'bike').length, 1);
+});
+
 test('our own trains by YouBike: a station 3 km away ridden to, its stations found, or no plan', () => {
   const o = { name: '家', lat: 24.8300, lon: 120.9716 }; // ~3 km north of 新竹
   const d = { name: '公司', lat: 25.0500, lon: 121.5200 };

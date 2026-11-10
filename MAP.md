@@ -82,7 +82,10 @@ Live: https://orbit.jaypengx.com/transit/
     right edge), places, pinned stops, 規劃: TPASS, each way of moving a
     switch (the last one on stays on), 每 30 分換一台 YouBike as the person's
     own choice (`prefs.swap30` 'on'/'off', else as before: 每 30 分換車 or a
-    pass with free first half hours; `tpass.mjs bikeSwap`), the maps app.
+    pass with free first half hours; `tpass.mjs bikeSwap`): a ride over 30
+    minutes is cut at any station on the way, the first part nearest 26
+    minutes (`plan.mjs swapRides`; Jay 2026-11-10: 竹東高中 → 竹北 stayed one
+    46′ ride, its station 801 m off the one point looked at), the maps app.
     A switch keeps the page where it is.
     Places, bus groups and their stops are put in order by their grips
     (kit `reorder`; `tab-me.mjs`, `bus-ui.mjs` manageSheet).

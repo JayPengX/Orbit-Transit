@@ -127,16 +127,47 @@ export const walkLeg = (from, to, dep) => {
 };
 
 // One ride from station to station, leaving at t.
-export const rideLeg = (rent, ret, t, ebike = false) => {
-  const dist = Math.round(rideM(rent, ret) ?? roadM(rent, ret));
+export const rideLeg = (rent, ret, t, ebike = false, m = null) => {
+  const dist = Math.round(m ?? rideM(rent, ret) ?? roadM(rent, ret));
   const dur = rideSec(dist / 1.25, ebike) + 2 * DOCK_SEC;
   return { mode: 'bike', ebike, name: ebike ? W('YouBike 電輔車', 'YouBike E-bike') : 'YouBike', from: { name: rent.name, lat: rent.lat, lon: rent.lon }, to: { name: ret.name, lat: ret.lat, lon: ret.lon }, dur, dist, dep: t, arr: t + dur * 1000, rent, ret };
 };
 
 // A ride over half an hour, cut where you can return the bike and take one
-// again (每 30 分鐘換車: each half hour free with TPASS, or the cheapest):
-// at a station ~26 minutes in. Rides that can't be
-// cut stay whole.
+// again (每 30 分鐘換車: each half hour free with TPASS, or the cheapest): at a
+// station on the way, the first part as near 26 minutes as it can be and
+// never past the half hour by more than 3, the way round it a few minutes at
+// most, with a dock to return to and a bike to take. Any station on the way,
+// not only one by the straight line's 26-minute point (Jay 2026-11-10: 竹東高中
+// → 竹北 stayed one 46-minute ride, 臺鐵上員車站 801 m off that point). Rides
+// that can't be cut stay whole.
+const SWAP_AT = 26 * 60;
+function swapAt(cur, bikes) {
+  const span = meters(cur.from.lat, cur.from.lon, cur.to.lat, cur.to.lon);
+  const roomFor = s => (s.ret == null || s.ret > 0) && (cur.ebike ? s.ebike == null || s.ebike > 0 : s.bikes == null || s.bikes + (s.ebike || 0) > 0);
+  let best = null;
+  for (const s of bikes) {
+    if (!usable(s) || s.uid === cur.rent.uid || s.uid === cur.ret.uid || !roomFor(s)) continue;
+    const a = meters(cur.from.lat, cur.from.lon, s.lat, s.lon);
+    const b = meters(s.lat, s.lon, cur.to.lat, cur.to.lon);
+    // (On the way: not far off the line, a fifth of it in at least.)
+    if (a + b > span * 1.2 + 500 || a < span * 0.2) continue;
+    // (Both parts by the roads when they're known, else the whole ride's roads
+    // shared out by the straight lines: a part guessed long beside a whole
+    // known short made every cut look like a detour.)
+    const known = rideM(cur.rent, s) != null && rideM(s, cur.ret) != null;
+    const k = (cur.dist || span) / Math.max(span, 1);
+    const first = rideLeg(cur.rent, s, cur.dep, cur.ebike, known ? null : a * k);
+    if (first.dur > SWAP_SEC + 3 * 60) continue;
+    const rest = rideLeg(s, cur.ret, first.arr + DOCK_SEC * 1000, cur.ebike, known ? null : b * k);
+    // (The way round it, past returning one bike and taking another.)
+    const round = first.dur + rest.dur - cur.dur - DOCK_SEC;
+    if (round > Math.max(4 * 60, cur.dur * 0.1)) continue;
+    const cost = Math.abs(first.dur - SWAP_AT) / 60 + Math.max(0, first.dur - SWAP_SEC) / 20 + Math.max(0, round) / 30;
+    if (!best || cost < best.cost) best = { cost, first, rest };
+  }
+  return best;
+}
 export function swapRides(legs, bikes) {
   const out = [];
   for (const l of legs) {
@@ -146,18 +177,10 @@ export function swapRides(legs, bikes) {
     }
     let cur = l;
     for (let guard = 0; cur.dur > SWAP_SEC && guard < 4; guard++) {
-      const f = (26 * 60) / cur.dur;
-      const at = { lat: cur.from.lat + (cur.to.lat - cur.from.lat) * f, lon: cur.from.lon + (cur.to.lon - cur.from.lon) * f };
-      const mid = bikes
-        .filter(s => usable(s) && s.uid !== cur.rent.uid && s.uid !== cur.ret.uid)
-        .map(s => ({ s, d: meters(at.lat, at.lon, s.lat, s.lon) }))
-        .filter(x => x.d <= 700)
-        .sort((a, b) => a.d - b.d)[0]?.s;
-      if (!mid) break;
-      const first = rideLeg(cur.rent, mid, cur.dep, cur.ebike);
-      if (first.dur > SWAP_SEC + 3 * 60) break;
-      out.push(first);
-      cur = { ...rideLeg(mid, cur.ret, first.arr + DOCK_SEC * 1000, cur.ebike), swap: true };
+      const cut = swapAt(cur, bikes);
+      if (!cut) break;
+      out.push(cut.first);
+      cur = { ...cut.rest, swap: true };
     }
     out.push(cur);
   }
