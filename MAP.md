@@ -489,6 +489,11 @@ node ../Orbit-Core/tools/preview.mjs transit --live --width 375
 - When changing the ranking, also run `node scripts/live.mjs --against
   HEAD` (old against new on today's data) and read what moved.
 - `scripts/replay.mjs` re-runs a 除錯紀錄 (`--why` shows the score).
+- `live.mjs` and `verdict.mjs` read the proxy through `scripts/dev-fetch.mjs`:
+  each address once in 5 minutes for every tool run (Orbit-Core's
+  `tools/live-keep.mjs`; `ORBIT_LIVE_KEEP=off` asks each time), so
+  `--against`'s two runs see the same buses. `timing.mjs` and
+  `bus-rhythm.mjs` time the live answers: they ask every time.
 - `node scripts/timing.mjs <from> <to> --warm` times a plan and counts its
   Worker asks by kind, on a new phone and then the same phone again
   (`scripts/phone.mjs` keeps its storage): run it before and after a change

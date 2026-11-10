@@ -81,9 +81,9 @@ if (against) {
   process.exit(0);
 }
 
-// The proxy lets a localhost page in without a pass (worker.js TRANSIT_DEV).
-const f = globalThis.fetch;
-globalThis.fetch = (u, o = {}) => f(u, { ...o, headers: { ...(o.headers || {}), Origin: 'http://localhost:8080' } });
+// The proxy lets a localhost page in without a pass (worker.js TRANSIT_DEV);
+// its answers shared with our other tool runs (dev-fetch.mjs).
+globalThis.fetch = (await import('./dev-fetch.mjs')).devFetch(globalThis.fetch);
 const { useSession } = await import('../public/lib/api.mjs');
 useSession({ ensureToken: async () => 'dev' });
 const { planTrip } = await import('../public/lib/planner.mjs');
