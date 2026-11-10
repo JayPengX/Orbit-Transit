@@ -394,6 +394,10 @@ export function routeNotices(notices, uid, name, now = Date.now(), stopUID = '')
 // The notice that stops a route today, or null.
 export const busOff = (notices, uid, name, now = Date.now()) => routeNotices(notices, uid, name, now).find(x => x.stop) || null;
 
+// The cities whose notices the phone reads itself (ebnotice.mjs, loaded only for them).
+const PHONE_NOTICES = new Set(['Taichung', 'Kaohsiung']);
+let noticeMod = null;
+const notices = () => (noticeMod ||= import('./ebnotice.mjs').catch(err => ((noticeMod = null), Promise.reject(err))));
 // The cities TDX has bus notices for (連江 none; Alert not for 臺南).
 const NO_ALERT = new Set(['Tainan', 'LienchiangCounty']);
 const NO_NEWS = new Set(['LienchiangCounty']);
@@ -404,7 +408,15 @@ export async function busNotices(cities = []) {
     ['basic/v2/Bus/News/InterCity', null],
     ...[...new Set(cities)].filter(c => CITY_NAMES.some(([k]) => k === c)).flatMap(c => [...(NO_ALERT.has(c) ? [] : [[`basic/v2/Bus/Alert/City/${c}`, c]]), ...(NO_NEWS.has(c) ? [] : [[`basic/v2/Bus/News/City/${c}`, c]])])
   ];
-  const lists = await Promise.all(asks.map(([p, c]) => tdx(p, { fresh: NOTICE_FRESH, max: 2e6 }).then(j => rows(j).map(a => busNotice(a, c)), () => [])));
+  const lists = await Promise.all(
+    asks.map(([p, c]) => {
+      const worker = () => tdx(p, { fresh: NOTICE_FRESH, max: 2e6 });
+      // (臺中's and 高雄's read by the phone from their own sites, the Worker's when they can't: ebnotice.mjs.)
+      const kind = p.includes('/Alert/') ? 'Alert' : 'News';
+      const read = c && PHONE_NOTICES.has(c) ? notices().then(m => (m.phoneNotices(kind, c) ? m.cityNotices(kind, c) : Promise.reject(new Error('the Worker\'s')))).catch(worker) : worker();
+      return read.then(j => rows(j).map(a => busNotice(a, c)), () => []);
+    })
+  );
   return lists.flat();
 }
 
