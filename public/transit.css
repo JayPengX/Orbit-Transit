@@ -644,6 +644,17 @@ html[data-look='native'] .ot-hc-field input::placeholder {
 .ot-leg.bike b {
   color: var(--q-label);
 }
+/* 下雨改搭車: a ride or walk it rains on, a raindrop after it (rain.mjs). */
+.ot-leg.wet::after {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 1px 1px 0 2px;
+  border-radius: 0 50% 50% 50%;
+  transform: rotate(45deg);
+  background: var(--q-blue);
+}
 .ot-leg-sep {
   color: var(--q-label-3);
   font-size: 13px;

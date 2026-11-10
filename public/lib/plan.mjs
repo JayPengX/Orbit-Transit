@@ -17,6 +17,7 @@ import { trainKind } from './ui.mjs';
 import { trainFor } from './navlive.mjs';
 import { stationPoint } from './raildata.mjs';
 import { canRent } from './bike.mjs';
+import { rainCost } from './rain.mjs';
 
 import { W } from '#kit/lang.mjs';
 const RIDE_M_MIN = { bike: 230, ebike: 300 }; // about 14 and 18 km/h
@@ -653,7 +654,7 @@ export function score(p, opts = {}) {
   return Object.values(parts).reduce((a, b) => a + b, 0);
 }
 // The score's parts, by name (scripts/replay.mjs --why shows them).
-export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0 } = {}) {
+export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0, wet = null } = {}) {
   const out = {};
   const add = (k, v) => v && (out[k] = (out[k] || 0) + v);
   const ridden = rides(p);
@@ -718,6 +719,8 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
   add('fare', fare / 12);
   // A bus caught further on by bike: a race against a bus's guess, worth it only clearly sooner.
   if (ridden.some(l => l.chase)) add('race', 4);
+  // 下雨改搭車: a ride or a long walk while it rains on it (rain.mjs, Weather's notebook).
+  add('rain', rainCost(p, wet));
   if (p.miss) add('miss', 25);
   if (p.off) add('off', 120);
   return out;
@@ -836,7 +839,7 @@ const mainLine = p => {
 export const inOrder = p => p.legs.every((l, i) => i === 0 || !isRide(l) || l.dep == null || p.legs[i - 1].arr == null || l.dep >= p.legs[i - 1].arr - 2 * 60_000);
 // To be there by a time: a way in by it, but not more than this before it.
 export const ARRIVE_WINDOW = 4 * 3_600_000;
-export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now(), keep = null } = {}) {
+export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now(), keep = null, wet = null } = {}) {
   // Only what `keep` allows (inside your TPASS's area: what the pass takes), unless that's nothing.
   if (keep) {
     const kept = plans.filter(p => p?.legs?.length && keep(p));
@@ -878,7 +881,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const key = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${l.dep}`).join('|');
   const order = (a, b) => a.s - b.s || a.p.arr - b.p.arr || named(b.p) - named(a.p) || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0);
   const scored = [];
-  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p) }), k: key(p) })).sort(order)) {
+  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p), wet }), k: key(p) })).sort(order)) {
     const i = scored.findIndex(y => sameWay(x.p, y.p));
     if (i < 0) scored.push(x);
     else if (named(x.p) > named(scored[i].p)) scored[i] = x;
@@ -953,7 +956,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // point lower: home a little sooner never makes a worse way "beat" one.
   const bothers = new Map();
   const bother = x => {
-    if (!bothers.has(x)) bothers.set(x, Object.entries(scoreParts(x, { o, d, now, by, deadline, fare: cost(x) })).reduce((a, [k, v]) => (k === 'time' || k === 'wait' ? a : a + v), 0));
+    if (!bothers.has(x)) bothers.set(x, Object.entries(scoreParts(x, { o, d, now, by, deadline, fare: cost(x), wet })).reduce((a, [k, v]) => (k === 'time' || k === 'wait' ? a : a + v), 0));
     return bothers.get(x);
   };
   // Over the river on the bike, before or after a bus or train, when a way
