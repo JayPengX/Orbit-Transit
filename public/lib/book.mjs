@@ -44,11 +44,8 @@ export async function bookWays(trip) {
 export async function openBooking({ from, to, dep, no }, say = () => {}) {
   const { date, hm: time } = tw(dep);
   const d = sheet(
-    `${sheetHead(W('高鐵訂票', 'Book on THSR'), `<span data-ride>${e(W(`${dayLabel(date)} ${time} · ${no} 次`, `${dayLabel(date)} ${time} · train ${no}`))}</span>`, tile('hsr', COLOR.hsr))}
-    <div class="ot-book" aria-live="polite">
-      <p class="ot-book-wait">${W('正在向高鐵取得這班車的連結…', 'Asking THSR for this train’s link…')}</p>
-    </div>
-    <p class="ot-book-note">${W('在高鐵的 App 或網站付款訂位；Orbit 不賣票。', 'You book and pay with THSR; Orbit sells nothing.')}</p>`,
+    `${sheetHead(W(`訂票 · 高鐵 ${e(no)}`, `Book THSR ${e(no)}`), `<span data-ride>${e(`${dayLabel(date)} ${time}`)}</span>`, tile('hsr', COLOR.hsr))}
+    <div class="ot-book" aria-live="polite" aria-busy="true"><span class="ot-book-way q-skel"></span><span class="ot-book-way q-skel"></span></div>`,
     'ot-book-sheet'
   );
   try {
@@ -56,11 +53,11 @@ export async function openBooking({ from, to, dep, no }, say = () => {}) {
     d.querySelector('[data-ride]').textContent = `${a} → ${b} · ${d.querySelector('[data-ride]').textContent}`;
     const { app: appUrl, web: webUrl } = await bookWays({ from: a, to: b, date, time, no: String(no) });
     if (!appUrl && !webUrl) throw new Error('no link');
-    d.querySelector('.ot-book').innerHTML = [
-      appUrl ? `<a class="q-btn block ot-book-app" href="${e(appUrl)}" target="_blank" rel="noopener" data-q-quick>${icon('ticket')} ${W('在高鐵 App 訂票', 'Book in the THSR app')}</a>` : '',
-      webUrl ? `<a class="q-btn block ${appUrl ? 'ghost' : ''}" href="${e(webUrl)}" target="_blank" rel="noopener">${W('在高鐵網站訂票', 'Book on THSR’s website')}</a>` : '',
-      appUrl && webUrl ? `<small class="ot-book-why">${W('沒有裝 T Express App，就用網站。', 'No T Express app? Use the website.')}</small>` : ''
-    ].join('');
+    // Two even cards, the app's first: a tile, what it is, whose.
+    const way = (url, glyph, label, sub, own = '') => `<a class="ot-book-way" href="${e(url)}" target="_blank" rel="noopener"${own}>${tile(glyph, COLOR.hsr)}<b>${label}</b><small>${sub}</small></a>`;
+    const box = d.querySelector('.ot-book');
+    box.innerHTML = [appUrl ? way(appUrl, 'ticket', W('高鐵 App', 'THSR app'), 'T Express', ' data-q-quick') : '', webUrl ? way(webUrl, 'globe', W('高鐵網站', 'THSR website'), W('官網訂票', 'Book online')) : ''].join('');
+    box.removeAttribute('aria-busy');
     // (Each link lasts minutes: the sheet goes once one is used.)
     d.querySelector('.ot-book').addEventListener('click', ev => ev.target.closest('a[href]') && setTimeout(() => d.shut?.(), 400));
     return true;

@@ -80,6 +80,8 @@ const I = {
   school: '<path d="m12 4.5 9 4.5-9 4.5L3 9zM7 11.5v4.2c0 1.2 2.2 2.3 5 2.3s5-1.1 5-2.3v-4.2M21 9v5"/>',
   live: '<circle cx="12" cy="12" r="2.3"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8"/>',
   // (The kit's own ticket: one drawing for the idea. An older kit without it: the rail glyph.)
+  // A globe: a website (高鐵訂票's 網站).
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.5 3.5 5.3 3.5 8.5s-1.1 6-3.5 8.5c-2.4-2.5-3.5-5.3-3.5-8.5s1.1-6 3.5-8.5z"/>',
   ticket: kit.ICONS?.ticket
 };
 // YouBike's wordmark alone, inline where a bike glyph stood (a plan's bike leg, a station's card).
