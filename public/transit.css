@@ -6507,26 +6507,38 @@ html[lang='en'] .ot-sn-tap {
   background-size: 12px;
 }
 
-/* 高鐵訂票's sheet (book.mjs): the ride, then its two ways, the app's first. */
+/* 高鐵訂票's sheet (book.mjs): the ride in its head, then two even cards, the app's first. */
 .ot-book {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
-.ot-book .q-btn {
-  box-sizing: border-box;
-  width: 100%;
+.ot-book-way {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
+  min-height: 112px;
+  padding: 14px 8px;
+  border-radius: var(--q-r-cell, 12px);
+  background: var(--nv-card, var(--q-fill-4));
+  color: var(--q-label);
+  text-align: center;
   text-decoration: none;
 }
-.ot-book-wait,
-.ot-book-why,
-.ot-book-note {
-  margin: 0;
-  color: var(--q-label-2);
-  font: 400 var(--q-t-footnote, 13px) / 1.4 var(--q-font);
-  text-align: center;
+.ot-book-way:only-child {
+  grid-column: 1 / -1;
 }
-.ot-book-note {
-  margin-top: 16px;
+.ot-book-way .q-tile {
+  margin-bottom: 2px;
+}
+.ot-book-way b {
+  font: 600 var(--q-t-body, 17px) / 1.2 var(--q-font);
+}
+.ot-book-way small {
+  color: var(--q-label-2);
+  font: 400 var(--q-t-footnote, 13px) / 1.2 var(--q-font);
 }
