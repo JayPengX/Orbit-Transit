@@ -316,6 +316,14 @@ button.ot-hero {
 .ot-hc-field input::-webkit-search-cancel-button {
   display: none;
 }
+/* (Orbit's own look: the hero a plain card, so what's typed is in the label's
+   colour; white, it was unseen on a light screen.) */
+html[data-look='native'] .ot-hc-field input {
+  color: var(--q-label);
+}
+html[data-look='native'] .ot-hc-field input::placeholder {
+  color: var(--q-label-3);
+}
 
 /* A countdown: the minutes big and rounded, 分 small after them. */
 .ot-count {
@@ -486,9 +494,13 @@ button.ot-hero {
 .ot-strip-eta.live b {
   color: var(--q-green);
 }
+/* Words (進站中, 今日未營運) at the figures' weight and their height: a 17 pt
+   word stands as tall as a 20 pt figure (Jay 2026-11-10: "balance the text
+   size"; at 14 pt they looked small and light beside 61 分 and 09:17). */
 .ot-strip-eta.words b {
   color: var(--q-label-2);
-  font: 600 14px/20px var(--q-font);
+  font: 600 17px/24px var(--q-font);
+  letter-spacing: 0;
 }
 .ot-strip-eta.live.words b {
   color: var(--q-green);
