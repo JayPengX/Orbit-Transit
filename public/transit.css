@@ -5602,8 +5602,9 @@ html[lang='en'] .ot-sn-tap {
 /* A route's timetable: the week as a strip of days, the hours as rows. */
 .ot-tt-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  gap: 2px 10px;
   margin: 6px 4px 10px;
 }
 .ot-tt-head small {

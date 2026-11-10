@@ -327,14 +327,14 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const stopPick = `<label class="ot-tt-stop"><b>${e(shown(s.name))}</b>${icon('down')}<select data-pickstop aria-label="${W('換站牌', 'Change stop')}">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(shown(x.name))}</option>`).join('')}</select></label>`;
     const body = times.length
       ? `<div class="ot-timetable">${hours(times)
-          .map(([h, list]) => `<div class="ot-tt-hour"><b>${e(h)}</b><span>${list.map(t => `<i class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t.slice(3, 5))}</i>`).join('')}</span></div>`)
+          .map(([h, list]) => `<div class="ot-tt-hour"><b>${e(String(Number(h) % 24).padStart(2, '0'))}</b><span>${list.map(t => `<i class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t.slice(3, 5))}</i>`).join('')}</span></div>`)
           .join('')}</div>`
       : every.length
         ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? W(`每 ${f.min}–${f.max} 分`, `every ${f.min}–${f.max} min`) : f.min || f.max ? W(`每 ${f.min || f.max} 分`, `every ${f.min || f.max} min`) : W('首末班', 'First and last')}</b></div>`).join('')}</div>`
         : `<p class="ot-note">${W(`${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。`, `No timetable at this stop for ${named.toLowerCase()} (none published, or not running).`)}</p>`;
     // (Times the stop has none of its own for: its first stop's plus the ride, said so.)
     const est = guess && times.length ? `<p class="ot-note">${W(`依起站 ${e(shown(w.stops[0].name))} 的發車時間推估`, `Estimated from ${e(shown(w.stops[0].name))}’s departures`)}</p>` : '';
-    return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${W(`${times.length} 班`, `${times.length} buses`)}${day ? '' : next ? `・${W('下一班', 'next')} ${guess ? W('約 ', 'about ') : ''}${e(next)}` : `・${W('已收班', 'done')}`}` : ''}</small></div>${est}${body}`;
+    return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${W(`${times.length} 班`, `${times.length} buses`)}${day ? '' : next ? `・${W('下一班', 'next')} ${e(next)}` : `・${W('已收班', 'done')}`}` : ''}</small></div>${est}${body}`;
   };
   let offDay = 0;
   const draw = () => {
