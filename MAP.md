@@ -326,9 +326,10 @@ Live: https://orbit.jaypengx.com/transit/
   the Worker checks every 2 minutes while the phone is locked.
 - **Data:**
   - live: TDX through `/transit/tdx`, cached on the Worker; buses due through
-    `/transit/eta` (`api.mjs busEta`): the Worker answers a quiet city's stops
-    or routes from TDX's filtered read, a busy city's from one read of the
-    whole city (公路客運 always by its stops); the phone asks the same thing
+    `/transit/eta` (`api.mjs busEta`): the Worker answers 新竹's, 臺北's,
+    新北's and 臺中's from the cities' own sites (Core `transit-free.js`), else
+    a quiet city's stops or routes from TDX's filtered read, a busy city's from
+    one read of the whole city (公路客運 always by its stops); the phone asks the same thing
     once a beat at most, and the routes asked within a moment as one ask a
     city (`routes=`; a plan's buses were five to ten asks, 2026-11-06); where
     a city's estimates come every 30 s (新竹, 新竹縣, 公路客運), not again
