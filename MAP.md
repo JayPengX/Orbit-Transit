@@ -265,6 +265,13 @@ Live: https://orbit.jaypengx.com/transit/
      direct crossing; a ride for nothing beside a short walk).
   2. Order what's left by door-to-door minutes plus a small table of
      bother (`scoreParts`).
+  **下雨改搭車** (`lib/rain.mjs`, Jay 2026-11-10, the family's links): Orbit
+  Weather tells the family's notebook where rain is due (`weather.rain`: each
+  of its places' wet stretches, the radar's then the hours at 50%+); a trip
+  with a Weather place within 8 km of either end (`rainFor`) costs a YouBike
+  ride or a walk of 3 minutes or more in the rain more (`rainCost`, the
+  score's `rain`), so a bus or the metro comes first; its card marks those
+  legs with a drop and says 會淋雨 (`markWet`). Nothing known: as before.
 - **Navigation** (`nav.mjs`, `navlive.mjs`): the whole trip on the map,
   each step moving on by itself (on board only once two fixes say so; a
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
@@ -502,6 +509,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/khbus.mjs` | 高雄's buses from the city's own site, read by the phone (the Worker's if it can't) |
 | `lib/ebbus.mjs` | 臺中's, 桃園's and 臺南's buses from the cities' own sites, read by the phone with the kit's reader (the Worker's if it can't) |
 | `lib/bus.mjs`, `bus-ui.mjs`, `busgps.mjs` | Routes, stops, arrivals; the route strip; a route's sheet (its stops with the buses on the line: a bus a green dot a size up from a stop's, 進站中 / 即將進站 at the list's own size in the live green, never a red pill); a lagging bus placed by its GPS |
+| `lib/rain.mjs` | 下雨改搭車: Weather's wet stretches near a trip's ends, what rain costs a ride or a walk, the wet legs marked |
 | `lib/family-share.mjs` | Transit's home, school and work places and saved trips told to the kit's family notebook (`family.mjs`, read by a dynamic import) on each save and merge, only when changed (`shareFamily`): Weather's 下雨改搭公車 reads them; a trip set out on (`navigate`, tab-map.mjs) whose fare is one known price told as the family's latest ride (`rideFact`, `shareRide`: `{ id, at, name, fare, modes }`), for Money's 車資記帳 to offer |
 | `lib/links.mjs` | Another app's link to a trip: `#plan?to=<lat>,<lon>,<name>[&by=<ISO time>]` (`planLink`; `planHash` makes one), opened by `app.mjs` `openLink` on the map from where you are, arriving by then; the address left as `#map` |
 | `lib/fare.mjs` | A bus ride's fare, stop to stop (a route sheet's 票價): TDX's RouteFare a route at a time, kept a week; 段次 with its buffer zones, stop to stop (公路客運), stages; free buses |

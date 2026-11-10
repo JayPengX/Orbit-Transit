@@ -189,8 +189,11 @@ export function legChips(legs) {
       // logo when it's the only one in three legs or fewer, else the bike glyph (the row never runs
       // past a 320 screen).
       const mins = `${Math.max(1, Math.round((l.dur || 0) / 60))}′`;
-      if (l.mode === 'walk') return `<span class="ot-leg walk" aria-label="${W('步行', 'Walk')} ${mins}">${icon('walk')}${mins}</span>`;
-      if (l.mode === 'bike') return `<span class="ot-leg bike" style="--c:${e(c)}" aria-label="${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${mins}">${all.length < 4 && all.filter(x => x.mode === 'bike').length === 1 ? bikeMark() : icon('bike')}${l.ebike ? icon('bolt') : ''}<b>${mins}</b></span>`;
+      // (下雨改搭車: a ride or walk it rains on, a drop beside it; rain.mjs.)
+      const wet = l.wet ? ' wet' : '';
+      const wetSay = l.wet ? W('，會淋雨', ', in the rain') : '';
+      if (l.mode === 'walk') return `<span class="ot-leg walk${wet}" aria-label="${W('步行', 'Walk')} ${mins}${wetSay}">${icon('walk')}${mins}</span>`;
+      if (l.mode === 'bike') return `<span class="ot-leg bike${wet}" style="--c:${e(c)}" aria-label="${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${mins}${wetSay}">${all.length < 4 && all.filter(x => x.mode === 'bike').length === 1 ? bikeMark() : icon('bike')}${l.ebike ? icon('bolt') : ''}<b>${mins}</b></span>`;
       // A train: its kind and number apart (a narrow row keeps the number, the colour says the kind).
       const label = l.mode === 'hsr' && l.train?.no ? `${MODE_NAME.hsr} ${l.train.no}` : legLabel(l);
       const [, kind, no] = (l.mode === 'tra' || l.mode === 'hsr') && /^(.*\S)\s+(\d{1,4}[A-Z]?)$/.exec(label) || [];

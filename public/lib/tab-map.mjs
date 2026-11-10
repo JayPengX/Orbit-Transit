@@ -47,6 +47,19 @@ import * as kit from '#kit/orbit.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';
+import { rainFor } from './rain.mjs';
+
+// 下雨改搭車: Orbit Weather's wet stretches near the trip's ends (the family's
+// notebook, on this phone; an older kit without it: nothing).
+let familyKit = null;
+import('#kit/family.mjs').then(f => (familyKit = f)).catch(() => {});
+const wetFor = (a, b) => {
+  try {
+    return rainFor(familyKit?.heard?.('weather', 'rain', { maxAge: 3 * 3_600_000 }), [a, b]);
+  } catch {
+    return null;
+  }
+};
 const $ = id => document.getElementById(id);
 const FALLBACK = { lat: 25.0478, lon: 121.517 }; // 台北車站
 const HERE = W('目前位置', 'Here');
@@ -1750,7 +1763,7 @@ async function plan(from, to, opts = {}) {
     // The whole plan before the first show (its second round too: the direct
     // buses, every bus's times, 追公車; steady.mjs `settled`), the skeleton till
     // then (Jay 2026-11-06: "the first show is the final result").
-    out = onTicket || onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await settled(await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow(), chase: !opts.noChase })));
+    out = onTicket || onBoard || (opts.plans?.length && !then.length ? { plans: opts.plans, sources: {} } : await settled(await planTrip(ctx.data, fromPt, dest, { at, by: when.by === 'arrive' ? 'arrive' : 'depart', modes: tripModes, ebike: ebikeNow(), chase: !opts.noChase, wet: wetFor(fromPt, dest) })));
     if (aboard && !onBoard) c.from = { ...c.from, name: start.name || HERE };
     c.plans = onBoard || onTicket ? out.plans : await walkHere(out.plans);
     c.choice = {};
@@ -2097,7 +2110,7 @@ function plansHtml(c) {
     const sum = k => all.reduce((a, q) => a + (q[k] || 0), 0);
     // (The price before the walk, which matters less. The line wraps between facts, never inside one: at 320 px it ended in … and the walk was lost; Jay 2026-11-06.)
     const facts = !c.then?.length
-      ? [leaveText(p), p.ticket ? '' : p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.fareText || (p.fare ? `NT$${p.fare}` : ''), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '']
+      ? [leaveText(p), p.ticket ? '' : p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.fareText || (p.fare ? `NT$${p.fare}` : ''), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '', p.wet ? W('會淋雨', 'In the rain') : '']
       : !later
         ? [leaveText(p), W(`後面 ${c.then.length} 段規劃中…`, `Planning ${c.then.length} more…`)]
         : [leaveText(p), sum('transfers') ? W(`轉乘 ${sum('transfers')} 次`, `${sum('transfers')} changes`) : W('不必轉乘', 'No changes'), sum('fare') ? `NT$${sum('fare')}` : '', sum('walk') > 50 ? W(`步行 ${distText(sum('walk'))}`, `walk ${distText(sum('walk'))}`) : ''];
