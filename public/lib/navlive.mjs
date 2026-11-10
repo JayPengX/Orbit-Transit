@@ -41,7 +41,8 @@ export function trainWhere(stops, i, live) {
 
 // On board: the stop you're coming to next, between the one you got on at
 // (i) and yours (j), from where you are: the nearest, or the one after it
-// once you're past it (or stopped at it).
+// once you're past it (or stopped at it). (Navigation keeps to the ride's
+// way as you go: rideOn.)
 export function nextStop(stops, i, j, pos) {
   if (!pos) return i + 1 <= j ? i + 1 : j;
   const d = s => meters(pos.lat, pos.lon, s.lat, s.lon);
@@ -49,6 +50,38 @@ export function nextStop(stops, i, j, pos) {
   for (let k = i; k <= j; k++) if (d(stops[k]) < d(stops[h])) h = k;
   if (h < j && (d(stops[h]) < 40 || d(stops[h + 1]) < meters(stops[h].lat, stops[h].lon, stops[h + 1].lat, stops[h + 1].lon))) h++;
   return Math.max(h, Math.min(i + 1, j));
+}
+// Where along a ride you are (`rs`: { stops, i, j }; alongRoute's { d, off }):
+// near where it last had you (`rs.d`, at `rs.seen`), at most a fast bus's
+// way on since (35 m/s, 400 m at least) and a little back, the stretch
+// nearest a bus's usual way on (5 m/s) first; not known yet, anywhere after
+// where you got on. A route that comes back past itself (out
+// one street, back on its pair across the way, a loop round a station) has
+// its way back near you on the way out: one rough fix there had the trip off
+// at your stop while still going out, or back at the stops passed (Jay
+// 2026-11-09: the route jumping back near the last stop).
+export function rideAlong(rs, pos, now = Date.now()) {
+  rs.cum ||= routeCum(rs.stops);
+  const from = Math.max(0, rs.i - 1);
+  if (rs.d == null) return alongRoute(rs.stops, pos, rs.cum, from);
+  const gap = Math.max(0, now - (rs.seen ?? now)) / 1000;
+  return alongRoute(rs.stops, pos, rs.cum, from, [rs.d - 150, rs.d + Math.max(400, 35 * gap)], rs.d + 5 * gap);
+}
+// The stop you're coming to on a ride, kept on it as you go: where along
+// it you are (rideAlong; never back), then the first stop still ahead (40 m
+// and more on: stopped at one, it's the next). `had`: the one the trip said
+// when the ride's stops were read again.
+export function rideOn(rs, pos, now = Date.now(), had = null) {
+  rs.cum ||= routeCum(rs.stops);
+  if (rs.d == null && had != null) rs.d = rs.cum[Math.max(rs.i, had - 1)];
+  if (pos) {
+    const a = rideAlong(rs, pos, now);
+    if (a) rs.d = Math.max(rs.d ?? -Infinity, a.d);
+    rs.seen = now;
+  }
+  if (rs.d == null) return nextStop(rs.stops, rs.i, rs.j, null);
+  for (let k = rs.i + 1; k <= rs.j; k++) if (rs.cum[k] > rs.d + 40) return k;
+  return rs.j;
 }
 
 // When the bus you're on is at each stop ahead, from the estimates: only
@@ -123,21 +156,31 @@ export function routeCum(stops) {
   return cum;
 }
 // How far along the stops a point is (metres from the first, on the nearest
-// stretch between two stops, from stop `from` on), and how far off that line.
-export function alongRoute(stops, pt, cum = routeCum(stops), from = 0) {
+// stretch between two stops, from stop `from` on; `range`: only between
+// those metres along; `near`: a stretch further from those metres along
+// counts as a tenth of that further off), and how far off that line.
+export function alongRoute(stops, pt, cum = routeCum(stops), from = 0, range = null, near = null) {
   const cos = Math.cos((pt.lat * Math.PI) / 180);
   const xy = s => [(s.lon - pt.lon) * 111_320 * cos, (s.lat - pt.lat) * 110_540];
   let best = null;
   for (let k = Math.max(0, from); k + 1 < stops.length; k++) {
+    const seg = cum[k + 1] - cum[k];
+    let [t0, t1] = [0, 1];
+    if (range) {
+      if (cum[k + 1] < range[0] || cum[k] > range[1]) continue;
+      if (seg > 0) [t0, t1] = [Math.max(0, (range[0] - cum[k]) / seg), Math.min(1, (range[1] - cum[k]) / seg)];
+    }
     const [ax, ay] = xy(stops[k]);
     const [bx, by] = xy(stops[k + 1]);
     const [dx, dy] = [bx - ax, by - ay];
     const len2 = dx * dx + dy * dy;
-    const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
+    const t = len2 ? Math.max(t0, Math.min(t1, -(ax * dx + ay * dy) / len2)) : 0;
     const off = Math.hypot(ax + t * dx, ay + t * dy);
-    if (!best || off < best.off) best = { d: cum[k] + t * (cum[k + 1] - cum[k]), off };
+    const d = cum[k] + t * (cum[k + 1] - cum[k]);
+    const score = off + (near != null ? Math.abs(d - near) / 10 : 0);
+    if (!best || score < best.score) best = { d, off, score };
   }
-  return best;
+  return best && { d: best.d, off: best.off };
 }
 // How far off a ride you are, in metres: from the line through its stops
 // and from its way on the map (its road; `way`, points), whichever is

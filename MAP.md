@@ -235,7 +235,10 @@ Live: https://orbit.jaypengx.com/transit/
 - **Navigation** (`nav.mjs`, `navlive.mjs`): the whole trip on the map,
   each step moving on by itself (on board only once two fixes say so; a
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
-  chime on iPhone) before yours. Missed bus → the next; on an earlier
+  chime on iPhone) before yours. On board, where you are along the ride
+  (`navlive.mjs rideAlong`, `rideOn`) is looked for only near where it last
+  had you: a route that comes back past itself (a loop, out one street and
+  back on its pair) never has you off early or back at stops passed. Missed bus → the next; on an earlier
   train than planned → the changes after it moved sooner; waiting for a
   train, a sooner one still to come is taken, except a train you picked
   (`pickedPlan`: a later one chosen over an earlier one on the plans card or

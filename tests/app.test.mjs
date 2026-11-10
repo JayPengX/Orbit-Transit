@@ -13,7 +13,7 @@ import { mergeBikes, bikeName, bikeLevel } from '../public/lib/bike.mjs';
 import { emptyData, encodeData, decodeData, mergeData, cleanData, remember, trainKey, move, cleanSaved, cleanPin, cleanPrefs, modeList, cleanEnd, cleanPlace } from '../public/lib/store.mjs';
 import { navNotices, navTimes, paceOf, gmapsLink, legEnd, rideName, wayText, boardHtml, leftText, tripAt, retimeRide, lateBy, stageView } from '../public/lib/nav.mjs';
 import { fastest, bestText } from '../public/lib/trouble.mjs';
-import { busWhere, busAhead, trainWhere, nextStop, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
+import { busWhere, busAhead, trainWhere, nextStop, rideOn, countText, trainFor, routeCum, alongRoute, ridePace, aheadByPace } from '../public/lib/navlive.mjs';
 import { decodeGoogle, decodeFlexible, tw, twAt, minsText, distText, meters, addDays, readSaved, UNREAD } from '../public/lib/util.mjs';
 import { cityFromAddress, cityAt, cityOf } from '../public/lib/city.mjs';
 import { parseSystem, lineRuns, upcoming, interchanges, firstLast, frequency } from '../public/lib/metro.mjs';
@@ -1555,6 +1555,27 @@ test('nextStop: on board, the stop you come to next from where you are', () => {
   assert.equal(nextStop(NSTOPS, 1, 6, { lat: 24.8, lon: NSTOPS[3].lon + 0.0004 }), 4);
   // Never past yours.
   assert.equal(nextStop(NSTOPS, 1, 6, { lat: 24.8, lon: NSTOPS[6].lon }), 6);
+});
+
+test('rideOn: the stop you come to by where you are along the ride, near where it last had you: never back, never across to its way back', () => {
+  const t = 1_000_000;
+  // Out east on one street, back west on its pair 100 m north; yours, Q6, across from Q1.
+  const A = { lat: 24.8, lon: 120.97 };
+  const at = (n, e) => ({ lat: A.lat + n / 110_540, lon: A.lon + e / (111_320 * Math.cos((A.lat * Math.PI) / 180)) });
+  const stops = [[0, 0], [0, 300], [0, 600], [0, 900], [100, 900], [100, 600], [100, 300]].map(([n, e], k) => ({ name: 'Q' + k, ...at(n, e) }));
+  const rs = { stops, i: 0, j: 6 };
+  assert.equal(rideOn(rs, at(0, 150), t), 1);
+  assert.equal(rideOn(rs, at(0, 250), t + 8000), 1);
+  assert.equal(rideOn(rs, at(70, 300), t + 16_000), 2, 'a rough fix nearer the street back, by Q6: still going out, past Q1');
+  assert.equal(rideOn(rs, at(0, 200), t + 24_000), 2, 'a fix back: never back');
+  assert.equal(rideOn(rs, at(0, 880), t + 60_000), 4);
+  assert.equal(rideOn(rs, at(100, 500), t + 90_000), 6, 'on the way back: yours next');
+  // Read again with the trip's own next stop: from there.
+  assert.equal(rideOn({ stops, i: 0, j: 6 }, at(100, 680), t, 5), 5);
+  // The phone locked a while: where it is now.
+  const woke = { stops, i: 0, j: 6 };
+  rideOn(woke, at(0, 100), t);
+  assert.equal(rideOn(woke, at(100, 700), t + 5 * 60_000), 5);
 });
 
 test('countText: m:ss under ten minutes, minutes after', () => {

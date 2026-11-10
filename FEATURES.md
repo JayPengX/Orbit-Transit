@@ -28,6 +28,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - 追公車: a YouBike to a stop further along the bus's way, planned (never on a replan under way, nor offered while navigating) — `public/lib/chase.mjs`, `public/lib/planner.mjs`: `chasePlan`, `chases(`, `chase: false`; kept steady and safe — `chaseSlack`, `chaseGain`, `chaseNow`, `steadyLead`
 - 出狀況 under way, one card: missed or late for a bus, train or metro (下一班 or 最快, each with when you're there), late for a set time, no bikes or docks nearby, on the wrong ride, got off, gone another way — `public/lib/trouble.mjs`, `public/lib/nav.mjs`, `public/lib/tab-map.mjs`: `troubleHtml`, `fastest(`, `wrongRide`, `askMiss`, `navFastest`, `好像搭錯車了`
 - A trip with stops navigated as one: the stops and what's after them in the chips (each a tap to look at), the bottom bar's time the next stop's (Jay 2026-11-07) — `public/lib/nav.mjs`, `public/lib/tab-map.mjs`: `navLater`, `data-nav-peek`, `ot-nav-chip stop`, `stopShort`
+- On a bus that comes back past itself, a rough fix never ends the ride early or takes it back (Jay 2026-11-09) — `public/lib/navlive.mjs`, `public/lib/nav.mjs`: `rideAlong`, `rideOn`
 - A step ahead looked at shows its own length and time, the trip's times unchanged — `public/lib/nav.mjs`: `state.reached`, `reachedPhase`
 - 停著 or 還車 at a stop, with which is sooner — `public/lib/nav.mjs`: `parkAsk`, `到了要還車嗎`
 - 附近換車 from 25 minutes on a YouBike with the free half hour — `public/lib/nav.mjs`: `附近換車`, `splitRide`
