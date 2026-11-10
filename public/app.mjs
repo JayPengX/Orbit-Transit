@@ -22,6 +22,7 @@ import { setHome, onNotices } from './lib/service.mjs';
 import { startAlerts } from './lib/alerts.mjs';
 import { savedNav, useMapsApp } from './lib/nav.mjs';
 import { planLink } from './lib/links.mjs';
+import { shareFamily } from './lib/family-share.mjs';
 import { useEbikeFirst } from './lib/look.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
@@ -79,6 +80,8 @@ export const ctx = {
     ctx.data.t = Date.now();
     local.data = encodeData(ctx.data);
     saveLocal();
+    // (Places and saved trips told to the family's notebook: Weather reads them.)
+    shareFamily(ctx.data);
     if (q.active) await q.write({ payload: local.data }).catch(() => {});
   },
   // Where the device is now (asked again after a minute), from the session's
@@ -196,6 +199,7 @@ async function boot() {
     ctx.data = merged;
     local.data = encodeData(merged);
     saveLocal();
+    shareFamily(merged);
     if (changed && theirs == null && merged.t && q.active) q.write({ payload: local.data }).catch(() => {});
     return local.data !== was;
   };
