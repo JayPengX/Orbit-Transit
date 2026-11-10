@@ -502,6 +502,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/khbus.mjs` | 高雄's buses from the city's own site, read by the phone (the Worker's if it can't) |
 | `lib/ebbus.mjs` | 臺中's, 桃園's and 臺南's buses from the cities' own sites, read by the phone with the kit's reader (the Worker's if it can't) |
 | `lib/bus.mjs`, `bus-ui.mjs`, `busgps.mjs` | Routes, stops, arrivals; the route strip; a route's sheet (its stops with the buses on the line: a bus a green dot a size up from a stop's, 進站中 / 即將進站 at the list's own size in the live green, never a red pill); a lagging bus placed by its GPS |
+| `lib/links.mjs` | Another app's link to a trip: `#plan?to=<lat>,<lon>,<name>[&by=<ISO time>]` (`planLink`; `planHash` makes one), opened by `app.mjs` `openLink` on the map from where you are, arriving by then; the address left as `#map` |
 | `lib/fare.mjs` | A bus ride's fare, stop to stop (a route sheet's 票價): TDX's RouteFare a route at a time, kept a week; 段次 with its buffer zones, stop to stop (公路客運), stages; free buses |
 | `lib/board.mjs`, `board.css` | 交通's board: `boardRow` (a row of the one shape), `whenHtml` (the time at its end) |
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
