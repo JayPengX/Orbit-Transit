@@ -472,7 +472,7 @@ Live: https://orbit.jaypengx.com/transit/
 | --- | --- |
 | `app.mjs` | The frame: Pass, tabs, location |
 | `lib/api.mjs` | The proxy: TDX, places, plans, walks; caches |
-| `lib/book.mjs` | 高鐵訂票: a 高鐵 ride's booking on 高鐵's own site, filled in (Core `/transit/book`, TDX 訂票導訂; 臺鐵's when TDX approves it) |
+| `lib/book.mjs` | 高鐵訂票: a 高鐵 ride's booking, filled in (Core `/transit/book`, TDX 訂票導訂; 臺鐵's when TDX approves it): a small sheet with the T Express app's link first (ets.thsrc.com.tw, its universal link, tapped for real so iOS can open the app) and 高鐵's website beside it (the Pass's way for links: quick view or Safari) |
 | `lib/planner.mjs`, `plan.mjs`, `live.mjs` | Planning; YouBike ideas, score and ranking; live re-timing |
 | `lib/chase.mjs` | 追公車: a bus caught further along its way by YouBike |
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |

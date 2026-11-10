@@ -6,39 +6,38 @@ import assert from 'node:assert/strict';
 
 const answer = body => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
-test('高鐵訂票: only a 高鐵 ride with its number still to come; the tap opens a window, then 高鐵’s link in it', async () => {
+test('高鐵訂票: only a 高鐵 ride with its number still to come; its app’s link and its website’s, asked together at the tap', async () => {
   const api = await import('../public/lib/api.mjs');
-  const { canBook, bookHtml, openBooking } = await import('../public/lib/book.mjs');
+  const { canBook, bookHtml, bookWays } = await import('../public/lib/book.mjs');
   const dep = Date.now() + 3_600_000;
   assert.equal(canBook({ mode: 'hsr', dep, train: { no: '123' } }), true);
   assert.equal(canBook({ mode: 'tra', dep, train: { no: '123' } }), false, '臺鐵 waits for TDX');
   assert.equal(canBook({ mode: 'hsr', dep }), false, 'no number: nothing to fill in');
   assert.equal(canBook({ mode: 'hsr', dep: Date.now() - 600_000, train: { no: '123' } }), false, 'gone');
   assert.match(bookHtml({ from: { name: '新竹"' }, to: { name: '台北' }, dep, train: { no: '123' } }), /data-book="\{&#34;from&#34;/, 'its data escaped');
-  const was = { fetch: globalThis.fetch, window: globalThis.window, location: globalThis.location };
+  const was = globalThis.fetch;
   const asked = [];
-  const win = { closed: false, location: { href: '' }, close() { this.closed = true; } };
-  globalThis.window = { open: () => win };
   globalThis.fetch = async url => {
     const u = new URL(url);
     asked.push(Object.fromEntries(u.searchParams));
-    return u.pathname.endsWith('/transit/book') ? answer({ url: 'https://irs.thsrc.com.tw/IMINT/?deeplinkToken=t' }) : new Response('', { status: 503 });
+    if (!u.pathname.endsWith('/transit/book')) return new Response('', { status: 503 });
+    return answer({ url: u.searchParams.get('app') === '1' ? 'https://ets.thsrc.com.tw/queryTrain?s=1' : 'https://irs.thsrc.com.tw/IMINT/?queryData=t' });
   };
   api.useSession({ ensureToken: async () => 'tok' });
   try {
-    const at = Date.parse('2026-11-10T13:10:00+08:00');
-    assert.equal(await openBooking({ from: '新竹', to: '台北', dep: at, no: '123' }), true);
-    assert.deepEqual([asked[0].sys, asked[0].from, asked[0].to, asked[0].date, asked[0].time, asked[0].no], ['hsr', '新竹', '台北', '2026-11-10', '13:10', '123']);
-    assert.equal(win.location.href, 'https://irs.thsrc.com.tw/IMINT/?deeplinkToken=t');
-    // (The proxy can't: the window shut, said so.)
-    globalThis.fetch = async () => new Response(JSON.stringify({ code: 'TDX_FAILED' }), { status: 502 });
-    win.closed = false;
-    const said = [];
-    assert.equal(await openBooking({ from: '新竹', to: '台北', dep: at, no: '123' }, m => said.push(m)), false);
-    assert.equal(win.closed, true);
-    assert.equal(said.length, 1);
+    const trip = { from: '新竹', to: '台北', date: '2026-11-10', time: '13:10', no: '123' };
+    assert.deepEqual(await bookWays(trip), { app: 'https://ets.thsrc.com.tw/queryTrain?s=1', web: 'https://irs.thsrc.com.tw/IMINT/?queryData=t' });
+    const app = asked.find(a => a.app === '1');
+    const web = asked.find(a => !a.app);
+    assert.deepEqual([app.sys, app.from, app.to, app.date, app.time, app.no], ['hsr', '新竹', '台北', '2026-11-10', '13:10', '123']);
+    assert.ok(web, 'the website’s too');
+    // (The app's refused: the website's alone; neither: nothing to open.)
+    globalThis.fetch = async url => (new URL(url).searchParams.get('app') === '1' ? new Response(JSON.stringify({ code: 'TDX_FAILED' }), { status: 502 }) : answer({ url: 'https://irs.thsrc.com.tw/IMINT/?queryData=t' }));
+    assert.deepEqual(await bookWays(trip), { app: null, web: 'https://irs.thsrc.com.tw/IMINT/?queryData=t' });
+    globalThis.fetch = async () => answer({ url: 'javascript:alert(1)' });
+    assert.deepEqual(await bookWays(trip), { app: null, web: null }, 'only an https link');
   } finally {
-    Object.assign(globalThis, was);
+    globalThis.fetch = was;
     api.useSession(null);
   }
 });
