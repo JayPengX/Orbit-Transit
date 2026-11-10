@@ -170,6 +170,13 @@ export async function traLive() {
   const j = await tdx('basic/v3/Rail/TRA/TrainLiveBoard', { fresh: 'live' });
   return new Map(rows(j).map(r => [r.TrainNo, { delay: Number(r.DelayTime) || 0, st: r.StationID ? `tra:${r.StationID}` : '', name: zh(r.StationName), status: Number(r.TrainStationStatus) || 0 }]));
 }
+// One train now (TRA): { delay, st, name, status } as traLive's, or null
+// when it isn't running (the Worker reads 台鐵's own page for one train:
+// no TDX; every train at once is TDX's).
+export async function traTrain(no) {
+  const r = rows(await tdx(`basic/v3/Rail/TRA/TrainLiveBoard/TrainNo/${encodeURIComponent(no)}`, { fresh: 'live' }))[0];
+  return r ? { delay: Number(r.DelayTime) || 0, st: r.StationID ? `tra:${r.StationID}` : '', name: zh(r.StationName), status: Number(r.TrainStationStatus) || 0 } : null;
+}
 // Every train's delay now (TRA), by train number.
 export async function traDelays() {
   return new Map([...(await traLive())].map(([no, x]) => [no, x.delay]));

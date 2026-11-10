@@ -258,7 +258,9 @@ Live: https://orbit.jaypengx.com/transit/
 - **Navigation** (`nav.mjs`, `navlive.mjs`): the whole trip on the map,
   each step moving on by itself (on board only once two fixes say so; a
   rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
-  chime on iPhone) before yours. On board, where you are along the ride
+  chime on iPhone) before yours. A 台鐵 train followed: its own delay alone
+  (`raildata.mjs traTrain`, 台鐵's own 車次查詢 through the Worker, no TDX;
+  every train at once, for plans and 查時刻, is TDX's). On board, where you are along the ride
   (`navlive.mjs rideAlong`, `rideOn`) is looked for only near where it last
   had you: a route that comes back past itself (a loop, out one street and
   back on its pair) never has you off early or back at stops passed. Missed bus → the next; on an earlier
