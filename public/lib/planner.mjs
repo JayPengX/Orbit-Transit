@@ -18,9 +18,9 @@ import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans, metroMapAt, metroWarm } from './metroroute.mjs';
 import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, useStreetRides, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
-import { motion, trainPace, trainAboard, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
+import { motion, trainPace, trainAboard, trainsNear, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
-import { dayTrips, railStations, traLive, planFare, faresIn } from './raildata.mjs';
+import { dayTrips, railStations, traTrain, planFare, faresIn } from './raildata.mjs';
 import { stationsAround } from './near.mjs';
 import { routeStops, routeSchedule, routeCity, busEtaMended } from './bus.mjs';
 import { chases } from './chase.mjs';
@@ -531,7 +531,11 @@ export async function findAboard(now = Date.now()) {
     const m = motion(recentFixes(now), now);
     if (!m) return null;
     if (trainPace(m)) {
-      const [trips, sts, lv] = await Promise.all([dayTrips(tw(now).date), railStations(), traLive().catch(() => new Map())]);
+      const [trips, sts] = await Promise.all([dayTrips(tw(now).date), railStations()]);
+      // (The delays of the trains that could be it, each its own read: those in by a second and a half.)
+      const nos = trainsNear(trips, sts, m, now);
+      const got = await Promise.race([Promise.all(nos.map(no => traTrain(no).then(x => [no, x], () => [no, null]))), new Promise(r => setTimeout(r, 1500, []))]);
+      const lv = new Map(got.filter(([, x]) => x));
       const ride = trainAboard(trips, sts, m, lv, now);
       rec('aboard', aboardTrace(m, ride ? [ride] : []));
       if (ride) return { kind: 'train', ride, m };

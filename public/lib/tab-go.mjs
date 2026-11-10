@@ -292,7 +292,8 @@ async function trainPins() {
     const now = Date.now();
     const span = railSpan(now);
     const net = await railNetwork(span.date, span);
-    const delays = await traDelays().catch(() => new Map());
+    // (The delays from the boards of the pins' 台鐵 stations they leave from.)
+    const delays = await traDelays(pins.filter(p => p.from?.sys === 'tra').map(p => p.from.id)).catch(() => new Map());
     for (const p of pins) {
       const from = `${p.from.sys}:${p.from.id}`;
       const to = `${p.to.sys}:${p.to.id}`;

@@ -144,8 +144,9 @@ export async function railNetwork(date, { next = false, prev = false } = {}) {
   return nets.get(key);
 }
 
-// A TRA station's board: the trains due in the next hour, with delays and
-// platforms. [{ no, type, dest, dir, sched (ms), delay (min), platform, status }].
+// A TRA station's board: the trains due there (台鐵's own 車站時刻, read by
+// the Worker: a delay on a train on its way; no platforms; TDX's when the site
+// can't answer). [{ no, type, dest, dir, sched (ms), delay (min), platform, status }].
 export async function traBoard(id) {
   const j = await tdx(`basic/v3/Rail/TRA/StationLiveBoard/Station/${id}`, { fresh: 'live' });
   const today = tw().date;
@@ -163,23 +164,30 @@ export async function traBoard(id) {
     .sort((a, b) => (a.sched || 0) - (b.sched || 0));
 }
 
-// Every train now (TRA), by train number: its delay, and the station it's
-// at or last left (`st`, as the network's keys; `status` 0 arriving, 1 at
-// it, 2 left it).
-export async function traLive() {
-  const j = await tdx('basic/v3/Rail/TRA/TrainLiveBoard', { fresh: 'live' });
-  return new Map(rows(j).map(r => [r.TrainNo, { delay: Number(r.DelayTime) || 0, st: r.StationID ? `tra:${r.StationID}` : '', name: zh(r.StationName), status: Number(r.TrainStationStatus) || 0 }]));
+// The TRA trains on their way through some stations (`ids`: ids or the
+// network's keys, three at most), by train number: { delay, st, name, status }
+// as traTrain's (no station: a board says only the delay). From those
+// stations' boards, each listing every train through it today with its delay
+// now; never every train at once (TDX's whole board, past its free tier from
+// 2026-12; Jay 2026-11-10: off TDX). No stations: none.
+export async function traLive(ids = []) {
+  const list = [...new Set(ids.map(id => String(id).replace(/^tra:/, '')).filter(id => /^\d{4}$/.test(id)))].slice(0, 3);
+  const boards = await Promise.all(list.map(id => tdx(`basic/v3/Rail/TRA/StationLiveBoard/Station/${id}`, { fresh: 'live' }).catch(() => null)));
+  if (list.length && boards.every(b => !b)) throw new Error('no board');
+  const out = new Map();
+  for (const r of boards.flatMap(rows)) if (r.DelayTime != null && Number(r.RunningStatus) !== 2 && !out.has(r.TrainNo)) out.set(r.TrainNo, { delay: Number(r.DelayTime) || 0, st: '', name: '', status: 0 });
+  return out;
 }
-// One train now (TRA): { delay, st, name, status } as traLive's, or null
-// when it isn't running (the Worker reads 台鐵's own page for one train:
-// no TDX; every train at once is TDX's).
+// One train now (TRA): { delay, st (the station it's at or last left, as the
+// network's keys), name, status (1 at it, 2 left it) }, or null when it isn't
+// running (the Worker reads 台鐵's own page for one train).
 export async function traTrain(no) {
   const r = rows(await tdx(`basic/v3/Rail/TRA/TrainLiveBoard/TrainNo/${encodeURIComponent(no)}`, { fresh: 'live' }))[0];
   return r ? { delay: Number(r.DelayTime) || 0, st: r.StationID ? `tra:${r.StationID}` : '', name: zh(r.StationName), status: Number(r.TrainStationStatus) || 0 } : null;
 }
-// Every train's delay now (TRA), by train number.
-export async function traDelays() {
-  return new Map([...(await traLive())].map(([no, x]) => [no, x.delay]));
+// The delays now of the TRA trains through some stations (traLive's), by train number.
+export async function traDelays(ids = []) {
+  return new Map([...(await traLive(ids))].map(([no, x]) => [no, x.delay]));
 }
 
 // The next trains at an HSR station today, from the day's timetable.

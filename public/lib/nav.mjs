@@ -30,7 +30,7 @@ let nav = null;
 // Where today's trains come from (the timetable, the live board): a test's own day instead.
 // (`traTrain`: the one train followed; a test's own board answers for it too.)
 let rail = { dayTrips, railStations, traLive, traTrain };
-export const useRail = x => (rail = { dayTrips, railStations, traLive, traTrain: x.traLive ? async no => (await x.traLive()).get(no) || null : traTrain, ...x });
+export const useRail = x => (rail = { dayTrips, railStations, traLive, traTrain: x.traLive ? async no => (await x.traLive([])).get(no) || null : traTrain, ...x });
 
 // The ride being followed, kept on the phone: swiped away and opened again,
 // it goes on where it was (savedNav, for tab-map), until it's over or ended.
@@ -679,7 +679,8 @@ async function rideOptions(l, info, now = Date.now()) {
   const sts = await rail.railStations();
   const near = (pt, max = 800) => new Set(sts.filter(s => s.sys === l.mode && meters(pt.lat, pt.lon, s.lat, s.lon) < max).map(s => s.key));
   const [a, b] = [near(l.from), near(l.to)];
-  const lv = l.mode === 'tra' ? await rail.traLive().catch(() => new Map()) : new Map();
+  // (The delays from the boards of the stations it leaves from.)
+  const lv = l.mode === 'tra' ? await rail.traLive([...a]).catch(() => new Map()) : new Map();
   const out = [];
   for (const t of await rail.dayTrips(tw(now).date)) {
     if (t.sys !== l.mode) continue;
@@ -1226,7 +1227,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         }
       } else if (l?.mode === 'tra' && l.train?.no) {
         // (The train followed alone: 台鐵's own page, no TDX; that failing, every train's board.)
-        const lv = await rail.traTrain(String(l.train.no)).catch(async () => (await rail.traLive()).get(String(l.train.no)) || null);
+        const lv = await rail.traTrain(String(l.train.no)).catch(() => null);
         const d = lv?.delay || 0;
         if (lv) {
           state.liveAt.set(ri, l.dep + d * 60_000);
@@ -1813,7 +1814,10 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (l.mode === 'tra' || l.mode === 'hsr') {
       let t;
       try {
-        const [trips, sts, lv] = await Promise.all([rail.dayTrips(tw(now).date), rail.railStations(), l.mode === 'tra' ? rail.traLive().catch(() => new Map()) : new Map()]);
+        const [trips, sts] = await Promise.all([rail.dayTrips(tw(now).date), rail.railStations()]);
+        // (The delays from the boards of the leg's two ends: a train on it passes both.)
+        const ends = sts.filter(s => s.sys === 'tra' && s.lat != null && [l.from, l.to].some(x => x?.lat != null && meters(x.lat, x.lon, s.lat, s.lon) < 800)).map(s => s.key);
+        const lv = l.mode === 'tra' ? await rail.traLive(ends).catch(() => new Map()) : new Map();
         t = trainNow(trips, sts, l, p, lv, now);
         // The train planned can't be it (not yet left where it boards, you
         // kilometres on): of those running now, the nearest by its clock,

@@ -40,9 +40,22 @@ test('trainAboard: the train where you are, going your way, its stops ahead', ()
   // The other way round (1202) is never it, nor at walking pace.
   assert.equal(A.trainAboard([trains[2]], st, m, new Map(), now), null);
   assert.equal(A.trainAboard(trains, st, A.motion(fixes(off(P, 5500, 0), 5, 1.2, now - 40_000), now), new Map(), now), null);
-  // Late 8 minutes by TDX's board: the train due here by its timetable then is 1203's slot, but 1201 is the one.
+  // Late 8 minutes by its own page: the train due here by its timetable then is 1203's slot, but 1201 is the one.
   const late = A.trainAboard([trip('1201', t0 - 8 * 60_000), trip('1203', t0)], st, m, new Map([['1201', { delay: 8 }]]), now);
   assert.equal(late?.train.no, '1201');
+});
+
+test("trainsNear: the 台鐵 trains that could be yours, up to half an hour late (each one's delay then read alone, not every train's)", () => {
+  const t0 = T(9);
+  const now = t0 + 6 * 60_000 + 15_000;
+  const m = A.motion(fixes(off(P, 5500, 0), 5, 17, now - 40_000), now);
+  // 1201 eight minutes late is here now; 1203 on time is here; 1205 hasn't left; 1199 ran its course an hour ago.
+  const trains = [trip('1201', t0 - 8 * 60_000), trip('1203', t0), trip('1205', t0 + 60 * 60_000), trip('1199', t0 - 90 * 60_000)];
+  assert.deepEqual(A.trainsNear(trains, st, m, now).sort(), ['1201', '1203']);
+  assert.deepEqual(A.trainsNear(trains, st, m, now, 1).length, 1);
+  assert.deepEqual(A.trainsNear(trains, st, null, now), []);
+  // Its delay read, the late one is found as before.
+  assert.equal(A.trainAboard(trains, st, m, new Map([['1201', { delay: 8 }]]), now)?.train.no, '1201');
 });
 
 test('a trip from the train: stay on to the station nearest the place, then walk', () => {
