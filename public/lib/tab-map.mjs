@@ -35,6 +35,7 @@ import { steadyPlans, samePlanAt, settled, SETTLE_MS } from './steady.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
 import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, iconName, LAYERS, MAX_PLACES, MAX_SAVED } from './store.mjs';
 import { wentTo } from './learn.mjs';
+import { shareRide } from './family-share.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, bikeTile, bikeStats, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
@@ -2680,6 +2681,8 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       .then(later => later?.length && navNow()?.plan?.dest?.lat === base.dest?.lat && navNow()?.plan?.dest?.lon === base.dest?.lon && laterIn(later, { replace: true }))
       .catch(() => {});
   }
+  // (A trip set out on with its fare known: the family's latest ride, Money's 車資記帳 offers it.)
+  if (!resume) shareRide(p);
   startNav(p, {
     box: $('nav'),
     mini: $('nav-mini'),
