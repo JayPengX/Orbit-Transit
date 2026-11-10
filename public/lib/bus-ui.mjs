@@ -356,7 +356,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       })
       .finally(() => d.open && view === 'fare' && draw());
   };
-  const WHO_NAME = { adult: W('全票', 'Adult'), student: W('學生', 'Student'), child: W('孩童', 'Child'), elder: W('敬老', 'Senior'), care: W('愛心', 'Disability') };
+  const WHO_NAME = { adult: W('全票', 'Adult'), student: W('學生', 'Student'), child: W('孩童', 'Child'), elder: W('敬老', 'Senior'), care: W('愛心', 'Disability'), half: W('半票', 'Half fare') };
   const nt = n => `NT$${n}`;
   const fareHtml = w => {
     const n = w.stops.length;

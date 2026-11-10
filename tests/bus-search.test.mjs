@@ -18,3 +18,15 @@ test('findRoutes with no rank: as before, by name', () => {
   assert.deepEqual(findRoutes(list, '1').slice(0, 3).map(x => x.name), ['1', '1', '1']);
   assert.deepEqual(findRoutes(list, '中研院').map(x => x.uid), ['Taipei:藍1']);
 });
+
+// A strip's words shrink to their room (fitStrips), never cut: their box is
+// the row's width, not the words' (2026-11-10: without max-width the box
+// grew with the words, so nothing was ever shrunk and 全部's long route ends
+// were cut at 320).
+test("a strip's words can shrink: their box no wider than the row", async () => {
+  const css = (await import('node:fs')).readFileSync(new URL('../public/transit.css', import.meta.url), 'utf8');
+  for (const sel of ['.ot-strip-what b', '.ot-strip-note small']) {
+    const rule = new RegExp(`${sel.replace(/[.]/g, '\\.')} \\{[^}]*max-width: 100%`);
+    assert.match(css, rule, sel);
+  }
+});

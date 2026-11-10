@@ -68,6 +68,24 @@ test('stages: each stop in the stage it is in, the fare between the two stages',
   assert.equal(fareBetween(list, way, stops[4], stops[6]).fares[0].price, 20, 'inside the second');
 });
 
+// As TDX publishes them (5608, 新竹's 2, read 2026-11-10): stages only between
+// two stages, never inside one; 半票 as FareClass 10; IsForAllSubRoutes as 0.
+test('stages as published: inside one stage the least fare (基本票價); 半票 said', () => {
+  const st = (id, seq, name) => ({ StopID: String(id), StopName: name, Sequence: seq });
+  const fares = (full, half) => [{ FareName: '全票_不分時段_四排座', TicketType: 1, FareClass: 1, Price: full }, { FareName: '半票_不分時段_四排座', TicketType: 1, FareClass: 10, Price: half }];
+  const list = [{ SubRouteID: '010101', FarePricingType: 2, IsFreeBus: 0, IsForAllSubRoutes: 0, StageFares: [
+    { Direction: 0, OriginStage: st(1, 1, '新竹站'), DestinationStage: st(4, 4, '光復新村'), Fares: fares(30, 15) },
+    { Direction: 0, OriginStage: st(1, 1, '新竹站'), DestinationStage: st(6, 6, '交通大學'), Fares: fares(44, 22) },
+    { Direction: 0, OriginStage: st(4, 4, '光復新村'), DestinationStage: st(6, 6, '交通大學'), Fares: fares(25, 12) }
+  ] }];
+  const f = (a, b) => fareBetween(list, way, stops[a], stops[b]);
+  assert.deepEqual(fareRows(f(0, 1).fares), [{ who: 'adult', cash: 25, card: null }, { who: 'half', cash: 12, card: null }], 'inside the first stage: the least');
+  assert.equal(f(1, 4).fares[0].price, 30, 'from the first stage into the second');
+  assert.equal(f(0, 6).fares[0].price, 44);
+  assert.equal(f(4, 5).fares[0].price, 25, 'inside the second');
+  assert.equal(fareBetween(list, { ...way, sub: 'HSZ010102' }, stops[0], stops[6]).fares[0].price, 44, "another sub-route's (0: not for all) when its own are none");
+});
+
 test("a free bus; a way's own sub-route's fares before those for all; nothing for a ride the wrong way", () => {
   assert.deepEqual(fareBetween([{ IsFreeBus: true, FarePricingType: 0 }], way, stops[0], stops[3]), { kind: 'free', fares: [] });
   const sec = price => ({ FarePricingType: 0, SectionFares: [{ BufferZones: [], Fares: [{ TicketType: 1, FareClass: 1, Price: price }] }] });
