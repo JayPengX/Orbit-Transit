@@ -9,8 +9,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const f = globalThis.fetch;
-globalThis.fetch = (u, o = {}) => f(u, { ...o, headers: { ...(o.headers || {}), Origin: 'http://localhost:8080' } });
+globalThis.fetch = (await import('./dev-fetch.mjs')).devFetch(globalThis.fetch);
 const { useSession } = await import('../public/lib/api.mjs');
 useSession({ ensureToken: async () => 'dev' });
 const { planTrip } = await import('../public/lib/planner.mjs');
