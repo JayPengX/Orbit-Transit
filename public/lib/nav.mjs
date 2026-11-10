@@ -21,7 +21,7 @@ import { rideSec, DOCK_SEC, walkLeg, rideLeg, rentNear, returnNear } from './pla
 import { rental, startRental, endRental, rentalStep, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
-import { busWhere, trainWhere, trainByTime, nextStop, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
+import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
 import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown, distText } from './util.mjs';
 
@@ -1130,7 +1130,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     rs.cum ||= routeCum(rs.stops);
     const from = Math.max(0, rs.i - 1);
     if (away && offRide(rs.stops, p, rs.cum, from, legPts(plan.legs[k])) > 250) return true;
-    const a = alongRoute(rs.stops, p, rs.cum, from);
+    // (Near where the ride last had you: a loop's way back past your stop is never you there.)
+    const a = rideAlong(rs, p);
     const got = Math.max(a?.d ?? 0, ...state.track.map(x => x.d));
     return got >= rs.cum[state.offJ ?? rs.j] - (OFF_M[plan.legs[k].mode] || 120);
   };
@@ -1174,7 +1175,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       }
       const rs = l ? state.ride.get(ri) : null;
       // On it already (opened again on board): the next stop from where you were last seen, not only on the next move.
-      if (on && rs && state.next == null && state.pos && state.i === at) state.next = nextStop(rs.stops, rs.i, rs.j, state.pos);
+      if (on && rs && state.next == null && state.pos && state.i === at) state.next = rideOn(rs, state.pos);
       if (l?.mode === 'bus' && l.from?.lat) {
         const x = state.info.get(ri);
         const eta = x?.route ? await routeEta(x.route, x.way?.w.dir ?? x.leg?.route?.dir ?? null).catch(() => null) : null;
@@ -1315,7 +1316,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       const k = state.reached;
       const l0 = plan.legs[k];
       const rs = state.ride.get(k);
-      if (rs ? ringNow(rs, nextStop(rs.stops, rs.i, rs.j, p)) : l0.to?.lat != null && meters(p.lat, p.lon, l0.to.lat, l0.to.lon) < NEXT_STOP_M) {
+      if (rs ? ringNow(rs, rideOn(rs, p)) : l0.to?.lat != null && meters(p.lat, p.lon, l0.to.lat, l0.to.lon) < NEXT_STOP_M) {
         state.look = null;
         go(k, 'on');
       } else return render();
@@ -1470,7 +1471,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         const rs = state.phase === 'on' ? state.ride.get(state.i) : null;
         const knew = state.next != null;
         const nextWas = state.next;
-        if (rs) state.next = nextStop(rs.stops, rs.i, rs.j, p);
+        if (rs) state.next = rideOn(rs, p, Date.now(), state.next);
         // Past a stop: the map's stops from the next one; your stop near, the YouBike after it shown, its bikes now.
         if (rs && state.next !== nextWas) {
           const soon = offSoon(state);
@@ -1483,7 +1484,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         // Where you are along it, kept for 10 minutes: your own pace says when you're at each stop ahead.
         if (rs) {
           rs.cum ||= routeCum(rs.stops);
-          const a = alongRoute(rs.stops, p, rs.cum, Math.max(0, rs.i - 1));
+          const a = rideAlong(rs, p, Date.now());
           const t = Date.now();
           // Off it (its stops' line and its road both far), for 45 s or more: asked if you got off.
           const away = a && offRide(rs.stops, p, rs.cum, Math.max(0, rs.i - 1), legPts(l)) > (AWAY_M[l.mode] || 250);

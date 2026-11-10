@@ -230,3 +230,39 @@ test('opened again after Google or Apple 地圖 with a step ahead looked at: bac
   const kept = JSON.parse(ls.get('ot.nav.v1'));
   assert.equal(kept.i, 0, 'kept at the walk, not the step looked at');
 });
+
+// Jay 2026-11-09: the route jumping back near the last stop, now and then. A
+// bus out one street and back on its pair 100 m across has stops of both
+// ways near you: one rough fix (60 m toward the other street) had the trip
+// off at your stop while still going out, or back at the stops passed. The
+// stop you're coming to never goes back, and more than one stop on needs a
+// second fix; where along it you are, only near that stop.
+test('a bus out one street and back on its pair: rough fixes toward the other street never end the ride early nor take it back', () => {
+  const A = { lat: 24.8, lon: 120.97 };
+  const road = [A, off(A, 0, 1000), off(A, 100, 1000), off(A, 100, 0)];
+  const stops = [A, off(A, 0, 300), off(A, 0, 600), off(A, 0, 900), off(A, 100, 900), off(A, 100, 600), off(A, 100, 300), off(A, 100, 0)].map((p, k) => ({ name: 'Q' + k, uid: 'q' + k, ...p }));
+  const j = 6;
+  const t0 = T(8);
+  const D = { name: 'D', ...off(stops[j], 150, 0) };
+  const plan = { legs: [{ mode: 'bus', short: '20', name: '20', from: stops[0], to: stops[j], dep: t0, arr: t0 + 8 * 60e3, dur: 480, path: road.map(p => [p.lat, p.lon]) }, { mode: 'walk', from: stops[j], to: D, dep: t0 + 8 * 60e3, arr: t0 + 10 * 60e3, dur: 120 }], dep: t0, arr: t0 + 10 * 60e3, dest: D };
+  clock.set(t0);
+  const { st: s } = start(plan, { resume: { i: 0, phase: 'on', reached: 0 } });
+  s.ride.set(0, { stops, i: 0, j });
+  const path = [];
+  for (let x = 50; x <= 1000; x += 50) path.push([0, x]);
+  for (let x = 1000; x >= 320; x -= 50) path.push([100, x]);
+  let n = 0;
+  let last = 0;
+  for (const [y, x] of path) {
+    clock.add(8e3);
+    const rough = ++n % 4 === 0;
+    pos(off(A, rough ? (y === 0 ? 60 : 40) : y, x));
+    if (x > 420 || y === 0) assert.deepEqual(show(s), { i: 0, phase: 'on', reached: 0 }, `still on it, ${y ? 'back' : 'out'} at ${x} m`);
+    if (s.i === 0) {
+      assert.ok(s.next >= last, `never back: ${last} then ${s.next}, ${y ? 'back' : 'out'} at ${x} m`);
+      assert.ok(s.next <= last + 1 || !last, `a stop at a time: ${last} then ${s.next}`);
+      last = s.next;
+    }
+  }
+  assert.equal(s.i, 1, 'off at Q6, walking to D');
+});
