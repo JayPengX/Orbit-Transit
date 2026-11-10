@@ -440,6 +440,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |
 | `lib/linemap.mjs`, `tra-map.mjs` | The station picker's line map: each line winding across its card (`rowLength`, `mapCols`), 新竹市/嘉義市 one area with their 縣 (`areaOf`, `areaParts` joins the lines), a 高鐵 station within 900 m of a 台鐵 one a tap on that stop (rerun `node scripts/tra-map.mjs` when 台鐵 opens a station) |
 | `lib/bus.mjs`, `bus-ui.mjs`, `busgps.mjs` | Routes, stops, arrivals; the route strip; a route's sheet (its stops with the buses on the line: a bus a green dot a size up from a stop's, 進站中 / 即將進站 at the list's own size in the live green, never a red pill); a lagging bus placed by its GPS |
+| `lib/fare.mjs` | A bus ride's fare, stop to stop (a route sheet's 票價): TDX's RouteFare a route at a time, kept a week; 段次 with its buffer zones, stop to stop (公路客運), stages; free buses |
 | `lib/board.mjs`, `board.css` | 交通's board: `boardRow` (a row of the one shape), `whenHtml` (the time at its end) |
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |

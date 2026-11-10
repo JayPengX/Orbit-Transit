@@ -4,7 +4,8 @@
 // (常用, 上班, 回家…), managing the groups, and the stops around a point with
 // every bus due.
 
-import { emptyNote, saidRows } from './look.mjs';
+import { emptyNote, saidRows, focus } from './look.mjs';
+import { routeFares, fareBetween, fareRows, fareGroups } from './fare.mjs';
 import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, dataAt, liveMs, busEta } from './api.mjs';
@@ -261,8 +262,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   let live = new Map();
   let at = 0;
   let err = '';
-  // 即時 (the buses on the stops now) or 時刻表 (a day's times at one stop:
-  // today, or any day of the coming week, since weekends run their own).
+  // 即時 (the buses on the stops now), 時刻表 (a day's times at one stop:
+  // today, or any day of the coming week, since weekends run their own) or
+  // 票價 (a ride's fare, stop to stop).
   let view = 'live';
   let day = 0;
   let dayPicked = false;
@@ -336,6 +338,56 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const est = guess && times.length ? `<p class="ot-note">${W(`依起站 ${e(shown(w.stops[0].name))} 的發車時間推估`, `Estimated from ${e(shown(w.stops[0].name))}’s departures`)}</p>` : '';
     return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${W(`${times.length} 班`, `${times.length} buses`)}${day ? '' : next ? `・${W('下一班', 'next')} ${e(next)}` : `・${W('已收班', 'done')}`}` : ''}</small></div>${est}${body}`;
   };
+  // 票價: the route's fares read the first time they're shown (fare.mjs:
+  // kept a week); on at the stop asked for, off at the way's last.
+  let fares = null;
+  let fareErr = '';
+  let fareOn = '';
+  let fareOff = '';
+  const loadFares = () => {
+    if (fares) return;
+    fares = 'wait';
+    fareErr = '';
+    routeFares(route)
+      .then(x => (fares = x))
+      .catch(x => {
+        fares = null;
+        fareErr = errorText(x);
+      })
+      .finally(() => d.open && view === 'fare' && draw());
+  };
+  const WHO_NAME = { adult: W('全票', 'Adult'), student: W('學生', 'Student'), child: W('孩童', 'Child'), elder: W('敬老', 'Senior'), care: W('愛心', 'Disability') };
+  const nt = n => `NT$${n}`;
+  const fareHtml = w => {
+    const n = w.stops.length;
+    if (n < 2) return emptyNote(W('這條路線沒有站牌資料', 'No stops for this route'));
+    const at = uid => w.stops.findIndex(s => s.uid === uid);
+    let a = at(fareOn);
+    if (a < 0) a = at(picked);
+    if (a < 0 || a >= n - 1) a = 0;
+    let b = w.stops.findIndex((s, k) => k > a && s.uid === fareOff);
+    if (b < 0) b = n - 1;
+    const [on, off] = [w.stops[a], w.stops[b]];
+    // Each a native picker (an iPhone's wheel): on at any stop but the last, off at one after it.
+    const pick = (attr, label, s, list) => `<label class="ot-fare-stop"><small>${label}</small><b>${e(shown(s.name))}</b>${icon('down')}<select ${attr} aria-label="${label}">${list.map(x => `<option value="${e(x.uid)}"${x === s ? ' selected' : ''}>${e(shown(x.name))}</option>`).join('')}</select></label>`;
+    const picks = `<div class="ot-fare-picks">${pick('data-fare-on', W('上車', 'Board'), on, w.stops.slice(0, -1))}${pick('data-fare-off', W('下車', 'Get off'), off, w.stops.slice(a + 1))}</div>`;
+    if (!fares || fares === 'wait') return `${picks}<p class="ot-note${fareErr ? ' bad' : ''}">${fareErr ? e(fareErr) : W('載入票價…', 'Loading fares…')}</p>`;
+    const none = `${picks}<p class="ot-note">${W('業者沒有公布這段的票價', 'No fare published for this ride')}</p>`;
+    const f = fareBetween(fares, w, on, off);
+    if (!f) return none;
+    if (f.kind === 'free') return `${picks}${focus({ eyebrow: W('票價', 'Fare'), big: `<strong class="q-focus-value">${W('免費', 'Free')}</strong>`, sub: W('這條路線免費搭乘', 'This route is free to ride') })}`;
+    const rows = fareRows(f.fares);
+    if (!rows.length) return none;
+    // 全票 the big number (cash, else by card); the others beside it, those at one price together.
+    const main = rows.find(r => r.who === 'adult') || rows[0];
+    const price = r => nt(r.cash ?? r.card);
+    const byCard = r => (r.cash == null ? W('刷卡', 'by card') : r.card != null ? W(`刷卡 ${nt(r.card)}`, `${nt(r.card)} by card`) : '');
+    const facts = [f.sections > 1 ? W(`${f.sections} 段票`, `${f.sections} sections`) : '', byCard(main)];
+    const groups = fareGroups(rows.filter(r => r !== main));
+    const named = g => g.who.map(x => WHO_NAME[x] || x).join('・');
+    const figs = groups.length ? `<div class="q-focus-figs ot-fare-figs">${groups.map(g => `<div><small>${e(named(g))}</small><b>${e(price(g))}</b>${byCard(g) ? `<small>${e(byCard(g))}</small>` : ''}</div>`).join('')}</div>` : '';
+    return `${picks}${focus({ eyebrow: WHO_NAME[main.who] || W('票價', 'Fare'), big: `<strong class="q-focus-value">${e(price(main))}</strong>`, facts, body: figs })}`;
+  };
   let offDay = 0;
   const draw = () => {
     const w = ways?.[way];
@@ -353,7 +405,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // some intercity routes) or long names: chips in a row to scroll, each said whole.
     const many = Boolean(ways && (ways.length > 2 || ways.some(x => String(x.headsign || '').length > 7)));
     const tabs = ways && ways.length > 1 ? `<div class="${many ? 'q-chips ot-dir ot-dir-chips' : 'q-seg ot-dir'}" role="group" aria-label="${W('方向', 'Direction')}">${ways.map((x, i) => `<button type="button"${many ? ' class="q-chip"' : ''} data-way="${i}" aria-pressed="${i === way}">${W('往', 'To')} ${e(shown(x.headsign))}</button>`).join('')}</div>` : '';
-    const views = `<div class="q-seg ot-view" role="group" aria-label="${W('即時或時刻表', 'Live or timetable')}"><button type="button" data-view="live" aria-pressed="${view === 'live'}">${W('即時到站', 'Live')}</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">${W('時刻表', 'Timetable')}</button></div>`;
+    const views = `<div class="q-seg ot-view" role="group" aria-label="${W('即時、時刻表或票價', 'Live, timetable or fare')}"><button type="button" data-view="live" aria-pressed="${view === 'live'}">${W('即時到站', 'Live')}</button><button type="button" data-view="table" aria-pressed="${view === 'table'}">${W('時刻表', 'Timetable')}</button><button type="button" data-view="fare" aria-pressed="${view === 'fare'}">${W('票價', 'Fare')}</button></div>`;
     // Each stop's live time, trusted: a bus 'coming' that the timetable has
     // nowhere near (resting with its tracker on) isn't taken (the
     // timetable's time instead).
@@ -387,7 +439,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
         ? emptyNote(W('這條路線沒有站牌資料', 'No stops for this route'))
         : view === 'table'
           ? tableHtml(w)
-          : `${off ? `<p class="ot-note ot-off-note ot-done-note">${e(off)}</p>` : ''}<ol class="ot-route-stops">${w.stops
+          : view === 'fare'
+            ? fareHtml(w)
+            : `${off ? `<p class="ot-note ot-off-note ot-done-note">${e(off)}</p>` : ''}<ol class="ot-route-stops">${w.stops
             .map(s => {
               const k = w.stops.indexOf(s);
               const v = lives[k];
@@ -512,8 +566,10 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   // Scrolled to the stop asked for.
   if (stopUID) requestAnimationFrame(() => d.querySelector(`[data-stop="${CSS.escape(stopUID)}"]`)?.scrollIntoView({ block: 'center' }));
   d.addEventListener('change', ev => {
-    if (!ev.target.matches('[data-pickstop]')) return;
-    picked = ev.target.value;
+    if (ev.target.matches('[data-fare-on]')) fareOn = ev.target.value;
+    else if (ev.target.matches('[data-fare-off]')) fareOff = ev.target.value;
+    else if (ev.target.matches('[data-pickstop]')) picked = ev.target.value;
+    else return;
     draw();
   });
   d.addEventListener('click', ev => {
@@ -531,6 +587,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const v = ev.target.closest('[data-view]');
     if (v) {
       view = v.dataset.view;
+      if (view === 'fare') loadFares();
       return draw();
     }
     const cur = ways?.[way];

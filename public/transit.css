@@ -5638,6 +5638,60 @@ html[lang='en'] .ot-sn-tap {
   opacity: 0;
   font-size: 16px;
 }
+/* A route's 票價: where you get on and off as two rows of a card (each a
+   native picker), the fare on the focus card under them. */
+.ot-fare-picks {
+  overflow: hidden;
+  margin: 10px 0 12px;
+  border-radius: 16px;
+  background: var(--q-sheet-cell, var(--q-surface));
+}
+.ot-fare-stop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+}
+.ot-fare-stop + .ot-fare-stop {
+  border-top: 0.5px solid var(--q-sep);
+}
+.ot-fare-stop small {
+  flex: none;
+  min-width: 52px;
+  color: var(--q-label-2);
+  font: 400 15px/20px var(--q-font);
+}
+.ot-fare-stop b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: 600 17px/22px var(--q-font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ot-fare-stop .ot-i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--q-label-2);
+}
+.ot-fare-stop select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 0;
+  opacity: 0;
+  font-size: 16px;
+}
+.ot-fare-figs {
+  flex-wrap: wrap;
+  row-gap: var(--q-s-3);
+}
+.ot-fare-figs > div {
+  align-content: start;
+}
 .ot-timetable {
   overflow: hidden;
   border-radius: 16px;
