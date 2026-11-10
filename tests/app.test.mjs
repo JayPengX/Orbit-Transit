@@ -1911,6 +1911,10 @@ test('a YouBike station out of bikes or docks while on the way: the ride moved t
   assert.equal(p.legs[0].to.name, '站3');
   assert.equal(p.legs[1].from.name, '站3');
   assert.equal(p.legs[1].poly, undefined);
+  // (The station itself kept: its marker on the map where you take it now.)
+  assert.equal(p.legs[1].rent.uid, 's3');
+  const { planBikes } = await import('../public/lib/tab-map.mjs');
+  assert.deepEqual(planBikes(p.legs).map(b => b.st.uid), ['s3']);
   // No docks at 站2: left at 站4, and walked from there.
   const T2 = { name: '站4', lat: 24.8195, lon: 120.9885 };
   assert.equal(moveRide(p, 1, 'return', T2), true);
@@ -1926,6 +1930,36 @@ test('a YouBike station out of bikes or docks while on the way: the ride moved t
   const { rideLeg, walkLeg } = await import('../public/lib/plan.mjs');
   assert.equal(p.legs[1].dur, rideLeg(S2, T2, 0).dur);
   assert.equal(p.legs[2].dist, walkLeg(T2, B, 0).dist);
+});
+
+// Jay 2026-11-09, from 成功九街 with 綠41公園 out of bikes: 換附近的站 took
+// 文興路莊敬南路口 (the nearest to 綠41公園, behind him, a 550 m walk) over
+// 成功國中 by his door. Now the planner's pick: the walk from where you are
+// and the ride on; more than 2 bikes where any station has.
+test('換附近的站: the station the planner would take from where you are, not the nearest to the old one', async () => {
+  const { swapPick, moveRide } = await import('../public/lib/nav.mjs');
+  const home = { name: '成功九街', lat: 24.8176, lon: 121.0165 };
+  const lib = { name: '竹北市立圖書館', lat: 24.83537, lon: 121.00851 };
+  const st = (uid, name, lat, lon, bikes) => ({ uid, name, lat, lon, bikes, ebike: 0, ret: 10, ok: true });
+  const park = st('g', '綠41公園', 24.81614, 121.0171, 0);
+  const corner = st('w', '文興路莊敬南路口', 24.81498, 121.01923, 5);
+  const school = st('c', '成功國中', 24.81872, 121.01597, 5);
+  const stadium = st('t', '新竹縣體育場', 24.81913, 121.01859, 5);
+  const plan = () => ({ legs: [{ mode: 'walk', from: home, to: park, dur: 200 }, { mode: 'bike', from: park, to: lib, dur: 900, rent: park }, { mode: 'walk', from: lib, to: lib, dur: 0 }] });
+  const list = [park, corner, school, stadium];
+  assert.equal(swapPick(plan(), 1, 'rent', list).name, '成功國中');
+  assert.equal(swapPick(plan(), 1, 'rent', list, { tried: new Set(['c']) }).name, '新竹縣體育場');
+  // (Down to its last bike or two: another with more, where there is one.)
+  assert.equal(swapPick(plan(), 1, 'rent', [park, corner, { ...school, bikes: 1 }, stadium]).name, '新竹縣體育場');
+  assert.equal(swapPick(plan(), 1, 'rent', [park, { ...school, bikes: 1 }]).name, '成功國中');
+  assert.equal(swapPick(plan(), 1, 'rent', [park]), null, 'none with a bike: none');
+  const p = plan();
+  moveRide(p, 1, 'rent', swapPick(p, 1, 'rent', list));
+  assert.deepEqual([p.legs[0].to.name, p.legs[1].from.name, p.legs[1].rent.uid], ['成功國中', '成功國中', 'c']);
+  // Where it goes back, full: the one by where you're going, not behind it.
+  const back = { legs: [{ mode: 'walk', from: lib, to: lib, dur: 0 }, { mode: 'bike', from: lib, to: park, dur: 900, ret: park }, { mode: 'walk', from: park, to: home, dur: 200 }] };
+  const full = [{ ...park, ret: 0 }, corner, school, stadium];
+  assert.equal(swapPick(back, 1, 'return', full).name, '成功國中');
 });
 
 test('a change where the next train already crosses your way: off at 竹中 for the 六家 train, not on to 新竹 and back', () => {

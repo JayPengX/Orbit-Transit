@@ -501,7 +501,11 @@ export const errorText = err =>
 // month's cap, each walk kept there a month), OpenStreetMap's router past
 // it. Its time at our pace (WALK_M_MIN), for every one alike. Kept on the
 // phone, the newest 400 (without their lines): a reopen has them at once.
-//   → [{ dist, sec, poly? } | null]
+// One Google didn't answer (`g` unset: its cap, an outage) is OpenStreetMap's
+// alone, asked again after WALK_RETRY_MS: kept for good, 11-07's 460 m round
+// the school stood for days over Google's 267 by the lane to 成功國中 (Jay
+// 2026-11-09). (Those kept before `g` count as not answered: asked once more.)
+//   → [{ dist, sec, poly?, g?, at? } | null]
 const WALKS_KEY = 'orbit-transit.walks';
 const walksRead = readSaved(WALKS_KEY, []);
 const walksKept = new Map(Array.isArray(walksRead) ? walksRead.filter(Array.isArray) : []);
@@ -510,12 +514,15 @@ const keepWalks = () => {
   if (walksRead === UNREAD) return; // (never saved over)
   clearTimeout(walksSave);
   walksSave = setTimeout(() => {
-    writeJson(WALKS_KEY, [...walksKept].slice(-400).map(([k, w]) => [k, { dist: w.dist, sec: w.sec }]));
+    writeJson(WALKS_KEY, [...walksKept].slice(-400).map(([k, w]) => [k, { dist: w.dist, sec: w.sec, ...(w.g ? { g: 1 } : { at: w.at || 0 }) }]));
   }, 1000);
 };
 const p5 = p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
 const walkKey = (a, b) => `${p5(a)}|${p5(b)}`;
 const paced = (dist, extra = {}) => ({ dist, sec: Math.round((dist / WALK_M_MIN) * 60), ...extra });
+export const WALK_RETRY_MS = 6 * 3600_000;
+// (Kept and settled: Google's answer in it, or OpenStreetMap's asked again too soon.)
+const settled = (w, now = Date.now()) => Boolean(w && (w.g || now - (w.at || 0) < WALK_RETRY_MS));
 // (Known on the phone now, or null.)
 export const walkKnown = (a, b) => walksKept.get(walkKey(a, b)) || null;
 // (OpenStreetMap's walks from one point to many, one ask: its table, the
@@ -538,7 +545,7 @@ async function osmWalks(from, tos) {
 // for the walks to its YouBike stations as it starts, and again to rank.)
 const walking = new Map(); // walkKey → the ask it's in (walks without their lines)
 export async function walksTo(from, tos, { line = false } = {}) {
-  const have = t => walksKept.get(walkKey(from, t)) && (!line || walksKept.get(walkKey(from, t)).poly);
+  const have = t => settled(walksKept.get(walkKey(from, t))) && (!line || walksKept.get(walkKey(from, t)).poly);
   const waits = new Set(line ? [] : tos.map(t => !have(t) && walking.get(walkKey(from, t))).filter(Boolean));
   const need = tos.map((t, i) => (have(t) || (!line && walking.has(walkKey(from, t))) ? -1 : i)).filter(i => i >= 0);
   if (need.length) {
@@ -559,12 +566,17 @@ async function askWalks(from, tos, need, line) {
     need.map(async (i, k) => {
       const g = asked?.walks?.[k];
       const o = osm[k];
+      const key = walkKey(from, tos[i]);
+      // (Google answered: settled. Else OpenStreetMap's for now, Google asked again later.)
+      const mark = g ? { g: 1 } : { at: Date.now() };
       // Google's, unless OpenStreetMap's is shorter (or Google's isn't there: past its cap).
-      if (g && (o == null || g.dist <= o)) return walksKept.set(walkKey(from, tos[i]), paced(g.dist, g.poly ? { poly: g.poly } : {}));
+      if (g && (o == null || g.dist <= o)) return walksKept.set(key, paced(g.dist, { ...(g.poly ? { poly: g.poly } : {}), ...mark }));
       // (Its line, when one's wanted: OpenStreetMap's route.)
       const r = line || o == null ? await roadPath('walk', from, tos[i]) : null;
       const dist = o ?? r?.dist;
-      if (dist != null) walksKept.set(walkKey(from, tos[i]), paced(dist, r?.poly ? { poly: r.poly } : {}));
+      // (Neither answering again: the one kept stays, asked again later.)
+      if (dist != null) walksKept.set(key, paced(dist, { ...(r?.poly ? { poly: r.poly } : {}), ...mark }));
+      else if (walksKept.has(key)) walksKept.get(key).at = Date.now();
     })
   );
   keepWalks();

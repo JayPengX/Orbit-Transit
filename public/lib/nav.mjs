@@ -17,7 +17,7 @@ import { troubleHtml, fastest, wrongRide, offKind } from './trouble.mjs';
 import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
 import { canRent, canReturn } from './bike.mjs';
-import { rideSec, DOCK_SEC, walkLeg, rideLeg } from './plan.mjs';
+import { rideSec, DOCK_SEC, walkLeg, rideLeg, rentNear, returnNear } from './plan.mjs';
 import { rental, startRental, endRental, rentalStep, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { traLive, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
@@ -484,7 +484,8 @@ function bikesText(bk, plan, i, pos) {
   const low = left != null && (left <= LOW || off);
   const quiet = (html, label) => (!low && left != null ? `<button class="ot-nav-bk" type="button" data-nav-bike="${end}" aria-label="${e(label)}">${html}</button>` : `<span>${html}</span>`);
   const swapLabel = W('換附近的站', 'Nearby dock');
-  if (bk.rent && taking) out.push(quiet(`${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・${icon('bolt')}${bk.rent.ebike}` : ''}`, swapLabel));
+  // (A 電輔車's ride: its 電輔車 the count, never 可借 0 beside them.)
+  if (bk.rent && taking) out.push(quiet(leg.ebike ? `${icon('bolt')}${W('可借電輔', 'E-bikes')} ${bk.rent.ebike || 0}` : `${icon('bike')}${W('可借', 'Bikes')} ${bk.rent.bikes}${bk.rent.ebike ? `・${icon('bolt')}${bk.rent.ebike}` : ''}`, swapLabel));
   if (bk.ret) out.push(taking ? `<span>${W('還車空位', 'Docks')} ${bk.ret.ret}</span>` : quiet(`${W('還車空位', 'Docks')} ${bk.ret.ret}`, swapLabel));
   const btn = text => `<button class="ot-nav-gm" type="button" data-nav-bike="${end}">${icon('route')}${text}</button>`;
   if (left == null) out.push(btn(swapLabel));
@@ -506,11 +507,14 @@ export function moveRide(plan, k, end, station) {
     if (prev?.mode === 'walk') Object.assign(prev, walk(prev.from, st), { poly: undefined, road: false, path: undefined });
     else plan.legs.splice(k, 0, walk(l.from, st)), (k += 1);
     l.from = st;
+    // (The station itself: its marker on the map where you take it now, its counts.)
+    l.rent = { ...station };
   } else {
     const next = plan.legs[k + 1];
     if (next?.mode === 'walk') Object.assign(next, walk(st, next.to), { poly: undefined, road: false, path: undefined });
     else plan.legs.splice(k + 1, 0, walk(st, l.to));
     l.to = st;
+    l.ret = { ...station };
   }
   // (Timed as the planner times a ride: by the roads, a river by its bridge, a dock at each end.)
   const { dist, dur } = rideLeg(l.from, l.to, 0, l.ebike);
@@ -519,6 +523,33 @@ export function moveRide(plan, k, end, station) {
   plan.dur = (plan.dur || before) + (after - before);
   if (plan.arr) plan.arr += (after - before) * 1000;
   return true;
+}
+
+// 換附近的站: where the ride goes instead (`end` 'rent' or 'return'), from
+// the stations around the old one (`list`, bikesAround's): within 500 m of
+// it, not tried yet, with a bike (a dock) now, more than LOW where any has;
+// of those the planner's pick (rentNear, returnNear): your walk to it from
+// where you are (`pos`, else where the walk to it starts) and the ride on by
+// the roads, or the ride to it and the walk on. The nearest to the old one
+// had been taken: 文興路莊敬南路口 a 550 m walk, the ride shorter (Jay 2026-11-09).
+// → the station, or null.
+export function swapPick(plan, k, end, list, { tried = new Set(), pos = null } = {}) {
+  const l = plan.legs[k];
+  if (l?.mode !== 'bike') return null;
+  const rent = end === 'rent';
+  const pt = rent ? l.from : l.to;
+  const left = s => (rent ? (l.ebike ? s.ebike || 0 : (s.bikes || 0) + (s.ebike || 0)) : s.ret || 0);
+  const ok = (list || []).filter(s => s.lat != null && !tried.has(s.uid) && meters(pt.lat, pt.lon, s.lat, s.lon) < 500 && (rent ? canRent(s, l.ebike) : canReturn(s)));
+  const plenty = ok.filter(s => left(s) > LOW);
+  const pool = plenty.length ? plenty : ok;
+  if (!pool.length) return null;
+  if (rent) {
+    const prev = plan.legs[k - 1];
+    const from = pos || (prev?.mode === 'walk' ? prev.from : l.from);
+    return rentNear(from, pool, { ebike: l.ebike, max: 3000, to: l.to });
+  }
+  const next = plan.legs[k + 1];
+  return returnNear(next?.mode === 'walk' ? next.to : l.to, pool, { max: 3000, from: pos || l.from, ebike: l.ebike });
 }
 
 // A YouBike ride cut at a station on its way (returned there and another
@@ -667,6 +698,17 @@ async function rideOptions(l, info, now = Date.now()) {
 // 竹東 the trip said 「區間 1833 次 18:12 開 比較早到，改搭這班」).
 // `others`: the plans it was picked from. → the plan (a copy when marked).
 const isRail = l => l?.mode === 'tra' || l?.mode === 'hsr';
+// A departure (a rideOptions row) that is the very run a step is timed for:
+// the same train by its number, else the same time.
+export const sameRun = (o, l) => Boolean(o && l) && Math.abs(o.dep - l.dep) < 60_000 && (!o.train?.no || !l.train?.no || String(o.train.no) === String(l.train.no));
+// A train still to come by its own live delay, read from its departures
+// (`opts`), whatever the step had heard so far: 區間 1198 16 minutes late at
+// 新竹 was taken as missed at 12:56 and "replaced" by itself, 1198 12:54 (Jay
+// 2026-11-09). → its delay in minutes, or null (not among them).
+export const runDelay = (opts, l) => {
+  const o = isRail(l) ? (opts || []).find(x => x.live && sameRun(x, l)) : null;
+  return o ? o.delay || 0 : null;
+};
 export function pickedPlan(p, others = []) {
   let hit = false;
   const legs = (p?.legs || []).map(l => {
@@ -1484,8 +1526,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     return k >= 0 && plan.legs.slice(from, k).every(x => x.mode === 'walk') ? k : -1;
   };
   // Found empty where you take it (or full where you leave it), said with a
-  // tap: the ride moved to the nearest station within 500 m that has a bike
-  // (a dock) now, the walk to it or from it redrawn; none: 換一條路.
+  // tap: the ride moved to a station within 500 m that has a bike (a dock)
+  // now, the walk to it or from it redrawn; none: 換一條路. Which one as the
+  // planner picks (swapPick): never the nearest to the old one regardless.
   const swapStation = async end => {
     const k = bikeAhead();
     if (k < 0) return;
@@ -1494,8 +1537,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const tried = (state.tried ||= new Set());
     const list = await bikesAround(pt.lat, pt.lon).catch(() => []);
     for (const s of list) if (meters(pt.lat, pt.lon, s.lat, s.lon) < 60) tried.add(s.uid);
-    const has = s => (end === 'rent' ? canRent(s, l.ebike) : canReturn(s));
-    const alt = list.map(s => ({ s, d: meters(pt.lat, pt.lon, s.lat, s.lon) })).filter(x => x.d < 500 && !tried.has(x.s.uid) && has(x.s)).sort((x, y) => x.d - y.d)[0]?.s;
+    const alt = swapPick(plan, k, end, list, { tried, pos: state.i <= k ? state.pos : null });
     if (nav !== state) return;
     if (!alt || !moveRide(plan, k, end, alt)) {
       state.bikes = { ...(state.bikes || {}), k, moved: '', none: end === 'rent' ? W('附近 500 公尺都沒車', 'No bikes within 500 m') : W('附近 500 公尺都沒空位', 'No docks within 500 m') };
@@ -1663,9 +1705,19 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // has its last fix at the stop. Jay 2026-11-07, 普悠瑪 107 taken as missed.)
     if (state.posAt < l.dep + (l.mode === 'bus' ? 0 : state.delay * 60_000) + 60_000) return;
     state.missing = k;
-    const next = (await rideOptions(l, state.info.get(k)).catch(() => [])).find(o => o.dep + (o.delay || 0) * 60_000 > Date.now() + 30_000);
+    const opts = await rideOptions(l, state.info.get(k)).catch(() => []);
     state.missing = null;
     if (nav !== state || state.i !== k || state.phase === 'on') return;
+    // (The train itself running late, its delay not heard yet: still to come, never missed.)
+    const own = runDelay(opts, l);
+    if (own != null && Date.now() <= l.dep + own * 60_000 + 150_000) {
+      state.delay = own;
+      state.delayLive = true;
+      state.liveAt.set(k, l.dep + own * 60_000);
+      return render();
+    }
+    // (Never "the next" that is the same run: a bus's timetable time, a train by its number.)
+    const next = opts.find(o => !sameRun(o, l) && o.dep + (o.delay || 0) * 60_000 > Date.now() + 30_000);
     const name = rideName(l);
     if (next) {
       buzz();
@@ -1689,8 +1741,10 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.missing = null;
     if (nav !== state || state.i !== k || state.phase === 'on') return;
     const late = o => (o.delay || 0) * 60_000;
-    const best = opts.filter(o => o.dep + late(o) > Date.now() + 60_000).sort((a, b) => a.arr + late(a) - (b.arr + late(b)))[0];
-    if (!best || best.arr + late(best) >= l.arr + (state.delay || 0) * 60_000 - 60_000) return;
+    // (This train's own delay as its departures say it, where the step hadn't heard it.)
+    const own = runDelay(opts, l) ?? state.delay ?? 0;
+    const best = opts.filter(o => !sameRun(o, l) && o.dep + late(o) > Date.now() + 60_000).sort((a, b) => a.arr + late(a) - (b.arr + late(b)))[0];
+    if (!best || best.arr + late(best) >= l.arr + own * 60_000 - 60_000) return;
     buzz();
     takeOther(k, best, W(`${optText(best, l)} 比較早到，改搭這班`, `${optText(best, l)} gets there sooner: switched`));
     cascade(k);

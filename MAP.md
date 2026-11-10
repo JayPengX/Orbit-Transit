@@ -154,7 +154,9 @@ Live: https://orbit.jaypengx.com/transit/
   博愛街 → 成功九街 back at 新竹縣體育場 where 成功國中 is by the door: Google's
   walk matrix answered 403, so the walk was OpenStreetMap's 460 m round the
   school, not Google's 267 by the lane; the proxy now asks Compute Routes a walk
-  each then; `tests/bike-roads.test.mjs`). TPASS counts as free (`tpass.mjs`).
+  each then; `tests/bike-roads.test.mjs`). A walk kept on the phone that Google
+  didn't answer is asked again after 6 hours (`api.mjs WALK_RETRY_MS`; 11-09
+  the 460 m still stood: `tests/walks-retry.test.mjs`). TPASS counts as free (`tpass.mjs`).
   A plan's price line: our own trains at their real fares when it's trains
   alone, the planner's never then (Google priced 普悠瑪 107 新竹 → 彰化 at the
   區間's NT$213, 查時刻 NT$331; Jay 2026-11-06), else the planner's own fare, else
@@ -299,7 +301,10 @@ Live: https://orbit.jaypengx.com/transit/
   starts the new directions by itself.
 - **Bikes at the next station** (`nav.mjs` `bikesText`): its counts;
   換附近的站 asked only when 2 or fewer are left (a 電輔車 ride: its own),
-  else the count itself is the tap. Everywhere a station shows, 一般, 電輔車
+  else the count itself is the tap. The tap takes the station the planner
+  would (`swapPick`: your walk to it and the ride on, more than 2 bikes where
+  any has), never the nearest to the old one (Jay 2026-11-09: 文興路莊敬南路口
+  behind him), and the leg keeps the station (`rent`/`ret`) so its pin moves. Everywhere a station shows, 一般, 電輔車
   and 空位 are three columns apart; YouBike wears its own logo everywhere but
   the map, whose pins keep the bike glyph.
 - **YouBike rental timer** (`rental.mjs`): starts by itself while
