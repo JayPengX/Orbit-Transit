@@ -1,4 +1,4 @@
-// 臺中's and 桃園's buses read by the phone from the cities' own bus sites
+// 臺中's, 桃園's and 臺南's buses read by the phone from the cities' own bus sites
 // (Jay 2026-11-10: what a phone can read, it reads), with the kit's reader
 // (kit/ebus-read.mjs, the proxy's too); the Worker's for what they can't
 // answer, and alone for 5 minutes after a site fails.
@@ -136,6 +136,91 @@ test("busEta and busGps: 臺中's from the city's site, what it can't answer the
     // 臺北's: the Worker's, never a site.
     await api.busEta('Taipei', { stops: ['TPE1'] });
     assert.ok(worker.includes('/transit/eta?city=Taipei&stops=TPE1'));
+  } finally {
+    globalThis.fetch = was;
+    api.useSession(null);
+    resetEb();
+  }
+});
+
+// 臺南's: its own site, a route one way a read (POST); a route it doesn't know
+// answers a 500 no page may read (a failed fetch, as the site down is).
+const TN_PATH = 'https://2384.tainan.gov.tw/IMP/jsp/rwd_api/ajax_routeinfo_pathattr.jsp';
+const TN_PACK = {
+  routes: [{ uid: 'TNN10019', name: '19', ways: [['TNN100190', '19路', 0, ['TNN16077', 'TNN16078']], ['TNN100191', '19路', 1, ['TNN16079']]] }],
+  stops: { TNN16077: ['安平古堡'] }
+};
+const TN_WAYS = {
+  '10019|0': { result: true, data: [{ id: '16077', seq: '0', infoId: '240', carNo: 'EAL-2367', subRouteId: '100190' }, { id: '16078', seq: '1', infoId: '300', carNo: '', subRouteId: '100190' }], busData: [{ carNo: 'EAL-2367', lat: '23.0', lon: '120.16', locId: '100190_1' }] },
+  '10019|1': { result: true, data: [{ id: '16079', seq: '0', infoId: '-3', carNo: '', subRouteId: '100191' }], busData: [] }
+};
+function tnSite(log, up = () => true) {
+  return async (url, init) => {
+    const u = new URL(url);
+    assert.equal(`${u.origin}${u.pathname}`, TN_PATH);
+    assert.equal(init.method, 'POST');
+    log.push(`${u.searchParams.get('id')}|${u.searchParams.get('goback')}`);
+    const way = up() && TN_WAYS[`${u.searchParams.get('id')}|${u.searchParams.get('goback')}`];
+    if (!way) throw new TypeError('Failed to fetch');
+    return answer(way);
+  };
+}
+
+test("臺南's from its own site: a stop the ways it's on, a route both ways, its buses; one it doesn't know the Worker's, the city still read", async () => {
+  const { ebEta, ebGps, resetEb, ebPhone } = await import('../public/lib/ebbus.mjs');
+  resetEb();
+  const log = [];
+  const deps = { fetchFn: tnSite(log), now: T0, pack: async () => (await import('../.kit/ebus-read.mjs')).packIndex(TN_PACK) };
+  assert.ok(ebPhone('Tainan', T0));
+  const got = await ebEta('Tainan', { stops: ['TNN16077', 'TNN1'] }, deps);
+  assert.deepEqual(got.rows.map(r => [r.StopUID, r.RouteUID, r.Direction, r.EstimateTime, r.PlateNumb]), [['TNN16077', 'TNN10019', 0, 240, 'EAL-2367']]);
+  assert.equal(got.rows[0].StopName.Zh_tw, '安平古堡');
+  assert.deepEqual(got.missing, ['TNN1']);
+  assert.deepEqual(log, ['10019|0'], 'only the way the stop is on');
+  const [a, b] = await Promise.all([ebEta('Tainan', { route: 'TNN10019' }, { ...deps, now: T0 + 30_000 }), ebEta('Tainan', { route: 'TNN99999' }, { ...deps, now: T0 + 30_000 })]);
+  assert.deepEqual(a.rows.map(r => [r.StopUID, r.Direction, r.StopStatus, r.EstimateTime]).sort(), [['TNN16077', 0, 0, 240], ['TNN16078', 0, 0, 300], ['TNN16079', 1, 3, undefined]]);
+  assert.deepEqual([a.missing, b.missing, b.rows], [[], ['TNN99999'], []], "the route it doesn't know: the Worker's");
+  assert.ok(ebPhone('Tainan', T0 + 60_000), "one route it doesn't know doesn't put the city down");
+  const g = await ebGps('Tainan', ['TNN10019'], { ...deps, now: T0 + 30_000 });
+  assert.deepEqual(g.rows.map(x => [x.PlateNumb, x.Direction, x.SubRouteUID, x.BusPosition.PositionLon]), [['EAL-2367', 0, 'TNN100190', 120.16]]);
+  assert.deepEqual(g.missing, []);
+});
+
+test("臺南's site down: the Worker's, and the Worker's alone 5 minutes; through busEta and busGps", async () => {
+  const { ebEta, resetEb, ebPhone } = await import('../public/lib/ebbus.mjs');
+  resetEb();
+  const log = [];
+  const pack = async () => (await import('../.kit/ebus-read.mjs')).packIndex(TN_PACK);
+  const got = await ebEta('Tainan', { stops: ['TNN16077'] }, { fetchFn: tnSite(log, () => false), now: T0, pack });
+  assert.deepEqual([got.rows, got.missing], [[], ['TNN16077']]);
+  assert.ok(!ebPhone('Tainan', T0 + 60_000), 'down: the Worker alone');
+  assert.ok(ebPhone('Tainan', T0 + 6 * 60_000), 'back after 5 minutes');
+  resetEb();
+  const api = await import('../public/lib/api.mjs');
+  const was = globalThis.fetch;
+  const worker = [];
+  let up = true;
+  const site = tnSite(log, () => up);
+  globalThis.fetch = async (url, init) => {
+    if (String(url).startsWith(TN_PATH)) return site(url, init);
+    const u = new URL(url);
+    if (u.pathname.endsWith('/bus/Tainan.json')) return answer(TN_PACK);
+    worker.push(decodeURIComponent(u.pathname + u.search).replace(/&qt=.*$/, ''));
+    if (u.pathname === '/transit/eta') return answer((u.searchParams.get('stops') || '').split(',').map(s => ({ StopUID: s, RouteUID: 'W', EstimateTime: 60 })));
+    if (u.pathname === '/transit/gps') return answer([{ RouteUID: 'W', PlateNumb: 'W', Direction: 0 }]);
+    return answer([]);
+  };
+  api.useSession({ ensureToken: async () => 'tok' });
+  try {
+    const a = await api.busEta('Tainan', { stops: ['TNN16077', 'TNN8888'] });
+    assert.deepEqual(a.rows.map(r => [r.StopUID, r.RouteUID, r.EstimateTime]).sort(), [['TNN16077', 'TNN10019', 240], ['TNN8888', 'W', 60]]);
+    assert.deepEqual(worker, ['/transit/eta?city=Tainan&stops=TNN8888'], 'the Worker for the stop the site has not');
+    const g = await api.busGps('Tainan', ['TNN10019']);
+    assert.deepEqual(g.rows.map(r => r.PlateNumb), ['EAL-2367']);
+    up = false;
+    resetEb();
+    const b = await api.busEta('Tainan', { stops: ['TNN16078'] });
+    assert.deepEqual(b.rows, [{ StopUID: 'TNN16078', RouteUID: 'W', EstimateTime: 60 }]);
   } finally {
     globalThis.fetch = was;
     api.useSession(null);

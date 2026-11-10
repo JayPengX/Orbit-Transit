@@ -307,9 +307,9 @@ export function busEta(city, { stops = [], route = '' } = {}) {
   if (etaAsks.size > 100) for (const [p, y] of etaAsks) if (now - y.got > 60_000) etaAsks.delete(p);
   return ask;
 }
-// 高雄's, 臺中's and 桃園's buses: the phone reads the city's own site
+// 高雄's, 臺中's, 桃園's and 臺南's buses: the phone reads the city's own site
 // itself (khbus.mjs: 高雄's answers only Taiwan's own networks, never the
-// Worker; ebbus.mjs: 臺中's and 桃園's, the kit's reader, the proxy's too;
+// Worker; ebbus.mjs: 臺中's, 桃園's and 臺南's, the kit's reader, the proxy's too;
 // Jay 2026-11-10, what a phone can read, it reads), loaded only when asked;
 // the Worker's (the proxy's) whatever it couldn't answer, or all when it fails.
 const KHH = 'Kaohsiung';
@@ -321,7 +321,8 @@ const ebb = () => (ebMod ||= import('./ebbus.mjs').catch(err => ((ebMod = null),
 const PHONE_BUS = {
   [KHH]: () => kh().then(m => ({ eta: q => m.khEta(q), gps: r => m.khGps(r) })),
   Taichung: () => ebb().then(m => ({ eta: q => m.ebEta('Taichung', q), gps: r => m.ebGps('Taichung', r) })),
-  Taoyuan: () => ebb().then(m => ({ eta: q => m.ebEta('Taoyuan', q), gps: r => m.ebGps('Taoyuan', r) }))
+  Taoyuan: () => ebb().then(m => ({ eta: q => m.ebEta('Taoyuan', q), gps: r => m.ebGps('Taoyuan', r) })),
+  Tainan: () => ebb().then(m => ({ eta: q => m.ebEta('Tainan', q), gps: r => m.ebGps('Tainan', r) }))
 };
 async function phoneFirst(city, stops, route, had) {
   const worker = s => (s.length ? etaAsk(`/transit/eta?city=${encodeURIComponent(city)}&stops=${s.map(encodeURIComponent).join(',')}${had ? `&had=${had}` : ''}`) : routeEta(city, route, had));

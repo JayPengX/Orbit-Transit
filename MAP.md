@@ -360,7 +360,7 @@ Live: https://orbit.jaypengx.com/transit/
 - **Data:**
   - live: TDX through `/transit/tdx`, cached on the Worker; buses due through
     `/transit/eta` (`api.mjs busEta`): the Worker answers 新竹's, 臺北's,
-    新北's and 臺南's from the cities' own sites (Core `transit-free.js`); 臺中's and 桃園's
+    新北's from the cities' own sites (Core `transit-free.js`); 臺中's, 桃園's and 臺南's
     the phone reads itself from the cities' bus sites (`ebbus.mjs`, loaded only when asked:
     the kit's reader `ebus-read.mjs`, the Worker's too; routes asked within a moment one read;
     times and buses' places), the Worker's for what it can't answer and for 5 minutes after
@@ -500,7 +500,7 @@ Live: https://orbit.jaypengx.com/transit/
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |
 | `lib/linemap.mjs`, `tra-map.mjs` | The station picker's line map: each line winding across its card (`rowLength`, `mapCols`), 新竹市/嘉義市 one area with their 縣 (`areaOf`, `areaParts` joins the lines), a 高鐵 station within 900 m of a 台鐵 one a tap on that stop (rerun `node scripts/tra-map.mjs` when 台鐵 opens a station) |
 | `lib/khbus.mjs` | 高雄's buses from the city's own site, read by the phone (the Worker's if it can't) |
-| `lib/ebbus.mjs` | 臺中's and 桃園's buses from the cities' own sites, read by the phone with the kit's reader (the Worker's if it can't) |
+| `lib/ebbus.mjs` | 臺中's, 桃園's and 臺南's buses from the cities' own sites, read by the phone with the kit's reader (the Worker's if it can't) |
 | `lib/bus.mjs`, `bus-ui.mjs`, `busgps.mjs` | Routes, stops, arrivals; the route strip; a route's sheet (its stops with the buses on the line: a bus a green dot a size up from a stop's, 進站中 / 即將進站 at the list's own size in the live green, never a red pill); a lagging bus placed by its GPS |
 | `lib/fare.mjs` | A bus ride's fare, stop to stop (a route sheet's 票價): TDX's RouteFare a route at a time, kept a week; 段次 with its buffer zones, stop to stop (公路客運), stages; free buses |
 | `lib/board.mjs`, `board.css` | 交通's board: `boardRow` (a row of the one shape), `whenHtml` (the time at its end) |
