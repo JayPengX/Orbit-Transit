@@ -26,8 +26,9 @@ export async function cityRoutes(city) {
 
 // Routes matching what's typed: the exact name first, then names that start
 // with it (the shortest first: 「2」 → 2, 20, 21…), then any that contain it,
-// then by the places at either end.
-export function findRoutes(list, text, n = 60) {
+// then by the places at either end. `rank` (a route → a number): among
+// matches as good, the lower first (全部: your city's 1 before 臺北's).
+export function findRoutes(list, text, n = 60, rank = null) {
   const t = norm(text);
   if (!t) return [];
   const score = r => {
@@ -41,7 +42,7 @@ export function findRoutes(list, text, n = 60) {
   return list
     .map(r => [score(r), r])
     .filter(([s]) => s != null)
-    .sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name, 'zh-Hant', { numeric: true }))
+    .sort((a, b) => a[0] - b[0] || (rank ? rank(a[1]) - rank(b[1]) : 0) || a[1].name.localeCompare(b[1].name, 'zh-Hant', { numeric: true }))
     .slice(0, n)
     .map(([, r]) => r);
 }
