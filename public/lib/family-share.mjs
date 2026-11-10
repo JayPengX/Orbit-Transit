@@ -38,3 +38,25 @@ export function shareFamily(data, load = () => import('#kit/family.mjs')) {
       return false;
     });
 }
+
+// A trip set out on (navigation begun) whose fare is known, one price (not
+// TPASS's, not 起): the family's latest ride, for Money's 車資記帳 to offer
+// as a 交通 entry the person confirms (never added on its own).
+// → { id, at (ms it sets out), name ('新竹車站 → 竹北火車站'), fare (NT$), modes } or null.
+const MODE = { bus: 'bus', tra: 'rail', hsr: 'rail', metro: 'metro', lightrail: 'metro' };
+export function rideFact(p, now = Date.now()) {
+  const m = /^NT\$(\d+)$/.exec(String(p?.fareText || '').trim());
+  const legs = (p?.legs || []).filter(l => l && l.mode !== 'walk' && l.mode !== 'bike');
+  const fare = m ? Number(m[1]) : 0;
+  if (!(fare > 0) || !legs.length) return null;
+  const at = Number.isFinite(p.dep) ? p.dep : Number.isFinite(legs[0].dep) ? legs[0].dep : now;
+  const name = `${legs[0].from?.name || ''} → ${legs.at(-1).to?.name || ''}`;
+  return { id: `${Math.round(at / 60_000)}:${name}`, at, name, fare, modes: [...new Set(legs.map(l => MODE[l.mode] || l.mode))] };
+}
+export function shareRide(p, load = () => import('#kit/family.mjs')) {
+  const fact = rideFact(p);
+  if (!fact) return Promise.resolve(false);
+  return load()
+    .then(f => (typeof f?.tell === 'function' ? (f.tell('transit', 'ride', fact), true) : false))
+    .catch(() => false);
+}
