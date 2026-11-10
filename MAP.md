@@ -363,6 +363,10 @@ Live: https://orbit.jaypengx.com/transit/
     The metros' maps and timetables, 高鐵's days, a city's route list and the
     rail stations are the Worker's copies in R2 too (Core `transit-free.js`),
     asked the same way through `/transit/tdx`: nothing here changed for them.
+    So are the metros' live boards, from the operators' own (臺北's open
+    file, 高雄's 高捷e遊行 a station at a time, 機場捷運's platform screens),
+    in TDX's shape; a board's every live train a way, soonest first, before
+    the timetable's (`metro.mjs withLive`).
     A route sheet's 時刻表 at a stop not timed itself (most of 台北, 新北,
     桃園, 台中 list only the first stop) is the first stop's plus the ride,
     said 依起站…推估 (`live.mjs stopTable`; 988, Jay 2026-11-09); the bus
