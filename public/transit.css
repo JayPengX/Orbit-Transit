@@ -6506,3 +6506,27 @@ html[lang='en'] .ot-sn-tap {
   background-position: right 10px center;
   background-size: 12px;
 }
+
+/* 高鐵訂票's sheet (book.mjs): the ride, then its two ways, the app's first. */
+.ot-book {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.ot-book .q-btn {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  text-decoration: none;
+}
+.ot-book-wait,
+.ot-book-why,
+.ot-book-note {
+  margin: 0;
+  color: var(--q-label-2);
+  font: 400 var(--q-t-footnote, 13px) / 1.4 var(--q-font);
+  text-align: center;
+}
+.ot-book-note {
+  margin-top: 16px;
+}

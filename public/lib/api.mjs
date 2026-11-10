@@ -102,8 +102,9 @@ async function get(path, opts = {}) {
 }
 
 // 高鐵's booking with a ride filled in (the proxy's /transit/book, TDX 訂票導訂):
-// → { url }, a link that lasts minutes (asked at the tap, never kept).
-export const bookLink = ({ from, to, date, time, no }) => get(`/transit/book?${new URLSearchParams({ sys: 'hsr', from, to, date, time, no })}`);
+// → { url }, a link that lasts minutes (asked at the tap, never kept): its
+// website's, or with `app`, its T Express app's (ets.thsrc.com.tw).
+export const bookLink = ({ from, to, date, time, no, app = false }) => get(`/transit/book?${new URLSearchParams({ sys: 'hsr', from, to, date, time, no, ...(app ? { app: '1' } : {}) })}`);
 
 // ---- TDX through the proxy -----------------------------------------------------------------
 

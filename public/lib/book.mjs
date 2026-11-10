@@ -5,8 +5,9 @@
 // lasts a few minutes. Orbit sells nothing: the person books and pays there.
 import { bookLink } from './api.mjs';
 import { railStations } from './raildata.mjs';
-import { icon } from './ui.mjs';
-import { e, hm, tw, meters } from './util.mjs';
+import { icon, sheet, sheetHead } from './ui.mjs';
+import { tile, COLOR } from './look.mjs';
+import { e, tw, meters, dayLabel } from './util.mjs';
 import { W } from '#kit/lang.mjs';
 
 // A ride that can be booked: 高鐵 with its train's number, not left yet.
@@ -25,21 +26,46 @@ async function hsrName(pt) {
   return near && near.d < 1000 ? near.s.name : pt.name || '';
 }
 
-// Opens 高鐵's booking for a ride ({ from, to, dep, no }: names or places).
-// The window opens at the tap (a phone lets only a tap open one), the link
-// put in it when it comes. → true when opened.
+// A ride's two links, asked together: { app, web } (null where the proxy couldn't).
+export async function bookWays(trip) {
+  const ok = x => (/^https:\/\//.test(x?.url || '') ? x.url : null);
+  const [app, web] = await Promise.all([bookLink({ ...trip, app: true }).catch(() => null), bookLink(trip).catch(() => null)]);
+  return { app: ok(app), web: ok(web) };
+}
+
+// Opens 高鐵's booking for a ride ({ from, to, dep, no }: names or places):
+// a small sheet with the ride and two ways, each asked of the proxy at once
+// (Jay 2026-11-10: "高鐵導訂 open hsr app if possible"): 高鐵's T Express app
+// first (ets.thsrc.com.tw, its universal link: iOS opens the app for a tap
+// on the app's own address, so the link is a real one the person taps, never
+// a window sent there later), then its website (the way the person chose for
+// links: the quick view or the Safari app, kit `linkHref`). → true when a
+// way came.
 export async function openBooking({ from, to, dep, no }, say = () => {}) {
-  const w = typeof window !== 'undefined' ? window.open('', '_blank') : null;
-  if (w) w.opener = null;
+  const { date, hm: time } = tw(dep);
+  const d = sheet(
+    `${sheetHead(W('高鐵訂票', 'Book on THSR'), `<span data-ride>${e(W(`${dayLabel(date)} ${time} · ${no} 次`, `${dayLabel(date)} ${time} · train ${no}`))}</span>`, tile('hsr', COLOR.hsr))}
+    <div class="ot-book" aria-live="polite">
+      <p class="ot-book-wait">${W('正在向高鐵取得這班車的連結…', 'Asking THSR for this train’s link…')}</p>
+    </div>
+    <p class="ot-book-note">${W('在高鐵的 App 或網站付款訂位；Orbit 不賣票。', 'You book and pay with THSR; Orbit sells nothing.')}</p>`,
+    'ot-book-sheet'
+  );
   try {
     const [a, b] = await Promise.all([hsrName(from), hsrName(to)]);
-    const { url } = await bookLink({ from: a, to: b, date: tw(dep).date, time: hm(dep), no: String(no) });
-    if (!/^https?:\/\//.test(url || '')) throw new Error('no link');
-    if (w) w.location.href = url;
-    else location.href = url;
+    d.querySelector('[data-ride]').textContent = `${a} → ${b} · ${d.querySelector('[data-ride]').textContent}`;
+    const { app: appUrl, web: webUrl } = await bookWays({ from: a, to: b, date, time, no: String(no) });
+    if (!appUrl && !webUrl) throw new Error('no link');
+    d.querySelector('.ot-book').innerHTML = [
+      appUrl ? `<a class="q-btn block ot-book-app" href="${e(appUrl)}" target="_blank" rel="noopener" data-q-quick>${icon('ticket')} ${W('在高鐵 App 訂票', 'Book in the THSR app')}</a>` : '',
+      webUrl ? `<a class="q-btn block ${appUrl ? 'ghost' : ''}" href="${e(webUrl)}" target="_blank" rel="noopener">${W('在高鐵網站訂票', 'Book on THSR’s website')}</a>` : '',
+      appUrl && webUrl ? `<small class="ot-book-why">${W('沒有裝 T Express App，就用網站。', 'No T Express app? Use the website.')}</small>` : ''
+    ].join('');
+    // (Each link lasts minutes: the sheet goes once one is used.)
+    d.querySelector('.ot-book').addEventListener('click', ev => ev.target.closest('a[href]') && setTimeout(() => d.shut?.(), 400));
     return true;
   } catch {
-    w?.close();
+    d.shut?.();
     say(W('高鐵訂票暫時打不開，稍後再試', 'THSR booking isn’t opening; try again later'));
     return false;
   }
