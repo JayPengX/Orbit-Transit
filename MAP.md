@@ -52,7 +52,12 @@ Live: https://orbit.jaypengx.com/transit/
     has what's near).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
     station picked by search, a nearby or recent one, or on a county's line
-    map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`); 查車次, a
+    map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), each train a
+    card that opens in place, sliding, the tapped card kept under the finger
+    (`toggleCard`; later reads, delays and fares, patch the cards: `freshen`),
+    every 台鐵 train today 準點, 晚 N 分 or 未發車 (`trainNow`: the live board
+    lists only trains on their way; read again a minute on; Jay 2026-11-10);
+    查車次, a search bar at the top (Jay 2026-11-10), a
     台鐵 or 高鐵 number, the day's trains with it and a tap its every stop and
     time (`tab-train.mjs trainNoSheet`, `ticket.mjs trainsNumbered`; Jay 2026-11-06), bus
     routes by number or stop, stop timetables, and 捷運: each city's metro

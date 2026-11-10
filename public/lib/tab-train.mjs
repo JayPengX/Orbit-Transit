@@ -26,7 +26,7 @@ let ctx = null;
 let shownNow = '';
 // The nearest station filled in (the opening waits for it a moment: never popping in after the loading screen).
 export let ready = Promise.resolve();
-const state = { from: null, to: null, mode: 'all', date: null, time: null, results: null, open: -1, error: '', delays: new Map(), fares: new Map(), passOnly: false };
+const state = { from: null, to: null, mode: 'all', date: null, time: null, results: null, open: -1, error: '', delays: new Map(), live: 0, fares: new Map(), passOnly: false };
 
 export function init(c) {
   ctx = c;
@@ -115,7 +115,10 @@ function render() {
   // 全部 / 台鐵 / 高鐵 kept across a redraw (the owner, 2026-10-27: it switched with no slide): a tap
   // redraws the page twice (the search's loading, then its trains), and a control drawn anew lands.
   const seg = $('panel-train').querySelector('.ot-tq-sys');
+  // 查車次 at the top, a search bar (Jay 2026-11-10: "Move 查車次 to the top like a
+  // search bar"; it was a row under the trains): a tap opens its sheet, the keys up.
   $('panel-train').innerHTML = `
+    <button class="ob-plan ot-tn-bar q-press" type="button" data-act="train-no">${icon('search')}<span>${W('查車次，例如 107', 'Train number, e.g. 107')}</span></button>
     <div class="ot-tq-days"></div>
     <div class="ot-tq-side">
     <section class="ot-tq">
@@ -125,7 +128,6 @@ function render() {
     <div id="t-notices">${noticesHtml(notices)}</div>
     </div>
     <div id="t-results">${resultsHtml()}</div>
-    ${rowCard(`<button class="q-ritem chevron" type="button" data-act="train-no">${tile('search', COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${W('查車次', 'Find a train')}</span><small>${W('輸入車次號碼，看停靠站和時間', 'By its number: its stops and times')}</small></span></button>`)}
     ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
   $('panel-train').querySelector('.ot-tq-days').replaceWith(kitUI.dayBar(dayRec, { days: trainDays(), current: date, today, follow: true, onPick: pickDay }));
   if (seg) {
@@ -139,17 +141,133 @@ let ticker = 0;
 function drawn() {
   fitLegs($('t-results'));
   clearInterval(ticker);
-  if ($('t-results')?.querySelector('[data-leave]')) ticker = setInterval(tickLeave, 15_000);
+  if ($('t-results')?.querySelector('[data-leave]') || (Array.isArray(state.results) && state.live)) ticker = setInterval(tickLeave, 15_000);
 }
 function tickLeave() {
   const els = $('t-results')?.querySelectorAll('[data-leave]') || [];
-  if (!$('t-results')?.isConnected || !els.length) return clearInterval(ticker);
+  if (!$('t-results')?.isConnected || (!els.length && !state.live)) return clearInterval(ticker);
   for (const el of els) {
     const t = leaveText(Number(el.dataset.leave));
     if (el.textContent !== t) el.textContent = t;
   }
+  // 台鐵's board read again a minute on while the trains are in view (a train
+  // that was 未發車 leaves; a delay grows), the same read for everyone at the edge.
+  const box = $('t-results');
+  if (state.live && Date.now() - delaysAt > 60_000 && box.offsetParent && document.visibilityState === 'visible') readDelays();
+}
+// Today's 台鐵 delays (the live board), then the cards told in place.
+let delaysAt = 0;
+function readDelays() {
+  delaysAt = Date.now();
+  const day = state.date || tw().date;
+  traDelays()
+    .then(m => {
+      if ((state.date || tw().date) !== day || day !== tw().date) return;
+      state.delays = m;
+      state.live = 1;
+      freshen();
+    })
+    .catch(() => {});
 }
 const showResults = () => (($('t-results').innerHTML = resultsHtml()), drawn());
+// What came in after the trains were drawn (台鐵's delays, the fares, a pin):
+// only what changed, in place. The list is never drawn again under the
+// reader: a card drawn anew is a new card, and a page kept still by what it
+// says lost it (Jay 2026-11-10: a tap on a train "jumps the UI").
+function freshen() {
+  const box = $('t-results');
+  const cards = box?.querySelectorAll('.ot-jny[data-j]') || [];
+  if (!Array.isArray(state.results) || cards.length !== state.results.length) return showResults();
+  const now = Date.now();
+  const next = (state.date || tw().date) === tw().date ? state.results.findIndex(j => leaveAt(j) >= now - 30_000) : -1;
+  const make = html => {
+    const t = document.createElement('template');
+    t.innerHTML = html;
+    return t.content;
+  };
+  cards.forEach((card, i) => {
+    const j = state.results[i];
+    // (The next train moved on: that card and the one before, whole.)
+    if (card.classList.contains('next') !== (i === next)) {
+      const n = make(journeyHtml(j, i, i === next)).firstElementChild;
+      if (!n.isEqualNode(card)) card.replaceWith(n);
+      return;
+    }
+    const leave = card.querySelector('[data-leave]');
+    if (leave && Number(leave.dataset.leave) !== leaveAt(j)) {
+      leave.dataset.leave = leaveAt(j);
+      leave.textContent = leaveText(leaveAt(j));
+    }
+    const st = card.querySelector('.ot-jny-st');
+    const st2 = make(statusHtml(j)).firstElementChild;
+    if (st && !st.isEqualNode(st2)) st.replaceWith(st2);
+    const more = card.querySelector('.ot-jny-more');
+    if (more && i === state.open) {
+      const m2 = make(detailHtml(j));
+      const same = more.childNodes.length === m2.childNodes.length && [...m2.childNodes].every((n, k) => n.isEqualNode(more.childNodes[k]));
+      if (!same) more.replaceChildren(m2);
+    }
+  });
+  const pin = box.querySelector('[data-act="pin-conn"]');
+  if (pin) {
+    pin.setAttribute('aria-pressed', String(pinnedConn()));
+    pin.textContent = pinnedConn() ? W('已釘選', 'Pinned') : W('釘選', 'Pin');
+  }
+  drawn();
+}
+// A train opened or shut where it is (its own card, nothing else drawn): the
+// card tapped stays under the finger, its stops sliding open under it; one
+// open above it shuts at once and the page moves by what it gave back, so
+// the card tapped doesn't move.
+const calm = () => matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const scrollerOf = n => {
+  for (let k = n.parentElement; k && k !== document.body; k = k.parentElement) if (k.scrollHeight > k.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(k).overflowY)) return k;
+  return document.scrollingElement;
+};
+function shut(card, slide) {
+  card.classList.remove('on');
+  card.setAttribute('aria-expanded', 'false');
+  const more = card.querySelector('.ot-jny-more');
+  if (!more) return;
+  const s = scrollerOf(card);
+  const h = more.offsetHeight;
+  // (Near the page's end the page would get shorter under the finger while it
+  // slides: then at once, and the kit keeps the place.)
+  if (!slide || calm() || s.scrollTop + s.clientHeight > s.scrollHeight - h - 1) return more.remove();
+  more.classList.add('going');
+  more.animate([{ height: `${h}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 220, easing: 'cubic-bezier(0.3, 0, 0.2, 1)' }).onfinish = () => more.remove();
+}
+function openCard(card, j) {
+  card.querySelector('.ot-jny-more')?.remove();
+  card.classList.add('on');
+  card.setAttribute('aria-expanded', 'true');
+  const more = document.createElement('span');
+  more.className = 'ot-jny-more';
+  more.innerHTML = detailHtml(j);
+  card.append(more);
+  if (calm()) return;
+  more.classList.add('going');
+  const run = more.animate([{ height: '0px', opacity: 0 }, { height: `${more.offsetHeight}px`, opacity: 1 }], { duration: 280, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+  run.onfinish = run.oncancel = () => more.classList.remove('going');
+}
+function toggleCard(i) {
+  const box = $('t-results');
+  const card = box?.querySelector(`.ot-jny[data-j="${i}"]`);
+  const j = Array.isArray(state.results) ? state.results[i] : null;
+  if (!card || !j) return;
+  const was = state.open;
+  state.open = was === i ? -1 : i;
+  const old = was >= 0 && was !== i ? box.querySelector(`.ot-jny[data-j="${was}"]`) : null;
+  if (old) {
+    const s = scrollerOf(card);
+    const top = card.getBoundingClientRect().top;
+    shut(old, false);
+    const moved = card.getBoundingClientRect().top - top;
+    if (Math.abs(moved) >= 1) s.scrollTop += moved;
+  }
+  if (state.open === i) openCard(card, j);
+  else shut(card, true);
+}
 
 function resultsHtml() {
   if (state.error) return `<p class="ot-note bad">${e(state.error)}</p>`;
@@ -173,6 +291,21 @@ function resultsHtml() {
 
 // A train's delay now (台鐵's live board; 高鐵 has none): minutes, 0 on time, null not running yet.
 const delayOf = t => (t.sys === 'tra' && state.delays.has(t.no) ? state.delays.get(t.no) : null);
+// What a 台鐵 train is now, by the live board (read today): its delay in
+// minutes (0 on time), 'wait' when it hasn't left its first station yet (the
+// board lists only trains on their way: Jay 2026-11-10, "some show 準點 some
+// doesn't"), or null when nobody can say (高鐵 has no live board; another day;
+// a train past its start the board doesn't list yet).
+export function trainNow(t, delays, live, now = Date.now()) {
+  if (!t || t.sys !== 'tra' || !live) return null;
+  if (delays.has(t.no)) return delays.get(t.no);
+  const start = t.stops?.[0]?.dep;
+  return start != null && start > now ? 'wait' : null;
+}
+const stateOf = t => trainNow(t, state.delays, state.live && (state.date || tw().date) === tw().date);
+const notYet = () => `<span class="ot-jny-st wait">${W('未發車', 'Not started')}</span>`;
+// A train's state as words beside its name (a ride's step, 查車次).
+const nowText = d => (d === 'wait' ? ` <span class="ot-wait">${W('未發車', 'Not started')}</span>` : d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : d === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : '');
 // When a journey really leaves: its first train's time, with that train's delay.
 const leaveAt = j => {
   const l = j.legs.find(x => !x.walk);
@@ -192,19 +325,27 @@ const trainChip = t => {
 };
 // The journey as one line (ui.mjs journeyLine): each train in its colour, a change a ring.
 const barHtml = j => journeyLine(j.legs.map(l => (l.walk ? { walk: true, min: l.min } : { min: (l.arr - l.dep) / 60_000, color: trainColor(l.trip) })));
-function journeyHtml(j, i, next) {
+// What changes the choice: late or run only if the weather allows (a tag: the exception),
+// on time by the live board (plain green text: a fact, DESIGN.md §6), or not on its
+// way yet (quiet grey: every 台鐵 train today says one of these once the board is read).
+// (An empty one when nobody can say: kept in its place, so a status read later lands in it.)
+function statusHtml(j) {
   const rides = j.legs.filter(l => !l.walk);
-  const delays = rides.map(l => delayOf(l.trip));
-  const late = delays.reduce((a, d) => a + (d || 0), 0);
-  // What changes the choice: late or run only if the weather allows (a tag: the exception),
-  // on time by the live board (plain green text: a fact, DESIGN.md §6).
-  const state_ = late
+  const states = rides.map(l => stateOf(l.trip));
+  const late = states.reduce((a, d) => a + (typeof d === 'number' ? d : 0), 0);
+  return late
     ? `<span class="ot-jny-st late">${W(`晚 ${late} 分`, `${late} min late`)}</span>`
-    : delays.some(d => d === 0)
+    : states.some(d => d === 0)
       ? `<span class="ot-jny-st ok" aria-label="${W('準點', 'On time')}">${icon('check')}<span>${W('準點', 'On time')}</span></span>`
       : rides.some(l => l.trip.maybe)
         ? `<span class="ot-jny-st maybe">${W('視天候', 'Weather')}</span>`
-        : '';
+        : states[0] === 'wait'
+          ? notYet()
+          : '<span class="ot-jny-st"></span>';
+}
+function journeyHtml(j, i, next) {
+  const rides = j.legs.filter(l => !l.walk);
+  const state_ = statusHtml(j);
   // A change: where, between the trains.
   const legs = rides
     .map((l, k) => {
@@ -213,11 +354,11 @@ function journeyHtml(j, i, next) {
     })
     .join('');
   const eyebrow = next ? `<span class="ot-jny-next">${W('下一班', 'Next train')} · <b data-leave="${leaveAt(j)}">${e(leaveText(leaveAt(j)))}</b></span>` : '';
-  return `<button class="ot-jny${i === state.open ? ' on' : ''}${next ? ' next' : ''}" type="button" data-j="${i}">
+  return `<button class="ot-jny${i === state.open ? ' on' : ''}${next ? ' next' : ''}" type="button" data-j="${i}" aria-expanded="${i === state.open}">
     ${eyebrow}
     <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><span class="ot-jny-mid"><small>${e(minsText((j.arr - j.dep) / 1000))}${state.allTrains && rides.every(onPass) ? ' · TPASS' : ''}</small>${barHtml(j)}</span><b>${e(hm(j.arr))}</b></span>
     <span class="ot-jny-foot${rides.length === 1 ? ' one' : ''}"><span class="ot-jny-legs">${legs}</span>${state_}</span>
-    ${i === state.open ? detailHtml(j) : ''}
+    ${i === state.open ? `<span class="ot-jny-more">${detailHtml(j)}</span>` : ''}
   </button>`;
 }
 
@@ -249,10 +390,10 @@ function detailHtml(j) {
     const prev = j.legs.slice(0, k).reverse().find(x => !x.walk);
     if (prev && prev.to === l.from) out.push(`<li class="change" style="--c:${COLOR.walk}"><span class="ot-step-time"></span><span class="ot-step-i">${icon('swap')}</span><span class="ot-step-what">${W(`在 <b>${e(nameOf(l.from))}</b> 換車`, `Change at <b>${e(nameOf(l.from))}</b>`)}<small>${W(`${Math.round((l.dep - prev.arr) / 60_000)} 分`, `${Math.round((l.dep - prev.arr) / 60_000)} min`)}</small></span></li>`);
     const t = l.trip;
-    const d = delayOf(t);
+    const d = stateOf(t);
     const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no && p.sys === t.sys);
     const facts = [W(`${l.stops} 站`, `${l.stops} stops`), minsText((l.arr - l.dep) / 1000), onPass(l) ? 'TPASS' : state.fares.get(fareKey(l)) ? `NT$${state.fares.get(fareKey(l))}` : '', t.bike ? W('可攜車', 'bikes OK') : ''].filter(Boolean).join(' · ');
-    out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : d === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span>${t.sys === 'hsr' && canBook({ mode: 'hsr', dep: l.dep, train: t }) ? bookHtml({ from: net?.st.get(l.from)?.name || '', to: net?.st.get(l.to)?.name || '', dep: l.dep, train: t }, 'ot-pin-train') : ''}</span></li>`);
+    out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${nowText(d)}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span>${t.sys === 'hsr' && canBook({ mode: 'hsr', dep: l.dep, train: t }) ? bookHtml({ from: net?.st.get(l.from)?.name || '', to: net?.st.get(l.to)?.name || '', dep: l.dep, train: t }, 'ot-pin-train') : ''}</span></li>`);
   });
   out.push(`<li class="end" style="--c:${COLOR.walk}"><span class="ot-step-time">${e(hm(j.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e(nameOf(j.legs.at(-1).to))}</b></span></li>`);
   // 用這班規劃: the trip from where you are around these trains (the ticket you hold: ticket.mjs), on the map.
@@ -307,11 +448,11 @@ async function search() {
   // Today's delays and the fares, after.
   if (Array.isArray(state.results) && state.results.length) {
     // (Another day: no live board, none of today's delays on its trains.)
-    if (date !== today) state.delays = new Map();
-    if (date === today) traDelays().then(m => ((state.delays = m), render())).catch(() => {});
+    if (date !== today) (state.delays = new Map()), (state.live = 0);
+    if (date === today) readDelays();
     const legs = state.results.flatMap(j => j.legs.filter(l => !l.walk));
     const uniq = [...new Map(legs.map(l => [fareKey(l), l])).values()].slice(0, 12);
-    Promise.all(uniq.map(l => legFare(l).then(p => p != null && state.fares.set(fareKey(l), p)).catch(() => {}))).then(() => render());
+    Promise.all(uniq.map(l => legFare(l).then(p => p != null && state.fares.set(fareKey(l), p)).catch(() => {}))).then(() => freshen());
   }
 }
 
@@ -339,12 +480,12 @@ function onClick(ev) {
       ctx.data.pins = ctx.data.pins.filter(p => p !== had);
       ctx.save();
       ctx.status(W(`已取消釘選 ${x.no} 次`, `Unpinned train ${x.no}`));
-      showResults();
+      freshen();
       return;
     }
     if (pinTrain(ctx, { kind: 'trainNo', sys: x.sys, no: x.no, type: x.type, dep: x.dep, from: keyStation(x.from), to: keyStation(x.to) })) {
       ctx.status(W(`已釘選 ${x.no} 次到「交通」`, `Train ${x.no} pinned to Transit`));
-      showResults();
+      freshen();
     }
     return;
   }
@@ -363,10 +504,7 @@ function onClick(ev) {
     return search();
   }
   const j = ev.target.closest('[data-j]');
-  if (j) {
-    state.open = state.open === Number(j.dataset.j) ? -1 : Number(j.dataset.j);
-    return showResults();
-  }
+  if (j) return toggleCard(Number(j.dataset.j));
   const act = ev.target.closest('[data-act]')?.dataset.act;
   if (act === 'all-trains' || act === 'pass-trains') {
     state.everyTrain = act === 'all-trains';
@@ -384,10 +522,10 @@ function onClick(ev) {
       ctx.data.pins = ctx.data.pins.filter(p => !(p.kind === 'train' && p.from.id === state.from.id && p.to.id === state.to.id && p.from.sys === state.from.sys));
       ctx.save();
       ctx.status(W('已取消釘選', 'Unpinned'));
-      return showResults();
+      return freshen();
     }
     if (pinTrain(ctx, { kind: 'train', from: state.from, to: state.to })) ctx.status(W('已釘選到「交通」', 'Pinned to Transit'));
-    return showResults();
+    return freshen();
   }
 }
 
@@ -438,9 +576,8 @@ function trainNoSheet() {
   };
   // A train's stops: the time it leaves each (arrives at the last), its delay if 台鐵 says one.
   const stops = t => {
-    const late = delayOf(t);
     const now = Date.now();
-    list.innerHTML = `<p class="ot-note"><b>${e(kind(t))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${late ? ` <span class="ot-warn">${W(`晚 ${late} 分`, `${late} min late`)}</span>` : late === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}</p>
+    list.innerHTML = `<p class="ot-note"><b>${e(kind(t))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${date === tw().date ? nowText(trainNow(t, state.delays, state.live)) : ''}</p>
       <ol class="ot-steps">${t.stops.map((x, k) => `<li style="--c:${trainColor(t)}"${(k === t.stops.length - 1 ? x.arr : x.dep) < now ? ' class="past"' : ''}><span class="ot-step-time">${e(hm(k === t.stops.length - 1 ? x.arr : x.dep))}</span><span class="ot-step-i">${icon(k === t.stops.length - 1 ? 'pin' : t.sys)}</span><span class="ot-step-what"><b>${e(stName(n, x.st))}</b></span></li>`).join('')}</ol>`;
   };
   let timer = 0;

@@ -4231,6 +4231,36 @@ button.ot-trip-foot {
   color: var(--q-green);
   font-weight: 500;
 }
+/* 查車次: a search bar at the top of 火車 (as 交通's 要去哪裡), a tap its sheet. */
+html[data-look='native'] .ot-tn-bar {
+  margin: 0 0 var(--q-s-3, 12px);
+}
+/* 未發車: not on its way yet (台鐵's board lists only trains that are), quiet. */
+.ot-jny-st.wait {
+  padding: 0;
+  color: var(--q-label-2);
+  font-weight: 500;
+}
+.ot-jny-st:empty {
+  display: none;
+}
+.ot-wait {
+  color: var(--q-label-2);
+  font-weight: 500;
+}
+/* A train's stops, opened under it in its own card (sliding, nothing else drawn again). */
+.ot-jny-more {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  box-sizing: border-box;
+  /* (The card's own gap inside it, so it slides from nothing.) */
+  margin-top: -8px;
+  padding-top: 8px;
+}
+.ot-jny-more.going {
+  overflow: hidden;
+}
 .ot-jny-st.maybe {
   background: color-mix(in srgb, var(--q-orange) 16%, transparent);
   color: var(--q-orange);
@@ -6262,18 +6292,23 @@ html[lang='en'] .ot-sn-tap {
   grid-column: 1;
   min-width: 0;
 }
+:root.q-wide #panel-train:has(#t-results:not(:empty)) > .ot-tn-bar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
 :root.q-wide #panel-train:has(#t-results:not(:empty)) > .q-day-bar {
   grid-column: 1 / -1;
+  grid-row: 2;
 }
 :root.q-wide #panel-train:has(#t-results:not(:empty)) > #t-results {
   grid-column: 2;
-  grid-row: 2 / span 9;
+  grid-row: 3 / span 9;
 }
 /* (The search stays in view beside a long list of trains, never a half
    left empty once it scrolls away (layout check, 2026-11-06). Its recent
    searches come after the trains, as on a phone.) */
 :root.q-wide #panel-train:has(#t-results:not(:empty)) > .ot-tq-side {
-  grid-row: 2 / span 9;
+  grid-row: 3 / span 9;
   align-self: start;
 }
 /* (Under the pinned day bar; a phone on its side is too short to pin it.) */
@@ -6285,7 +6320,7 @@ html[lang='en'] .ot-sn-tap {
   }
 }
 :root.q-wide #panel-train:has(#t-results:not(:empty)) > .ot-tq-side ~ .q-section {
-  grid-row: 11;
+  grid-row: 12;
 }
 :root.q-wide #times-bus:has(#tb-list:not(:empty)) > #tb-list {
   grid-column: 2;
