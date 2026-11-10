@@ -49,8 +49,9 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 - **Map:** every bus stop with live arrival times, YouBike stations with regular bikes, e-bikes (電輔車) and docks counted apart (the five nearest along the bottom), train and metro stations, search and your pins.
 - **Trip planning** across bus, 台鐵, 高鐵, the metros and YouBike, ranked by door-to-door minutes and how much bother each way is, first plans in a second or two. There is always a recommendation.
 - **建議 learns where you go:** a place you often go at about this hour comes up first as 常在這時候去.
-- **Navigation** that follows the trip: every step moves on by itself, countdowns, the stops to go, a buzz before yours, the next bus if you miss one, and it survives the app being swiped away.
-- **Timetables:** 台鐵 and 高鐵 station to station, stations picked on a train map (北部, 中部, 南部, 東部) or from nearby and recent ones, bus routes and stops, and each city's metro drawn as a metro map with the trains arriving now.
+- **Navigation** that follows the trip: every step moves on by itself, countdowns, the stops to go, a buzz before yours, the next bus if you miss one, and it survives the app being swiped away. One 出狀況 card covers a missed or late ride, no bikes, or the wrong bus, in any mode; plans already shown never change under you.
+- **Timetables:** 台鐵 and 高鐵 station to station, stations picked on a train map (北部, 中部, 南部, 東部) or from nearby and recent ones, the picker showing only the line you chose (高鐵's one line, 南港 to 左營); every 台鐵 train says 準點, 晚 N 分 or 未發車 and opens in its own card; a bus route's fares between any two stops; bus routes and stops, and each city's metro drawn big and straight, full screen, with every station searchable and the trains arriving now.
+- **高鐵訂票:** a 高鐵 ride opens 高鐵's own booking with the trip filled in, in the T Express app or on 高鐵's site.
 - **YouBike rental timer** that warns before TPASS's free half hour runs out and offers docks nearby.
 - **到站提醒:** "tell me when the 5608 is 5 minutes away", checked by the server while the phone is locked.
 - **Service notices** from the operators themselves: a stopped line or route is marked and never planned.
@@ -64,9 +65,9 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 | App | Plain JavaScript (ES modules), HTML and CSS; no framework, no build step, no dependencies |
 | Platform | Installable web app with a service worker; location and vibration for navigation, lock-screen notices while it runs |
 | Shared | Look, Orbit Pass, notices and data reads from the kit in [Orbit-Core](https://github.com/JayPengX/Orbit-Core) |
-| Data | TDX (Taiwan's transport data exchange) through the Orbit proxy on Cloudflare Workers; weekly bus packs and line shapes in Cloudflare R2; 台鐵's track © OpenStreetMap contributors (ODbL), `public/rail-tra.json` |
+| Data | The operators' own sources first, read by the phone where it can: 台鐵's open data and boards, 高鐵's timetable (GTFS), each city's bus site (臺北, 新北, 新竹, 桃園, 臺中, 臺南, 高雄, 公路局), the metros' own screens, YouBike's own list; TDX (Taiwan's transport data exchange) only as a backup, through the Orbit proxy on Cloudflare Workers; weekly bus packs from TDX's GTFS and line shapes in Cloudflare R2; 台鐵's track © OpenStreetMap contributors (ODbL), `public/rail-tra.json` |
 | Maps | Google Maps under the month's cap, else Leaflet with NLSC's tiles; walks on Google's streets, else OpenStreetMap |
-| Routing | Our own 台鐵/高鐵 router (Connection Scan) and metro router, beside Google's and TDX's planners |
+| Routing | Our own 台鐵/高鐵 router (Connection Scan) and metro router, beside Google's planner (TDX's planner is off since the move to its free tier) |
 | Tests | `node --test`, including navigation driven fix by fix and the owner's verdicts on real trips |
 
 ## How it works
@@ -74,7 +75,7 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 ```
 plan a trip
   ├─ Google's planner ┐
-  ├─ TDX's planner    ├─► every way, re-timed by live bus estimates
+  │                  ├─► every way, re-timed by live bus estimates
   ├─ rail.mjs (CSA)   │
   └─ metro router     ┘
         ▼
