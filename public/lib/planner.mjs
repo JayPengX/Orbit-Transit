@@ -11,7 +11,7 @@
 //      inside your TPASS's area only by what the pass takes.
 // Only the ways of moving the person allows (我的 → 交通偏好) are used.
 
-import { routePlans, townships, walksTo, walkKnown, bikeRides, rideKnown } from './api.mjs';
+import { routePlans, townships, walksTo, walkTo, walkKnown, bikeRides, rideKnown } from './api.mjs';
 import { cityBikes } from './bike.mjs';
 import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
@@ -75,6 +75,23 @@ async function cityFinder() {
     return memo.get(k);
   };
 }
+
+// A trip short enough to walk (2 km as the crow flies): the walk is a way
+// of its own, whatever the planners say. Google's planner gave it; past
+// Google's 100 trips a day (its limit, used up by mid-morning) it says
+// nothing, TDX's gives no walk, and a 600 m trip found no way at all (Jay
+// 2026-11-10). By the streets: Google's walk kept a month, else
+// OpenStreetMap's walking router, its line too; neither in 2 s, the
+// streets' guess (walkLeg). To be there by a time: in 5 minutes before it.
+export const WALK_TRIP_M = 2000;
+const WALK_WAIT = 2000;
+export const allWalk = p => p.legs.length > 0 && p.legs.every(l => l.mode === 'walk');
+export function walkPlan(from, to, w, { t0, by = 'depart' } = {}) {
+  const leg = w ? { mode: 'walk', from: { name: from.name || '', lat: from.lat, lon: from.lon }, to: { name: to.name || '', lat: to.lat, lon: to.lon }, dist: w.dist, dur: w.sec, ...(w.poly ? { poly: w.poly, fmt: '', road: true } : { straight: true }) } : walkLeg(from, to, 0);
+  const dep = by === 'arrive' ? t0 - 5 * 60_000 - leg.dur * 1000 : t0;
+  return finish({ src: 'walk', legs: [{ ...leg, dep, arr: dep + leg.dur * 1000 }] });
+}
+const walkOf = (from, to) => Promise.race([walkTo(spotOf(from), to, { line: true }).catch(() => null), new Promise(r => setTimeout(r, WALK_WAIT, null))]);
 
 // Our train plans that end far from the place, finished by a direct bus
 // (each train's looked for side by side).
@@ -233,6 +250,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   let tdxIn = null;
   const tdxAsk = ask('tdx').then(r => (tdxIn = r));
   const googleAsk = ask('google');
+  // (Walkable: the walk asked once Google's plans are in without one.)
+  const walkAsk = meters(from.lat, from.lon, to.lat, to.lon) <= WALK_TRIP_M ? googleAsk.then(g => (g.plans?.some(allWalk) ? null : walkOf(from, to).then(w => walkPlan(from, to, w, { t0, by })))).catch(() => null) : null;
   const span = railSpan(tS, by === 'arrive' ? t0 : null);
   const netAsk = useRail ? railNetwork(span.date, span) : null;
   if (useRail && modes.metro !== false && !metroMapAt(from)) metroWarm(to);
@@ -282,8 +301,9 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   if (!tdxIn && (noLater || (!gRes.plans.length && !trains.length && !metros.length))) await tdxAsk;
   const res = tdxIn ? joinPlanners(gRes, tdxIn) : gRes;
   const tdxLate = tdxIn ? null : tdxAsk;
-  if (res.err && !trains.length && !metros.length) return { plans: [], sources: res.sources || {}, error: res.err };
-  let plans = [...res.plans.map(tidy), ...trains, ...metros].filter(p => allowed(p, { ...modes, bike: true }));
+  const walked = walkAsk && !res.plans.some(allWalk) ? await walkAsk : null;
+  if (res.err && !trains.length && !metros.length && !walked) return { plans: [], sources: res.sources || {}, error: res.err };
+  let plans = [...res.plans.map(tidy), ...trains, ...metros, ...(walked ? [walked] : [])].filter(p => allowed(p, { ...modes, bike: true }));
   // YouBike near both ends and the stations, asked now, while the buses are
   // looked at (it doesn't wait for them; a train-then-bus's stop is asked after).
   const bikeCities = modes.bike && bikeSwap(prefs) ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];

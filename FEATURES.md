@@ -17,6 +17,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - 附近 waits for nearby — `public/lib/near-ui.mjs`: `NEAR_WAIT_MS`
 - 查時刻: TPASS-only trains, said so — `public/lib/tab-train.mjs`: `passOnly`, `只列 TPASS`
 - 高鐵訂票: a 高鐵 ride (a trip's step, 查時刻) opens 高鐵's own booking with it filled in — `public/lib/book.mjs`, `public/lib/tab-map.mjs`, `public/lib/tab-train.mjs`: `openBooking`, `canBook`, `data-book`
+- A trip short enough to walk is always a walk, Google's planner or not (OpenStreetMap's streets and line past Google's 100 trips a day) — `public/lib/planner.mjs`: `walkPlan`, `WALK_TRIP_M`, `allWalk`
 - A route's 時刻表 at a stop past the first: the first stop's times plus the ride, said so — `public/lib/live.mjs`, `public/lib/bus-ui.mjs`: `stopTable`, `發車時間推估`
 - 查時刻: train kinds coloured, legs on one line — `public/lib/ui.mjs`: `trainColor`, `fitLegs`
 - 建議 guesses a place: 去公司 / 去學校 from the first day, 常去 by Taiwan's calendar, a card passed over too often stops coming — `public/lib/suggest.mjs`, `public/lib/learn.mjs`: `goScore`, `workday`, `placeItem`, `cardsShown`
