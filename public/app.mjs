@@ -21,6 +21,7 @@ import { warmRail } from './lib/raildata.mjs';
 import { setHome, onNotices } from './lib/service.mjs';
 import { startAlerts } from './lib/alerts.mjs';
 import { savedNav, useMapsApp } from './lib/nav.mjs';
+import { planLink } from './lib/links.mjs';
 import { useEbikeFirst } from './lib/look.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
@@ -220,13 +221,16 @@ async function boot() {
   // map (or, shrunk to its bar, on the tab you were on).
   const was = savedNav();
   const asked = /^#(map|go|times|me)/.exec(location.hash)?.[1] || 'map';
-  const want = was && !was.min ? 'map' : asked;
+  // (Another app's link to a trip, #plan?to=…: the map, the trip planned there.)
+  const link = was && !was.min ? null : planLink(location.hash);
+  const want = was && !was.min ? 'map' : link ? 'map' : asked;
   mapTab.register(ctx);
   meTab.register(ctx);
   // The first tab drawn behind the loading screen, which lifts onto it
   // finished: the map's tiles, what's in view, the strip (mapTab.ready), at
   // most 4 s (then as it stands).
   select(want);
+  if (link) openLink(link);
   // (Shrunk, on another tab: the map started behind it, so the ride goes on and its bar shows.)
   if (was && want !== 'map' && !started.has('map')) {
     started.add('map');
@@ -253,7 +257,16 @@ async function boot() {
 }
 // A notice tapped while the app is open (kit goNotice): its tab, a ride
 // being navigated (#nav) on the map. (Opening, the same: boot's `asked`.)
+// Another app's link to a trip (lib/links.mjs): planned from where you are,
+// arriving by its time when it has one; the address back to the map, so a
+// reload doesn't plan it again.
+function openLink(l) {
+  history.replaceState(null, '', `${location.pathname}${location.search}#map`);
+  ctx.openTrip(null, l.to, l.at && l.at > Date.now() ? { by: 'arrive', at: l.at } : {});
+}
 window.addEventListener('hashchange', () => {
+  const l = bar && planLink(location.hash);
+  if (l) return openLink(l);
   const m = /^#(map|go|times|me|nav)\b/.exec(location.hash);
   const id = m && (m[1] === 'nav' ? 'map' : m[1]);
   if (id && bar && bar.current !== id) select(id);
