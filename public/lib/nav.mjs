@@ -19,7 +19,7 @@ import { etaAround, bikesAround } from './near.mjs';
 import { canRent, canReturn } from './bike.mjs';
 import { rideSec, DOCK_SEC, walkLeg, rideLeg, rentNear, returnNear } from './plan.mjs';
 import { rental, startRental, endRental, rentalStep, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
-import { traLive, dayTrips, railStations } from './raildata.mjs';
+import { traLive, traTrain, dayTrips, railStations } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
@@ -28,8 +28,9 @@ import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSa
 import { W, en } from '#kit/lang.mjs';
 let nav = null;
 // Where today's trains come from (the timetable, the live board): a test's own day instead.
-let rail = { dayTrips, railStations, traLive };
-export const useRail = x => (rail = { dayTrips, railStations, traLive, ...x });
+// (`traTrain`: the one train followed; a test's own board answers for it too.)
+let rail = { dayTrips, railStations, traLive, traTrain };
+export const useRail = x => (rail = { dayTrips, railStations, traLive, traTrain: x.traLive ? async no => (await x.traLive()).get(no) || null : traTrain, ...x });
 
 // The ride being followed, kept on the phone: swiped away and opened again,
 // it goes on where it was (savedNav, for tab-map), until it's over or ended.
@@ -1224,7 +1225,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           state.fresh = next && !next.planned ? Date.now() : 0;
         }
       } else if (l?.mode === 'tra' && l.train?.no) {
-        const lv = (await rail.traLive()).get(String(l.train.no)) || null;
+        // (The train followed alone: 台鐵's own page, no TDX; that failing, every train's board.)
+        const lv = await rail.traTrain(String(l.train.no)).catch(async () => (await rail.traLive()).get(String(l.train.no)) || null);
         const d = lv?.delay || 0;
         if (lv) {
           state.liveAt.set(ri, l.dep + d * 60_000);
