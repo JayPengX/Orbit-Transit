@@ -18,6 +18,9 @@ Live: https://orbit.jaypengx.com/transit/
     Google's 台鐵新竹車站, 新竹火車站, 新竹 at its door fold into it), the
     railway the words name first (火車站 台鐵, 高鐵 高鐵). YouBike only
     (`bike.mjs mergeBikes`: 彰化's Moovo, ServiceType 3, isn't shown or planned on).
+    Live counts are read by the phone from YouBike's own `parkingInfo` (its
+    firewall refuses Cloudflare; 10 km circles, `circlesOf`), names from the
+    proxy's TDX station list, the proxy's TDX counts if YouBike fails.
     釘選這個方案 on a way with no trip saved yet makes a one-time trip that day,
     leaving then, the way first (`oneTimeTrip`; Jay 2026-11-06). A stop's signs a few metres apart are one
     stop (`stopGroups`).
