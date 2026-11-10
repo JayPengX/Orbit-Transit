@@ -1150,6 +1150,28 @@ test('the buses after one: the way the ride goes, TDX’s later estimates, the s
   assert.deepEqual(departuresAt(freq, ways[0], 1, day('08:06'), 3), [20, 40, 60].map(m => day('08:06') + m * 60_000));
 });
 
+// Jay 2026-11-09: 988 at a stop past its first, 沒有排班資料: most of 台北,
+// 新北, 桃園 and 台中 list only when a bus leaves its first stop.
+test('the route sheet’s 時刻表 at a stop past the first: the first stop’s times plus the ride, said as estimated; its own where it has them', async () => {
+  const { stopTable } = await import('../public/lib/live.mjs');
+  const A = { uid: 'A', name: 'A', lat: 24.80, lon: 121.00 }, B = { uid: 'B', name: 'B', lat: 24.81, lon: 121.00 }, C = { uid: 'C', name: 'C', lat: 24.83, lon: 121.00 };
+  const w = { dir: 0, stops: [A, B, C] };
+  const trips = rows => [{ Direction: 0, Timetables: rows.map(st => ({ StopTimes: st.map(([uid, t]) => ({ StopUID: uid, DepartureTime: t })) })) }];
+  // (Only the first stop listed, the last run past midnight.)
+  const first = trips(['06:40', '07:40', '23:58'].map(t => [['A', t]]));
+  const at0 = stopTable(first, w, 0, '2026-11-09', 1);
+  assert.deepEqual([at0.times, at0.guess], [['06:40', '07:40', '23:58'], false], 'the first stop: its own');
+  const at2 = stopTable(first, w, 2, '2026-11-09', 1);
+  assert.equal(at2.guess, true);
+  assert.equal(at2.times.length, 3);
+  assert.ok(at2.times[1] > '06:40' && at2.times[2] > '07:40' && at2.times[0] < '01:00', 'later by the ride, past midnight wrapped');
+  // (Every stop at the first stop's time, 公路客運's way: the same.)
+  assert.equal(stopTable(trips([[['A', '08:00'], ['B', '08:00'], ['C', '08:00']]]), w, 1, '2026-11-09', 1).guess, true);
+  // A stop timed itself: its own times.
+  const own = stopTable(trips([[['A', '08:00'], ['B', '08:07'], ['C', '08:15']]]), w, 1, '2026-11-09', 1);
+  assert.deepEqual([own.times, own.guess], [['08:07'], false]);
+});
+
 test('a route sheet’s times: the nearest day it runs when not today; a live bus only when the timetable has one due about then', async () => {
   const { nextRun, liveTrusted } = await import('../public/lib/live.mjs');
   const A = { uid: 'A', name: 'A', lat: 24.80, lon: 121.00 }, B = { uid: 'B', name: 'B', lat: 24.81, lon: 121.00 };

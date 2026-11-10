@@ -5,7 +5,7 @@
 // every bus due.
 
 import { emptyNote, saidRows } from './look.mjs';
-import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stopTimes, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
+import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, dataAt, liveMs, busEta } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
@@ -13,7 +13,7 @@ import { cleanItem, MAX_GROUPS, MAX_ITEMS } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
 import { gripHtml, reorder } from '#kit/ui.mjs';
 import { e, uid, meters, tw, twAt, zh, addDays, hm, dayLabel, readJson, writeJson, shown } from './util.mjs';
-import { nextRun, nextUnseen, liveTrusted, departuresAt } from './live.mjs';
+import { nextRun, nextUnseen, liveTrusted, departuresAt, stopTable } from './live.mjs';
 import { routeLines } from './shapes.mjs';
 import { routeStatus, effectLabel } from './service.mjs';
 
@@ -305,7 +305,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       day = 0;
       moved = '';
       const has = n => {
-        const x = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, addDays(t0.date, n), (t0.dow + n) % 7);
+        const x = stopTable(sched, w, w.stops.indexOf(s), addDays(t0.date, n), (t0.dow + n) % 7);
         return x.times.length || x.every.length;
       };
       const n = has(0) ? 0 : [1, 2, 3, 4, 5, 6].find(has);
@@ -318,7 +318,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const dow = (t0.dow + day) % 7;
     // Today's past times greyed and its next one marked; another day's all alike.
     const now = day ? '' : t0.hm;
-    const { times, every } = stopTimes(sched, { stopUID: s.uid, name: s.name, dir: w.dir }, date, dow);
+    const { times, every, guess } = stopTable(sched, w, w.stops.indexOf(s), date, dow);
     const next = day ? null : times.find(t => t >= now);
     const named = day === 0 ? W('今天', 'Today') : day === 1 ? W('明天', 'Tomorrow') : wk(dow);
     // The coming week: the family's strip of days (drawn in after, ttDays).
@@ -330,9 +330,11 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
           .map(([h, list]) => `<div class="ot-tt-hour"><b>${e(h)}</b><span>${list.map(t => `<i class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t.slice(3, 5))}</i>`).join('')}</span></div>`)
           .join('')}</div>`
       : every.length
-        ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? W(`每 ${f.min}–${f.max} 分`, `every ${f.min}–${f.max} min`) : W(`每 ${f.min || f.max} 分`, `every ${f.min || f.max} min`)}</b></div>`).join('')}</div>`
+        ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? W(`每 ${f.min}–${f.max} 分`, `every ${f.min}–${f.max} min`) : f.min || f.max ? W(`每 ${f.min || f.max} 分`, `every ${f.min || f.max} min`) : W('首末班', 'First and last')}</b></div>`).join('')}</div>`
         : `<p class="ot-note">${W(`${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。`, `No timetable at this stop for ${named.toLowerCase()} (none published, or not running).`)}</p>`;
-    return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${W(`${times.length} 班`, `${times.length} buses`)}${day ? '' : next ? `・${W('下一班', 'next')} ${e(next)}` : `・${W('已收班', 'done')}`}` : ''}</small></div>${body}`;
+    // (Times the stop has none of its own for: its first stop's plus the ride, said so.)
+    const est = guess && times.length ? `<p class="ot-note">${W(`依起站 ${e(shown(w.stops[0].name))} 的發車時間推估`, `Estimated from ${e(shown(w.stops[0].name))}’s departures`)}</p>` : '';
+    return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${W(`${times.length} 班`, `${times.length} buses`)}${day ? '' : next ? `・${W('下一班', 'next')} ${guess ? W('約 ', 'about ') : ''}${e(next)}` : `・${W('已收班', 'done')}`}` : ''}</small></div>${est}${body}`;
   };
   let offDay = 0;
   const draw = () => {

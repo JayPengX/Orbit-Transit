@@ -163,6 +163,27 @@ export function departuresAt(sched, w, i, after, n = 4) {
   return out.slice(0, n);
 }
 
+// The timetable at the i-th stop of a way on a day, as the route sheet's
+// 時刻表 shows it: the stop's own times, or where it has none of its own
+// (公路客運's, and most of 台北, 新北, 桃園, 台中: only when a bus leaves its
+// first stop) the first stop's plus the ride there, said as estimated
+// (`guess`); its headways as they are. (988 at a stop past its first said
+// 沒有排班資料; Jay 2026-11-09.) → { times: ['HH:MM'], every, guess }
+export function stopTable(sched, w, i, date, dow) {
+  const at = k => stopTimes(sched || [], { stopUID: w.stops[k].uid, name: w.stops[k].name, dir: w.dir }, date, dow);
+  const here = at(i);
+  if (i > 0) {
+    const first = at(0).times;
+    if (first.length && guessedAt(here.times, first)) {
+      const shift = Math.round(rideTime(w, 0, i) / 60);
+      const hhmm = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      const times = [...new Set(first.map(t => hhmm(Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) + shift)))].sort();
+      return { times, every: here.every, guess: true };
+    }
+  }
+  return { ...here, guess: false };
+}
+
 // The next scheduled bus at the i-th stop of a way from `after`, today or
 // the nearest day it runs: { at, day } (day 0 today, 1 tomorrow…), or null
 // (no timetable for it this coming week).
