@@ -85,6 +85,15 @@ test('捷運 and 高鐵: what isn’t 正常營運 is said', () => {
   assert.equal(hsrNoticeOf([{ Title: '全線營運正常(Normal)' }]), null);
 });
 
+test('捷運: 貓空纜車 running as usual (「目前全線正常營運」, its hours) is no notice; closed, it is', () => {
+  // (TDX's TRTCMG alert on 2026-11-10: a whole card on 捷運 for nothing.)
+  const alert = (Title, Status) => ({ Alerts: [{ AlertID: '0', Title, Description: '今日營運時間：09:00-21:00', Status }] });
+  assert.equal(metroNoticesOf(alert('目前全線正常營運', 1)).length, 0);
+  assert.equal(metroNoticesOf(alert('正常營運', 1)).length, 0);
+  assert.equal(metroNoticesOf(alert('目前全線正常營運', 0)).length, 1);
+  assert.equal(metroNoticesOf(alert('因風速過大暫停營運', 0))[0].stop, true);
+});
+
 test('the banner: 台鐵, and the bus notices of your city', () => {
   const rows = summarize({ tra, bus, cities: ['Hsinchu'] }, NOW);
   assert.deepEqual(rows.map(r => r.kind), ['tra', 'bus']);

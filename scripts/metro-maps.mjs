@@ -6,7 +6,8 @@
 // Reads TDX through the Worker's dev door (a localhost origin, as preview.mjs does).
 import { writeFileSync } from 'node:fs';
 import { MAPS, parseSystem } from '../public/lib/metro.mjs';
-import { schematic, faults } from '../public/lib/metromap.mjs';
+import { schematic, faults, straighten } from '../public/lib/metromap.mjs';
+import DRAWINGS from '../public/lib/metro-drawings.mjs';
 
 const tries = Number(process.argv[2] || 40);
 const PROXY = 'https://orbit-workers-proxy.pengzjay.workers.dev/transit/tdx?p=';
@@ -31,6 +32,13 @@ const out = {};
 for (const m of MAPS) {
   const systems = await Promise.all(m.systems.map(load));
   let best = null;
+  // (The drawing kept now, made exact, against fresh tries.)
+  const kept = schematic(systems, { preset: DRAWINGS[m.id] });
+  if (kept.sig === DRAWINGS[m.id]?.sig) {
+    straighten(kept.nodes, kept.edges);
+    kept.pos = kept.nodes.map(n => [Math.round(n.x * 1000) / 1000, Math.round(n.y * 1000) / 1000]);
+    best = { map: kept, f: faults(kept), seed: 'kept', tune: {} };
+  }
   for (const tune of [{}, { hold: 0.015 }, { fisheye: 0.5 }])
     for (let seed = 0; seed < tries; seed++) {
       const map = schematic(systems, { seed, ...tune });

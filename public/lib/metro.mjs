@@ -9,11 +9,12 @@ import { zh, meters, tw, twAt, TDX_DAYS } from './util.mjs';
 import { W, en } from '#kit/lang.mjs';
 // The maps, by city; each draws one or more TDX rail systems.
 export const MAPS = [
-  // box: [south, west, north, east], a little past the farthest station.
-  { id: 'taipei', name: W('台北・新北', 'Taipei'), systems: ['TRTC', 'NTMC', 'NTDLRT', 'NTALRT', 'TRTCMG'], box: [24.9, 121.33, 25.22, 121.67] },
-  { id: 'taoyuan', name: W('桃園機場捷運', 'Taoyuan Airport'), systems: ['TYMC'], box: [24.93, 121.15, 25.1, 121.46] },
-  { id: 'taichung', name: W('台中', 'Taichung'), systems: ['TMRT'], box: [24.1, 120.58, 24.22, 120.7] },
-  { id: 'kaohsiung', name: W('高雄', 'Kaohsiung'), systems: ['KRTC', 'KLRT'], box: [22.53, 120.25, 22.8, 120.44] }
+  // box: [south, west, north, east], a little past the farthest station. `short`: on the map's
+  // switch, the four side by side on a 320 phone (雙北: 台北 and 新北's systems together).
+  { id: 'taipei', name: W('台北・新北', 'Taipei'), short: W('雙北', 'Taipei'), systems: ['TRTC', 'NTMC', 'NTDLRT', 'NTALRT', 'TRTCMG'], box: [24.9, 121.33, 25.22, 121.67] },
+  { id: 'taoyuan', name: W('桃園機場捷運', 'Taoyuan Airport'), short: W('桃園', 'Taoyuan'), systems: ['TYMC'], box: [24.93, 121.15, 25.1, 121.46] },
+  { id: 'taichung', name: W('台中', 'Taichung'), short: W('台中', 'Taichung'), systems: ['TMRT'], box: [24.1, 120.58, 24.22, 120.7] },
+  { id: 'kaohsiung', name: W('高雄', 'Kaohsiung'), short: W('高雄', 'Kaohsiung'), systems: ['KRTC', 'KLRT'], box: [22.53, 120.25, 22.8, 120.44] }
 ];
 // The maps whose area a point (or a view [s, w, n, e]) touches.
 export const mapsNear = ([s, w, n, e]) => MAPS.filter(m => !(n < m.box[0] || s > m.box[2] || e < m.box[1] || w > m.box[3]));
@@ -73,7 +74,7 @@ export function parseSystem(sys, st, of, ln, ro = [], tr = []) {
     const lat = Number(s.StationPosition?.PositionLat);
     const lon = Number(s.StationPosition?.PositionLon);
     if (!Number.isFinite(lat)) continue;
-    stations.set(s.StationID, { key: `metro:${sys}:${s.StationID}`, sys: 'metro', op: sys, id: s.StationID, name: zh(s.StationName), lat, lon, lines: [] });
+    stations.set(s.StationID, { key: `metro:${sys}:${s.StationID}`, sys: 'metro', op: sys, id: s.StationID, name: zh(s.StationName), en: s.StationName?.En || '', lat, lon, lines: [] });
   }
   const meta = new Map(rows(ln).map(l => [l.LineID || l.LineNo, l]));
   const lines = [];
