@@ -330,7 +330,7 @@ Live: https://orbit.jaypengx.com/transit/
 - **Data:**
   - live: TDX through `/transit/tdx`, cached on the Worker; buses due through
     `/transit/eta` (`api.mjs busEta`): the Worker answers 新竹's, 臺北's,
-    新北's, 臺中's and 桃園's from the cities' own sites (Core `transit-free.js`), else
+    新北's, 桃園's, 臺中's and 臺南's from the cities' own sites (Core `transit-free.js`), else
     a quiet city's stops or routes from TDX's filtered read, a busy city's from
     one read of the whole city (公路客運 always by its stops); the phone asks the same thing
     once a beat at most, and the routes asked within a moment as one ask a
