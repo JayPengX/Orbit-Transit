@@ -83,7 +83,10 @@ Live: https://orbit.jaypengx.com/transit/
     (kit `reorder`; `tab-me.mjs`, `bus-ui.mjs` manageSheet).
 - **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by
   side, plus our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and
-  metro router. A planner's YouBike ride needs a real station at each end
+  metro router. A trip within 2 km (straight) is a walk too when no planner
+  gave one (`walkPlan`: Google's walk kept a month, else OpenStreetMap's
+  walking router with its line; Google's planner stops at 100 trips a day).
+  A planner's YouBike ride needs a real station at each end
   (never a made-up 附近的 YouBike 站). Buses are re-timed by TDX's live estimates (`adjustPlan`).
   Our own bus ride's minutes (`busLink`): TDX's buses on the road first
   (`live.mjs liveRide`: each hop between two stops showing the same bus, as TDX
