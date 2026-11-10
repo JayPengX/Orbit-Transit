@@ -12,6 +12,7 @@ import { cityShort } from './city.mjs';
 import { lineMapHtml, mapCities, mapCols, areaOf, areaName } from './linemap.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
+import { canBook, bookHtml, openBooking } from './book.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
 import { sheet, sheetHead, icon, tagText, trainKind, trainColor, inkOn, stationLabel, fitLegs, journeyLine } from './ui.mjs';
 import { COLOR, tile, section, rowCard, emptyNote, noticesHtml } from './look.mjs';
@@ -251,7 +252,7 @@ function detailHtml(j) {
     const d = delayOf(t);
     const pinned = ctx.data.pins.some(p => p.kind === 'trainNo' && p.no === t.no && p.sys === t.sys);
     const facts = [W(`${l.stops} 站`, `${l.stops} stops`), minsText((l.arr - l.dep) / 1000), onPass(l) ? 'TPASS' : state.fares.get(fareKey(l)) ? `NT$${state.fares.get(fareKey(l))}` : '', t.bike ? W('可攜車', 'bikes OK') : ''].filter(Boolean).join(' · ');
-    out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : d === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span></span></li>`);
+    out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${d ? ` <span class="ot-warn">${W(`晚 ${d} 分`, `${d} min late`)}</span>` : d === 0 ? ` <span class="ot-ok">${W('準點', 'On time')}</span>` : ''}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span>${t.sys === 'hsr' && canBook({ mode: 'hsr', dep: l.dep, train: t }) ? bookHtml({ from: net?.st.get(l.from)?.name || '', to: net?.st.get(l.to)?.name || '', dep: l.dep, train: t }, 'ot-pin-train') : ''}</span></li>`);
   });
   out.push(`<li class="end" style="--c:${COLOR.walk}"><span class="ot-step-time">${e(hm(j.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e(nameOf(j.legs.at(-1).to))}</b></span></li>`);
   // 用這班規劃: the trip from where you are around these trains (the ticket you hold: ticket.mjs), on the map.
@@ -327,6 +328,9 @@ function onClick(ev) {
     if (!rides.length || !end) return;
     return ctx.openTrip?.(null, { ...stationPoint(end), name: stationLabel(end) }, { ticket: ticketOf(rides) });
   }
+  // 高鐵訂票: 高鐵's own booking, this train filled in (book.mjs).
+  const bk = ev.target.closest('[data-book]');
+  if (bk) return void openBooking(JSON.parse(bk.dataset.book), m => ctx.status(m));
   const pt = ev.target.closest('[data-pin-train]');
   if (pt) {
     const x = JSON.parse(pt.dataset.pinTrain);

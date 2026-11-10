@@ -12,9 +12,12 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - 偏好電輔車 in 我的, off by default (every trip's ⚡ starts on) — `public/lib/tab-me.mjs`: `ebikeRow`
 - 電輔車 counted first on station cards when preferred — `public/lib/look.mjs`: `ebikeFirst`
 - 換附近的站 only when a station runs low — `public/lib/nav.mjs`: `換附近的站`
+- 換附近的站 takes the station the planner would from where you are, its pin moving with it — `public/lib/nav.mjs`: `swapPick`, `l.rent = { ...station }`
 - Operators' notices: 今日停駛, 可能停駛 — `public/lib/service.mjs`, `public/lib/near-ui.mjs`: `可能停駛`, `今日停駛`
 - 附近 waits for nearby — `public/lib/near-ui.mjs`: `NEAR_WAIT_MS`
 - 查時刻: TPASS-only trains, said so — `public/lib/tab-train.mjs`: `passOnly`, `只列 TPASS`
+- 高鐵訂票: a 高鐵 ride (a trip's step, 查時刻) opens 高鐵's own booking with it filled in — `public/lib/book.mjs`, `public/lib/tab-map.mjs`, `public/lib/tab-train.mjs`: `openBooking`, `canBook`, `data-book`
+- A route's 時刻表 at a stop past the first: the first stop's times plus the ride, said so — `public/lib/live.mjs`, `public/lib/bus-ui.mjs`: `stopTable`, `發車時間推估`
 - 查時刻: train kinds coloured, legs on one line — `public/lib/ui.mjs`: `trainColor`, `fitLegs`
 - 建議 guesses a place: 去公司 / 去學校 from the first day, 常去 by Taiwan's calendar, a card passed over too often stops coming — `public/lib/suggest.mjs`, `public/lib/learn.mjs`: `goScore`, `workday`, `placeItem`, `cardsShown`
 - Station picker on a county line map (winding rows, 新竹 one area, 高鐵 beside 台鐵 as one stop) — `public/lib/linemap.mjs`: `lineMapHtml`

@@ -101,6 +101,10 @@ async function get(path, opts = {}) {
   }
 }
 
+// 高鐵's booking with a ride filled in (the proxy's /transit/book, TDX 訂票導訂):
+// → { url }, a link that lasts minutes (asked at the tap, never kept).
+export const bookLink = ({ from, to, date, time, no }) => get(`/transit/book?${new URLSearchParams({ sys: 'hsr', from, to, date, time, no })}`);
+
 // ---- TDX through the proxy -----------------------------------------------------------------
 
 const memory = new Map();
