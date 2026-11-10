@@ -34,7 +34,9 @@ Live: https://orbit.jaypengx.com/transit/
     leave counting down, or why not (`tripWhy`); under it the way as one line
     (`ui.mjs journeyLine`: each ride its colour by its minutes, a change a
     ring), leave and arrive at its ends, its rides as chips; then 其他班次, the
-    next two ways in three hours. Opened again the next morning (its kept ways
+    next two ways as the map lists them, leaving within three hours of the way
+    shown (`otherWays`; not of now: a 16:45 trip opened at 14:05 lost 17:07's
+    快捷8號支, Jay 2026-11-10). Opened again the next morning (its kept ways
     two hours old), a trip shows its last ways at once, moved on by whole days,
     said 更新中… while they're found again (`lastGuess`, `ot.trips.last.v1`: a
     slim copy a way, eight days; same hour within 90 minutes, same kind of day;

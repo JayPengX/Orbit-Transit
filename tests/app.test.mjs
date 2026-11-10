@@ -863,6 +863,23 @@ test('a pinned recommendation: known by its lines (trains by their stations), sh
   assert.equal(cleanSaved({ to: { name: 'x', lat: 24.8, lon: 121 }, picks: ['a', 'a', 5, 'b'] }).picks.join(), 'a,b');
 });
 
+test('交通’s 其他班次 are the map’s ways around the trip’s own time, not three hours from now (Jay 2026-11-10)', async () => {
+  const { tripPlans, otherWays } = await import('../public/lib/tab-go.mjs');
+  // 上學 回程 at 16:45, opened at 14:05: the map listed 1831+1758, 快捷8號支 (17:07), YouBike 46′ and
+  // 1831 alone under them; the card dropped 快捷8號支 (17:07 is past 14:05 + 3 h) for 1831 alone.
+  const now = T('14:05');
+  const P = (k, dep, score, top) => ({ legs: [{ mode: 'bus', short: k }], dep: T(dep), arr: T(dep) + 3_600_000, score, top, lead: true });
+  const plans = [P('1831+1758', '16:59', 88, true), P('快捷8號支', '17:07', 89, true), P('YouBike', '16:45', 144, true), P('1831', '16:59', 75, false)];
+  const { first, rest } = tripPlans(plans, [], now);
+  const lead = first[0];
+  assert.equal(lead.legs[0].short, '1831+1758');
+  assert.deepEqual(otherWays(first, rest, lead).map(p => p.legs[0].short), ['快捷8號支', 'YouBike'], 'the map’s recommendations, in its order');
+  // (Leaving now, three hours on from now as before: a way past that isn't listed.)
+  const soon = [P('A', '14:10', 10, true), P('B', '17:20', 20, true), P('C', '14:30', 30, true)];
+  const s = tripPlans(soon, [], now);
+  assert.deepEqual(otherWays(s.first, s.rest, s.first[0]).map(p => p.legs[0].short), ['C']);
+});
+
 test('the day’s trains kept compact: the same trips back', async () => {
   const { packTrips, unpackTrips } = await import('../public/lib/raildata.mjs');
   const trips = [{ id: 't', sys: 'tra', no: '1', code: '6', stops: [{ st: 'tra:1210', arr: T('23:50'), dep: T('23:52') }, { st: 'tra:1180', arr: twAt('2026-10-06', '00:05'), dep: twAt('2026-10-06', '00:05') }] }];
