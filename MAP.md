@@ -52,7 +52,11 @@ Live: https://orbit.jaypengx.com/transit/
     has what's near).
   - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
     station picked by search, a nearby or recent one, or on a county's line
-    map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`), each train a
+    map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`; with 台鐵 picked
+    only 台鐵's stations, with 高鐵 picked its one line 南港 to 左營, each
+    station's 台鐵 under it, `hsrMapHtml`, `HSR_TRA`; switched with a station of
+    the other railway picked, that station's own there, 六家 ↔ 高鐵新竹,
+    `fitStation`; Jay 2026-11-10), each train a
     card that opens in place, sliding, the tapped card kept under the finger
     (`toggleCard`; later reads, delays and fares, patch the cards: `freshen`),
     every 台鐵 train today 準點, 晚 N 分 or 未發車 (`trainNow`: the boards of the

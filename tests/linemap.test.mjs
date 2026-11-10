@@ -64,3 +64,52 @@ test('a row runs left to right, the next right to left; a 高鐵 station beside 
   const cells = [...html.matchAll(/grid-area:(\d+)\/(\d+)/g)].map(m => [+m[1], +m[2]]);
   assert.deepEqual(cells, [[1, 1], [1, 2], [1, 3], [2, 3]]);
 });
+
+// 查時刻's 台鐵 / 高鐵 picked (Jay 2026-11-10): the picker shows only that
+// railway, 高鐵 as its one line; a station picked on the other moves over.
+import { readFileSync } from 'node:fs';
+const real = JSON.parse(readFileSync(new URL('./fixtures/rail-stations-2026-11-10.json', import.meta.url)));
+const realMap = new Map(real.map(s => [s.key, s]));
+
+test('高鐵 only: one line, 南港 to 左營, every station a tap, its 台鐵 under it', async () => {
+  const { hsrMapHtml } = await import('../public/lib/linemap.mjs');
+  const html = hsrMapHtml(realMap, { current: 'hsr:1030', other: 'hsr:1000', cols: 4 });
+  assert.deepEqual(ids(html), ['0990', '1000', '1010', '1020', '1030', '1035', '1040', '1043', '1047', '1050', '1060', '1070'].map(id => `hsr:${id}`));
+  assert.equal((html.match(/class="ot-lm /g) || []).length, 1, 'one card');
+  assert.ok(!html.includes('data-city'), 'no counties, no edges');
+  assert.match(html, /data-st="hsr:1030"[^>]*aria-current="true"[^]*?台鐵六家/);
+  assert.match(html, /data-st="hsr:1000" disabled/);
+  assert.match(html, /接駁 中壢/);
+  assert.match(html, /data-st="hsr:1040"[^]*?台鐵新烏日/);
+  // 12 at 4 a row: three rows, the second right to left.
+  const cells = [...html.matchAll(/grid-area:(\d+)\/(\d+)/g)].map(m => [+m[1], +m[2]]);
+  assert.deepEqual(cells.slice(3, 6), [[1, 4], [2, 4], [2, 3]]);
+});
+
+test('台鐵 only: a county with no 高鐵 tap and no 高鐵 card', () => {
+  const traOnly = new Map([...stations].filter(([, s]) => s.sys === 'tra'));
+  const html = lineMapHtml('Taipei', traOnly);
+  assert.ok(!/data-st="hsr:/.test(html));
+  assert.ok(!html.includes('ot-lm-hsr'));
+});
+
+test('a station on the other railway moves to its own there', async () => {
+  const { fitStation } = await import('../public/lib/linemap.mjs');
+  const st = (sys, id) => ({ sys, id, name: realMap.get(`${sys}:${id}`).name });
+  const fit = (s, mode) => fitStation(s, mode, real)?.name ?? null;
+  // The screenshot: 六家 → 臺北 with 高鐵 picked.
+  assert.equal(fit(st('tra', '1194'), 'hsr'), '新竹');
+  assert.equal(fit(st('tra', '1000'), 'hsr'), '台北');
+  assert.equal(fit(st('hsr', '1030'), 'tra'), '六家');
+  assert.equal(fit(st('hsr', '1040'), 'tra'), '新烏日');
+  assert.equal(fit(st('hsr', '1047'), 'tra'), '斗六');
+  // No 高鐵 beside it: the nearest within 40 km (臺中 → 台中, 宜蘭 → 南港); none for 花蓮.
+  assert.equal(fit(st('tra', '3300'), 'hsr'), '台中');
+  assert.equal(fit(st('tra', '1210'), 'hsr'), '新竹');
+  assert.equal(fit(st('tra', '7190'), 'hsr'), '南港');
+  assert.equal(fit(st('tra', '7000'), 'hsr'), null);
+  // 全部, or already that railway: as it is.
+  const x = st('tra', '1194');
+  assert.equal(fitStation(x, 'all', real), x);
+  assert.equal(fitStation(x, 'tra', real), x);
+});
