@@ -201,9 +201,9 @@ test("busEta and busGps: 高雄's from the city's site, the rest (or all, when i
     assert.deepEqual(again.rows, [{ StopUID: 'KHH100100122871', RouteUID: 'KHH15102', EstimateTime: 60 }]);
     const gps2 = await api.busGps('Kaohsiung', ['KHH15102']);
     assert.deepEqual(gps2.rows, [{ RouteUID: 'KHH15102', PlateNumb: 'W', Direction: 0 }]);
-    // Every other city as before: never the site.
-    await api.busEta('Taichung', { stops: ['TXG1'] });
-    assert.ok(worker.includes('/transit/eta?city=Taichung&stops=TXG1'));
+    // A city no phone reads: the Worker's, never the site.
+    await api.busEta('Taipei', { stops: ['TPE1'] });
+    assert.ok(worker.includes('/transit/eta?city=Taipei&stops=TPE1'));
   } finally {
     globalThis.fetch = was;
     api.useSession(null);
