@@ -9,7 +9,7 @@ import { ticketOf, trainsNumbered } from './ticket.mjs';
 import { journeys, findStations } from './rail.mjs';
 import { errorText } from './api.mjs';
 import { cityShort } from './city.mjs';
-import { lineMapHtml, mapCities, mapCols, areaOf, areaName } from './linemap.mjs';
+import { lineMapHtml, hsrMapHtml, fitStation, mapCities, mapCols, areaOf, areaName } from './linemap.mjs';
 import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { canBook, bookHtml, openBooking } from './book.mjs';
@@ -53,6 +53,7 @@ export function show() {
     state.from = ctx.trainFrom;
     state.results = null;
     ctx.trainFrom = null;
+    asked();
     render();
   }
   // The trains between the stations last asked, at once (no 查詢 to press).
@@ -61,8 +62,33 @@ export function show() {
   if (ctx.trainQuery) {
     Object.assign(state, { from: ctx.trainQuery.from, to: ctx.trainQuery.to, time: null, date: null });
     ctx.trainQuery = null;
+    asked();
     search();
   }
+}
+// Stations asked as they are (a recent pair, a pin, a station's 查時刻) on
+// the other railway than 台鐵/高鐵 picked: 全部, so they're asked as they were.
+function asked() {
+  if (state.mode !== 'all' && [state.from, state.to].some(s => s && s.sys !== state.mode)) state.mode = 'all';
+}
+// 台鐵 or 高鐵 picked with a station of the other picked: its own station
+// there (六家 ↔ 高鐵新竹, 臺中 → 高鐵台中); none (花蓮 on 高鐵): left to pick, said.
+async function fitMode() {
+  if (state.mode === 'all' || ![state.from, state.to].some(s => s && s.sys !== state.mode)) return;
+  let list = [];
+  try {
+    list = await railStations();
+  } catch {}
+  const lost = [];
+  for (const which of ['from', 'to']) {
+    const st = state[which];
+    if (!st || st.sys === state.mode) continue;
+    state[which] = fitStation(st, state.mode, list);
+    if (!state[which]) lost.push(stationLabel(st));
+  }
+  // (Both ends the same station now, 六家 and 新竹 on 高鐵: the far end left to pick.)
+  if (state.from && state.to && state.from.sys === state.to.sys && state.from.id === state.to.id) state.to = null;
+  if (lost.length) ctx.status(state.mode === 'hsr' ? W(`${lost.join('、')}附近沒有高鐵`, `No HSR near ${lost.join(', ')}`) : W(`${lost.join('、')}沒有台鐵`, `No TRA at ${lost.join(', ')}`));
 }
 const pinnedConn = () => state.from && state.to && ctx.data.pins.some(p => p.kind === 'train' && p.from.id === state.from.id && p.to.id === state.to.id && p.from.sys === state.from.sys);
 
@@ -495,13 +521,18 @@ function onClick(ev) {
   const mode = ev.target.closest('[data-mode]');
   if (mode) {
     state.mode = mode.dataset.mode;
-    render();
-    return search();
+    const was = [state.from, state.to];
+    return fitMode().then(() => {
+      if (state.from !== was[0] || state.to !== was[1]) state.results = null;
+      render();
+      return search();
+    });
   }
   const rec = ev.target.closest('[data-recent]');
   if (rec) {
     const x = ctx.data.trains.filter(y => trainKey(y) !== (state.from && state.to ? trainKey({ from: state.from, to: state.to }) : ''))[Number(rec.dataset.recent)];
     if (x) Object.assign(state, { from: x.from, to: x.to });
+    asked();
     return search();
   }
   const j = ev.target.closest('[data-j]');
@@ -602,9 +633,14 @@ async function pickStation(which) {
   let city = '';
   let list = [];
   let byKey = new Map();
+  let both = new Map();
   const other = state[which === 'from' ? 'to' : 'from'];
+  // 台鐵 or 高鐵 picked: only its stations, everywhere in the sheet; 高鐵's on
+  // its own line's map, no counties (Jay 2026-11-10).
+  const mode = state.mode;
+  const hsrOnly = mode === 'hsr';
   const d = sheet(`${sheetHead(which === 'from' ? W('出發車站', 'From station') : W('抵達車站', 'To station'))}
-    <label class="q-search ot-search-in"><input id="s-q" type="search" placeholder="${W('站名', 'Station')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
+    <label class="q-search ot-search-in"><input id="s-q" type="search" placeholder="${mode === 'tra' ? W('台鐵站名', 'TRA station') : hsrOnly ? W('高鐵站名', 'HSR station') : W('站名', 'Station')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
     <div id="s-body"></div>`, 'ot-tall-sheet ot-pick-sheet');
   let picking = false;
   const choose = (s, el) => {
@@ -613,7 +649,7 @@ async function pickStation(which) {
     el?.classList.add('picked');
     state[which] = { sys: s.sys, id: s.id, name: s.name };
     state.results = null;
-    writeJson(CITY_KEY, areaOf(s.city));
+    if (!hsrOnly) writeJson(CITY_KEY, areaOf(s.city));
     // (The dot lights, then the sheet goes: a tap that shows it landed.)
     setTimeout(() => {
       d.shut();
@@ -645,10 +681,12 @@ async function pickStation(which) {
     if (!map) return;
     // (Room for a whole screen under the counties, and no more: a short
     // county ends where it ends, yet a tap never pulls the page from under the finger.)
+    // (高鐵's one line: no counties to change, it ends where it ends.)
     const rail = d.querySelector('.ot-pick-cities');
-    map.style.minHeight = `${Math.max(0, d.clientHeight - (rail?.offsetHeight || 0))}px`;
+    map.style.minHeight = hsrOnly ? '' : `${Math.max(0, d.clientHeight - (rail?.offsetHeight || 0))}px`;
     cols = colsNow(map);
-    map.innerHTML = lineMapHtml(city, byKey, { current: keyOf(state[which]), other: keyOf(other), cols });
+    const at = { current: keyOf(state[which]), other: keyOf(other), cols };
+    map.innerHTML = hsrOnly ? hsrMapHtml(both, at) : lineMapHtml(city, byKey, at);
     if (fresh) {
       map.classList.remove('fresh');
       void map.offsetWidth;
@@ -677,10 +715,10 @@ async function pickStation(which) {
     const seen = new Set(mine.map(s => s.key));
     const close = near().filter(([, s]) => !seen.has(s.key));
     body.innerHTML = `${quickRow(W('常用', 'Yours'), mine.map(s => chip(s)))}${quickRow(W('附近', 'Nearby'), close.map(([m, s]) => chip(s, distText(m))))}
-      <div class="q-chips ot-chip-rail ot-pick-cities" role="group" aria-label="${W('縣市', 'County')}">${mapCities(list)
+      ${hsrOnly ? '' : `<div class="q-chips ot-chip-rail ot-pick-cities" role="group" aria-label="${W('縣市', 'County')}">${mapCities(list)
         .map(k => `<button class="q-chip" type="button" data-city="${k}" aria-pressed="${k === city}">${e(areaName(k))}</button>`)
-        .join('')}</div>
-      <div class="ot-pick-map" id="s-map"></div>`;
+        .join('')}</div>`}
+      <div class="ot-pick-map${hsrOnly ? ' ot-pick-hsr' : ''}" id="s-map"></div>`;
     drawMap();
     ro?.observe(body.querySelector('#s-map'));
     // (The county in sight in its row, once as the sheet opens.)
@@ -714,7 +752,9 @@ async function pickStation(which) {
     }
   });
   try {
-    list = await railStations();
+    const all = await railStations();
+    both = new Map(all.map(s => [s.key, s]));
+    list = mode === 'all' ? all : all.filter(s => s.sys === mode);
     byKey = new Map(list.map(s => [s.key, s]));
     // The county of the station picked now, else of the nearest, else the last one looked at.
     const now = byKey.get(keyOf(state[which])) || near()[0]?.[1];
