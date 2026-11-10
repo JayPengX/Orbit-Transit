@@ -189,6 +189,29 @@ async function timetable(st) {
   return rows(await tdx(`basic/v2/Rail/Metro/StationTimeTable/${st.op}?$filter=StationID eq '${st.id}'`, { fresh: DAY, persist: true }));
 }
 
+// A board's live trains over the timetable's rows: each way's live times
+// first (every train the board lists, soonest first: 機場捷運's lists an
+// hour of them), then the timetable's after the last; a way only the board
+// has, its own row.
+export function withLive(rowsOut, board, now = Date.now()) {
+  const live = new Map();
+  for (const b of board || []) {
+    if (!b.dest) continue;
+    let r = rowsOut.find(x => x.dest === b.dest && (!b.line || !x.line || x.line === b.line));
+    if (!r) rowsOut.push((r = { line: b.line, dest: b.dest, times: [], live: false, note: '' }));
+    if (b.status === 3) r.note = W('末班車已過', 'Last train gone');
+    else if (b.status === 4) r.note = W('今日未營運', 'Not running today');
+    if (b.min == null || b.status >= 3) continue;
+    live.set(r, [...(live.get(r) || []), now + b.min * 60_000]);
+  }
+  for (const [r, ts] of live) {
+    ts.sort((a, b) => a - b);
+    r.times = [...ts, ...r.times.filter(x => x > ts.at(-1) + 60_000)].slice(0, 3);
+    r.live = true;
+  }
+  return rowsOut;
+}
+
 // The first and last train each way on the service day running now (04:00
 // to 04:00): [{ line, dest, first, last }] (ms), a row a line and way, named by
 // where most of its trains go (板南線's to 頂埔, not the few to 亞東醫院).
@@ -241,18 +264,7 @@ export const frequencies = op => (FREQUENCY.has(op) ? tdx(`basic/v2/Rail/Metro/F
 export async function stationBoard(st, now = Date.now()) {
   const [board, list] = await Promise.all([liveBoard(st).catch(() => null), timetable(st).catch(() => null)]);
   const next = list ? upcoming(list, now, 3) : [];
-  const rowsOut = next.map(r => ({ line: r.line, dest: r.dest, times: r.times, live: false, note: '' }));
-  for (const b of board || []) {
-    if (!b.dest) continue;
-    let r = rowsOut.find(x => x.dest === b.dest && (!b.line || !x.line || x.line === b.line));
-    if (!r) rowsOut.push((r = { line: b.line, dest: b.dest, times: [], live: false, note: '' }));
-    if (b.status === 3) r.note = W('末班車已過', 'Last train gone');
-    else if (b.status === 4) r.note = W('今日未營運', 'Not running today');
-    if (b.min == null || b.status >= 3) continue;
-    const t = now + b.min * 60_000;
-    r.times = [t, ...r.times.filter(x => x > t + 60_000)].slice(0, 3);
-    r.live = true;
-  }
+  const rowsOut = withLive(next.map(r => ({ line: r.line, dest: r.dest, times: r.times, live: false, note: '' })), board, now);
   const fl = list ? firstLast(list, now) : [];
   // Its lines with no trains listed: their frequency, toward both ends.
   const bare = (st.lines || []).filter(l => !rowsOut.some(r => r.line === l));

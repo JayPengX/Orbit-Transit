@@ -3060,3 +3060,18 @@ test('a train kind said once: TDX’s 普悠瑪(普悠瑪) is 普悠瑪, 自強(
   assert.equal(trainKind('自強(3000)'), '自強(3000)');
   assert.equal(trainKind('區間'), '區間');
 });
+
+test("a station's board: every live train each way, soonest first, then the timetable's after the last (機場捷運's board lists an hour of trains: its last was shown as the next)", async () => {
+  const { withLive } = await import('../public/lib/metro.mjs');
+  const now = Date.parse('2026-11-10T16:48:00+08:00');
+  const at = m => now + m * 60_000;
+  const rows = () => [{ line: 'A', dest: '台北車站', times: [at(7), at(14), at(21)], live: false, note: '' }];
+  const board = [6, 13, 20, 28].map(min => ({ dest: '台北車站', min, status: 0, line: 'A' }));
+  const [r] = withLive(rows(), board, now);
+  assert.deepEqual(r.times, [at(6), at(13), at(20)]);
+  assert.equal(r.live, true);
+  const [one] = withLive(rows(), [{ dest: '台北車站', min: 3, status: 0, line: 'A' }], now);
+  assert.deepEqual(one.times, [at(3), at(7), at(14)], 'one live train: then the timetable after it');
+  const both = withLive(rows(), [{ dest: '老街溪站', min: 5, status: 0, line: 'A' }], now);
+  assert.deepEqual(both.map(x => [x.dest, x.times.length, x.live]), [['台北車站', 3, false], ['老街溪站', 1, true]]);
+});
