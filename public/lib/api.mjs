@@ -289,7 +289,7 @@ export function busEta(city, { stops = [], route = '' } = {}) {
   const k = etaAsks.get(key);
   if (k && (now - k.got < liveMs() - 1000 || (k.at && now <= nextDue(city, k.at, k.dt)))) return k.ask;
   const had = k?.at ? Math.max(1, Math.floor((now - k.at) / 1000)) : 0;
-  const ask = stops.length ? etaAsk(had ? `${key}&had=${had}` : key) : routeEta(city, route, had);
+  const ask = city === KHH ? khFirst(stops, route, had) : stops.length ? etaAsk(had ? `${key}&had=${had}` : key) : routeEta(city, route, had);
   const x = { got: now, ask, dt: k?.dt || 0, at: k?.at || 0 };
   etaAsks.set(key, x);
   ask.then(
@@ -306,10 +306,37 @@ export function busEta(city, { stops = [], route = '' } = {}) {
   if (etaAsks.size > 100) for (const [p, y] of etaAsks) if (now - y.got > 60_000) etaAsks.delete(p);
   return ask;
 }
+// 高雄's buses: the phone reads the city's own site (khbus.mjs: it answers
+// only Taiwan's own networks, never the Worker), loaded only when asked; the
+// Worker's (TDX's) whatever it couldn't answer, or all when it fails.
+const KHH = 'Kaohsiung';
+let khMod = null;
+const kh = () => (khMod ||= import('./khbus.mjs').catch(err => ((khMod = null), Promise.reject(err))));
+async function khFirst(stops, route, had) {
+  const worker = s => (s.length ? etaAsk(`/transit/eta?city=${KHH}&stops=${s.map(encodeURIComponent).join(',')}${had ? `&had=${had}` : ''}`) : routeEta(KHH, route, had));
+  const got = await kh()
+    .then(m => m.khEta({ stops, route }))
+    .catch(() => null);
+  if (!got) return worker(stops);
+  if (!got.missing.length) return { rows: got.rows, at: got.at };
+  const rest = await worker(stops.length ? got.missing : []).catch(err => (got.rows.length ? null : Promise.reject(err)));
+  return rest ? { rows: [...got.rows, ...rest.rows], at: Math.min(got.at, rest.at) } : { rows: got.rows, at: got.at };
+}
+
 // Where routes' buses are (/transit/gps: the Worker reads a city's whole list
 // once for every route and every phone, 公路客運's by its routes), `had`: how
 // old the phone's copy is (s), as busEta's. → { rows, at } (when the copy is from).
 export async function busGps(city, routes, had = 0) {
+  if (city !== KHH) return workerGps(city, routes, had);
+  const got = await kh()
+    .then(m => m.khGps(routes))
+    .catch(() => null);
+  if (!got) return workerGps(city, routes, had);
+  if (!got.missing.length) return { rows: got.rows, at: got.at };
+  const rest = await workerGps(city, got.missing, had).catch(err => (got.rows.length ? null : Promise.reject(err)));
+  return rest ? { rows: [...got.rows, ...rest.rows], at: Math.min(got.at, rest.at) } : { rows: got.rows, at: got.at };
+}
+async function workerGps(city, routes, had = 0) {
   const meta = {};
   const got = await get(`/transit/gps?city=${encodeURIComponent(city)}&routes=${routes.map(encodeURIComponent).join(',')}${had ? `&had=${had}` : ''}`, { meta, wait: 8000 });
   return { rows: Array.isArray(got) ? got : [], at: Date.now() - (meta.age || 0) * 1000 };
