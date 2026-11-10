@@ -650,6 +650,13 @@ const warnOf = p => {
 // and arrive at its ends and its rides as chips; then the next ways to pick from at once.
 // A tap on the top opens its ways on the map, on a way that way (導航 a tap away there).
 const WAYS_MS = 3 * 3600_000;
+// The card's 其他班次: the next ways as the map's plans card lists them (pinned,
+// then the recommendations best first, then the rest), those leaving within
+// three hours of the way shown, not of now: a trip at 16:45 opened at 14:05
+// lost 快捷8號支 at 17:07, past 17:05, while the map listed it (Jay 2026-11-10).
+export function otherWays(first, rest, p, n = 2) {
+  return [...first, ...rest].filter(q => q !== p && q.dep < p.dep + WAYS_MS).slice(0, n);
+}
 function tripCard({ t, w }) {
   const st = tripOf(w);
   const all = st?.plans || [];
@@ -671,9 +678,8 @@ function tripCard({ t, w }) {
     when: whenHtml(p.dep, tw(p.dep).date === tw().date ? W('出發', 'Leave') : `${dayLabel(tw(p.dep).date)}${W(' 出發', '')}`, p.live),
     attrs: `data-all-trip="${e(w.id)}"`
   });
-  const now = Date.now();
   const way = `<button class="ob-trip-way q-press" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ob-trip-line">${wayLine(p)}<b>${e(hm(p.arr))}<small>${W('到', ' in')}</small></b></span><span class="ot-legs">${legChips(p.legs)}</span></button>`;
-  const more = [...first, ...rest].filter(q => q !== p && q.dep < now + WAYS_MS).slice(0, 2);
+  const more = otherWays(first, rest, p);
   const others = more.length
     ? `<div class="ob-ways"><span class="ob-ways-h">${W('其他班次', 'Other ways')}</span>${more
         .map(q => {
