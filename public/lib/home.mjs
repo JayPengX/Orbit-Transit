@@ -35,7 +35,7 @@ const NEAR_BUSES = 4;
 const FRESH_MS = 20_000;
 
 // A shelf's head (the kit's).
-const head = (title, { more = '', moreTap = '' } = {}) => kitUI.sectionHeadHtml(title, { more, moreTap });
+const head = (title, { more = '', moreTap = '', ai = false } = {}) => kitUI.sectionHeadHtml(title, { more, moreTap, ai });
 // A saved place's tile, in its own colour (the kit's).
 const placeTile = kind => kitUI.placeTileHtml(kind);
 
@@ -180,7 +180,7 @@ export function createHome(box, ctx, act) {
       return `<button class="q-ritem ot-sg" type="button" data-sg="${e(x.key)}">${s.tile}<span class="q-ritem-text"><span class="q-ritem-title">${e(s.eyebrow)}</span><small>${e(s.title)}</small></span>${end}</button>`;
     });
     const [first, ...rest] = cards;
-    return `<section class="ot-shelf ot-sugs">${head(W('建議', 'For you'))}${first}${rest.length ? `<div class="q-rowcard">${rest.join('')}</div>` : ''}</section>`;
+    return `<section class="ot-shelf ot-sugs">${head(W('建議', 'For you'), { ai: true })}${first}${rest.length ? `<div class="q-rowcard">${rest.join('')}</div>` : ''}</section>`;
   };
 
   const recents = () => {
