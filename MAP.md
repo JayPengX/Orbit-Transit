@@ -491,7 +491,11 @@ Live: https://orbit.jaypengx.com/transit/
   tablet or a computer it is pinned whole, as tall as what it holds
   (`sheet.mjs` `pinned`, `tab-map.mjs` `SIDE_Q`/`PIN_Q`, `covered()` for what
   the map frames around); navigation's cards stand in its place. 交通, 我的 and
-  查時刻 lay out in two columns (`transit.css` §11).
+  查時刻 lay out in two columns (`transit.css` §11): 交通's 要去哪裡 and places
+  across the top (`.q-span`), the trips beside the pins level under it (no pins:
+  the trips the width, their cards side by side, `.ob-solo`); 查時刻's 最近 under
+  the question beside the trains (`.ot-tq-recent-side`; after them on a phone).
+  Jay's iPad 2026-11-11.
 - Logs hold places: keep them in `captures/` (git-ignored).
 - Taxis never.
 

@@ -59,3 +59,17 @@ test("a route's stops: 進站中 / 即將進站 at the list's own size, no pill,
     assert.ok(px(body, 'width') <= 22 && px(body, 'height') <= 22, `${name}: at most 22 px (a stop's dot is 14)`);
   }
 });
+
+// Wide screens (Jay's iPad 2026-11-11: 釘選 one short card beside the search and
+// a trip, half the screen empty; 查時刻's question alone in a column beside a long
+// list of trains): 交通's 要去哪裡 and places run across the top so the trips and
+// the pins start level, and 查時刻's 最近 stands under the question beside the
+// trains (after them on a phone).
+test('交通 heads the page with the search across it; 查時刻 keeps 最近 beside the trains', () => {
+  const go = readFileSync(new URL('../public/lib/tab-go.mjs', import.meta.url), 'utf8');
+  assert.match(go, /<div class="q-span">\$\{noticesHtml\(S\.notices\)\}\$\{plan\}<\/div>/);
+  const train = readFileSync(new URL('../public/lib/tab-train.mjs', import.meta.url), 'utf8');
+  assert.match(train, /ot-tq-recent-side/);
+  const css = readFileSync(new URL('../public/transit.css', import.meta.url), 'utf8');
+  assert.match(css, /:root\.q-wide #panel-train:has\(#t-results:not\(:empty\)\) \.ot-tq-recent-side \{\s*display: block;/);
+});
