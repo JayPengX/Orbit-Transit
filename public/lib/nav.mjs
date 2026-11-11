@@ -1271,6 +1271,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const a = arrival(state.near, p, to, state.leftAlong);
     state.near = a.near;
     if (!a.done) return;
+    landed();
+  };
+  const landed = () => {
+    if (state.done) return;
+    const l = plan.legs[state.i];
     state.done = true;
     // (There on the bike: returned at the last station.)
     if (l.mode === 'bike' && !l.park && rental()) endRental();
@@ -1280,6 +1285,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.doneAt = Date.now();
     state.endTimer = setTimeout(finish, END_MS);
   };
+  state.landed = landed;
+  state.redraw = render;
   // Ended a few seconds after 已抵達 (it waited 20 s, and with the phone
   // locked or the app away its timer waited too: the owner, 2026-10-16, there
   // and still navigating); checked again each second and on coming back.
@@ -2229,6 +2236,13 @@ export function stageView(plan, i, phase, me, path, ride = null) {
   return pts;
 }
 
+// (The 測試工具's 「導航：已抵達」: the trip that's on, there now.)
+export function navArriveNow() {
+  if (!nav?.landed) return false;
+  nav.landed();
+  nav.redraw?.();
+  return true;
+}
 export function navNow() {
   if (!nav) return null;
   const on = isRide(nav.plan.legs[nav.i]) && nav.phase === 'on';

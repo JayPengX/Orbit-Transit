@@ -274,14 +274,23 @@ export function etaOf(r, now = Date.now()) {
   const sec = r.EstimateTime == null || ghost ? null : Math.max(0, Math.round(Number(r.EstimateTime) - age));
   const more = ghost ? [] : (r.Estimates || []).map(x => Math.round(Number(x.EstimateTime) - age)).filter(x => Number.isFinite(x) && x !== sec).sort((a, b) => a - b);
   const raw = { t: now, sec: Number.isFinite(sec) ? sec : null, status: Number(r.StopStatus) || 0, next: r.NextBusTime ? Date.parse(r.NextBusTime) : null, last: r.IsLastBus === true, plate: r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '', more, countdown: r.StopCountDown ?? null, old, stale: old != null && old > ETA_STALE && !ghost && Number.isFinite(sec), rt: { uid: r.RouteUID, name: zh(r.RouteName), stop: r.StopUID } };
+  const test = globalThis.ORBIT_TEST?.flags?.busNow;
+  if (test) testEta(raw, test);
   return said(raw, now);
+}
+// (The 測試工具's 公車到站 switch, testing.mjs: every bus as picked; shown only, never kept.)
+function testEta(raw, kind) {
+  if (kind === 'off') return Object.assign(raw, { status: 1, sec: null, more: [] });
+  const at = { now: 45, due: 150, soon: 300, stale: 600 }[kind];
+  if (at == null) return;
+  Object.assign(raw, { status: 0, sec: at, more: [at + 900], ...(kind === 'stale' ? { old: 420, stale: true } : { old: 10, stale: false }) });
 }
 // A time with what's known about its route now (asked again at each drawing:
 // the notices and the buses on the road come in after the times do).
 export function said(v, now = Date.now()) {
   const raw = v?.raw || v;
   if (!raw?.rt) return v;
-  const st = routeStatus(raw.rt.uid, raw.rt.name, now, raw.rt.stop);
+  const st = globalThis.ORBIT_TEST?.flags?.busNow === 'off' ? { effect: 'off', label: W('今日停駛', 'Not running today') } : routeStatus(raw.rt.uid, raw.rt.name, now, raw.rt.stop);
   const flag = st ? { effect: st.effect, label: st.label } : null;
   const onRoad = (raw.status === 0 && raw.sec != null) || raw.more.length > 0;
   if (flag && (flag.effect === 'off' || flag.effect === 'likely') && !onRoad) return { ...raw, raw, sec: null, status: 4, next: null, more: [], flag };

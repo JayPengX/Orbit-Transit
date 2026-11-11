@@ -176,13 +176,16 @@ export async function traLive(ids = []) {
   if (list.length && boards.every(b => !b)) throw new Error('no board');
   const out = new Map();
   for (const r of boards.flatMap(rows)) if (r.DelayTime != null && Number(r.RunningStatus) !== 2 && !out.has(r.TrainNo)) out.set(r.TrainNo, { delay: Number(r.DelayTime) || 0, st: '', name: '', status: 0 });
+  // (The 測試工具's 台鐵誤點 switch, testing.mjs: every train on these boards 12 minutes late.)
+  if (globalThis.ORBIT_TEST?.flags?.traLate) for (const r of boards.flatMap(rows)) r.TrainNo && out.set(r.TrainNo, { delay: 12, st: '', name: '', status: 0 });
   return out;
 }
 // One train now (TRA): { delay, st (the station it's at or last left, as the
 // network's keys), name, status (1 at it, 2 left it) }, or null when it isn't
 // running (the Worker reads 台鐵's own page for one train).
 export async function traTrain(no) {
-  const r = rows(await tdx(`basic/v3/Rail/TRA/TrainLiveBoard/TrainNo/${encodeURIComponent(no)}`, { fresh: 'live' }))[0];
+  const r0 = rows(await tdx(`basic/v3/Rail/TRA/TrainLiveBoard/TrainNo/${encodeURIComponent(no)}`, { fresh: 'live' }))[0];
+  const r = r0 && globalThis.ORBIT_TEST?.flags?.traLate ? { ...r0, DelayTime: 12 } : r0;
   return r ? { delay: Number(r.DelayTime) || 0, st: r.StationID ? `tra:${r.StationID}` : '', name: zh(r.StationName), status: Number(r.TrainStationStatus) || 0 } : null;
 }
 // The delays now of the TRA trains through some stations (traLive's), by train number.

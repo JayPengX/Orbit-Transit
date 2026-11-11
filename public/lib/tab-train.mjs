@@ -14,10 +14,10 @@ import { remember, trainKey } from './store.mjs';
 import { pinTrain } from './tab-go.mjs';
 import { canBook, bookHtml, openBooking } from './book.mjs';
 import { tpassOf, passTrainTrip } from './tpass.mjs';
-import { sheet, sheetHead, icon, tagText, trainKind, trainColor, inkOn, stationLabel, fitLegs, journeyLine } from './ui.mjs';
+import { sheet, sheetHead, icon, trainKind, trainColor, inkOn, stationLabel, fitLegs, journeyLine } from './ui.mjs';
 import { COLOR, tile, section, rowCard, emptyNote, noticesHtml } from './look.mjs';
-import { loadNotices, onNotices } from './service.mjs';
-import { e, hm, minsText, tw, twAt, addDays, meters, distText, readJson, writeJson, shown } from './util.mjs';
+import { loadNotices } from './service.mjs';
+import { e, hm, minsText, tw, twAt, addDays, meters, distText, readJson, writeJson, shown, dayLabel } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 import * as kitUI from '#kit/ui.mjs';
@@ -508,9 +508,10 @@ function onClick(ev) {
     const x = JSON.parse(pt.dataset.pinTrain);
     const had = ctx.data.pins.find(p => p.kind === 'trainNo' && p.no === x.no && p.sys === x.sys);
     if (had) {
+      const before = ctx.data.pins;
       ctx.data.pins = ctx.data.pins.filter(p => p !== had);
       ctx.save();
-      ctx.status(W(`已取消釘選 ${x.no} 次`, `Unpinned train ${x.no}`));
+      ctx.removed(W(`已取消釘選 ${x.no} 次`, `Unpinned train ${x.no}`), 'pins', before, freshen);
       freshen();
       return;
     }
@@ -555,9 +556,10 @@ function onClick(ev) {
   }
   if (act === 'pin-conn') {
     if (pinnedConn()) {
+      const before = ctx.data.pins;
       ctx.data.pins = ctx.data.pins.filter(p => !(p.kind === 'train' && p.from.id === state.from.id && p.to.id === state.to.id && p.from.sys === state.from.sys));
       ctx.save();
-      ctx.status(W('已取消釘選', 'Unpinned'));
+      ctx.removed(W('已取消釘選', 'Unpinned'), 'pins', before, freshen);
       return freshen();
     }
     if (pinTrain(ctx, { kind: 'train', from: state.from, to: state.to })) ctx.status(W('已釘選到「交通」', 'Pinned to Transit'));
@@ -581,7 +583,7 @@ const CITY_KEY = 'orbit-transit.st-city';
 // already reads: no read of its own), a tap its every stop and time.
 function trainNoSheet() {
   const date = state.date || tw().date;
-  const d = sheet(`${sheetHead(W('查車次', 'Find a train'), date === tw().date ? '' : timeText(date))}
+  const d = sheet(`${sheetHead(W('查車次', 'Find a train'), date === tw().date ? '' : e(dayLabel(date)))}
     <label class="q-search ot-search-in"><input id="tn-q" type="search" inputmode="numeric" enterkeyhint="search" placeholder="${W('車次號碼，例如 107', 'Train number, e.g. 107')}" autocomplete="off"><button class="q-search-clear" type="button" aria-label="${W('清除', 'Clear')}">✕</button></label>
     <div id="tn-list"></div>`, 'ot-tall-sheet ot-ticket-sheet');
   const input = d.querySelector('#tn-q');

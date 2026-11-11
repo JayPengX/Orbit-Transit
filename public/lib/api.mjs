@@ -43,6 +43,9 @@ async function bodyJson(res, quiet) {
   }
 }
 async function ask(path, { signal, wait = 15_000, meta = null, renew = false } = {}) {
+  // (The 測試工具's TDX switch, testing.mjs: TDX failing or busy, asked of no one.)
+  const test = path.startsWith('/transit/tdx') && globalThis.ORBIT_TEST?.flags?.tdx;
+  if (test === 'fail' || test === 'busy') throw Object.assign(new Error(test), test === 'busy' ? { code: 'TDX_BUSY', status: 429 } : { code: 'TDX_FAILED', status: 503 });
   // (The token is waited for within `wait` too: a sign-in refresh that never answered held every ask behind it.)
   const t = await Promise.race([token(renew), sleep(wait).then(() => Promise.reject(Object.assign(new Error('network'), { code: 'TIMEOUT', status: 0 })))]);
   const url = `${PROXY}${path}${path.includes('?') ? '&' : '?'}qt=${encodeURIComponent(t)}`;
@@ -87,6 +90,8 @@ async function ask(path, { signal, wait = 15_000, meta = null, renew = false } =
   if (!res.ok) throw Object.assign(new Error(body?.code || `${res.status}`), { code: body?.code || 'HTTP', status: res.status });
   // How old the proxy's copy is (s): TDX slow, it answers with the copy it has.
   if (meta) meta.age = Number(res.headers?.get?.('X-Transit-Age')) || 0;
+  // (The TDX switch's 只有副本: the proxy's copy, 10 minutes old, as when TDX is past its share.)
+  if (meta && test === 'copy') meta.age = Math.max(meta.age, 600);
   return body;
 }
 async function get(path, opts = {}) {
@@ -171,12 +176,13 @@ async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr
     const k = await kept(path);
     if (k) {
       memory.set(path, k);
-      if (now - k.at < fresh) return k.data;
+      // (A copy from ahead of the clock, the tester's clock moved back, is never fresh.)
+      if (k.at <= now && now - k.at < fresh) return k.data;
     }
   }
   if (swr && !mem && !inflight.has(path)) {
     const k = await kept(path);
-    if (k && now - k.at < swr && !memory.has(path)) {
+    if (k && k.at <= now && now - k.at < swr && !memory.has(path)) {
       memory.set(path, k);
       tdxAsk(path, { fresh, persist, store, max }).then(() => freshers.forEach(f => f(path)), () => {});
       return k.data;

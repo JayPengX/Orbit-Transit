@@ -26,10 +26,10 @@ import { pickSig, boardEarly } from './plan.mjs';
 import { chaseOf, chaseNow, steadyLead } from './chase.mjs';
 import { steadyPlans, settled } from './steady.mjs';
 import { lateBy } from './nav.mjs';
-import { loadNotices, bikesOff, onNotices } from './service.mjs';
+import { loadNotices, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, tripOver, MAX_PINS, PLACE_ICONS } from './store.mjs';
-import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legLabel, legColor, trainColor, legChips, fitLegs, journeyLine } from './ui.mjs';
+import { sheet, sheetHead, icon, trainKind, trainName, stationLabel, legColor, trainColor, legChips, fitLegs, journeyLine } from './ui.mjs';
 import { boardRow, whenHtml } from './board.mjs';
 import { COLOR, PLACE_COLOR, tile, tripTile, tag, section, rowCard, tick, navTitle, noticesHtml } from './look.mjs';
 import { e, hm, distText, meters, tw, twAt, addDays, dayLabel, holidayOn, weekdaysOnly, isRide, readJson, readSaved, UNREAD, writeJson, workday, shown as nameIn } from './util.mjs';
@@ -846,21 +846,6 @@ function onClick(ev) {
   if (r) {
     const x = JSON.parse(r.dataset.route);
     return openRoute(ctx, { uid: x.uid, name: x.name, city: x.city }, { stopUID: x.stopUID, dir: x.dir });
-  }
-  const ub = ev.target.closest('[data-unpin-bus]');
-  if (ub) {
-    const id = ub.dataset.unpinBus;
-    ctx.data.groups = ctx.data.groups.map(g => ({ ...g, items: g.items.filter(i => i.id !== id) }));
-    ctx.save();
-    ctx.status(W('已取消釘選', 'Unpinned'));
-    return render();
-  }
-  const ut = ev.target.closest('[data-unpin-train]');
-  if (ut) {
-    ctx.data.pins = ctx.data.pins.filter(p => p.id !== ut.dataset.unpinTrain);
-    ctx.save();
-    ctx.status(W('已取消釘選', 'Unpinned'));
-    return render();
   }
   const pb = ev.target.closest('[data-pinbus]');
   if (pb) return chooseGroup(JSON.parse(pb.dataset.pinbus), render);
