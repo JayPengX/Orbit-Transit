@@ -2576,6 +2576,18 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   background: color-mix(in srgb, var(--q-green) 16%, transparent);
   color: var(--q-green);
 }
+/* 推薦, the planner's pick: the Orbit AI mark, as on every smart thing (Jay 11-11). */
+.ot-tag-ai {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+.ot-tag-ai svg {
+  width: 100%;
+  height: 100%;
+}
 .ot-tag.live {
   background: color-mix(in srgb, var(--q-green) 16%, transparent);
   color: var(--q-green);
