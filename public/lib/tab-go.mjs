@@ -729,7 +729,8 @@ function renderBoard(ts) {
   const railX = box.querySelector('.ob-places')?.scrollLeft || 0;
   const here = ctx.here;
   const places = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
-  const plan = `<button class="ob-plan q-press" type="button" data-plan-to="1">${icon('search')}<span>${W('要去哪裡？', 'Where to?')}</span></button>${places.length ? `<div class="ob-places">${places.map(p => `<button class="ob-place q-press" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place, 'sm')}<span>${e(nameIn(p.name))}</span></button>`).join('')}</div>` : ''}`;
+  // (✦ beside it: 用說的查路線, lib/say-trip.mjs.)
+  const plan = `<div class="ob-plan-row"><button class="ob-plan q-press" type="button" data-plan-to="1">${icon('search')}<span>${W('要去哪裡？', 'Where to?')}</span></button>${kitUI.icons?.ai ? `<button class="ob-say q-press" type="button" data-say-trip="1" aria-label="${W('用說的查路線', 'Say your trip')}">${kitUI.icons.ai}</button>` : ''}</div>${places.length ? `<div class="ob-places">${places.map(p => `<button class="ob-place q-press" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place, 'sm')}<span>${e(nameIn(p.name))}</span></button>`).join('')}</div>` : ''}`;
   // Your trips, each its own card; then what you've pinned, a row each in the order you keep
   // them (on a wide screen beside the trips, where 附近 was: Jay 2026-11-03, "basically useless").
   const tripsHtml = ts.length ? section(W('行程', 'Trips'), `<div class="ob-trips">${ts.map(tripCard).join('')}</div>`) : '';
@@ -871,6 +872,7 @@ function onClick(ev) {
     }
   }
   if (ev.target.closest('[data-plan-to]')) return ctx.planTo?.();
+  if (ev.target.closest('[data-say-trip]')) return void import('./say-trip.mjs').then(m => m.openSayTrip(ctx)).catch(() => {});
   if (ev.target.closest('[data-new-trip]')) return ctx.newTrip?.();
 }
 

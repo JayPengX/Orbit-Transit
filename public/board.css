@@ -28,6 +28,44 @@ html[data-look='native'] .ob-plan .ot-i {
   height: 20px;
 }
 
+/* ✦ beside it: 用說的查路線 (lib/say-trip.mjs), the Orbit AI mark. */
+html[data-look='native'] .ob-plan-row {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+html[data-look='native'] .ob-plan-row .ob-plan {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+html[data-look='native'] .ob-say {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--q-fill-3);
+  cursor: pointer;
+}
+html[data-look='native'] .ob-say svg {
+  width: 24px;
+  height: 24px;
+}
+/* The sheet: the starters, what was said, what was understood, 看路線. */
+.ot-say-hint { margin: 0 0 12px; color: var(--q-label-2); font: var(--q-t-subhead); text-wrap: pretty; }
+.ot-say-err { color: var(--q-red, #ff3b30); }
+.ot-say-starters { margin: 0 0 12px; }
+.ot-say-talk { display: grid; gap: 8px; }
+.ot-say-talk:empty { display: none; }
+.ot-say-you { margin: 0 0 8px auto; width: fit-content; max-width: 85%; padding: 8px 12px; border-radius: 18px 18px 6px 18px; background: var(--q-fill-3); font: 400 var(--q-t-body) / 1.35 var(--q-font); overflow-wrap: anywhere; }
+.ot-say-a { display: grid; gap: 12px; }
+.ot-say-line { margin: 0; font: 600 var(--q-t-headline) / 1.4 var(--q-font); }
+.ot-say-foot { margin-top: 12px; padding-top: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); border-top: 0; }
+
 /* Your places under it, a row to scroll: a tap is its ways from here. */
 html[data-look='native'] .ob-places {
   display: flex;
