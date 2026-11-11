@@ -27,7 +27,8 @@ export function openSayTrip(ctx, { ask = '' } = {}) {
   const foot = h('div', { class: 'q-sheet-foot ot-say-foot' }, [bar]);
   const s = kitUI.sheet({ title: W('用說的查路線', 'Say your trip'), detent: 'large', cls: 'ot-say', body: [hint, starters, talk], foot, onClose: () => (open = false) });
   if (ask) requestAnimationFrame(() => go(String(ask).slice(0, 120)));
-  else requestAnimationFrame(() => bar.input?.focus());
+  // (In the tap that opened it: iOS raises its keys only then; the kit lands the sheet first.)
+  else bar.input?.focus();
 
   const go_ = trip => {
     s.close?.();

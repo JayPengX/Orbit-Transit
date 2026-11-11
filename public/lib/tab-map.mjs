@@ -1485,7 +1485,7 @@ function pickPoint(title, { here = false, onMap = true, q = '' } = {}) {
     // (用說的查路線: the search opened with the place as said, the right one a tap away.)
     if (q) input.value = q;
     draw();
-    setTimeout(() => input.focus(), 50);
+    input.focus();
   });
 }
 
@@ -2085,7 +2085,7 @@ function ticketSheet() {
   d.querySelector('.ot-when-strip').replaceWith(dayRec.bar);
   input.addEventListener('input', () => draw());
   draw();
-  setTimeout(() => input.focus(), 60);
+  input.focus();
 }
 
 const whenDay = at => {

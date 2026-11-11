@@ -630,7 +630,7 @@ function trainNoSheet() {
     const b = ev.target.closest('[data-tn]');
     if (b && found[Number(b.dataset.tn)]) stops(found[Number(b.dataset.tn)]);
   });
-  setTimeout(() => input.focus(), 50);
+  input.focus();
 }
 
 async function pickStation(which) {
