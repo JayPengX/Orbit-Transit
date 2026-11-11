@@ -607,21 +607,49 @@ const whenSmall = at => {
   return other ? `${dayLabel(tw(at).date)}${far ? '' : ` ${hm(at)}`}` : far ? '' : hm(at);
 };
 
-// A one-time trip (a day picked, not every week): told 10 minutes before it's time to leave, the app
-// closed or not (the Worker sends it). When to leave: the way found for it once there is one, else its
-// time out (by an arrival time, an hour before it until a way is found).
+// A trip's 「該出發了」, told 10 minutes before it's time to leave, the app
+// closed or not (the Worker sends it). A one-time trip (a day picked) on its
+// day; 通勤小幫手 (the AI plan): a weekly trip (school, work) on each of its
+// next days within a week, holidays skipped as its times are (tripNow). When
+// to leave: the way found for it once there is one (for a weekly trip, only
+// a way kept for that same time out), else its time out (by an arrival time:
+// the way's own length before it when one is kept, else an hour).
 const LEAVE_SOON_MS = 10 * 60_000;
+const WEEK_MS = 7 * 86_400_000;
+export function tripLeaves(t, now = Date.now(), lead0 = null) {
+  const out = [];
+  let from = now;
+  for (let k = 0; k < (t.date ? 1 : 9); k++) {
+    const w = tripNow(t, null, from);
+    // (The way back by the clock (an evening): the next day's way out.)
+    if (w?.id.endsWith(':b') && !t.date) {
+      from = twAt(addDays(tw(from).date, 1), '00:00');
+      continue;
+    }
+    if (!w?.at || w.id.endsWith(':b') || w.at > now + WEEK_MS) break;
+    // (Past the 20 minutes tripNow still calls it now: the next one.)
+    from = w.at + 21 * 60_000;
+    const lead = lead0?.(w) || null;
+    // (A way kept for another time out says nothing of this one but how long it takes.)
+    const near = lead && Math.abs((w.by === 'arrive' ? lead.arr : lead.dep) - w.at) <= 30 * 60_000;
+    const len = lead ? Math.max(0, lead.arr - lead.dep) : 0;
+    const dep = near ? lead.dep : w.by === 'arrive' ? w.at - (len ? len + 5 * 60_000 : 60 * 60_000) : w.at;
+    const arr = near ? lead.arr : w.by === 'arrive' ? w.at : len ? dep + len : null;
+    if (dep - LEAVE_SOON_MS < now - 60_000) continue;
+    out.push({ at: dep - LEAVE_SOON_MS, title: W(`${t.name || t.to.name}：10 分鐘後出發`, `${t.name || t.to.name}: leave in 10 min`), body: W(`${hm(dep)} 出發${arr ? `，${hm(arr)} 到` : ''}`, `Leave ${hm(dep)}${arr ? `, there ${hm(arr)}` : ''}`), tag: `trip:${t.id}:${tw(w.at).date}`, kind: 'trip', hash: 'go' });
+  }
+  return out;
+}
 function tripPush(now = Date.now()) {
   const items = [];
   for (const t of ctx.data.saved) {
-    if (!t.date) continue;
-    const w = tripNow(t, null, now);
-    if (!w?.at || w.id.endsWith(':b')) continue;
-    const st = S.trips.get(w.id);
-    const lead = (st?.guess ? null : st?.plans?.find(p => p.top && p.lead !== false)) || keptLead(w, { prefs: ctx.data.prefs, picks: t.picks, now });
-    const dep = lead?.dep ?? (w.by === 'arrive' ? w.at - 60 * 60_000 : w.at);
-    if (dep - LEAVE_SOON_MS < now - 60_000) continue;
-    items.push({ at: dep - LEAVE_SOON_MS, title: W(`${t.name || t.to.name}：10 分鐘後出發`, `${t.name || t.to.name}: leave in 10 min`), body: W(`${hm(dep)} 出發${lead ? `，${hm(lead.arr)} 到` : ''}`, `Leave ${hm(dep)}${lead ? `, there ${hm(lead.arr)}` : ''}`), tag: `trip:${t.id}:${t.date}`, kind: 'trip', hash: 'go' });
+    if (!t.to || (!t.date && !t.days?.length)) continue;
+    items.push(
+      ...tripLeaves(t, now, w => {
+        const st = S.trips.get(w.id);
+        return (st?.guess ? null : st?.plans?.find(p => p.top && p.lead !== false)) || keptLead(w, { prefs: ctx.data.prefs, picks: t.picks, now });
+      })
+    );
   }
   setTripPush(items);
 }
