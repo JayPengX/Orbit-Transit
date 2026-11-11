@@ -426,7 +426,10 @@ function detailHtml(j) {
     const facts = [W(`${l.stops} 站`, `${l.stops} stops`), minsText((l.arr - l.dep) / 1000), onPass(l) ? 'TPASS' : state.fares.get(fareKey(l)) ? `NT$${state.fares.get(fareKey(l))}` : '', t.bike ? W('可攜車', 'bikes OK') : ''].filter(Boolean).join(' · ');
     out.push(`<li style="--c:${trainColor(t)}"><span class="ot-step-time">${e(hm(l.dep))}</span><span class="ot-step-i">${icon(t.sys)}</span><span class="ot-step-what"><b>${e(trainKind(t.typeFull || t.type))} ${e(t.no)}</b> ${W('往', 'to')} ${e(shown(String(t.headsign || '').replace(/^往/, '')))}${nowText(d)}<small>${e(nameOf(l.from))} → ${e(nameOf(l.to))} ${e(hm(l.arr))}</small><small>${e(facts)}</small><span class="ot-pin-train${pinned ? ' on' : ''}" role="button" data-pin-train="${e(JSON.stringify({ sys: t.sys, no: t.no, type: t.type, from: l.from, to: l.to, dep: hm(l.dep) }))}">${icon('star')}${pinned ? W('已釘選', 'Pinned') : W('釘選這班', 'Pin train')}</span>${t.sys === 'hsr' && canBook({ mode: 'hsr', dep: l.dep, train: t }) ? bookHtml({ from: net?.st.get(l.from)?.name || '', to: net?.st.get(l.to)?.name || '', dep: l.dep, train: t }, 'ot-pin-train') : ''}</span></li>`);
   });
-  out.push(`<li class="end" style="--c:${COLOR.walk}"><span class="ot-step-time">${e(hm(j.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e(nameOf(j.legs.at(-1).to))}</b></span></li>`);
+  // The whole journey's fare under the legs (a ride's own is on its line): what TPASS doesn't take.
+  const rides = j.legs.filter(l => !l.walk);
+  const fare = rides.length > 1 ? fareText(rides) : '';
+  out.push(`<li class="end" style="--c:${COLOR.walk}"><span class="ot-step-time">${e(hm(j.arr))}</span><span class="ot-step-i">${icon('pin')}</span><span class="ot-step-what"><b>${W('抵達', 'Arrive')} ${e(nameOf(j.legs.at(-1).to))}</b>${fare ? `<small class="ot-jny-fare">${e(W(`全程 ${fare}`, `In all: ${fare}`))}</small>` : ''}</span></li>`);
   // 用這班規劃: the trip from where you are around these trains (the ticket you hold: ticket.mjs), on the map.
   return `<ol class="ot-steps">${out.join('')}</ol><span class="ot-jny-plan" role="button" data-ride-plan="${state.results.indexOf(j)}">${icon('route')} ${W('用這班規劃路線', 'Plan a trip on it')}</span>`;
 }

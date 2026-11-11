@@ -16,6 +16,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - Operators' notices: 今日停駛, 可能停駛 — `public/lib/service.mjs`, `public/lib/near-ui.mjs`: `可能停駛`, `今日停駛`
 - 附近 waits for nearby — `public/lib/near-ui.mjs`: `NEAR_WAIT_MS`
 - 查時刻: TPASS-only trains, said so — `public/lib/tab-train.mjs`: `passOnly`, `只列 TPASS`
+- 查時刻: an opened journey of two or more trains shows its whole fare under the legs (the TPASS part said) — `public/lib/tab-train.mjs`: `fareText(rides)`, `ot-jny-fare`, `全程 ${fare}`
 - 捷運: each city's metro map, straight lines, big and full screen; pinch, drag, two taps in — `public/lib/metromap.mjs`, `public/lib/tab-metro.mjs`: `straighten`, `mountMap`, `placeNames`, `mm-full`
 - 捷運: 搜尋車站 across all nine systems by name, English name or code (BL12), with 最近查看, 附近, 轉乘站 — `public/lib/tab-metro.mjs`: `findMetro`, `findSheet`, `最近查看`
 - 捷運: a station tapped on the map is ringed and opens its next trains — `public/lib/metromap.mjs`, `public/lib/tab-metro.mjs`: `select(node)`, `view?.select(n)`, `stationSheet`
