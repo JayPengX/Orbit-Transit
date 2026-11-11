@@ -728,6 +728,30 @@ test('a saved trip’s way now: out from home, back from its far end, the time t
   assert.equal(tripNow(t, home, T('09:00')).at, twAt('2026-10-06', '07:30'), 'past today: tomorrow’s');
 });
 
+test('通勤小幫手: a weekly trip is told 10 minutes before leaving on each of its next days, holidays skipped', async () => {
+  const { tripLeaves } = await import('../public/lib/tab-go.mjs');
+  const home = { name: '家', lat: 24.821, lon: 121.018 };
+  const school = { name: '學校', lat: 24.733, lon: 121.088 };
+  const t = cleanSaved({ id: 's1', name: '上學', from: home, to: school, time: '07:30', days: [1, 2, 3, 4, 5], back: '17:00' });
+  // Sunday evening (2026-10-04): Monday to Thursday's; Friday 10-09 is 國慶日's day off
+  // (10-10 a Saturday), a weekdays trip isn't on it; none on the weekend; a week at most.
+  const sun = twAt('2026-10-04', '20:00');
+  const out = tripLeaves(t, sun);
+  assert.deepEqual(out.map(x => x.tag), ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08'].map(d => `trip:s1:${d}`));
+  assert.equal(out[0].at, twAt('2026-10-05', '07:20'));
+  assert.equal(out[0].kind, 'trip');
+  // Monday at school, 16:00 (the way back by the clock): still Tuesday's on.
+  assert.equal(tripLeaves(t, twAt('2026-10-05', '16:00'))[0].tag, 'trip:s1:2026-10-06');
+  // A way kept for that time out: its own times; one for another hour: only its length.
+  const lead = { dep: twAt('2026-10-05', '07:25'), arr: twAt('2026-10-05', '08:05') };
+  const withLead = tripLeaves(t, sun, w => (w.at === twAt('2026-10-05', '07:30') ? lead : null));
+  assert.equal(withLead[0].at, twAt('2026-10-05', '07:15'));
+  assert.match(withLead[0].body, /07:25 出發，08:05 到/);
+  // A one-time trip: its day only.
+  const once = cleanSaved({ id: 's2', name: '動物園', from: home, to: school, time: '09:00', date: '2026-10-07' });
+  assert.deepEqual(tripLeaves(once, sun).map(x => x.tag), ['trip:s2:2026-10-07']);
+});
+
 test('a one-time trip: its day only, weeks ahead too, and let go once its time is gone', async () => {
   const { tripNow } = await import('../public/lib/tab-go.mjs');
   const { tripOver } = await import('../public/lib/store.mjs');
