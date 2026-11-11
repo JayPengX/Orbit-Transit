@@ -2,502 +2,56 @@
 
 Taiwan's public transport in one app: buses, 台鐵, 高鐵, the metros and
 YouBike; trips planned the way a person really travels; navigation that
-follows the trip. Signs in with the Orbit Pass, which keeps places, trips
-and pins. Light or dark follows the phone; the look is `lib/look.mjs` on the kit,
-in Orbit's own look (Jay 2026-11-03, Orbit-Core DESIGN §11: `data-look="native"`
-on the page, `board.css` after `transit.css`).
+follows the trip. Signs in with the Orbit Pass, which keeps places, trips and
+pins. Live: https://orbit.jaypengx.com/transit/ `FEATURES.md` lists every
+feature with its code.
 
-Live: https://orbit.jaypengx.com/transit/
+## Rules
+
+Jay's, dated (Taiwan day), newest wins; the family's are in Orbit-Core `docs/RULEBOOK.md`.
+
+**The app.**
+- 11-03 The tabs are 地圖, 交通, 查時刻, 我的, opening on 地圖; never moved without asking. 交通 is one board (要去哪裡, places, trips, pins); no 附近 tab.
+- 10-22 YouBike is crucial: never plan a trip without bikes as a fallback; make it load reliably instead. 10-30 YouBike shows its own logo everywhere but the map (whose pins keep the bike glyph); 一般, 電輔車 and 空位 are counted apart.
+- 10-23 Operators' 停駛 notices are rules: what isn't running comes from their notices (`service.mjs`), never guessed; stopped services are never planned; a notice saying 部分, 減班 or a time of day is shown, never a stop; likely-off is 可能停駛, never 停駛. On a nothing-running day the app still works and says what's stopped.
+- 10-27 A trip's legs fit one line (tighten, never wrap); 查時刻 is visual (a journey bar, live 準點/晚, the next train lit), not text.
+- 11-06 Google's places on the map keep Google's own colours; a tap on one opens it at once. Google's own bus stops stay off (ours have live times). A place's or spot's card shows the YouBike near it, never its bus stops.
+- Bus times: TDX's live estimates are right, TDX's timetables between the ends are often wrong, Google's planner's ride time is right (`busLink`, `liveRide`). The islands (金門, 馬祖) stay supported.
+- Every real choice is shown, with official names, times and live data first. There is always a recommendation. Taxis never.
+- The map opens on where you are and follows you, and never pulls you back once a finger has moved it. Navigation never takes the app over: the tabs stay, it shrinks to a bar. Status bar `black`.
+- Logs hold places: keep them in `captures/` (git-ignored).
+
+**Planning.**
+- A plan costs what it costs a person, in minutes: waiting at home counts a third while short, past 15 minutes as lost time; changing onto a train is easy, onto a bus a gamble, bus to bus barely a plan; walking past 5 minutes is slow (5 km/h, one walk reads the same everywhere, by Google's streets); YouBike 10 minutes is nothing, 18 a workout, past 30 each minute counts 4.5×, two short rides beat one long; never race your own train to the next station. 高鐵 is never free; our own trains are costed by distance.
+- YouBike is planned by station place, except a trip that starts on the bike: never at a station with no bike now. A trip with stops is planned whole; one kept YouBike through the stops unless a stop is far or walking it all is sooner.
+- Train or bus then a ride over 頭前溪 is listed when 5 minutes sooner (at most one of each, under the recommendations); after a bus it's recommended when nothing else is close. An arrival time nothing reaches: the ways leaving now, each saying how late.
+- 10-29 偏好電輔車 is a per-trip choice on the plans card (of stations about as near, the one with 電輔車, ridden at their pace); 11-04 also a setting in 我的 › 規劃, off by default (on, every trip starts with it and station cards count 電輔車 first).
+- 11-03 Buses run early or late, trains on time: at a bus stop 5 minutes before its timetable time, 2 before a bus seen live; trains as timed; ranking unchanged, only the leave time. A bus TDX sees arriving is that timetable run: once it's gone before you can be there, the next run you can make; never 快一點 when hurrying can't make it (趕不上了).
+- 11-03 Trains go beyond TPASS: inside a TPASS area the list and planner keep to the pass's trains, but any 台鐵 or 高鐵 train can be the one you hold a ticket for (指定車次, or 用這班規劃路線 from 查時刻); 查時刻 has 全部班次.
+- 11-04 A train you pick is the train you take: a later departure chosen is never switched to a sooner one by itself; a plan you didn't pick still moves to a sooner train still to come (10-28).
+- 11-06 追公車 (a YouBike to a stop further along a bus's way) is offered only when clearly sooner (8+ minutes, more for a long ride), with real room at the stop (4+ minutes), never on a stopped feed; once shown, the near or further stop keeps showing until the other is 10 minutes sooner. Planning only: never while navigating or replanning under way. (Replaced 11-03's 3 minutes.)
+- 11-06 Trip results never change under the person: the plans card and 交通's trips show the whole plan once (the skeleton or a trip's last ways until then); after that a way keeps its place and labels and only its times update; a way found later joins quietly at the end (`lib/steady.mjs`).
+- 11-10 下雨改搭車: rain due near a trip's ends (Weather's `weather.rain`) costs a YouBike ride or walk in it more, and the card says 會淋雨.
+
+**Navigation.**
+- 10-22 One standard table (leg type × phase × auto/user view) in one function (`navLook`); change the table, never add one-off rules.
+- 10-22 On a ride: frame the remaining ride only, no zoom-follow on a bus or train; your own YouBike station icon-only (counts when zoomed in); no nearby stations or parking badges; boarding and start marks; a ring one stop before yours; no swipe-down minimize. Looking ahead on a ride keeps following it and returns with a buzz when your stop is next.
+- 10-29 換附近的站 is asked only when a station runs low (2 or fewer bikes or docks; no 電輔車 for an e-bike ride); otherwise the count is a quiet tap, and it takes the station the planner would, never the nearest to the old one (11-09).
+- 11-06 When something goes wrong under way, one card, any mode (`lib/trouble.mjs`): missed or late → 下一班 and 最快, each with when you're there; no bike or dock nearby → 最快; on the wrong ride (GPS) → 從這裡重新規劃. Steps move only by GPS.
+- 11-07 A trip with stops is one coherent trip while navigating: the chips run to the last place, each step after a stop a tap to look at it; the bottom bar's time is the next stop's arrival (replaced 11-03's end time); riding a YouBike to a stop it asks 停著 or 還車 with which is sooner; with the free half hour, 附近換車 from 25 minutes on a bike.
+- Every screen: on a wide screen the map's sheet is a panel at the map's left (pinned whole on a tablet or computer); 交通, 我的 and 查時刻 in two columns (`transit.css` §11).
 
 ## How it works
 
-- **Tabs** (地圖 first, where the app opens; Jay 2026-11-03: "map should be the first tab"):
-  - **地圖:** YouBike stations (the five nearest along the bottom), every
-    bus stop with live times, train and metro stations, search, pins, and
-    a trip planned from anywhere. Search lists a station once (`uniqueResults`:
-    Google's 台鐵新竹車站, 新竹火車站, 新竹 at its door fold into it), the
-    railway the words name first (火車站 台鐵, 高鐵 高鐵). YouBike only
-    (`bike.mjs mergeBikes`: 彰化's Moovo, ServiceType 3, isn't shown or planned on).
-    Live counts are read by the phone from YouBike's own `parkingInfo` (its
-    firewall refuses Cloudflare; 10 km circles, `circlesOf`), names from the
-    proxy's TDX station list, the proxy's TDX counts if YouBike fails.
-    釘選這個方案 on a way with no trip saved yet makes a one-time trip that day,
-    leaving then, the way first (`oneTimeTrip`; Jay 2026-11-06). A stop's signs a few metres apart are one
-    stop (`stopGroups`).
-  - **交通:** one board (`lib/board.mjs`, `board.css`; Jay 2026-11-03 found
-    the old green focus card "kind of useless": half a screen for one item,
-    a different one each open). 要去哪裡 (a bar opening the place search,
-    `ctx.planTo`), your places as chips (a tap opens the place: its buses,
-    its bikes, 怎麼去), then 行程: each trip its own card (Jay 2026-11-03:
-    交通 "boring", the first ride's bike badge "misleading"): its main ride's
-    badge (`mainRide`: the ride you're on longest), its name and ends, when to
-    leave counting down, or why not (`tripWhy`); under it the way as one line
-    (`ui.mjs journeyLine`: each ride its colour by its minutes, a change a
-    ring), leave and arrive at its ends, its rides as chips; then 其他班次, the
-    map's other recommendations in its order (two at least, filled from the rest), leaving within three hours of the way
-    shown (`otherWays`; not of now: a 16:45 trip opened at 14:05 lost 17:07's
-    快捷8號支, Jay 2026-11-10). Opened again the next morning (its kept ways
-    two hours old), a trip shows its last ways at once, moved on by whole days,
-    said 更新中… while they're found again (`lastGuess`, `ot.trips.last.v1`: a
-    slim copy a way, eight days; same hour within 90 minutes, same kind of day;
-    never navigated or notified on; Jay 2026-11-06: 上學 sat on 找班次…).
-    A school day's trip whose time went by (20 min to 3 h) while you're not
-    there yet: its way now as a card of its own above the next time's, that
-    one saying its day (`tripLate`, Jay 2026-11-06: "show both").
-    A tap on the top opens its ways on the map,
-    on a way that way ready to go; editing it is in 我的. Then 釘選: each
-    pinned bus and train a row of one shape in the order you keep them (beside
-    the trips on a wide screen). No 附近 (Jay 2026-11-03: "basically useless";
-    its live read of every bus around you every 20 s went with it; the map
-    has what's near).
-  - **查時刻:** 台鐵/高鐵 station to station (changing where faster; a
-    station picked by search, a nearby or recent one, or on a county's line
-    map: `linemap.mjs`, the lines from `scripts/tra-map.mjs`; with 台鐵 picked
-    only 台鐵's stations, with 高鐵 picked its one line 南港 to 左營, each
-    station's 台鐵 under it, `hsrMapHtml`, `HSR_TRA`; switched with a station of
-    the other railway picked, that station's own there, 六家 ↔ 高鐵新竹,
-    `fitStation`; Jay 2026-11-10), each train a
-    card that opens in place, sliding, the tapped card kept under the finger
-    (`toggleCard`; later reads, delays and fares, patch the cards: `freshen`),
-    every 台鐵 train today 準點, 晚 N 分 or 未發車 (`trainNow`: the boards of the
-    two stations asked, `traDelays`, give a delay only to trains on their way;
-    read again a minute on; Jay 2026-11-10);
-    查車次, a search bar at the top (Jay 2026-11-10), a
-    台鐵 or 高鐵 number, the day's trains with it and a tap its every stop and
-    time (`tab-train.mjs trainNoSheet`, `ticket.mjs trainsNumbered`; Jay 2026-11-06), bus
-    routes by number or stop (附近: your city, its neighbours and the 公路客運;
-    全部: every place's, `cityRoutes` each, those around you first and the rest
-    four at a time, found routes ranked yours first, `findRoutes` `rank`, each
-    saying its city; one far from you not asked for its next bus, `far`; Jay
-    2026-11-10), stop timetables, and 捷運: each city's metro
-    as a metro map (`metromap.mjs`: from TDX's real stations, relaxed, then
-    `straighten` by least squares onto the eight directions with even gaps
-    and no station on another line's track; worked out ahead by
-    `scripts/metro-maps.mjs` into `metro-drawings.mjs`, which starts from
-    the kept drawing; a phone redraws only when the network changes, kept
-    as `metro-map-v2/<city>`). `mountMap` draws it on a canvas filling the
-    screen down to the tabs (`--mm-top`) or full screen (`.mm-full`, moved
-    to `body`): pinch, drag that coasts, two taps in, two fingers out, the
-    wheel and keys; lines widen and names grow gently with zoom, names
-    placed per zoom step so none overlap (`placeNames`); lines sharing a
-    track run side by side; the trains arriving now beside their track.
-    Over it: the cities (雙北, 桃園, 台中, 高雄), 搜尋車站 across all nine
-    systems by name, English name or code (`findMetro`; 最近查看, 附近,
-    轉乘站), 實景 for the real map, 定位, the lines to focus. A station
-    tapped is ringed, and opens: its line codes, the next trains each way counting
-    down (live where the operator sends them, else the timetable, else how
-    often the line runs), first and last trains, exits (`metro-ui.mjs`).
-  - **建議** (on 交通, `lib/suggest.mjs`): each trip planned keeps its time
-    (the last 12 per place in 最近); a place gone to 3+ times at about this
-    hour on days like this (a working day or a day off on Taiwan's calendar,
-    `util.mjs workday`: a holiday is a day off) comes up as 常在這時候去, its
-    distance first, a tap plans it (not when you're there, nor when a saved
-    trip or 回家 covers it; somewhere else usual now, 補習班, goes before
-    回家). From the first day, a working day's morning at 家 has 去公司 or
-    去學校 from the places pinned (`goScore`; not on a typhoon day off there).
-    These guesses of a place learn on the kit's feedback.mjs (`lib/learn.mjs`,
-    `fb:transit` on the Pass): each card drawn and each trip planned, by the
-    place and the place on that weekday (`placeItem`); one passed over too
-    often stops coming (`chance` under 0.16). `node scripts/backtest-usual.mjs
-    --against <ref>` replays made-up people (2026-11-03, first two weeks
-    caught 53/45/64% → 74/65/86%; wrong cards a week, later, a student
-    7.9 → 4.5, one who never plans the commute 3.3 → 1.0).
-  - **我的:** trips (each a way there and a way back, its time at the
-    right edge), places, pinned stops, 規劃: TPASS, each way of moving a
-    switch (the last one on stays on), 每 30 分換一台 YouBike as the person's
-    own choice (`prefs.swap30` 'on'/'off', else as before: 每 30 分換車 or a
-    pass with free first half hours; `tpass.mjs bikeSwap`): a ride over 30
-    minutes is cut at any station on the way, the first part nearest 26
-    minutes (`plan.mjs swapRides`; Jay 2026-11-10: 竹東高中 → 竹北 stayed one
-    46′ ride, its station 801 m off the one point looked at), the maps app.
-    A switch keeps the page where it is.
-    Places, bus groups and their stops are put in order by their grips
-    (kit `reorder`; `tab-me.mjs`, `bus-ui.mjs` manageSheet).
-- **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by
-  side, plus our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and
-  metro router. A trip within 2 km (straight) is a walk too when no planner
-  gave one (`walkPlan`: Google's walk kept a month, else OpenStreetMap's
-  walking router with its line; Google's planner stops at 100 trips a day).
-  A planner's YouBike ride needs a real station at each end
-  (never a made-up 附近的 YouBike 站). Buses are re-timed by TDX's live estimates (`adjustPlan`).
-  Our own bus ride's minutes (`busLink`): TDX's buses on the road first
-  (`live.mjs liveRide`: each hop between two stops showing the same bus, as TDX
-  estimates it), else the timetable's run you'd be on (`rideTime` with the
-  moment it boards; never its first run: 5608's 05:34 at 7 minutes stood for
-  every hour). A timetable's times between its ends can be far off (5608's
-  15:23 says 10 minutes to 豐邦公司; the bus took 23, as TDX's live estimates
-  said). A planner's bus keeps its own ride (Google's 22 minutes there was right).
-  A bus TDX sees is matched to its timetable run (`live.mjs` `seenAt`,
-  `nextCatchable`): one seen gone before you can be there is never planned
-  or shown again, the next run you can make is. You're at a bus stop 5
-  minutes before a timetable time, 2 before a bus seen live; trains as
-  timed (`plan.mjs boardEarly`, after ranking: the leave time alone moves).
-  A live bus is taken when the timetable has one due about then
-  (`liveTrusted`); at a stop the timetable doesn't time (快捷8號 times only
-  台大竹東分院 → 砂石廠), when a run left the first stop for it. A route
-  sheet draws a bus between two stops only where a live time drops below the
-  nearest one before it, a stop without one in between being no bus
-  (`bus-ui.mjs busBetween`; `tests/route-bus-icon.test.mjs`).
-  A TDX estimate is counted from its DataTime (`etaAge`, at most 5 min). One
-  over 4 minutes old is a feed that stopped (`util.mjs ETA_STALE`; TDX's usual
-  lag is 1–3.5): shown as it was, 可能已過 for 3 minutes or less, never
-  進站中, no bus drawn or placed (`busWhere`), the route sheet saying so once
-  at the top; over 15 (`ETA_GHOST`) no live time and none planned on
-  (`tests/eta-stale.test.mjs`: 快捷8號's feed froze 17:37:54 on 2026-11-03).
-  A route sheet counts a lagging bus again from its GPS (`lib/busgps.mjs`
-  `gpsFix`, `bus.mjs routeEtaMended`: TDX RealTimeByFrequency, under a minute
-  old, placed along the route's shape, `shapes.mjs routeLines`): the stops it
-  has passed lose their time, the rest are the estimates' own gaps from where
-  it is (`tests/bus-gps.test.mjs`; on 快捷8號 the error to where buses really
-  got to fell from about 2 minutes to under 1).
-  Stop cards, a trip's bus, a ride aboard and the planner's live buses read
-  the same fix (`bus.mjs busEtaMended`, in place of `busEta`: up to 8 lagging
-  routes, never waiting past 2.5 s), so a frozen feed is felt nowhere. The
-  routes' GPS asked within a moment go as one ask a city (`routeGps`,
-  `api.mjs busGps`: the Worker's `/transit/gps` reads a city's whole list
-  once for every route and every phone, 公路客運's by its routes), once in
-  each 20 s of the clock (a bus sends its place each 20 s), saying how old
-  the copy is (`had=`): a stop card read TDX's GPS 24 → 17 times in 3
-  minutes (2026-11-06), and a crowd at different stops reads it once a city.
-  Today and the next day on one line (`bus-ui.mjs` `nexts`, `doneToday`):
-  the stops today's last bus has passed are the next day's (the line grey
-  there, the day said once where they begin); where today's begin, that bus
-  by the timetable as a ring on the line and 末班車. Today's last is kept 15
-  minutes past its time until a bus is seen beyond the stop (it shows up live
-  only once it's out). 今天已收班 only when no stop has a run still to come.
-- **追公車** (`lib/chase.mjs`): a plan's first bus, walked to, due within the
-  hour: a YouBike to a stop further along its way (within 4.5 km of you)
-  where TDX sees a bus ahead of the one you'd make (a stopped feed never
-  counts), there with room to spare (`chaseSlack`: 2 minutes, 15% of the
-  trip there and 10% of the bus's countdown, 4 at least), listed only when it
-  gets you in clearly sooner (`chaseGain`: 8+ minutes and half the riding),
-  ranked with a 4-point `race` (Jay 2026-11-06: it flipped and was too tight).
-  Steady: a chase leaves now while it keeps room (`chaseNow`); re-timed, it
-  keeps that very bus with `chaseHold` to spare or is `lost` and hands its
-  card to the near stop (`adjustPlan`, `rollPlans`); found again (a replan,
-  the planner's later round, on 交通 and the map's card) the stop the card
-  showed keeps it unless the other is 10 minutes sooner (`steadyLead`).
-  Never offered while navigating, and never on a replan under way
-  (`planTrip`'s `chase: false`; Jay 2026-11-06: "not force me to go further").
-  YouBike ideas are by station place (`plan.mjs`); rivers are crossed by
-  the nearest bridge (`rivers.mjs`). Which station: the walks by the streets
-  and the rides by the roads (`api.mjs bikeRides`: OpenStreetMap's bike
-  router, one table ask from the stations near the start to those near the
-  end and the end itself, inside the planner's 1.5 s for the walks; a ride's
-  length then the roads', `rideLeg`); the straight line and its guess at a
-  station past the door (`back`) only where they aren't in (Jay 2026-11-07:
-  博愛街 → 成功九街 back at 新竹縣體育場 where 成功國中 is by the door: Google's
-  walk matrix answered 403, so the walk was OpenStreetMap's 460 m round the
-  school, not Google's 267 by the lane; the proxy now asks Compute Routes a walk
-  each then; `tests/bike-roads.test.mjs`). A walk kept on the phone that Google
-  didn't answer is asked again after 6 hours (`api.mjs WALK_RETRY_MS`; 11-09
-  the 460 m still stood: `tests/walks-retry.test.mjs`). TPASS counts as free (`tpass.mjs`).
-  A plan's price line: our own trains at their real fares when it's trains
-  alone, the planner's never then (Google priced 普悠瑪 107 新竹 → 彰化 at the
-  區間's NT$213, 查時刻 NT$331; Jay 2026-11-06), else the planner's own fare, else
-  ours (`raildata.mjs planFare`, `tpass.mjs fareOf`, TDX's ODFare as 查時刻's, read while the
-  buses are looked at; a bus or the metro beside them unpriced makes it
-  `NT$… 起`); the ranking still costs trains by distance (`tests/cross-county.test.mjs`).
-  The facts line under a plan wraps between facts, never inside one.
-  A train is drawn through its own stops when it stops between (`roadLegs`:
-  a planner's shape passing a stop by 1.5 km is replaced; 普悠瑪 107 by the 山線, not the 海線).
-  Nothing within three hours (a place in the country past its station, no bus
-  on from it and no YouBike there: 台北 → 池上's 伯朗大道): the trains with a
-  walk up to 6 km at the end (`RAIL_FAR_WALK_M`), beside tomorrow's ways.
-  Into a metro's area (台北・新北, 桃園, 台中, 高雄), our trains go on by our
-  metro router from each of their stops there (`planner.mjs trainThenMetro`:
-  高鐵 to 台北 then the 淡水信義線 to 101, over 高鐵 to 板橋, 區間 to 松山 and a
-  YouBike; Jay 2026-11-06), ranked with the rest; the metro's network asked at
-  the start (`metroWarm`), never waited on past 1.5 s (`tests/train-metro.test.mjs`).
-  A 高鐵 ridden past the place and back by another train (0149 skips 台南: to
-  左營, back by 自強) is dropped when a way that doesn't ride past gets in
-  within 15 minutes of it (`plan.mjs overshoots`, `dropOvershoots`).
-  偏好電輔車 (the ⚡ after the plans card's ways of moving, this search's
-  own): of stations about as near, one with 電輔車 there now, ridden at
-  their pace (`plan.mjs` `PREFER_SEC`). 我的's 偏好電輔車 (`prefs.ebike`, off by
-  default, Jay 2026-11-04) is where it starts: on, every search and saved trip
-  prefers them (`planTrip`'s `ebike` unsaid = the pref) and station cards count
-  電輔車 first (`look.mjs ebikeFirst`, handed the pref by `app.mjs`).
-- **指定車次** (`lib/ticket.mjs`, `planner.mjs planTicket`, Jay 2026-11-03:
-  "some train you buy ticket, HSR as well"): the plans card's time chip →
-  指定車次: a 台鐵 or 高鐵 number typed, the day picked, the day's trains with
-  it listed from the timetable already loaded (no read of its own), on and
-  off at the stops nearest the trip's ends (two pickers to change them). Or
-  查時刻's 用這班規劃路線 under a journey's steps (its trains, to its last
-  station). The trip is that train: to its station 3 minutes before (高鐵 5)
-  by a walk within 800 m, else the planners' ways there by then (never on the
-  ticket's own train); then on from where it gets in as any trip from that
-  station; ranked together. The chip shows the train; 現在出發 clears it.
-  Inside a TPASS area the train list and planner still keep to the pass's
-  trains (查時刻 says so, with 全部班次 a chip away, `· TPASS` on the ones it
-  covers); a ticket's train is never filtered.
-- **On board** (`lib/aboard.mjs`, Jay 2026-11-03): 規劃 from 你的位置 while
-  on a bus or train plans from it, never from the point on the track. A train:
-  the last 2½ minutes of fixes (`api.mjs recentFixes`) at a train's pace and
-  today's train where you are going your way (`trainAboard`: timetable plus
-  the delays of the three trains that could be it, `trainsNear`, each its own
-  read, `traTrain`, those in by 1½ s). A bus: faster than a bike between two fixes, every fix along a
-  route's stops going its way, and TDX's estimate of that route's bus at the
-  stop just ahead matching when you'll be there (`busesAboard`); two routes
-  that fit are chips to pick. The ride to the stop nearest the place (and one
-  more a kilometre off), then a trip planned from there (`planAboard`, the
-  same ride boarded again joined on: `joinRide`). Navigation starts on the
-  ride (`aboard` on the first leg). 不在車上 plans from the street; the metro
-  (no fixes underground) as before; never a trip started by itself.
-- **Speed:** the first plans wait at most 1.5 s on the buses' live times
-  (`planner.mjs FIRST_WAIT`), the rest come with the second round.
-- **What's shown stays** (`lib/steady.mjs`; Jay 2026-11-06: "it update the
-  trip in front of me which is bad", "the first show is the final result"):
-  the plans card and 交通's trip cards wait for the second round before their
-  first show (`settled`, up to 6 s past the first round, the skeleton or the
-  trip's last ways meanwhile); ways set aside as gone and a trip's later
-  stretches before it too. Anything found after that (a slow second round,
-  the real ways over a trip's last ways) is merged in place (`steadyPlans`):
-  each way shown keeps its place, rank and labels, only its times change; a
-  new way comes in quietly at the end, never 推薦; the way open stays open
-  (`samePlanAt`). The phone keeps the ways as ranked, so the next opening ranks
-  afresh (`tests/steady-plans.test.mjs`).
-- **Planned once:** a saved trip's ways are kept and re-timed live. The
-  billed planners are asked again only when the ways could differ.
-- **Ranking** (`plan.mjs rank`), in two steps:
-  1. Fold the ways a person wouldn't take (bus to bus when there's another
-     way; a pointless change; a far-behind way; a river ride beside a
-     direct crossing; a ride for nothing beside a short walk).
-  2. Order what's left by door-to-door minutes plus a small table of
-     bother (`scoreParts`).
-  **下雨改搭車** (`lib/rain.mjs`, Jay 2026-11-10, the family's links): Orbit
-  Weather tells the family's notebook where rain is due (`weather.rain`: each
-  of its places' wet stretches, the radar's then the hours at 50%+); a trip
-  with a Weather place within 8 km of either end (`rainFor`) costs a YouBike
-  ride or a walk of 3 minutes or more in the rain more (`rainCost`, the
-  score's `rain`), so a bus or the metro comes first; its card marks those
-  legs with a drop and says 會淋雨 (`markWet`). Nothing known: as before.
-- **Navigation** (`nav.mjs`, `navlive.mjs`): the whole trip on the map,
-  each step moving on by itself (on board only once two fixes say so; a
-  rough fix moves the dot, never the trip), countdowns, the stops to go, a buzz (a
-  chime on iPhone) before yours. A 台鐵 train followed: its own delay alone
-  (`raildata.mjs traTrain`, 台鐵's own 車次查詢 through the Worker, no TDX).
-  Never every 台鐵 train at once (TDX's whole board: off TDX, 2026-11-10): a
-  ride's, a pin's and 查時刻's delays come from the boards of the stations
-  they leave from and get to (`traLive(ids)`, 台鐵's own 車站時刻 through the
-  Worker; a station's map card the same, with no platforms). On board, where you are along the ride
-  (`navlive.mjs rideAlong`, `rideOn`) is looked for only near where it last
-  had you: a route that comes back past itself (a loop, out one street and
-  back on its pair) never has you off early or back at stops passed. Missed bus → the next; on an earlier
-  train than planned → the changes after it moved sooner; waiting for a
-  train, a sooner one still to come is taken, except a train you picked
-  (`pickedPlan`: a later one chosen over an earlier one on the plans card or
-  交通's 其他班次, 指定車次, 改搭別班; `leg.picked`), kept as chosen. A bus you can't
-  make (`pastHurry`: later than you'd hurry back) says 趕不上了, never 快一點.
-  **出狀況, one card** (`lib/trouble.mjs`, Jay 2026-11-06: missed or wrong
-  bus, "not limited to bus"): a bus, train or metro you can't make or that's
-  gone shows 趕不上 X with two rows, each with when you're there: 下一班 (the
-  same line's next run from the same stop; taken by itself once the one
-  planned is gone, ticked) and 最快 (the quickest way from where you are,
-  planned whole by tab-map `navFastest`, no 追公車; dropped when it isn't a
-  minute sooner than 下一班). To be there by a time: late rows say 晚 N 分,
-  and a way gone late asks 最快 (`late`). No bike or dock within 500 m: 最快
-  (`bike`). At its stop, then moving at a bus's or train's pace away from it
-  and off its way, or on board and off its way at speed: 好像搭錯車了？
-  (`wrongRide`, `offKind`), 從這裡重新規劃 planned from the ride you're on
-  (aboard.mjs, leaving now); at a walk: 好像已經下車了？; away from it all:
-  不照這條路走了？. The card shows once it's whole, then only times move; ×
-  is never asked again for that run. Steps still move only by GPS.
-  **Replays** (`tests/navreplay.mjs`): navigation records each trip
-  (`state.trace`: the plan, every fix, steps reached, cards shown; 除錯紀錄
-  `navtrip`); `node scripts/replay-nav.mjs <log.json>` drives it again through
-  today's code (logs stay in captures/); `tests/nav-replay.test.mjs` replays
-  `tests/fixtures/trips/*.json` (made on 快捷8號's real route by
-  `scripts/trip-fixture.mjs`) against what each should do.
-  A trip with stops is one trip: the chips run on past each stop; the
-  bottom bar's time is the next stop's (`到 墨竹亭 還要 …`, `stopShort`; Jay
-  2026-11-07: "full trip length should be about when I arrive my first
-  stop"); a step ahead tapped shows its own length and time, the trip's
-  times kept from the step you're at (`state.reached`; Jay 2026-11-07: "when
-  I click walk it though I gonna walk from where I am now"); each stop has its pin on the map (a size down
-  from the end's) and every leg after it its roads, as the first stretch's
-  (`tab-map roadLegs` over `tripLegs`, a road kept by its ends for the
-  stretch's re-timed copies, `roadsKnown`; Jay 2026-11-07: "after that
-  destination it's all straight line"; `tests/stop-roads.test.mjs`); each
-  step after a stop a tap that shows it on the map (`peek`, the step you're
-  at kept), and on a ride the trip's own YouBike stations to its last place
-  (`navLook`); a trip under way whose stretches after a stop came from an
-  older way of planning has them planned again when it's opened (`PLAN_V`,
-  `laterIn`; Jay 2026-11-07: "I want my current trip to get the update";
-  `tests/nav-later-peek.test.mjs`); on a YouBike to a stop, 到了要還車嗎 (停著 or
-  還車, with which is sooner) in its last 5 minutes (`parkAsk`). Off the plan your
-  own way (`offPlan`): a bike's pace on a walk → on the YouBike step; heading
-  for a later walk's end or the next stop → that step; heading nowhere on it →
-  從這裡重新規劃 asked. Where you are is checked again every 20 s as on opening
-  half way (a late train boarded after it was taken as missed); a rough fix
-  far from the stop you were waiting at counts; a fix stamped over 30 s old
-  (an iPhone back from sleep hands over its last one) moves nothing (`api.mjs
-  fixAt`); a ride is missed only when you're seen at its stop a minute after it
-  left; a train you're found on while the planned one hasn't left yet is the
-  nearest running by its clock out to 15 km (an express drawn straight between
-  far stops; Jay 2026-11-07, 普悠瑪 107 past 香山 taken for 自強 105 at 新竹:
-  `tests/nav-woke-aboard.test.mjs`); a train changed mid-trip moves what follows
-  by its arrival and its line is found again (`tab-map navDraw`). 台鐵's track is
-  OpenStreetMap's (`public/rail-tra.json`, 25 KB, `node scripts/rail-osm.mjs`;
-  ODbL, credited in README: no source named on screen, TRUTH §7), tried before TDX's broken pieces (`shapes.mjs
-  railPack`, `railGroups().first`); a train's way drawn before it is drawn again
-  (`tab-map TRACK_V`). A one-time trip goes 20 minutes after its time
-  (`store.mjs tripOver`; Jay 2026-11-07, it stayed all day offering other trains
-  while he rode the one pinned); fresh fixes only, and a watch
-  silent 10 s is started over (twice as long each time it stays silent, up to a minute);
-  one that hasn't answered yet (the location ask may be up) is left a minute, never a second ask over the first. Late for an
-  arrival time → 最快 on the 出狀況 card. It resumes after the app
-  is swiped away and tells the lock screen. 編輯行程 while navigating: a stop
-  added, or the one you're heading to taken off or changed, re-routes and
-  starts the new directions by itself.
-- **Bikes at the next station** (`nav.mjs` `bikesText`): its counts;
-  換附近的站 asked only when 2 or fewer are left (a 電輔車 ride: its own),
-  else the count itself is the tap. The tap takes the station the planner
-  would (`swapPick`: your walk to it and the ride on, more than 2 bikes where
-  any has), never the nearest to the old one (Jay 2026-11-09: 文興路莊敬南路口
-  behind him), and the leg keeps the station (`rent`/`ret`) so its pin moves. Everywhere a station shows, 一般, 電輔車
-  and 空位 are three columns apart; YouBike wears its own logo everywhere but
-  the map, whose pins keep the bike glyph.
-- **YouBike rental timer** (`rental.mjs`): starts by itself while
-  navigating. With TPASS's free half hour, it warns at 25 minutes and
-  offers nearby docks to swap: navigating, 附近換車 on the timer's line
-  (the docks your way, one tapped cuts the ride there: `splitRide`).
-- **到站提醒** (`alerts.mjs`): "tell me when the 5608 is 5 minutes away";
-  the Worker checks every 2 minutes while the phone is locked.
-- **Data:**
-  - live: TDX through `/transit/tdx`, cached on the Worker; buses due through
-    `/transit/eta` (`api.mjs busEta`): the Worker answers 新竹's, 臺北's,
-    新北's from the cities' own sites (Core `transit-free.js`); 臺中's, 桃園's and 臺南's
-    the phone reads itself from the cities' bus sites (`ebbus.mjs`, loaded only when asked:
-    the kit's reader `ebus-read.mjs`, the Worker's too; routes asked within a moment one read;
-    times and buses' places), the Worker's for what it can't answer and for 5 minutes after
-    a site fails (`tests/ebbus.test.mjs`; Jay 2026-11-10: what a phone can read, it reads); 高雄's
-    the phone reads itself from the city's ibus site, which answers only Taiwan's own networks
-    (`khbus.mjs`, loaded only when asked: TDX's ids from the site's, each estimate worded as
-    the proxy words 臺中's, kit `ebus.mjs`; buses' places too, `busGps`), the Worker's for
-    what it can't answer and for 5 minutes after it fails (`tests/khbus.test.mjs`); else
-    a quiet city's stops or routes from TDX's filtered read, a busy city's from
-    one read of the whole city (公路客運 always by its stops); the phone asks the same thing
-    once a beat at most, and the routes asked within a moment as one ask a
-    city (`routes=`; a plan's buses were five to ten asks, 2026-11-06); where
-    a city's estimates come every 30 s (新竹, 新竹縣, 公路客運), not again
-    until the next can be there (each city's rhythm learnt from its answers;
-    a stop whose rows sat one out, again once it's surely at TDX, 5 s on),
-    and an ask says how old the phone's copy is (`had=`: the Worker reads TDX
-    then if its own is no newer); `tests/bus-asks.test.mjs`, `bus-quiet.test.mjs`,
-    `scripts/bus-rhythm.mjs` (the rule against TDX's timing, a stop card's
-    asks before and after);
-  - bus routes and timetables: weekly packs in R2 (`packs.mjs`, built from
-    TDX's free GTFS on GitHub: Core `tools/gtfs-buses.mjs`; 新北's ways
-    TDX doesn't time filled from 新北's own route list, Core `builders/ntpc.js`).
-    The metros' maps and timetables, 高鐵's days, a city's route list and the
-    rail stations are the Worker's copies in R2 too (Core `transit-free.js`),
-    asked the same way through `/transit/tdx`: nothing here changed for them.
-    So are the metros' live boards, from the operators' own (臺北's open
-    file, 高雄's 高捷e遊行 a station at a time, 機場捷運's platform screens),
-    in TDX's shape; a board's every live train a way, soonest first, before
-    the timetable's (`metro.mjs withLive`).
-    A route sheet's 時刻表 at a stop not timed itself (most of 台北, 新北,
-    桃園, 台中 list only the first stop) is the first stop's plus the ride,
-    said 依起站…推估 (`live.mjs stopTable`; 988, Jay 2026-11-09); the bus
-    stations (the map's stops, the stops near you: `bus.mjs stationsNear`)
-    from weekly 0.05° tiles in R2 (`packs.mjs stationRows`, Core
-    `builders/buses.js cityStations`), never TDX's advanced search around
-    each new ~200 m, asked only when a tile can't be had
-    (`tests/map-stops.test.mjs`);
-  - what's near a point: worked out on the phone (`near.mjs`); the buses at
-    the stops near you (附近, `bus-ui.mjs nearStops`) and at a plan's stops
-    (`etaAround`) through `/transit/eta` too, never TDX's advanced search of
-    the buses around a point (7.5 basic asks' points, made each ~100 m and
-    20 s, never shared: most of a phone's TDX points on 2026-11-06;
-    `tests/near-stops.test.mjs`); the map's shelves aren't read while a card
-    or the search's results cover them (`tab-map.mjs shelvesShown`);
-  - line shapes: `shapes.mjs` (packs and shapes read with the kit's
-    `packJson`; a piece TDX draws there and back, 六家線, cut into its two tracks);
-  - the map: Google under the month's cap, else NLSC. Google's places keep
-    their own colours (greyed for an hour on 2026-11-06: Jay "I hate it");
-    its own bus stops off in light and dark (`map.mjs mapStyles`,
-    `tests/map-style.test.mjs`). A tap on one of its places
-    (`tab-map.mjs googlePlace`) opens its card at once, the station lists
-    waited on 250 ms at most (a station near it opens ours); its name from
-    `/transit/place` (除錯紀錄 `place-tap`: how long, `spot-tap`: a tap on
-    nothing). A place's or a spot's card shows the YouBike near it, never
-    its bus stops (Jay 2026-11-06: "unhelpful");
-  - walks: Google's streets, OpenStreetMap past the cap; asked from a
-    spot on a ~40 m grid (`planner.mjs spotOf`, the map's `fromHere` too),
-    so a plan finds the walks the map's YouBike strip asked (a plan's 15 → 10).
-- **Offline:** covered (`onlineOnly`); never old bus times.
-- **Saved:**
-  - On the Pass (`store.mjs`, `t1:`, up to 200,000 characters): groups,
-    pins, trips, preferences.
-  - On the phone: `ot.trips.v2` (planned ways), `ot.nav.v1` (navigation).
-
-## Decisions in force
-
-- What isn't running comes from the operators' own notices (TDX Alert/News),
-  never guessed (`service.mjs`): 台鐵's stopped trains leave the day's
-  timetable (TDX's own lags: 內灣線 still listed on 2026-10-23), those run
-  "視風雨情形" keep a 視天候行駛 tag; a bus route a notice stops is 今日停駛
-  everywhere and never planned, unless a bus is seen on the road. A notice
-  that says 部分, 減班, a time of day and the like is shown, never a stop.
-  The banner rows (交通, 火車, 公車, 捷運) open to the notice as written.
-  臺中's and 高雄's bus notices the phone reads itself from the cities' own bus
-  sites (`ebnotice.mjs`, loaded only when asked; 高雄's answers only Taiwan's
-  networks, and asks a route at a time when its site wants that), worded as the
-  proxy words them (kit `ebus.mjs`); the Worker's for what they can't answer and
-  for 5 minutes after one fails (`tests/ebnotice.test.mjs`).
-
-- Judged by how the owner really travels. Every real choice is shown, with
-  official names, times and live data first.
-- A plan costs what it costs a person, in minutes:
-  - Waiting at home counts a third while short; past 15 minutes, as lost
-    time.
-  - Changing onto a train is easy, onto a bus a gamble, bus to bus barely
-    a plan.
-  - Walking past 5 minutes is slow.
-  - YouBike: 10 minutes is nothing, 18 a workout; past 30, each minute
-    counts 4.5×. Two short rides beat one long one.
-  - Never race your own train to the next station.
-- Walking pace is 5 km/h. One walk reads the same everywhere it's shown,
-  by Google's streets.
-- YouBike is planned by station place, except a trip that starts on the
-  bike: never at a station with no bike now.
-- A trip with stops is planned whole. One kept YouBike through the stops
-  is recommended unless a stop is far, or walking it all is sooner.
-- Buses come early or late, trains on time (Jay 2026-11-03): at a bus stop
-  5 minutes before its timetable time, 2 before a bus seen live. A bus seen
-  gone is never offered again, and never "hurry" when hurrying can't make it.
-- A trip with stops is navigated as one trip (Jay 2026-11-03), the YouBike
-  kept or returned at a stop as you choose.
-- Train or bus, then a ride over 頭前溪, is listed when it's 5 minutes
-  sooner. At most one of each, under the recommendations.
-- A ride over 頭前溪 after a bus is recommended when nothing else is close
-  (竹東南 → 成功九街: 5608 and a 20′ ride). A way folded itself (bus then
-  bus) never hides it.
-- There is always a recommendation.
-- 高鐵 is never free; our own trains are costed by distance in the ranking.
-- Looking ahead on a ride keeps following it, and returns to the ride
-  with a buzz when your stop is next.
-- An arrival time nothing reaches any more: the ways leaving now, each
-  saying how late.
-- Navigation never takes the app over: the tabs stay, and it shrinks to a
-  bar. The map never pulls you back once a finger has moved it.
-- The map opens on where you are and follows you. iOS is asked for the
-  location unprompted once, never at every launch.
-- Status bar `black`, with a solid strip on the map tab too.
-- Every screen, either way up (Jay 2026-10-31): on a wide screen (640 px and
-  up) the map's sheet is a panel at the map's left, beside the tab rail, as
-  Maps on an iPad: on a phone on its side it keeps its three stops, on a
-  tablet or a computer it is pinned whole, as tall as what it holds
-  (`sheet.mjs` `pinned`, `tab-map.mjs` `SIDE_Q`/`PIN_Q`, `covered()` for what
-  the map frames around); navigation's cards stand in its place. 交通, 我的 and
-  查時刻 lay out in two columns (`transit.css` §11): 交通's 要去哪裡 and places
-  across the top (`.q-span`), the trips beside the pins level under it (no pins:
-  the trips the width, their cards side by side, `.ob-solo`); 查時刻's 最近 under
-  the question beside the trains (`.ot-tq-recent-side`; after them on a phone).
-  Jay's iPad 2026-11-11.
-- Logs hold places: keep them in `captures/` (git-ignored).
-- Taxis never.
+- **地圖:** YouBike stations (live counts read by the phone from YouBike's own `parkingInfo`; the proxy's TDX counts if it fails; `bike.mjs`), every bus stop with live times (stations from weekly 0.05° tiles in R2, `packs.mjs stationRows`), train and metro stations, search (`uniqueResults`), pins, a trip planned from anywhere. The map is Google under the month's cap, else NLSC (`map.mjs`).
+- **交通** (`lib/board.mjs`): trips as cards with when to leave (`tripWhy`, `lastGuess` for an instant first paint, `tripLate`), 其他班次 (`otherWays`), pins; 建議 (`lib/suggest.mjs`, learning on the kit's `feedback.mjs` as `fb:transit`; `node scripts/backtest-usual.mjs --against <ref>`).
+- **查時刻:** 台鐵/高鐵 station to station (`trainNow`, `traDelays`), 查車次, line maps (`linemap.mjs`), bus routes and stop timetables (`findRoutes`, `stopTable`), 捷運 as metro maps (`metromap.mjs`, worked out by `scripts/metro-maps.mjs` into `metro-drawings.mjs`; `metro-ui.mjs`).
+- **Planning** (`lib/planner.mjs`): Google's and TDX's planners side by side with our own 台鐵/高鐵 router (`rail.mjs`, Connection Scan) and metro router (`trainThenMetro`); walks (`walkPlan`, Google, else OpenStreetMap); buses re-timed by TDX's live estimates (`adjustPlan`, `live.mjs seenAt`, `nextCatchable`, `boardEarly`); a stale feed (`ETA_STALE` 4 min, `ETA_GHOST` 15) never shown as live; lagging buses re-counted from GPS (`lib/busgps.mjs gpsFix`); YouBike stations by street walks and road rides (`api.mjs bikeRides`); fares (`raildata.mjs planFare`, `tpass.mjs`); 追公車 (`lib/chase.mjs`); 指定車次 (`lib/ticket.mjs`); on board (`lib/aboard.mjs`). The first plans wait at most 1.5 s (`FIRST_WAIT`); a saved trip's ways are kept and re-timed live.
+- **Ranking** (`plan.mjs rank`): fold the ways a person wouldn't take, then order by door-to-door minutes plus a small table of bother (`scoreParts`), rain included (`lib/rain.mjs`).
+- **Navigation** (`nav.mjs`, `navlive.mjs`): the whole trip on the map, steps moving by GPS (`rideAlong`, `rideOn`, `offPlan`, `fixAt`), 台鐵 delays from 台鐵's own boards through the Worker (`traTrain`, `traLive`), `pickedPlan`, `pastHurry`, the 出狀況 card, stops (`stopShort`, `peek`, `parkAsk`, `PLAN_V`), resumes after the app is swiped away. Replays: `node scripts/replay-nav.mjs <log.json>`; `tests/nav-replay.test.mjs` replays `tests/fixtures/trips/`. 台鐵's track is OpenStreetMap's (`public/rail-tra.json`, `scripts/rail-osm.mjs`, ODbL credited in README).
+- **Timers and alerts:** the YouBike rental timer (`rental.mjs`, `splitRide`); 到站提醒 (`alerts.mjs`, checked by the Worker every 2 minutes).
+- **Data:** live TDX through `/transit/tdx`, cached on the Worker; buses due through `/transit/eta`: 新竹, 臺北, 新北 from the cities' own sites (Orbit-Core `transit-free.js`); 臺中, 桃園, 臺南 read by the phone from the cities' bus sites (`ebbus.mjs`, kit `ebus-read.mjs`), 高雄 by the phone from its ibus site (`khbus.mjs`), the Worker's as fallback; routes asked together, once a beat at most, `had=` saying the copy's age (`tests/bus-asks.test.mjs`, `bus-quiet.test.mjs`). Bus routes, timetables and shapes: weekly packs in R2 built from TDX's free GTFS (Orbit-Core `tools/gtfs-buses.mjs`, `builders/ntpc.js`), read with the kit's `packJson` (`packs.mjs`, `shapes.mjs`). Metros' maps, timetables and live boards, 高鐵's days and rail stations: the Worker's copies (`transit-free.js`). What's near a point is worked out on the phone (`near.mjs`). Notices: TDX's and, for 臺中 and 高雄, the cities' own (`ebnotice.mjs`). The family: Weather's rain, Money's 車資記帳 (`transit.ride`), the planner opened by `#plan` (kit `planHash`) from Class, Sports and the Pass.
+- **Saved:** on the Pass (`store.mjs`, `t1:`, up to 200,000 characters): groups, pins, trips, preferences; on the phone `ot.trips.v2`, `ot.trips.last.v1`, `ot.nav.v1`. **Offline:** covered (`onlineOnly`); never old bus times.
 
 ## Files (`public/`)
 
