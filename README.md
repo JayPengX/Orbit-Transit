@@ -17,14 +17,20 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 
 <p align="center">
   <img src="docs/screenshots/transit-1.webp" width="30%" alt="Your trip on Google Maps">
-  <img src="docs/screenshots/transit-2.webp" width="30%" alt="The fastest way, at a glance">
-  <img src="docs/screenshots/transit-3.webp" width="30%" alt="Every train between two stations">
+  <img src="docs/screenshots/transit-2.webp" width="30%" alt="Just say where you're going">
+  <img src="docs/screenshots/transit-3.webp" width="30%" alt="The fastest way, at a glance">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/transit-4.webp" width="30%" alt="How long until the bus">
-  <img src="docs/screenshots/transit-5.webp" width="30%" alt="YouBike docks, live">
-  <img src="docs/screenshots/transit-6.webp" width="30%" alt="Live trains at the station">
+  <img src="docs/screenshots/transit-4.webp" width="30%" alt="Every train between two stations">
+  <img src="docs/screenshots/transit-5.webp" width="30%" alt="How long until the bus">
+  <img src="docs/screenshots/transit-6.webp" width="30%" alt="YouBike docks, live">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/transit-7.webp" width="30%" alt="Live trains at the station">
+  <img src="docs/screenshots/transit-8.webp" width="30%" alt="Metro maps, true to the lines">
+  <img src="docs/screenshots/transit-9.webp" width="30%" alt="High-speed rail, booked through">
 </p>
 
 <details>
@@ -32,20 +38,28 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 
 <p align="center">
   <img src="docs/screenshots/transit-1.zh.webp" width="30%" alt="路線畫在 Google 地圖上">
-  <img src="docs/screenshots/transit-2.zh.webp" width="30%" alt="最快的走法，一眼看懂">
-  <img src="docs/screenshots/transit-3.zh.webp" width="30%" alt="兩站之間每一班車">
+  <img src="docs/screenshots/transit-2.zh.webp" width="30%" alt="用說的查路線">
+  <img src="docs/screenshots/transit-3.zh.webp" width="30%" alt="最快的走法，一眼看懂">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/transit-4.zh.webp" width="30%" alt="公車還要等多久">
-  <img src="docs/screenshots/transit-5.zh.webp" width="30%" alt="YouBike 即時車位">
-  <img src="docs/screenshots/transit-6.zh.webp" width="30%" alt="車站即時班次">
+  <img src="docs/screenshots/transit-4.zh.webp" width="30%" alt="兩站之間每一班車">
+  <img src="docs/screenshots/transit-5.zh.webp" width="30%" alt="公車還要等多久">
+  <img src="docs/screenshots/transit-6.zh.webp" width="30%" alt="YouBike 即時車位">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/transit-7.zh.webp" width="30%" alt="車站即時班次">
+  <img src="docs/screenshots/transit-8.zh.webp" width="30%" alt="捷運路網，照真的路線畫">
+  <img src="docs/screenshots/transit-9.zh.webp" width="30%" alt="高鐵訂位一路帶到底">
 </p>
 
 </details>
 
 ## Features
 
+- **Orbit AI:** 用說的查路線: say where and when (明天早上八點從新竹車站到台北101); plain phrases are read by code, a time by AI, shown as understood before 看路線. 下雨改搭車: rain due on the way (from Orbit Weather, on the phone) puts a bus or the metro before a YouBike or a long walk, the wet legs marked with a drop. 這班為什麼慢: a late train's 晚 N 分 opens where it is and when it reaches you.
+- **With the family:** a fare you set out on is offered to Orbit Money as a 交通 entry (車資記帳); other apps open a trip to a place (`#plan?to=`), and 問 Orbit's question opens 用說的查路線 asked.
 - **Map:** every bus stop with live arrival times, YouBike stations with regular bikes, e-bikes (電輔車) and docks counted apart (the five nearest along the bottom), train and metro stations, search and your pins.
 - **Trip planning** across bus, 台鐵, 高鐵, the metros and YouBike, ranked by door-to-door minutes and how much bother each way is, first plans in a second or two. There is always a recommendation.
 - **建議 learns where you go:** a place you often go at about this hour comes up first as 常在這時候去.
