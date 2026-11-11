@@ -417,3 +417,6 @@ html[data-look='native'] .ot-fab {
   backdrop-filter: none;
   box-shadow: 0 0 0 0.5px var(--nv-edge, rgba(255, 255, 255, 0.08)), 0 4px 14px rgba(0, 0, 0, 0.28);
 }
+/* 這班為什麼慢: a late 台鐵 train's 晚 N 分, a tap with the Orbit AI mark (lib/slow.mjs). */
+.ot-late.ot-slow { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+.ot-late.ot-slow svg { flex: none; width: 12px; height: 12px; }

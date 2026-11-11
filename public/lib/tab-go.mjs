@@ -12,12 +12,13 @@
 // What's recommended is never pinned by itself: ☆ pins it.
 
 import * as kitUI from '#kit/ui.mjs';
-import { errorText, liveMs } from './api.mjs';
+import { errorText, liveMs, tdx } from './api.mjs';
+import { traAlertsNow, alertsOn, slowSpec } from './slow.mjs';
 import { stopsEta, etaRank, etaFor } from './bus.mjs';
 import { nearBikes } from './near-ui.mjs';
 import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
-import { railNetwork, railSpan, traDelays } from './raildata.mjs';
+import { railNetwork, railSpan, traDelays, traTrain } from './raildata.mjs';
 import { journeys } from './rail.mjs';
 import { planTrip } from './planner.mjs';
 import { setTripPush } from './alerts.mjs';
@@ -301,14 +302,14 @@ async function trainPins() {
         const js = journeys(net, [{ key: from, at: now }], [{ key: to, extra: 0 }], now, { n: 3 });
         S.trains.set(p.id, { rows: js.map(j => {
           const rides = j.legs.filter(l => !l.walk);
-          return { dep: j.dep, arr: j.arr, label: rides.map(l => trainName(l.trip).replace(/ /g, '\u00a0')).join(' › '), delay: rides[0]?.trip.sys === 'tra' ? delays.get(rides[0].trip.no) || 0 : 0, sys: rides[0]?.trip.sys || '', type: rides[0]?.trip.type || '', no: rides[0]?.trip.no || '' };
+          return { dep: j.dep, arr: j.arr, label: rides.map(l => trainName(l.trip).replace(/ /g, '\u00a0')).join(' › '), delay: rides[0]?.trip.sys === 'tra' ? delays.get(rides[0].trip.no) || 0 : 0, sys: rides[0]?.trip.sys || '', type: rides[0]?.trip.type || '', no: rides[0]?.trip.no || '', stops: (rides[0]?.trip.stops || []).map(s => s.st), first: rides[0] ? trainName(rides[0].trip) : '', arrAt: rides.length === 1 ? j.arr : null };
         }) });
       } else {
         // That train today (or tomorrow, after it's gone): its times at your two stations.
         const runs = net.trips.filter(t => t.sys === p.sys && t.no === p.no);
         const times = runs.map(t => ({ a: t.stops.find(x => x.st === from), b: t.stops.find(x => x.st === to) })).filter(x => x.a && x.b && x.a.dep > now - 60_000);
         const x = times[0];
-        S.trains.set(p.id, { rows: [{ dep: x ? x.a.dep : null, arr: x ? x.b.arr : null, label: x ? W(`${p.type || ''} ${p.no} 次`, `${trainKind(p.type || '')} ${p.no}`).trim() : W(`${p.no} 次今天不開或已過`, `Train ${p.no}: none today or gone`), delay: p.sys === 'tra' ? delays.get(p.no) || 0 : 0, sys: p.sys, type: p.type || '', no: p.no }] });
+        S.trains.set(p.id, { rows: [{ dep: x ? x.a.dep : null, arr: x ? x.b.arr : null, label: x ? W(`${p.type || ''} ${p.no} 次`, `${trainKind(p.type || '')} ${p.no}`).trim() : W(`${p.no} 次今天不開或已過`, `Train ${p.no}: none today or gone`), delay: p.sys === 'tra' ? delays.get(p.no) || 0 : 0, sys: p.sys, type: p.type || '', no: p.no, stops: (runs[0]?.stops || []).map(s => s.st), arrAt: x ? x.b.arr : null }] });
       }
     }
   } catch (err) {
@@ -719,7 +720,7 @@ function boardTrains() {
     const main = `${e(stationLabel(p.from))} → ${e(stationLabel(p.to))}`;
     if (!x) return boardRow({ glyph: p.from.sys === 'hsr' ? 'hsr' : 'tra', color: p.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, main, note: e(!got ? W('載入中…', 'Loading…') : got.error || W('今天沒有車了', 'No more trains today')), attrs: `data-times="${e(p.id)}"` });
     const sys = x.sys || p.from.sys;
-    const note = [e(x.label), x.delay ? `<span class="ot-late">${e(W(`晚 ${x.delay} 分`, `${x.delay} min late`))}</span>` : '', ''].filter(Boolean).join(' · ') + (y ? `<span class="ot-drop"> · ${e(W(`下一班 ${hm(y.dep)}`, `then ${hm(y.dep)}`))}</span>` : '');
+    const note = [e(x.label), x.delay ? `<span class="ot-late${x.sys === 'tra' && x.no ? ' ot-slow" role="button" tabindex="0" data-slow="' + e(p.id) + '" aria-label="' + e(W('這班為什麼慢', 'Why it’s late')) + '">' + (kitUI.icons?.ai || '') : '">'}${e(W(`晚 ${x.delay} 分`, `${x.delay} min late`))}</span>` : '', ''].filter(Boolean).join(' · ') + (y ? `<span class="ot-drop"> · ${e(W(`下一班 ${hm(y.dep)}`, `then ${hm(y.dep)}`))}</span>` : '');
     return boardRow({ no: kindOf({ ...x, sys }), color: trainColor({ sys, type: x.type }), main, note, when: whenHtml(x.dep, whenSmall(x.dep)), attrs: `data-times="${e(p.id)}"` });
   });
 }
@@ -863,6 +864,8 @@ function onClick(ev) {
     const p = ctx.data.places.find(x => x.id === gp.dataset.goPlace);
     if (p) return ctx.openTrip(null, { name: p.name, lat: p.lat, lon: p.lon, ...(p.gid ? { gid: p.gid } : {}) });
   }
+  const sl = ev.target.closest('[data-slow]');
+  if (sl) return void openSlow(sl.dataset.slow);
   const tm = ev.target.closest('[data-times]');
   if (tm) {
     const p = ctx.data.pins.find(x => x.id === tm.dataset.times);
@@ -874,6 +877,22 @@ function onClick(ev) {
   if (ev.target.closest('[data-plan-to]')) return ctx.planTo?.();
   if (ev.target.closest('[data-say-trip]')) return void import('./say-trip.mjs').then(m => m.openSayTrip(ctx)).catch(() => {});
   if (ev.target.closest('[data-new-trip]')) return ctx.newTrip?.();
+}
+
+// 這班為什麼慢 (lib/slow.mjs): a late 台鐵 train's delay with where it is, when it
+// reaches your station and 台鐵's notices on its way; code, under the Orbit AI mark.
+async function openSlow(id) {
+  const p = ctx.data.pins.find(x => x.id === id);
+  const x = p && trainNext(p)[0];
+  if (!x?.no) return;
+  const ai = await import('#kit/ai.mjs').catch(() => null);
+  const body = kitUI.h('div', { class: 'ot-slow-body', 'aria-live': 'polite' }, [ai?.aiAnswerWait?.({ rows: 3 }) || kitUI.h('p', { class: 'ot-note', text: W('讀一下…', 'Reading…') })]);
+  const s = kitUI.sheet({ title: W('這班為什麼慢', 'Why it’s late'), cls: 'ot-slow-sheet', body: [body] });
+  const [pos, alerts] = await Promise.all([traTrain(x.no).catch(() => null), tdx('basic/v3/Rail/TRA/Alert', { fresh: 3 * 60_000 }).catch(() => null)]);
+  if (!s.el?.isConnected) return;
+  const ic = kitUI.icons || {};
+  const spec = slowSpec({ label: (x.first || x.label).replace(/\u00a0/g, ' '), delay: pos ? pos.delay : x.delay, arr: x.arrAt, toName: stationLabel(p.to), pos, alerts: alertsOn(traAlertsNow(alerts), x.stops || []) }, { train: ic.train, clock: ic.clock, flag: ic.flag, bell: ic.bell });
+  body.replaceChildren(ai?.aiAnswer?.(spec) || kitUI.h('p', { class: 'ot-note', text: spec.line }));
 }
 
 // Pinning a train (查時刻 calls it): a connection, or one train.
