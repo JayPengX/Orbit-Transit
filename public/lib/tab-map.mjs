@@ -2192,7 +2192,7 @@ function leaveText(p) {
 
 // Which planner didn't answer, said plainly: only when no plan came at all
 // (when there are plans, they're what matters).
-// Some of the planning didn't answer: said once, plainly, never which source (TRUTH §7: one truth).
+// Some of the planning didn't answer: said once, plainly, never which source (RULEBOOK §2: no source names on screen).
 function sourcesNote(src) {
   const bad = Object.entries(src || {}).some(([k, v]) => ['google', 'tdx', 'tdxBike'].includes(k) && !['ok', 'off', 'cap', 'nokey'].includes(v));
   return bad ? `<p class="ot-note">${W('有些路線暫時查不到，稍後再試一次。', 'Some routes couldn’t be found just now; try again shortly.')}</p>` : '';

@@ -2764,7 +2764,7 @@ test('one train or metro named two ways by two planners (機場線普通車, 桃
   assert.ok(!sameWay(way('桃園機場捷運線', '高鐵', A1), { ...way('桃園機場捷運線', '高鐵', A1), legs: way('桃園機場捷運線', '高鐵', A1).legs.map((l, i) => (i ? { ...l, dep: l.dep + 30 * 60_000, arr: l.arr + 30 * 60_000 } : l)) }), 'the next train is another way');
 });
 
-test('no source’s name on the screen (TRUTH §7: one truth): no TDX, Google (but the Google 地圖 you hand a walk to), OpenStreetMap, nor a quota, in any shown string', async () => {
+test('no source’s name on the screen (RULEBOOK §2): no TDX, Google (but the Google 地圖 you hand a walk to), OpenStreetMap, nor a quota, in any shown string', async () => {
   const { readdirSync, readFileSync } = await import('node:fs');
   const dir = new URL('../public/lib/', import.meta.url);
   const bad = [];
