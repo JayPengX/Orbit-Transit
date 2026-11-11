@@ -8,7 +8,7 @@ import { emptyNote, saidRows, focus } from './look.mjs';
 import { routeFares, fareBetween, fareRows, fareGroups } from './fare.mjs';
 import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
-import { errorText, dataAt, liveMs, busEta } from './api.mjs';
+import { errorText, liveMs, busEta } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
@@ -505,8 +505,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   // A ride pinned: on at `on`, off at `off` (null: just the stop), and the
   // way back: the other direction, on where you got off, off where you got on.
   const saveRide = (w, on, off) => {
-    const all = ctx.data.groups.flatMap(g => g.items);
-    if (all.length >= MAX_ITEMS * ctx.data.groups.length) return ctx.status(W('釘選的公車太多了，先刪掉一些', 'Too many pinned buses; remove some first'));
+    // (Into the first group with room: each holds MAX_ITEMS, and cleanData drops what's past it.)
+    const g = ctx.data.groups.length ? ctx.data.groups.find(x => x.items.length < MAX_ITEMS) : (ctx.data.groups[0] = { id: 'g' + uid(), name: W('常用', 'Favorites'), items: [] });
+    if (!g) return ctx.status(W('釘選的公車太多了，先刪掉一些', 'Too many pinned buses; remove some first'));
     const pt = s => ({ stopUID: s.uid, stop: s.name, lat: s.lat, lon: s.lon });
     let back = null;
     if (off) {
@@ -521,7 +522,6 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     }
     const n = off ? w.stops.indexOf(off) - w.stops.indexOf(on) : 0;
     const item = cleanItem({ id: 'i' + uid(), city: route.city, routeUID: route.uid, route: route.name, dir: w.dir, stopUID: on.uid, stop: on.name, headsign: w.headsign, lat: on.lat, lon: on.lon, ...(off ? { off: pt(off), n, back } : {}) });
-    const g = ctx.data.groups[0] || (ctx.data.groups[0] = { id: 'g' + uid(), name: W('常用', 'Favorites'), items: [] });
     g.items.push(item);
     ctx.save();
     ctx.refreshTabs?.();
@@ -613,10 +613,11 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       if (!s) return;
       // Pinned already: ☆ again takes it off.
       if (pinnedAt(s.uid)) {
+        const before = ctx.data.groups;
         ctx.data.groups = ctx.data.groups.map(g => ({ ...g, items: g.items.filter(x => !rideAt(s.uid)(x)) }));
         ctx.save();
         ctx.refreshTabs?.();
-        ctx.status(W('已取消釘選', 'Unpinned'));
+        ctx.removed(W('已取消釘選', 'Unpinned'), 'groups', before, () => d.open && draw());
         return draw();
       }
       boarding = s;
@@ -711,6 +712,7 @@ export function manageSheet() {
   d.addEventListener('click', ev => {
     const gd = ev.target.closest('[data-gdel]');
     const id = ev.target.closest('[data-idel]');
+    const before = (gd || id) && structuredClone(ctx.data.groups);
     if (gd) ctx.data.groups = ctx.data.groups.filter((_, i) => i !== Number(gd.dataset.gdel));
     else if (id) {
       const [g, k] = id.dataset.idel.split(':').map(Number);
@@ -720,5 +722,6 @@ export function manageSheet() {
     ctx.save();
     draw();
     ctx.refreshTabs?.();
+    if (before) ctx.removed(gd ? W('已刪除群組', 'Group deleted') : W('已刪除站牌', 'Stop deleted'), 'groups', before, () => d.open && draw());
   });
 }

@@ -220,7 +220,8 @@ const SCHOOL = /學|校|園|school|college|universit|class/i;
 export const tripNeed = t => (SCHOOL.test(`${t?.name || ''} ${t?.to?.name || ''}`) ? 'class' : 'work');
 // (A stop from later in the day leaves the morning's trip as it is.)
 const offAllDay = o => Boolean(o && (!o.from || o.from <= '08:00'));
-export const holidayOn = (date, trip = null) => Boolean(twHoliday(date)) || Boolean(trip?.to && Number.isFinite(trip.to.lat) && offAllDay(dayOffOn(date, { lat: trip.to.lat, lon: trip.to.lon }, tripNeed(trip))));
+// (The 測試工具's 今天放假 switch, testing.mjs: today a day off, as a typhoon's.)
+export const holidayOn = (date, trip = null) => Boolean(globalThis.ORBIT_TEST?.flags?.dayOff && date === tw().date) || Boolean(twHoliday(date)) || Boolean(trip?.to && Number.isFinite(trip.to.lat) && offAllDay(dayOffOn(date, { lat: trip.to.lat, lon: trip.to.lon }, tripNeed(trip))));
 // A working day on Taiwan's calendar: not a weekend or a holiday, and a 補班
 // Saturday is one (an older kit without twWorkday: a weekday that isn't a holiday).
 export const workday = date => kitDays.twWorkday?.(date) ?? (![0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay()) && !twHoliday(date));

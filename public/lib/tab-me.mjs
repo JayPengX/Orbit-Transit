@@ -45,8 +45,6 @@ const DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const daysText = d => (!d.length ? '' : d.length === 5 && [1, 2, 3, 4, 5].every(x => d.includes(x)) ? W('平日', 'Weekdays') : d.length === 7 ? W('每天', 'Daily') : d.length === 2 && d.includes(0) && d.includes(6) ? W('週末', 'Weekends') : W(`每週${d.map(x => DAYS[x]).join('、')}`, d.map(x => DAYS_EN[x]).join(', ')));
 const placeTile = p => tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place);
 const addRow = (act, text) => `<button class="q-ritem q-add" type="button" data-act="${act}"><span class="q-add-i" aria-hidden="true">${icon('plus')}</span><span class="q-ritem-text"><span class="q-ritem-title">${text}</span></span></button>`;
-// Which ways of moving the planner uses, in a word or a few.
-const modesText = m => (Object.values(m).every(Boolean) ? W('全部', 'All') : Object.entries(MODES).filter(([k]) => m[k]).map(([, n]) => n).join('・'));
 
 function render() {
   const D = ctx.data;
@@ -143,8 +141,10 @@ function onClick(ev) {
   }
   const pin = ev.target.closest('[data-pin-del]');
   if (pin) {
+    const before = ctx.data.pins;
     ctx.data.pins = ctx.data.pins.filter(p => p.id !== pin.dataset.pinDel);
-    return done();
+    done();
+    return ctx.removed(W('已刪除釘選的火車', 'Pinned train deleted'), 'pins', before);
   }
   const act = ev.target.closest('[data-act]')?.dataset.act || (ev.target.closest('.ot-pass') ? 'tpass' : '');
   if (act === 'tpass') return tpassSheet();
@@ -200,11 +200,14 @@ function placeSheet(id) {
       ic = b.dataset.icon;
       return d.querySelectorAll('[data-icon]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.icon === ic)));
     }
-    if (ev.target.closest('[data-del]')) ctx.data.places = ctx.data.places.filter(x => x.id !== id);
+    const before = ctx.data.places;
+    const del = ev.target.closest('[data-del]');
+    if (del) ctx.data.places = ctx.data.places.filter(x => x.id !== id);
     else if (ev.target.closest('[data-save]')) ctx.data.places = ctx.data.places.map(x => (x.id === id ? { ...x, name: d.querySelector('#pl-name').value.trim().slice(0, 30) || x.name, icon: ic } : x));
     else return;
     d.shut();
     done();
+    if (del) ctx.removed(W(`已刪除 ${p.name}`, `${p.name} deleted`), 'places', before);
   });
 }
 function done() {

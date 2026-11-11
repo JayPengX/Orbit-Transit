@@ -13,7 +13,7 @@ import { fitNumbers, netState, rec } from '#kit/orbit.mjs';
 import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
-import { railStations, metroSystems, traBoard, hsrBoard, railNetwork, stationPoint } from './raildata.mjs';
+import { railStations, metroSystems, traBoard, hsrBoard, railNetwork } from './raildata.mjs';
 import { canBook, bookHtml, openBooking } from './book.mjs';
 import { OPERATORS, stationTitle } from './metro.mjs';
 import { stationGroup, loadBoards, boardHtml, codesHtml } from './metro-ui.mjs';
@@ -40,7 +40,7 @@ import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, M
 import { COLOR, tile, bikeTile, bikeStats, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
 import { placeNamed } from './said.mjs';
-import { openRoute, strip, fitStrips, busWhen, plannedAt, nearStops } from './bus-ui.mjs';
+import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
 import { createHome } from './home.mjs';
 const plannedKey = r => `${r.routeUID}|${r.dir}|${r.stopUID}`;
@@ -1292,14 +1292,18 @@ function homeActs() {
     // 最近: looked at again, or forgotten (one, or all).
     recent: r => r && chooseResult({ kind: 'trip', name: r.name || MAP_SPOT, lat: r.lat, lon: r.lon, ...(r.gid ? { gid: r.gid } : {}) }),
     delRecent(key) {
+      const before = ctx.data.trips;
       ctx.data.trips = ctx.data.trips.filter(x => tripKey(x) !== key);
       ctx.save();
       home.draw();
+      ctx.removed(W('已從最近移除', 'Removed from Recent'), 'trips', before, () => home.draw());
     },
     clearRecents() {
+      const before = ctx.data.trips;
       ctx.data.trips = [];
       ctx.save();
       home.draw();
+      ctx.removed(W('已清除最近', 'Recent cleared'), 'trips', before, () => home.draw());
     }
   };
 }
@@ -3304,10 +3308,12 @@ function saveTripSheet(c, { edit = null } = {}) {
       return drawAlt();
     }
     if (ev.target.closest('[data-del]')) {
+      const before = ctx.data.saved;
       ctx.data.saved = ctx.data.saved.filter(y => y.id !== edit.id);
       ctx.save();
       d.shut();
       ctx.refreshTabs?.();
+      ctx.removed(W('已刪除行程', 'Trip deleted'), 'saved', before);
       return;
     }
     if (!ev.target.closest('[data-save]')) return;

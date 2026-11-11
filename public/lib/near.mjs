@@ -15,7 +15,7 @@
 // can't be had.
 
 import * as kit from '#kit/orbit.mjs';
-import { liveMs, busEta } from './api.mjs';
+import { liveMs } from './api.mjs';
 import { pack } from './packs.mjs';
 import { stationsNear, etaOf, routeCity, busEtaMended } from './bus.mjs';
 import { cityBikes, bikesNear } from './bike.mjs';

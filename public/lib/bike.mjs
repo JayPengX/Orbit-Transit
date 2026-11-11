@@ -38,7 +38,16 @@ export function mergeBikes(stations, live) {
     // (YouBike only: 彰化's Moovo, TDX's ServiceType 3, is another company's
     // bikes, its own app and fares, a "station" of 350; it showed and was
     // planned as YouBike at 彰化車站, where there's none. Jay 2026-11-06.)
-    .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && s.kind !== 'Moovo');
+    .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && s.kind !== 'Moovo')
+    .map(testBikes);
+}
+// (The 測試工具's YouBike switch, testing.mjs: every station empty, full or down to one; shown only.)
+function testBikes(s) {
+  const t = globalThis.ORBIT_TEST?.flags?.bikes;
+  if (t === 'empty') return { ...s, bikes: 0, ebike: 0, ret: s.cap || 20, ok: true };
+  if (t === 'full') return { ...s, ret: 0, ok: true };
+  if (t === 'low') return { ...s, bikes: 1, ebike: 0, ret: 1, ok: true };
+  return s;
 }
 
 // ---- YouBike's own counts, read here -----------------------------------------------------------

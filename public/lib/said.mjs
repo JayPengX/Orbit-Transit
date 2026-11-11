@@ -39,8 +39,14 @@ export function placeNamed(places, name, nameIn = x => x) {
 // The AI's day (0 today, 1 tomorrow…) and time ('08:00') as a moment, Taiwan's clock; by 'now' none.
 export function whenOf({ by = 'now', day = 0, time = '' } = {}, now = Date.now()) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(time || ''));
-  if (by === 'now' || !m) return { by: 'now', at: null };
   const d = new Date(now + TW);
+  // (A later day with no time, 明天去台中: that day, leaving at this hour, or 08:00 at night.)
+  if (!m && Number(day) > 0) {
+    const h = d.getUTCHours();
+    const at = h >= 6 && h < 22 ? now + Number(day) * 86_400_000 : Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + Number(day) + (h < 6 ? -1 : 0), 8, 0) - TW;
+    return { by: 'depart', at };
+  }
+  if (by === 'now' || !m) return { by: 'now', at: null };
   let at = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + (Number(day) || 0), Number(m[1]), Number(m[2])) - TW;
   // (A time already past today, with no day said: the next one, as a person means it.)
   if (!day && at < now - 10 * 60_000) at += 86_400_000;

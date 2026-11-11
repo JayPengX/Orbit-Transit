@@ -30,6 +30,7 @@ import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
 import { readSaved, UNREAD, writeJson } from './lib/util.mjs';
 import { keepLearning } from './lib/learn.mjs';
+import './lib/testing.mjs';
 import { W, en, lang } from '#kit/lang.mjs';
 
 const $ = id => document.getElementById(id);
@@ -72,7 +73,8 @@ const saveLocal = () => kept !== UNREAD && writeJson(LOCAL, local);
 export const ctx = {
   q,
   data: decodeData(local.data) || emptyData(),
-  here: local.here || null, // { lat, lon, acc, at }
+  // (The tester's place picked: not the last real one, kept on the device.)
+  here: (globalThis.ORBIT_TEST?.place ? null : local.here) || null, // { lat, lon, acc, at }
   city: local.city || null, // TDX City where the device is
   cfg: null,
   // The pass's copy written after a change (the newest wins on every device).
@@ -87,7 +89,8 @@ export const ctx = {
   // Where the device is now (asked again after a minute), from the session's
   // one watch on it (api.mjs): one ask a launch, never skipped.
   locate({ force = false } = {}) {
-    if (!force && ctx.here && Date.now() - ctx.here.at < 60_000) return Promise.resolve(ctx.here);
+    // (A fix stamped ahead of the clock, the tester's clock moved back, is asked again.)
+    if (!force && ctx.here && ctx.here.at <= Date.now() && Date.now() - ctx.here.at < 60_000) return Promise.resolve(ctx.here);
     // (One ask at a time: the map and the opening both ask at launch.)
     if (!force && locating) return locating;
     const p = (locating = locateNow(force));
@@ -106,6 +109,22 @@ export const ctx = {
   // What the app says (pinned, can't locate, replanning…): the kit's toast, a moment over the tab bar.
   status(text) {
     if (text) kitUI.toast(text, { batch: 'status', ms: 3200 });
+  },
+  // A one-tap delete said with 復原 (the family's rule): `before` is ctx.data[key] as it was;
+  // `after` draws again what isn't a tab (a sheet, the map's 最近).
+  removed(text, key, before, after) {
+    kitUI.toast(text, {
+      ms: 6000,
+      action: {
+        label: W('復原', 'Undo'),
+        onTap: () => {
+          ctx.data[key] = before;
+          ctx.save();
+          ctx.refreshTabs();
+          after?.();
+        }
+      }
+    });
   },
   goTab: id => select(id),
   // The metro maps (查時刻's third view), from a station's card.

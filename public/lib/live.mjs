@@ -9,7 +9,7 @@
 //               when the next ones come (a train's last station to the
 //               place: 竹中 → 5608 → 竹東高中)
 
-import { tdx, rows, busEta } from './api.mjs';
+import { tdx, rows } from './api.mjs';
 import { routeStops, routeSchedule, stopTimes, routeCity, runsOn, busEtaMended } from './bus.mjs';
 import { stationsAround, etaAround, etaStops } from './near.mjs';
 import { finish, walkLeg, chaseHold } from './plan.mjs';

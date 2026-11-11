@@ -20,6 +20,16 @@ test("a said day and time as Taiwan's moment; one past today is tomorrow's", () 
   assert.deepEqual(whenOf({ by: 'arrive', time: '' }, now), { by: 'now', at: null });
 });
 
+test('a later day with no time is that day, not now (明天去台中)', () => {
+  const now = Date.parse('2026-11-11T02:00:00Z'); // 10:00 in Taiwan
+  assert.deepEqual(whenOf({ by: 'now', day: 1, time: '' }, now), { by: 'depart', at: Date.parse('2026-11-12T02:00:00Z') });
+  assert.deepEqual(whenOf({ by: 'depart', day: 2 }, now), { by: 'depart', at: Date.parse('2026-11-13T02:00:00Z') });
+  const night = Date.parse('2026-11-11T15:30:00Z'); // 23:30 in Taiwan
+  assert.deepEqual(whenOf({ day: 1 }, night), { by: 'depart', at: Date.parse('2026-11-12T00:00:00Z') });
+  const early = Date.parse('2026-11-11T18:30:00Z'); // 02:30 on the 12th in Taiwan, still up: 明天 is this morning
+  assert.deepEqual(whenOf({ day: 1 }, early), { by: 'depart', at: Date.parse('2026-11-12T00:00:00Z') });
+});
+
 test('your places by name; the facts the AI is told', () => {
   const places = [{ name: 'home' }, { name: '臺大醫院' }];
   const zh = n => ({ home: '家' })[n] || n;
