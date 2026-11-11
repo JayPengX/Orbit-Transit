@@ -45,3 +45,4 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - A trip's row says when to leave, or why not; a tap opens its ways on the map — `public/lib/tab-go.mjs`: `tripWhy`, `whenHtml(p.dep`, `data-all-trip`
 - A place chip opens the place: its buses, its bikes, 怎麼去 — `public/lib/tab-go.mjs`: `openPlace`, `data-go-place`
 - A route's stops with its buses on the line (on a stop, between two), 進站中 / 即將進站 — `public/lib/bus-ui.mjs`, `public/transit.css`: `busAt`, `busBetween`, `ot-rs-bus`, `li.at .ot-rs-dot`
+- 用說的查路線: a trip said in words (「明天八點前到台大醫院」), the plain ones read by code, a time read by the AI and shown as understood before 看路線; your own places by name, else the place search with the words in it — `public/lib/said.mjs`, `public/lib/say-trip.mjs`, `public/lib/tab-map.mjs`: `readSaid`, `whenOf`, `placeNamed`, `planSaid`

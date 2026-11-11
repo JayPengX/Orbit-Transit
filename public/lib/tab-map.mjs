@@ -39,6 +39,7 @@ import { shareRide } from './family-share.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, bikeTile, bikeStats, emptyNote } from './look.mjs';
 import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
+import { placeNamed } from './said.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt, nearStops } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
 import { createHome } from './home.mjs';
@@ -121,6 +122,19 @@ export function register(c) {
     const to = await pickPoint(W('要去哪裡', 'Where to?'), { onMap: false });
     if (!to || to.here) return;
     saveTripSheet({ fromHere: Boolean(from.here), from, to });
+  };
+  // 用說的查路線 (lib/said.mjs): the places as said, each one of yours by its
+  // name or the search opened with the words in it; then the trip, at the time said.
+  ctx.planSaid = async ({ from = '', to = '', by = 'now', at = null }) => {
+    const point = async (name, title, opts) => {
+      const mine = placeNamed(ctx.data.places, name, shown);
+      return mine ? { name: mine.name, lat: mine.lat, lon: mine.lon } : pickPoint(title, { ...opts, q: name });
+    };
+    const t = await point(to, W('要去哪裡', 'Where to?'), { onMap: false });
+    if (!t || t.here) return;
+    const f = from ? await point(from, W('從哪裡出發', 'From where?'), { here: true, onMap: false }) : null;
+    if (from && !f) return;
+    ctx.openTrip(f && !f.here ? f : null, t, by === 'now' ? {} : by === 'arrive' ? { at, by: 'arrive' } : { at });
   };
   // 交通's 要去哪裡 (the board, board.mjs): a place picked, its ways from here on the map.
   ctx.planTo = async () => {
@@ -1407,7 +1421,7 @@ const resultRow = r =>
 
 // A sheet to choose a trip's end: 目前位置, your places, stations, Google's
 // places. → { name, lat, lon } (here: true for 目前位置), or null.
-function pickPoint(title, { here = false, onMap = true } = {}) {
+function pickPoint(title, { here = false, onMap = true, q = '' } = {}) {
   return new Promise(resolve => {
     let done = false;
     const finish = v => {
@@ -1468,6 +1482,8 @@ function pickPoint(title, { here = false, onMap = true } = {}) {
       }
       if (Number.isFinite(r.lat)) finish({ name: r.name, lat: r.lat, lon: r.lon, ...(r.gid ? { gid: r.gid } : {}) });
     });
+    // (用說的查路線: the search opened with the place as said, the right one a tap away.)
+    if (q) input.value = q;
     draw();
     setTimeout(() => input.focus(), 50);
   });
