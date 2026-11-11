@@ -733,16 +733,19 @@ function renderBoard(ts) {
   // (✦ beside it: 用說的查路線, lib/say-trip.mjs.)
   const plan = `<div class="ob-plan-row"><button class="ob-plan q-press" type="button" data-plan-to="1">${icon('search')}<span>${W('要去哪裡？', 'Where to?')}</span></button>${kitUI.icons?.ai ? `<button class="ob-say q-press" type="button" data-say-trip="1" aria-label="${W('用說的查路線', 'Say your trip')}">${kitUI.icons.ai}</button>` : ''}</div>${places.length ? `<div class="ob-places">${places.map(p => `<button class="ob-place q-press" type="button" data-place="${e(p.id)}">${tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place, 'sm')}<span>${e(nameIn(p.name))}</span></button>`).join('')}</div>` : ''}`;
   // Your trips, each its own card; then what you've pinned, a row each in the order you keep
-  // them (on a wide screen beside the trips, where 附近 was: Jay 2026-11-03, "basically useless").
+  // them (on a wide screen beside the trips, where 附近 was: Jay 2026-11-03, "basically useless";
+  // 要去哪裡 and your places across the top, so the trips and the pins start level: Jay's iPad
+  // 2026-11-11, one pinned row beside the search and a trip, a half screen empty under it).
   const tripsHtml = ts.length ? section(W('行程', 'Trips'), `<div class="ob-trips">${ts.map(tripCard).join('')}</div>`) : '';
   const pins = [...boardBuses(), ...boardTrains()].join('');
   const pinsHtml = pins ? section(W('釘選', 'Pinned'), rowCard(pins)) : '';
   const empty = !tripsHtml && !pinsHtml ? section(W('我的路線', 'My rides'), `<div class="q-rowcard ob-empty"><p>${W('釘選常搭的車，時間都在這裡', 'Pin what you ride: its times show here')}</p><button class="q-btn" type="button" data-new-trip="1">${icon('plus')} ${W('新增行程', 'Add a trip')}</button></div>`) : '';
   box.innerHTML = `<div class="ot-page ob-page">
     ${navTitle(W('交通', 'Transit'))}
-    <div class="q-cols ot-cols">
-      <div>${noticesHtml(S.notices)}${plan}${tripsHtml}${empty}</div>
-      <div>${pinsHtml}</div>
+    <div class="q-cols ot-cols ob-cols${pinsHtml ? '' : ' ob-solo'}">
+      <div class="q-span">${noticesHtml(S.notices)}${plan}</div>
+      <div>${tripsHtml}${empty}</div>
+      ${pinsHtml ? `<div>${pinsHtml}</div>` : ''}
     </div>
   </div>`;
   kitUI.wireNavTitles(box);

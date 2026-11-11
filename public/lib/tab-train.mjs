@@ -141,6 +141,9 @@ function render() {
   // 全部 / 台鐵 / 高鐵 kept across a redraw (the owner, 2026-10-27: it switched with no slide): a tap
   // redraws the page twice (the search's loading, then its trains), and a control drawn anew lands.
   const seg = $('panel-train').querySelector('.ot-tq-sys');
+  // 最近: after the trains on a phone; on a wide screen under the question in its
+  // column beside them, never a half screen empty under it (Jay's iPad 2026-11-11).
+  const recentHtml = recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : '';
   // 查車次 at the top, a search bar (Jay 2026-11-10: "Move 查車次 to the top like a
   // search bar"; it was a row under the trains): a tap opens its sheet, the keys up.
   $('panel-train').innerHTML = `
@@ -152,9 +155,10 @@ function render() {
       <div class="ot-tq-when"><label class="ot-tq-pill">${icon('clock')}<b id="t-time-text">${e(timeText(date))}</b><input id="t-time" type="time" value="${state.time || (shownNow = tw().hm)}" aria-label="${W('出發時間', 'Leave at')}"></label><div class="q-seg ot-tq-sys" role="group" aria-label="${W('搭什麼', 'Trains')}">${[['all', W('全部', 'All')], ['tra', W('台鐵', 'TRA')], ['hsr', W('高鐵', 'HSR')]].map(([k, n]) => `<button type="button" data-mode="${k}" aria-pressed="${state.mode === k}">${n}</button>`).join('')}</div></div>
     </section>
     <div id="t-notices">${noticesHtml(notices)}</div>
+    ${recentHtml.replace('class="q-section', 'class="q-section ot-tq-recent-side')}
     </div>
     <div id="t-results">${resultsHtml()}</div>
-    ${recent.length ? section(W('最近', 'Recent'), rowCard(recent.map((x, i) => `<button class="q-ritem chevron" type="button" data-recent="${i}">${tile(x.from.sys === 'hsr' ? 'hsr' : 'tra', x.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(stationLabel(x.from))} → ${e(stationLabel(x.to))}</span></span></button>`).join(''))) : ''}`;
+    ${recentHtml}`;
   $('panel-train').querySelector('.ot-tq-days').replaceWith(kitUI.dayBar(dayRec, { days: trainDays(), current: date, today, follow: true, onPick: pickDay }));
   if (seg) {
     $('panel-train').querySelector('.ot-tq-sys').replaceWith(seg);

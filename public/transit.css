@@ -6468,8 +6468,13 @@ html[lang='en'] .ot-sn-tap {
     z-index: 1;
   }
 }
+/* (最近 under the question, in the column beside the trains; after them on a phone.) */
+.ot-tq-recent-side,
 :root.q-wide #panel-train:has(#t-results:not(:empty)) > .ot-tq-side ~ .q-section {
-  grid-row: 12;
+  display: none;
+}
+:root.q-wide #panel-train:has(#t-results:not(:empty)) .ot-tq-recent-side {
+  display: block;
 }
 :root.q-wide #times-bus:has(#tb-list:not(:empty)) > #tb-list {
   grid-column: 2;
@@ -6481,6 +6486,18 @@ html[lang='en'] .ot-sn-tap {
 :root.q-wide :is(.ot-page.ot-one, #panel-times:has(> .ot-page > #panel-train:not([hidden]) #t-results:empty), #panel-times:has(> .ot-page > #times-bus:not([hidden]) #tb-list:empty)) {
   max-width: 720px;
   margin-inline: auto;
+}
+/* 交通: 要去哪裡 and your places across the top, the trips and the pins level under them. */
+:root.q-wide .ob-cols > .q-span {
+  margin-bottom: 22px;
+}
+/* 交通 with nothing pinned: the trips take the width, their cards side by side. */
+:root.q-wide .ob-cols.ob-solo > div {
+  grid-column: 1 / -1;
+}
+:root.q-wide .ob-cols.ob-solo .ob-trips {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  align-items: start;
 }
 /* (A column's first heading level with the other column's top, not a section's gap below it.) */
 :root.q-wide :is(.ot-cols > div, #t-results, #tb-list) > .q-section:first-child {
