@@ -243,6 +243,7 @@ async function boot() {
   if (want === 'map') await Promise.race([mapTab.ready, new Promise(r => setTimeout(r, 4000))]);
   else await Promise.race([TABS.find(t => t.id === want)?.mod.ready?.(), new Promise(r => setTimeout(r, 1500))]);
   $('loading').hidden = true;
+  askFromLink();
   ctx.locate();
   startAlerts(t => ctx.status(t), {
     schedule: items => schedulePush(q, items),
@@ -268,7 +269,20 @@ function openLink(l) {
   history.replaceState(null, '', `${location.pathname}${location.search}#map`);
   ctx.openTrip(null, l.to, l.at && l.at > Date.now() ? { by: 'arrive', at: l.at } : {});
 }
+// 問 Orbit's question (the Pass sheet, kit ask-orbit.mjs: #ask=<words>): 用說的查路線 with it, on 交通.
+function askFromLink() {
+  if (!/(?:^#|&)ask=/.test(location.hash)) return;
+  import('#kit/ask-orbit.mjs')
+    .then(m => {
+      const text = m.takeAsk?.();
+      if (!text) return;
+      if (bar?.current !== 'go') select('go');
+      return import('./lib/say-trip.mjs').then(x => x.openSayTrip(ctx, { ask: text }));
+    })
+    .catch(() => {});
+}
 window.addEventListener('hashchange', () => {
+  if (bar && /(?:^#|&)ask=/.test(location.hash)) return askFromLink();
   const l = bar && planLink(location.hash);
   if (l) return openLink(l);
   const m = /^#(map|go|times|me|nav)\b/.exec(location.hash);

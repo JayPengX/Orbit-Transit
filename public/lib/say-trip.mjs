@@ -16,7 +16,8 @@ const md = t => {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${d.toISOString().slice(11, 16)}`;
 };
 
-export function openSayTrip(ctx) {
+// `ask`: a question already said (問 Orbit's, #ask=…), read at once.
+export function openSayTrip(ctx, { ask = '' } = {}) {
   const STARTERS = [W('明天早上 8 點前到台北車站', 'To Taipei Main Station by 8 tomorrow'), W('現在回家', 'Home now'), W('下午三點從學校去台大醫院', 'From school to NTU Hospital at 3 pm')];
   const talk = h('div', { class: 'ot-say-talk', 'aria-live': 'polite' });
   let open = true;
@@ -25,7 +26,8 @@ export function openSayTrip(ctx) {
   const hint = h('p', { class: 'ot-say-hint', text: W('說出發地、目的地和時間；沒說從哪裡，就從你現在的位置。', 'Say where from, where to and when; with no start, from where you are.') });
   const foot = h('div', { class: 'q-sheet-foot ot-say-foot' }, [bar]);
   const s = kitUI.sheet({ title: W('用說的查路線', 'Say your trip'), detent: 'large', cls: 'ot-say', body: [hint, starters, talk], foot, onClose: () => (open = false) });
-  requestAnimationFrame(() => bar.input?.focus());
+  if (ask) requestAnimationFrame(() => go(String(ask).slice(0, 120)));
+  else requestAnimationFrame(() => bar.input?.focus());
 
   const go_ = trip => {
     s.close?.();
