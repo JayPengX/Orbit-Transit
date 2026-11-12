@@ -16,7 +16,7 @@ import { errorText, liveMs, tdx } from './api.mjs';
 import { traAlertsNow, alertsOn, slowSpec } from './slow.mjs';
 import { stopsEta, etaRank, etaFor } from './bus.mjs';
 import { nearBikes } from './near-ui.mjs';
-import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
+import { nearStops, openRoute, chooseGroup, useBusCtx, strip, fitStrips, busWhen, plannedAt, towardOf, fillHeadsign } from './bus-ui.mjs';
 import { bikesAround } from './near.mjs';
 import { railNetwork, railSpan, traDelays, traTrain } from './raildata.mjs';
 import { journeys } from './rail.mjs';
@@ -558,6 +558,8 @@ async function loadPlace(id) {
   if (old && Date.now() - old.at < 25_000) return;
   try {
     const [stops, bikes] = await Promise.all([nearStops(p, { n: 2, r: 400 }), bikesAround(p.lat, p.lon).catch(() => [])]);
+    // (Each bus its way, 往 its last stop: 返程 says nothing; 2026-11-12.)
+    await Promise.all(stops.flatMap(st => st.rows.slice(0, 3)).map(async r => (r.toward = await towardOf(r.city, r.uid, r.dir))));
     S.places.set(id, { at: Date.now(), stops, bikes: bikes.map(s => ({ ...s, d: meters(p.lat, p.lon, s.lat, s.lon) })).filter(s => s.d <= 500).sort((a, b) => a.d - b.d).slice(0, 2) });
     // The buses shown with none on their way: the timetable's next there.
     const quiet = placeBuses(stops).filter(x => !(x.v?.status === 0 && x.v.sec != null) && !S.planned.has(x.stopUID));
@@ -586,7 +588,7 @@ const placeBuses = stops =>
     .slice(0, 5);
 const busRow = x => {
   const pinned = ctx.data.groups.some(g => g.items.some(i => i.stopUID === x.stopUID));
-  return `<div class="ot-strip">${strip({ no: x.route, note: x.dir ? W('返程', 'Return') : W('去程', 'Outbound'), main: e(nameIn(x.stop || '')), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: routeAttr({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }) })}<button class="q-icon-btn ot-strip-act${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, lat: x.lat, lon: x.lon }))}" aria-label="${W('釘選', 'Pin')}" ${pinned ? 'disabled' : ''}>${icon('star')}</button></div>`;
+  return `<div class="ot-strip">${strip({ no: x.route, note: x.toward ? `${W('往', 'to')} ${e(nameIn(x.toward))}` : x.dir ? W('返程', 'Return') : W('去程', 'Outbound'), main: e(nameIn(x.stop || '')), eta: busWhen(x.v, S.planned.get(x.stopUID)), attrs: routeAttr({ uid: x.uid, name: x.route, city: x.city, stopUID: x.stopUID, dir: x.dir }) })}<button class="q-icon-btn ot-strip-act${pinned ? ' on' : ''}" type="button" data-pinbus="${e(JSON.stringify({ city: x.city, routeUID: x.uid, route: x.route, dir: x.dir, stopUID: x.stopUID, stop: x.stop, headsign: x.toward || '', lat: x.lat, lon: x.lon }))}" aria-label="${W('釘選', 'Pin')}" ${pinned ? 'disabled' : ''}>${icon('star')}</button></div>`;
 };
 
 // A trip's plans to show: the ways you pinned first (their next
@@ -734,10 +736,11 @@ function boardBuses() {
   return ctx.data.groups
     .flatMap(g => g.items)
     .map(it => {
+      fillHeadsign(it);
       const r = sideOf(it);
       const v = etaFor(S.pinned, r);
       const dir = it.back ? `<span class="ot-strip-dir" role="button" data-flip="${e(it.id)}" aria-label="${r.back ? W('回程，改看去程', 'Return; show outbound') : W('去程，改看回程', 'Outbound; show return')}">${icon('swap')}${r.back ? W('回程', 'Return') : W('去程', 'Out')}</span>` : '';
-      const note = r.off ? `${dir}${W('到', 'to')} ${e(nameIn(r.off.stop))}${it.n ? `<span class="ot-drop"> · ${W(`${it.n} 站`, `${it.n} stops`)}</span>` : ''}` : `${W('往', 'to')} ${e(nameIn(r.headsign || '—'))}`;
+      const note = r.off ? `${dir}${W('到', 'to')} ${e(nameIn(r.off.stop))}${it.n ? `<span class="ot-drop"> · ${W(`${it.n} 站`, `${it.n} stops`)}</span>` : ''}` : r.headsign ? `${W('往', 'to')} ${e(nameIn(r.headsign))}` : r.dir ? W('返程', 'Return') : W('去程', 'Outbound');
       return `<div class="ot-strip">${strip({ no: it.route, note, main: e(nameIn(r.stop)), eta: busWhen(v, S.planned.get(r.stopUID)), attrs: routeAttr({ uid: it.routeUID, name: it.route, city: it.city, stopUID: r.stopUID, dir: r.dir }) })}</div>`;
     });
 }
@@ -761,6 +764,8 @@ function renderBoard(ts) {
   const box = $('panel-go');
   const keep = box.scrollTop;
   const railX = box.querySelector('.ob-places')?.scrollLeft || 0;
+  // (A notice opened stays open as the board is drawn again: it shut under the finger; 2026-11-12.)
+  const opened = new Set([...box.querySelectorAll('details[open] > summary')].map(x => x.textContent));
   const here = ctx.here;
   const places = ctx.data.places.filter(p => !here || meters(here.lat, here.lon, p.lat, p.lon) > 300);
   // (✦ beside it: 用說的查路線, lib/say-trip.mjs.)
@@ -784,6 +789,7 @@ function renderBoard(ts) {
   kitUI.wireNavTitles(box);
   fitStrips(box);
   fitLegs(box);
+  for (const x of box.querySelectorAll('details > summary')) if (opened.has(x.textContent)) x.parentElement.open = true;
   box.scrollTop = keep;
   const rail = box.querySelector('.ob-places');
   if (rail) rail.scrollLeft = railX;

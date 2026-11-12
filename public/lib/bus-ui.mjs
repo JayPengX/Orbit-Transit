@@ -6,7 +6,7 @@
 
 import { emptyNote, saidRows, focus } from './look.mjs';
 import { routeFares, fareBetween, fareRows, fareGroups } from './fare.mjs';
-import { routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
+import { cityRoutes, routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, liveMs, busEta } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
@@ -629,8 +629,30 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
 }
 
 // Which group a stop goes into (or a new one).
+// Which way a route goes from a stop: 往 its last stop that way (the city's
+// route list, kept a day), '' when not known.
+export async function towardOf(city, routeUID, dir) {
+  const r = (await cityRoutes(city).catch(() => [])).find(x => x.uid === routeUID);
+  return (r && (Number(dir) === 1 ? r.from : r.to)) || '';
+}
+// A pin with no way said (pinned from a place's sheet, which reads stops, not
+// routes): said once known and kept, never 往 — (2026-11-12).
+const asked = new Set();
+export function fillHeadsign(item) {
+  if (item.headsign || !item.routeUID || asked.has(item)) return;
+  asked.add(item);
+  towardOf(item.city, item.routeUID, item.dir).then(h => {
+    if (!h || item.headsign) return;
+    item.headsign = h.slice(0, 40);
+    if (ctx.data.groups.some(g => g.items.includes(item))) {
+      ctx.save();
+      ctx.refreshTabs?.();
+    }
+  });
+}
 export function chooseGroup(raw, done) {
   const item = cleanItem({ ...raw, id: 'i' + uid() });
+  fillHeadsign(item);
   const d = sheet(`${sheetHead(W('加入群組', 'Add to group'), `${e(shown(item.route))} · ${e(shown(item.stop))}`)}
     <div class="ot-list">${ctx.data.groups
       .map((g, i) => {
