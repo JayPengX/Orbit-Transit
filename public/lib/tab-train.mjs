@@ -73,8 +73,18 @@ function asked() {
 }
 // 台鐵 or 高鐵 picked with a station of the other picked: its own station
 // there (六家 ↔ 高鐵新竹, 臺中 → 高鐵台中); none (花蓮 on 高鐵): left to pick, said.
+// The pair as you picked it, before a mode moved it: back on a mode it fits, it
+// comes back (新竹 → 竹北, 高鐵, then 台鐵 again, was 六家 → nothing; 2026-11-12).
+let picked = null;
+const fits = (pair, mode) => mode === 'all' || pair.every(s => !s || s.sys === mode);
 async function fitMode() {
+  if (picked && (picked[0] !== state.from || picked[1] !== state.to) && fits(picked, state.mode) && state.moved?.[0] === state.from && state.moved?.[1] === state.to) {
+    [state.from, state.to] = picked;
+    state.moved = null;
+    return;
+  }
   if (state.mode === 'all' || ![state.from, state.to].some(s => s && s.sys !== state.mode)) return;
+  picked = [state.from, state.to];
   let list = [];
   try {
     list = await railStations();
@@ -88,6 +98,7 @@ async function fitMode() {
   }
   // (Both ends the same station now, 六家 and 新竹 on 高鐵: the far end left to pick.)
   if (state.from && state.to && state.from.sys === state.to.sys && state.from.id === state.to.id) state.to = null;
+  state.moved = [state.from, state.to];
   if (lost.length) ctx.status(state.mode === 'hsr' ? W(`${lost.join('、')}附近沒有高鐵`, `No HSR near ${lost.join(', ')}`) : W(`${lost.join('、')}沒有台鐵`, `No TRA at ${lost.join(', ')}`));
 }
 const pinnedConn = () => state.from && state.to && ctx.data.pins.some(p => p.kind === 'train' && p.from.id === state.from.id && p.to.id === state.to.id && p.from.sys === state.from.sys);
@@ -317,7 +328,11 @@ function resultsHtml() {
   // The next train still to leave today: lit, its countdown on it.
   const now = Date.now();
   const next = (state.date || tw().date) === tw().date ? state.results.findIndex(j => leaveAt(j) >= now - 30_000) : -1;
-  return section(W('班次', 'Trains'), passNote + state.results.map((j, i) => journeyHtml(j, i, i === next)).join(''), pin);
+  // (Past the day asked, after midnight: the day said on the first of it; 23:58 listed
+  // the morning's 04:59 as if today's; 2026-11-12.)
+  const asked = state.date || tw().date;
+  const dayOf = j => tw(j.dep).date;
+  return section(W('班次', 'Trains'), passNote + state.results.map((j, i) => journeyHtml(j, i, i === next, dayOf(j) !== asked && (i === 0 || dayOf(state.results[i - 1]) !== dayOf(j)) ? dayLabel(dayOf(j)) : '')).join(''), pin);
 }
 
 // A train's delay now (台鐵's live board; 高鐵 has none): minutes, 0 on time, null not running yet.
@@ -374,7 +389,7 @@ function statusHtml(j) {
           ? notYet()
           : '<span class="ot-jny-st"></span>';
 }
-function journeyHtml(j, i, next) {
+function journeyHtml(j, i, next, day = '') {
   const rides = j.legs.filter(l => !l.walk);
   const state_ = statusHtml(j);
   // A change: where, between the trains.
@@ -384,7 +399,7 @@ function journeyHtml(j, i, next) {
       return at + trainChip(l.trip);
     })
     .join('');
-  const eyebrow = next ? `<span class="ot-jny-next">${W('下一班', 'Next train')} · <b data-leave="${leaveAt(j)}">${e(leaveText(leaveAt(j)))}</b></span>` : '';
+  const eyebrow = next ? `<span class="ot-jny-next">${day ? `${e(day)} · ` : ''}${W('下一班', 'Next train')} · <b data-leave="${leaveAt(j)}">${e(leaveText(leaveAt(j)))}</b></span>` : day ? `<span class="ot-jny-next ot-jny-day">${e(day)}</span>` : '';
   return `<button class="ot-jny${i === state.open ? ' on' : ''}${next ? ' next' : ''}" type="button" data-j="${i}" aria-expanded="${i === state.open}">
     ${eyebrow}
     <span class="ot-jny-top"><b>${e(hm(j.dep))}</b><span class="ot-jny-mid"><small>${e(minsText((j.arr - j.dep) / 1000))}${state.allTrains && rides.every(onPass) ? ' · TPASS' : ''}</small>${barHtml(j)}</span><b>${e(hm(j.arr))}</b></span>
