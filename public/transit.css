@@ -754,13 +754,15 @@ html.q-tabrail .ot-map-panel {
   z-index: 0; /* the map's own panes (Leaflet's go to 700) stay under the app's buttons */
   background: var(--q-page);
 }
-/* Taiwan's NLSC map is light: as it is in light mode, turned dark to match in dark. */
+/* Taiwan's NLSC map is light: as it is in light mode, turned dark to match in dark.
+   (On each tile, not the layer: Safari on a laptop-sized map drew the layer's filter
+   not at all, a light map in dark mode.) */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .ot-tiles {
+  :root:not([data-theme='light']) .ot-tiles .leaflet-tile {
     filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.92) contrast(0.92);
   }
 }
-:root[data-theme='dark'] .ot-tiles {
+:root[data-theme='dark'] .ot-tiles .leaflet-tile {
   filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.92) contrast(0.92);
 }
 .leaflet-container {
