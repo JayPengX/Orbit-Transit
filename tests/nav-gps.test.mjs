@@ -79,3 +79,13 @@ test('arrival: never on one fix; a second 4 s on, or the same one a minute on', 
   a = arrival(a.near, { ...p, lat: p.lat + 0.002 }, 220, null, 2000);
   assert.equal(arrival(a.near, p, 30, null, 6000).done, false, 'a far fix between: started over');
 });
+
+test('a plan in a minute after the time asked says so (抵達 13:30, in 13:31); navigation keeps its minute', async () => {
+  const { lateShown, lateBy } = await import('../public/lib/nav.mjs');
+  const dl = Date.parse('2026-11-12T13:30:00+08:00');
+  assert.equal(lateShown({ deadline: dl }, dl + 60_000), 1);
+  assert.equal(lateShown({ deadline: dl }, dl + 59_000), 0);
+  assert.equal(lateShown({ deadline: dl }, dl - 60_000), 0);
+  assert.equal(lateBy({ deadline: dl }, dl + 60_000), 0);
+  assert.equal(lateShown({}, dl), 0);
+});

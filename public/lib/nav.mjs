@@ -827,6 +827,10 @@ export function retimeAlong(plan, k, frac, now = Date.now()) {
 // To be there by a time (a trip planned 抵達 by it: `plan.deadline`): how
 // late, in minutes, getting in at `eta`; 0 on time.
 export const lateBy = (plan, eta) => (plan.deadline && eta > plan.deadline + 60_000 ? Math.ceil((eta - plan.deadline) / 60_000) : 0);
+// As a plan's row says it: any minute shown after the time asked (13:31 for
+// 抵達 13:30 is late, said so; navigation keeps its minute's grace before it
+// asks). Jay 2026-11-12: 推薦 arriving 13:31 for 13:30 with nothing said.
+export const lateShown = (plan, eta) => (plan.deadline ? Math.max(lateBy(plan, eta), Math.floor(eta / 60_000) - Math.floor(plan.deadline / 60_000), 0) : 0);
 // plan: a ranked plan; `draw(plan, i)` shows it on the map with leg i lit;
 // `follow(pos)` keeps the map on you; `onEnd()` when it's closed; `dest`:
 // the place the trip is to (Google's, for its own navigation to it).
@@ -1046,7 +1050,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       </div>`;
     const etaHtml = `<div class="ot-nav-eta">
           <span><b>${e(hm(state.done && !plan.later?.length ? now : whole))}</b><small>${state.done && !plan.later?.length ? W('已抵達', 'Arrived') : plan.later?.length ? `${driftText ? `${driftText}・` : ''}${W(`到 ${e(stopName)} 還要 `, `${e(stopName)} in `)}${leftText(minsLeft)}` : driftText ? `${driftText}・${W('剩 ', '')}${leftText(minsLeft)}` : `${W('抵達・還要 ', 'arrive・')}${leftText(minsLeft)}`}</small></span>
-          <button class="q-icon-btn" type="button" data-nav="more" aria-label="${W('更多：縮小、改下車站、重新規劃、改目的地', 'More: shrink, change stop, replan, change destination')}">${icon('more')}</button>
+          <button class="q-icon-btn" type="button" data-nav="more" aria-label="${W('更多：縮小、改搭別班、換一條路、編輯行程', 'More: minimize, another departure, another way, edit trip')}">${icon('more')}</button>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">${W('結束', 'End')}</button>
         </div>`;
     // Drawn in place: the card's parts each time, the steps only when they change.
