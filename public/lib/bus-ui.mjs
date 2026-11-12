@@ -698,7 +698,7 @@ export function manageSheet() {
             <button class="ot-order-x" type="button" data-gdel="${i}" aria-label="${W('刪除群組', 'Delete group')}" ${all.length > 1 ? '' : 'disabled'}>${icon('trash')}</button>${all.length > 1 ? gripHtml(W(`拖曳排序：${g.name}`, `Reorder ${g.name}`)) : ''}</div>
           <div class="ot-order-items" data-items="${i}">${g.items
             .map(
-              (it, k, list) => `<div class="ot-order-row" data-q-key="${k}"><span><b>${e(shown(it.route))}</b> ${e(shown(it.stop))}${it.off ? ` → ${e(shown(it.off.stop))}` : ''}<small>${W('往', 'to')} ${e(shown(it.headsign))}${it.back ? W(' · 回程自動對調', ' · back flips') : ''}</small></span>
+              (it, k, list) => `<div class="ot-order-row" data-q-key="${k}"><span><span class="ot-order-line"><b>${e(shown(it.route))}</b> ${e(shown(it.stop))}${it.off ? ` → ${e(shown(it.off.stop))}` : ''}</span><small>${W('往', 'to')} ${e(shown(it.headsign))}${it.back ? W(' · 回程自動對調', ' · back flips') : ''}</small></span>
               <button class="ot-order-x" type="button" data-idel="${i}:${k}" aria-label="${W('移除', 'Remove')}">${icon('trash')}</button>${list.length > 1 ? gripHtml(W(`拖曳排序：${shown(it.route)}`, `Reorder ${shown(it.route)}`)) : ''}</div>`
             )
             .join('')}</div>
