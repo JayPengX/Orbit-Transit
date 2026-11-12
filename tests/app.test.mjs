@@ -1073,12 +1073,12 @@ test("a bus alert set with notices off says so: addAlert gives the reason for th
   const { addAlert, alerts, removeAlert, startAlerts } = await import('../public/lib/alerts.mjs');
   const said = [];
   startAlerts(t => said.push(t), { schedule() {}, allow: () => '沒有允許通知：只在 App 開著時提醒' });
-  const why = await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 5, stopUID: 'HSZ1' });
+  const why = await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 5, stopUID: '' });
   assert.equal(why, '沒有允許通知：只在 App 開著時提醒');
   assert.deepEqual(said, [], 'said once, by the sheet');
   startAlerts(t => said.push(t), { schedule() {}, allow: () => '' });
-  assert.equal(await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 3, stopUID: 'HSZ1' }), '');
-  // (Taken off again: an alert kept checks every 20 s, and the test would never end.)
+  assert.equal(await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 3, stopUID: '' }), '');
+  // (No stop: nothing is read. Taken off again: an alert kept checks every 20 s, and the test would never end.)
   for (const a of [...alerts()]) removeAlert(a.id);
 });
 
