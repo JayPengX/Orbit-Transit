@@ -23,7 +23,7 @@ import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround, etaAround } from './near.mjs';
 import { nearBikes as nearBikeCards } from './near-ui.mjs';
-import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown } from './nav.mjs';
+import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown } from './nav.mjs';
 import { fastest } from './trouble.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
@@ -265,7 +265,32 @@ function showPlan(p, from, to, resume = null) {
 function takePending() {
   const t = pendingTrip;
   pendingTrip = null;
-  return t.nav ? showPlan(t.nav, t.from, t.to, t.resume) : plan(t.from, t.to, t.opts);
+  if (!t.nav) return plan(t.from, t.to, t.opts);
+  // A ride kept on the phone that can't be taken up again (a plan kept by an
+  // older app, a step this one reads otherwise) ends, said once: never a map
+  // stuck on a sheet with nothing in it at every opening (Jay 2026-11-12).
+  const failed = err => {
+    rec('error', { where: 'transit resume', message: String(err?.message || err).slice(0, 160) });
+    try {
+      stopNav();
+    } catch {}
+    forgetNav();
+    document.body.classList.remove('ot-navigating', 'ot-nav-min', 'ot-planning');
+    $('nav').hidden = true;
+    try {
+      closeCard();
+    } catch {
+      card = null;
+      $('card').hidden = true;
+    }
+    msheet?.relayout();
+    ctx.status(W('上一趟導航接不下去，已經結束', 'Couldn’t pick up the last trip; it has ended'));
+  };
+  try {
+    return Promise.resolve(showPlan(t.nav, t.from, t.to, t.resume)).catch(failed);
+  } catch (err) {
+    failed(err);
+  }
 }
 export function show({ back = false } = {}) {
   map?.resize();
@@ -677,6 +702,26 @@ function closeCard() {
   planDraw++;
   setPlanMarks([]);
 }
+// A card that couldn't be drawn is never left open with nothing in it: the
+// sheet showed only its handle, the search and the shelves hidden behind an
+// empty card, and a ride opened again (its card drawn first) never went on:
+// Jay 2026-11-12, back on a YouBike trip with stops, its kept bike's card
+// reading the stops a reopened trip doesn't carry. What failed goes to 除錯紀錄.
+function renderCard() {
+  try {
+    drawCard();
+  } catch (err) {
+    rec('error', { where: 'transit card', kind: card?.kind || '', message: String(err?.message || err).slice(0, 160) });
+    if (!$('card').textContent.trim()) {
+      try {
+        closeCard();
+      } catch {
+        card = null;
+        $('card').hidden = true;
+      }
+    }
+  }
+}
 // The card's live part, again every 20 s while it's open.
 function refreshCard() {
   clearInterval(cardTimer);
@@ -832,7 +877,7 @@ function head(title, sub, kind) {
   return `<div class="ot-card-head">${kind === 'bike' ? bikeTile() : tile(g, c)}<div class="ot-card-title"><h2>${e(title)}</h2><p>${[sub, d].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
 }
 
-function renderCard() {
+function drawCard() {
   const box = $('card');
   if (!card) return;
   box.hidden = false;
@@ -1063,8 +1108,8 @@ function alertSheet(c, x) {
   d.addEventListener('click', ev => {
     const m = ev.target.closest('[data-min]');
     if (m) {
-      addAlert({ station: st, routeUID: x.routeUID, route: x.route, dir: x.dir, min: Number(m.dataset.min), stopUID: x.stop });
-      ctx.status(W(`${x.route} 到站前 ${m.dataset.min} 分鐘會提醒你`, `Alert ${m.dataset.min} min before ${x.route}`));
+      // (Set: the card says 5 分前提醒你; the toast says it, or why only while the app is open.)
+      addAlert({ station: st, routeUID: x.routeUID, route: x.route, dir: x.dir, min: Number(m.dataset.min), stopUID: x.stop }).then(why => ctx.status(why || W(`${x.route} 到站前 ${m.dataset.min} 分鐘會提醒你`, `Alert ${m.dataset.min} min before ${x.route}`)));
     } else if (ev.target.closest('[data-off]')) removeAlert(on.id);
     else return;
     d.shut();
@@ -2106,7 +2151,7 @@ function plansHtml(c) {
       <button class="q-icon-btn ot-ph-star${saved ? ' on' : ''}" type="button" data-card="save-trip" aria-label="${W('釘選這個行程', 'Pin this trip')}">${icon('star')}</button>
       <button class="q-close ot-ph-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button>
       <div class="ot-card-title ot-od"><button type="button" data-card="edit-from" aria-label="${W('改出發地', 'Change start')}"><i class="ot-dot from"></i><span>${e(shown(c.from.name))}</span></button><button type="button" data-card="edit-to" aria-label="${c.then?.length ? W('改第一站', 'Change first stop') : W('改目的地', 'Change destination')}"><i class="ot-dot ${c.then?.length ? 'stop' : 'to'}"></i>${c.then?.length ? '<small class="ot-od-n">1</small>' : ''}<b>${e(c.to.name || W('目的地', 'Destination'))}</b></button>${(c.then || [])
-        .map((x, k) => `<div class="ot-od-stop"><button type="button" data-card="stop-first" data-k="${k}" aria-label="${W('先去', 'Go first to')} ${e(shown(x.name))}"><i class="ot-dot ${k === c.then.length - 1 ? 'to' : 'stop'}"></i><small class="ot-od-n">${k + 2}</small><b>${e(x.name || W('地點', 'Place'))}</b></button><button class="ot-od-x" type="button" data-card="stop-drop" data-k="${k}" aria-label="${W('移除這一站', 'Remove this stop')}">×</button></div>`)
+        .map((x, k) => `<div class="ot-od-stop"><button type="button" data-card="stop-first" data-k="${k}" aria-label="${W('先去', 'Go first to')} ${e(shown(x.name))}"><i class="ot-dot ${k === c.then?.length - 1 ? 'to' : 'stop'}"></i><small class="ot-od-n">${k + 2}</small><b>${e(x.name || W('地點', 'Place'))}</b></button><button class="ot-od-x" type="button" data-card="stop-drop" data-k="${k}" aria-label="${W('移除這一站', 'Remove this stop')}">×</button></div>`)
         .join('')}${(c.then?.length || 0) < MAX_STOPS ? `<button class="ot-od-add" type="button" data-card="stop-add">${icon('plus')}<span>${W('加一站', 'Add stop')}</span></button>` : ''}</div>
       <button class="q-icon-btn ot-ph-swap" type="button" data-card="swap" aria-label="${W('對調起訖', 'Swap ends')}">${icon('swap')}</button></div>
     ${aboardHtml(c)}<div class="ot-opts"><button class="q-chip ot-when-pick" type="button" data-when="menu" aria-haspopup="dialog">${when.by === 'train' ? `${icon(when.ticket.rides[0].sys)}${e(ticketText(when.ticket))}` : `${icon('clock')}${e(when.by === 'now' ? W('現在出發', 'Leave now') : W(`${whenDay(when.at)}${hm(when.at)} ${when.by === 'arrive' ? '抵達' : '出發'}`, `${when.by === 'arrive' ? 'Arrive' : 'Leave'} ${whenDay(when.at)}${hm(when.at)}`))}`}${icon('down', 'ot-caret')}</button>
@@ -2132,7 +2177,7 @@ function plansHtml(c) {
     const facts = !c.then?.length
       ? [leaveText(p), p.ticket ? '' : p.transfers ? W(`轉乘 ${p.transfers} 次`, `${p.transfers} change${p.transfers > 1 ? 's' : ''}`) : W('不必轉乘', 'No changes'), p.fareText || (p.fare ? `NT$${p.fare}` : ''), p.walk > 50 ? W(`步行 ${distText(p.walk)}`, `walk ${distText(p.walk)}`) : '', p.wet ? W('會淋雨', 'In the rain') : '']
       : !later
-        ? [leaveText(p), W(`後面 ${c.then.length} 段規劃中…`, `Planning ${c.then.length} more…`)]
+        ? [leaveText(p), W(`後面 ${c.then?.length} 段規劃中…`, `Planning ${c.then?.length} more…`)]
         : [leaveText(p), sum('transfers') ? W(`轉乘 ${sum('transfers')} 次`, `${sum('transfers')} changes`) : W('不必轉乘', 'No changes'), sum('fare') ? `NT$${sum('fare')}` : '', sum('walk') > 50 ? W(`步行 ${distText(sum('walk'))}`, `walk ${distText(sum('walk'))}`) : ''];
     // (Nothing gets there from one stop on: said, the time up to it.)
     const short = later?.short != null ? W(`${[c.to, ...c.then][later.short].name || '這一站'}之後找不到方案`, `Nothing found after ${[c.to, ...c.then][later.short].name || 'this stop'}`) : '';
@@ -2143,7 +2188,7 @@ function plansHtml(c) {
     return `<button class="ot-plan${on ? ' on' : ''}${mini ? ' mini' : ''}" type="button" data-plan="${i}">
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="${W('釘選的方案', 'Pinned route')}">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText((arr - p.dep) / 1000))}</b><span class="ot-plan-time">${e(timeRange(p.dep, arr))}</span></div>
         <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="${W(`第 ${k} 站`, `Stop ${k}`)}">${k}</span>` : ''}${chips(q)}`).join('')}</div>${on ? deps(lead, i) : ''}
-        ${mini ? '' : `<div class="ot-plan-sub facts">${[...p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').slice(0, 1).map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${t === '推薦' && kitUI.icons?.ai ? `<span class="ot-tag-ai" aria-hidden="true">${kitUI.icons.ai}</span>` : ''}${e(tagText(t))}</span>`), ...facts.filter(Boolean).map(e)].map((h, k, all) => `<span class="ot-plan-fact">${h}${k < all.length - 1 ? ' ·' : ''}</span>`).join(' ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then.length ? W('騎著的這台，到這裡還', 'Return the bike you’re on here') : bikeSwap(ctx.data.prefs) ? W('同一台騎到底，快滿 30 分鐘時在站旁換一台', 'Keep riding; swap at a dock near 30 minutes') : W('同一台騎到最後才還，停留時也在計費', 'Keep one bike to the end; stops are charged too')}</div>` : ''}
+        ${mini ? '' : `<div class="ot-plan-sub facts">${[...p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').slice(0, 1).map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${t === '推薦' && kitUI.icons?.ai ? `<span class="ot-tag-ai" aria-hidden="true">${kitUI.icons.ai}</span>` : ''}${e(tagText(t))}</span>`), ...facts.filter(Boolean).map(e)].map((h, k, all) => `<span class="ot-plan-fact">${h}${k < all.length - 1 ? ' ·' : ''}</span>`).join(' ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then?.length ? W('騎著的這台，到這裡還', 'Return the bike you’re on here') : bikeSwap(ctx.data.prefs) ? W('同一台騎到底，快滿 30 分鐘時在站旁換一台', 'Keep riding; swap at a dock near 30 minutes') : W('同一台騎到最後才還，停留時也在計費', 'Keep one bike to the end; stops are charged too')}</div>` : ''}
         ${!mini && (p.miss || p.off || p.late || lateShown(p, p.arr) || p.note || p.rivers?.length) ? `<div class="ot-plan-sub${p.miss || p.off || p.late || lateShown(p, p.arr) ? ' warn' : ' note'}">${e(p.off || p.miss || p.late || (lateShown(p, p.arr) ? W(`比 ${hm(p.deadline)} 晚 ${lateShown(p, p.arr)} 分到`, `${lateShown(p, p.arr)} min after ${hm(p.deadline)}`) : '') || p.note || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')} (road bridge)`))}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
@@ -2533,8 +2578,8 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   // (Navigating one: its stretches after each stop, drawn after it.)
   const later = lit < 0 && card?.plans?.includes(p) ? restOf(card, p) : lit >= 0 ? p.later : null;
   // (Each stop on the way marked too, as the end is: Jay 2026-11-07, 墨竹亭 had no mark.)
-  const stops = later?.length ? (lit >= 0 ? [p.dest, ...(p.then || [])] : [card.to, ...card.then]).slice(0, later.length).filter(x => x?.lat != null) : [];
-  if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: lit >= 0 ? p.then?.[later.length - 1] || p.dest : card.then[later.length - 1] };
+  const stops = later?.length ? (lit >= 0 ? [p.dest, ...(p.then || [])] : [card.to, ...(card.then || [])]).slice(0, later.length).filter(x => x?.lat != null) : [];
+  if (later?.length) p = { ...p, legs: [...p.legs, ...later.flatMap(q => q.legs)], dest: lit >= 0 ? p.then?.[later.length - 1] || p.dest : card.then?.[later.length - 1] || p.dest };
   // (Its own YouBike stations, only: drawLayers.)
   if (!navFull()) drawLayers();
   const lines = [];

@@ -1069,6 +1069,17 @@ test('a bus alert as the Worker’s notice: the stop’s own TDX ask, checked fr
   assert.match(item.check.bus.path, /^advanced\/v2\/Bus\/EstimatedTimeOfArrival\/City\/Hsinchu\/PassThrough\/Station\/1234\?\$select=/);
 });
 
+test("a bus alert set with notices off says so: addAlert gives the reason for the toast, never one said and replaced at once", async () => {
+  const { addAlert, removeAlert, startAlerts } = await import('../public/lib/alerts.mjs');
+  const said = [];
+  startAlerts(t => said.push(t), { schedule() {}, allow: () => '沒有允許通知：只在 App 開著時提醒' });
+  const why = await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 5, stopUID: 'HSZ1' });
+  assert.equal(why, '沒有允許通知：只在 App 開著時提醒');
+  assert.deepEqual(said, [], 'said once, by the sheet');
+  startAlerts(t => said.push(t), { schedule() {}, allow: () => '' });
+  assert.equal(await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 3, stopUID: 'HSZ1' }), '');
+});
+
 test('a stop’s timetable an hour a row; any day of the coming week', async () => {
   const { hours } = await import('../public/lib/bus-ui.mjs');
   assert.deepEqual(hours(['06:00', '06:20', '07:40', '24:10']), [['06', ['06:00', '06:20']], ['07', ['07:40']], ['24', ['24:10']]]);
