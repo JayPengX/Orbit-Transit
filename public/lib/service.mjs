@@ -494,6 +494,9 @@ export const runningIn = city => runKnown.get(city)?.run || null;
 // operator's word first; then, with nothing said, no bus on the road in a
 // city whose buses are all off it. `stopUID`: a stop's own notices too.
 export function routeStatus(uid, name, now = Date.now(), stopUID = '') {
+  // (The 測試工具's 公車到站 今日停駛, testing.mjs: every route off, as TDX's whole-day 今日未營運,
+  // so the route's sheet and the plans say what 附近 does.)
+  if (globalThis.ORBIT_TEST?.flags?.busNow === 'off') return { effect: 'off', label: effectLabel('off'), notice: null, why: 'tdx', notices: [] };
   const city = cityOfUid(uid) || '';
   const runCity = city || 'InterCity';
   if (!busKnown.has('') || (city && !busKnown.has(city))) ensureBus([city]).catch(() => {});
