@@ -900,7 +900,7 @@ function drawCard() {
     html = `${head(s.name, s.kind, 'bike')}
       <section class="q-focus ot-bike-now">
         ${bikeStats(s)}
-        ${s.ok === false || s.cap || s.at ? `<span class="q-focus-sub ot-card-tags">${[s.cap ? W(`共 ${s.cap} 柱`, `${s.cap} docks`) : '', s.at ? ago(s.at) : ''].filter(Boolean).map(e).join(' · ')}${s.ok === false ? ` <span class="q-tag red">${W('暫停營運', 'Closed')}</span>` : ''}</span>` : ''}
+        ${s.ok === false || s.cap || s.at ? `<span class="q-focus-sub ot-card-tags">${s.ok === false ? `<span class="q-tag red">${W('暫停營運', 'Closed')}</span> ` : ''}${[s.cap ? W(`共 ${s.cap} 柱`, `${s.cap} docks`) : '', s.at ? ago(s.at) : ''].filter(Boolean).map(e).join(' · ')}</span>` : ''}
       </section>
       ${err}${rentButtons(c)}${actions(c)}`;
   } else if (c.kind === 'bus') {
@@ -1672,7 +1672,9 @@ function rentButtons(c) {
   const swap = bikeSwap(ctx.data.prefs);
   if (r)
     return `<div class="ot-go-there"><button class="q-btn" type="button" data-card="rent-end">${icon('dock')} ${W('在這裡還車', 'Return here')}</button>${swap ? `<button class="q-btn" type="button" data-card="rent-swap">${icon('bike')} ${W('換一台', 'Swap bike')}</button>` : ''}</div>`;
-  return `<div class="ot-go-there">${goButtons(c, { bike: false })}<button class="q-btn" type="button" data-card="rent-start">${icon('bike')} ${W('借車計時', 'Start timer')}</button></div>`;
+  // (A closed station: no bike to take there, so no timer to start.)
+  const closed = (c.live || c.item)?.ok === false;
+  return `<div class="ot-go-there">${goButtons(c, { bike: false })}${closed ? '' : `<button class="q-btn" type="button" data-card="rent-start">${icon('bike')} ${W('借車計時', 'Start timer')}</button>`}</div>`;
 }
 // The timer's sheet: since when, until when it's free, and (TPASS) the
 // stations near you to return it at and take another, the way you're

@@ -77,7 +77,8 @@ export const bikeStats = s => {
   const col = (label, n, cls = '') => `<div class="ot-bstat${cls}${n ? '' : ' zero'}"><small>${label}</small><b class="num">${n}</b></div>`;
   const reg = col(`${icon('bike')}${W('一般', 'Regular')}`, s.bikes || 0);
   const ev = col(`${icon('bolt')}${W('電輔車', 'E-bikes')}`, s.ebike || 0);
-  return `<div class="ot-bstats">${ebikeFirst() ? ev + reg : reg + ev}${col(`${icon('dock')}${W('空位', 'Docks')}`, s.ret || 0, ' dock')}</div>`;
+  // (A closed station's counts greyed: there, but nothing to take or return.)
+  return `<div class="ot-bstats${s.ok === false ? ' off' : ''}">${ebikeFirst() ? ev + reg : reg + ev}${col(`${icon('dock')}${W('空位', 'Docks')}`, s.ret || 0, ' dock')}</div>`;
 };
 
 // Nothing here: the kit's empty state.

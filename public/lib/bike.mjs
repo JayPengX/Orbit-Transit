@@ -41,12 +41,13 @@ export function mergeBikes(stations, live) {
     .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && s.kind !== 'Moovo')
     .map(testBikes);
 }
-// (The 測試工具's YouBike switch, testing.mjs: every station empty, full or down to one; shown only.)
+// (The 測試工具's YouBike switch, testing.mjs: every station empty, full, down to one or closed; shown only.)
 function testBikes(s) {
   const t = globalThis.ORBIT_TEST?.flags?.bikes;
   if (t === 'empty') return { ...s, bikes: 0, ebike: 0, ret: s.cap || 20, ok: true };
   if (t === 'full') return { ...s, ret: 0, ok: true };
   if (t === 'low') return { ...s, bikes: 1, ebike: 0, ret: 1, ok: true };
+  if (t === 'paused') return { ...s, ok: false };
   return s;
 }
 

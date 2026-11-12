@@ -49,12 +49,13 @@ const app = 'transit';
   {
     app,
     title: W('YouBike 站', 'YouBike stations'),
-    sub: W('每一站都沒車、沒位，或只剩 1 台', 'Every station empty, full, or down to 1 bike'),
+    sub: W('每一站都沒車、沒位、只剩 1 台，或暫停營運', 'Every station empty, full, down to 1 bike, or closed'),
     flag: 'bikes',
     options: [
       { id: 'empty', label: W('沒車', 'No bikes') },
       { id: 'full', label: W('沒位', 'No docks') },
-      { id: 'low', label: W('剩 1 台', '1 bike') }
+      { id: 'low', label: W('剩 1 台', '1 bike') },
+      { id: 'paused', label: W('暫停', 'Closed') }
     ]
   },
   { app, title: W('今天放假', 'Day off today'), sub: W('今天當作颱風假：每週的行程今天休息', 'Today a typhoon day off: weekly trips rest'), flag: 'dayOff' },
