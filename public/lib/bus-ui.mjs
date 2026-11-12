@@ -660,7 +660,7 @@ export function chooseGroup(raw, done) {
         return `<button class="ot-row-btn" type="button" data-to="${i}" ${has ? 'disabled' : ''}><span><b>${e(shown(g.name))}</b><small>${W(`${g.items.length} 個站牌`, `${g.items.length} stops`)}${has ? W(' · 已在這裡', ' · already here') : ''}</small></span>${icon('plus')}</button>`;
       })
       .join('')}</div>
-    ${ctx.data.groups.length < MAX_GROUPS ? `<label class="ot-field"><span>${W('或新的群組', 'Or a new group')}</span><div class="ot-row"><input id="g-new" maxlength="12" placeholder="${W('上班、回家', 'Work, Home')}"><button class="q-btn" type="button" data-new="1">${W('建立並加入', 'Create')}</button></div></label>` : ''}`);
+    ${ctx.data.groups.length < MAX_GROUPS ? `<label class="ot-field"><span>${W('或新的群組', 'Or a new group')}</span><div class="ot-row"><input id="g-new" maxlength="16" placeholder="${W('上班、回家', 'Work, Home')}"><button class="q-btn" type="button" data-new="1">${W('建立並加入', 'Create')}</button></div></label>` : ''}`);
   d.addEventListener('click', ev => {
     const to = ev.target.closest('[data-to]');
     let g = null;

@@ -8,6 +8,7 @@ import * as kitAI from '#kit/ai.mjs';
 import { W } from '#kit/lang.mjs';
 import { readSaid, whenOf, saidFacts, placeNamed } from './said.mjs';
 import { shown } from './util.mjs';
+import { PLACE_ICONS } from './store.mjs';
 
 const h = kitUI.h;
 const TW = 8 * 3_600_000;
@@ -40,7 +41,7 @@ export function openSayTrip(ctx, { ask = '' } = {}) {
     const when = trip.by === 'now' ? W('現在出發', 'Leaving now') : `${trip.by === 'arrive' ? W('抵達', 'Arrive by') : W('出發', 'Leave at')} ${md(trip.at)}`;
     const a = (kitAI.aiAnswer || (() => null))({
       line: W(`${trip.from || '目前位置'} 到 ${trip.to}`, `${trip.from || 'Here'} to ${trip.to}`),
-      sections: [{ rows: [row(W('出發', 'From'), trip.from || W('目前位置', 'Where you are'), mine.from ? 'home' : 'pin', 'var(--q-green)'), row(W('到達', 'To'), trip.to, mine.to ? 'home' : 'flag', 'var(--q-red)'), row(W('時間', 'When'), when, 'clock', 'var(--q-blue)')] }]
+      sections: [{ rows: [row(W('出發', 'From'), trip.from || W('目前位置', 'Where you are'), mine.from || 'pin', 'var(--q-green)'), row(W('到達', 'To'), trip.to, mine.to || 'flag', 'var(--q-red)'), row(W('時間', 'When'), when, 'clock', 'var(--q-blue)')] }]
     }) || h('p', { class: 'ot-say-line', text: `${trip.from || W('目前位置', 'Here')} → ${trip.to} · ${when}` });
     return h('div', { class: 'ot-say-a' }, [a, h('button', { class: 'q-btn primary block', type: 'button', text: W('看路線', 'See the ways'), onclick: () => go_(trip) })]);
   };
@@ -66,7 +67,9 @@ export function openSayTrip(ctx, { ask = '' } = {}) {
         return;
       }
       const trip = { from: o.from || '', to: o.to, ...whenOf(o, now) };
-      const mine = { from: Boolean(trip.from && placeNamed(ctx.data.places, trip.from, shown)), to: Boolean(placeNamed(ctx.data.places, trip.to, shown)) };
+      // (A place of yours with its own icon: 家's house, 學校's cap, a pinned place's pin; never a house for every one.)
+      const iconOf = name => PLACE_ICONS[placeNamed(ctx.data.places, name, shown)?.icon] || '';
+      const mine = { from: trip.from ? iconOf(trip.from) : '', to: iconOf(trip.to) };
       const a = understood(trip, mine);
       think.replaceWith(a);
       a.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });

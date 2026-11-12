@@ -54,6 +54,8 @@ export function savedNav(now = Date.now()) {
   return null;
 }
 const dropNav = () => writeJson(NAV_KEY, null);
+// (The map's: a kept ride it couldn't take up again, forgotten.)
+export const forgetNav = dropNav;
 
 // A bus leg as its official route and way, with its timetable (for which
 // live buses are in service), looked up once per leg.

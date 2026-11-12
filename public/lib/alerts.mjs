@@ -90,10 +90,13 @@ export async function addAlert({ station, routeUID, route, dir, min, stopUID }) 
     if (globalThis.Notification?.permission === 'default') await Notification.requestPermission();
   } catch {}
   // Asking for an alert is asking for notices (unless they were turned off).
-  const why = push?.allow();
+  // → why the lock screen won't hear of it ('' when it will): the caller says
+  // it in place of its 會提醒你 (said after, that toast replaced it at once, so
+  // a phone with notices off never heard alerts come only while it's open).
+  const why = push?.allow() || '';
   keep();
-  if (why) say(why);
   check();
+  return why;
 }
 export function removeAlert(id) {
   list = list.filter(a => a.id !== id);
