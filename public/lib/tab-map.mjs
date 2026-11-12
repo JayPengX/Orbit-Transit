@@ -885,7 +885,7 @@ function head(title, sub, kind) {
   // (Walking, by the streets once known: what 走過去 and the strip say.)
   const d = ctx.here && card ? distText(walkKnown(ctx.here, card)?.dist ?? meters(ctx.here.lat, ctx.here.lon, card.lat, card.lon)) : '';
   const [g, c] = KIND_TILE[kind] || KIND_TILE.place;
-  return `<div class="ot-card-head">${kind === 'bike' ? bikeTile() : tile(g, c)}<div class="ot-card-title"><h2>${e(title)}</h2><p>${[sub, d].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
+  return `<div class="ot-card-head">${kind === 'bike' ? bikeTile() : tile(g, c)}<div class="ot-card-title"><h2 class="q-fit-wrap">${e(title)}</h2><p class="q-fit-wrap">${[sub, d].filter(Boolean).map(e).join(' · ')}</p></div><button class="q-close" type="button" data-card="close" aria-label="${W('關閉', 'Close')}">×</button></div>`;
 }
 
 function drawCard() {
