@@ -1070,7 +1070,7 @@ test('a bus alert as the Worker’s notice: the stop’s own TDX ask, checked fr
 });
 
 test("a bus alert set with notices off says so: addAlert gives the reason for the toast, never one said and replaced at once", async () => {
-  const { addAlert, removeAlert, startAlerts } = await import('../public/lib/alerts.mjs');
+  const { addAlert, alerts, removeAlert, startAlerts } = await import('../public/lib/alerts.mjs');
   const said = [];
   startAlerts(t => said.push(t), { schedule() {}, allow: () => '沒有允許通知：只在 App 開著時提醒' });
   const why = await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 5, stopUID: 'HSZ1' });
@@ -1078,6 +1078,8 @@ test("a bus alert set with notices off says so: addAlert gives the reason for th
   assert.deepEqual(said, [], 'said once, by the sheet');
   startAlerts(t => said.push(t), { schedule() {}, allow: () => '' });
   assert.equal(await addAlert({ station: { uid: 'HSZ1234', id: '1234', name: '竹東高中' }, routeUID: 'HSZ0058', route: '5608', dir: 0, min: 3, stopUID: 'HSZ1' }), '');
+  // (Taken off again: an alert kept checks every 20 s, and the test would never end.)
+  for (const a of [...alerts()]) removeAlert(a.id);
 });
 
 test('a stop’s timetable an hour a row; any day of the coming week', async () => {
