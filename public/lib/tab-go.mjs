@@ -574,10 +574,15 @@ async function loadPlace(id) {
 
 const routeAttr = x => `data-route="${e(JSON.stringify({ uid: x.uid, name: x.name, city: x.city, stopUID: x.stopUID, dir: x.dir }))}"`;
 // The buses shown near a pinned place: the three soonest at each of its stops, the five soonest of those.
+// (By when, a timetable's 預計 time too: 13:17 預計 had come after a live 34 分; Jay 2026-11-12.)
+const whenRank = x => {
+  const p = S.planned.get(x.stopUID);
+  return p && !(x.v?.status === 0 && x.v.sec != null) ? Math.max(0, (p.at - Date.now()) / 1000) + 60 : etaRank(x.v);
+};
 const placeBuses = stops =>
   stops
     .flatMap(st => st.rows.slice(0, 3).map(r => ({ ...r, lat: st.lat, lon: st.lon })))
-    .sort((a, b) => etaRank(a.v) - etaRank(b.v))
+    .sort((a, b) => whenRank(a) - whenRank(b))
     .slice(0, 5);
 const busRow = x => {
   const pinned = ctx.data.groups.some(g => g.items.some(i => i.stopUID === x.stopUID));

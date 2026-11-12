@@ -34,9 +34,14 @@ const bars = () => ['', ''].map(() => `<div class="ot-strip">${strip({ no: '', w
 export function nearBusRows(stops, { skip = '', planned = null, max = 4 } = {}) {
   if (stops === null) return bars();
   const seen = new Set();
+  const rankOf = x => {
+    const p = planned?.get(x.stopUID);
+    return p && !(x.v?.status === 0 && x.v.sec != null) ? Math.max(0, (p.at - Date.now()) / 1000) + 60 : etaRank(x.v);
+  };
   const all = stops
     .flatMap(st => st.rows.slice(0, 3).map(r => ({ ...r, dist: st.dist })))
-    .sort((a, b) => etaRank(a.v) - etaRank(b.v))
+    // (By when, a timetable's 預計 time too, as 交通's places: never a live 34 分 above 13:17 預計.)
+    .sort((a, b) => rankOf(a) - rankOf(b))
     .filter(x => skip !== `near:${x.stopUID}:${x.uid}` && !seen.has(x.uid) && seen.add(x.uid));
   if (!all.length) return '';
   // (Soonest first: the first one stopped, every one is.)

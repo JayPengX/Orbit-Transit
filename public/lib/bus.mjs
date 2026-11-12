@@ -239,9 +239,12 @@ export async function routeEta(route, dir = null) {
   return etaMap(got.rows, dir);
 }
 // A bus's place in a list: due soonest first, not out yet after, not running last.
-export function etaRank(v) {
+// (By when, live or timetabled alike: a timetabled bus in 5 minutes before a
+// live one in 36 (a place's 5 soonest had listed 36 分 above 13:17; Jay
+// 2026-11-12); a timetabled one a minute after a live one at the same time.)
+export function etaRank(v, now = Date.now()) {
   v = v && said(v);
-  return !v ? 3e6 : v.sec != null ? v.sec : v.status === 1 ? 1e6 + ((v.next || 0) - Date.now()) / 1000 : 2e6;
+  return !v ? 3e6 : v.sec != null ? v.sec : v.status === 1 && v.next ? Math.max(0, (v.next - now) / 1000) + 60 : v.status === 1 ? 1e6 : 2e6;
 }
 // The stops of a group, one ask per city (near.mjs etaStops: shared with every other look at them).
 export async function stopsEta(items) {
