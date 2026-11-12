@@ -232,6 +232,10 @@ export function createHome(box, ctx, act) {
       }
     );
     const done = await inTime(read);
+    // (Moved away from where the stops shown were read, and the new ones slow:
+    // none until they land, never the old place's stops under 附近 with their
+    // old distances, 新竹車站's buses 130 m away while you stood in 竹北.)
+    if (!done && nearMoved(S.near, h)) S.stops = [];
     // (Never bars for ever: nothing yet, nothing shown; the read lands in its own time.)
     S.stops ||= [];
     if (!done) read.then(draw);
