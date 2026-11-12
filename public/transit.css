@@ -6429,6 +6429,9 @@ html[lang='en'] .ot-sn-tap {
 .ot-bike-now .ot-bstats {
   margin-top: 0;
 }
+.ot-bstats.off .num {
+  color: var(--q-label-3);
+}
 
 /* ==== 11. Wide screens (Jay 2026-10-31: every screen, either way up) =============================
    The map is the whole screen with its panel at the left (section 3). The
