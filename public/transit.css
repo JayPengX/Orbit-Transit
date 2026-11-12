@@ -2520,6 +2520,7 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
 }
 .ot-plan {
   display: block;
+  box-sizing: border-box;
   width: 100%;
   /* (A grid item: never as wide as its one-line legs or its departures row; they fit inside.) */
   min-width: 0;

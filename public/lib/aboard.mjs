@@ -31,22 +31,49 @@ const BUS_MS = { avg: 3, top: 8 };
 // quickest between two fixes), which way (a unit vector east, north), over
 // how long. → null when there's too little to say (two fixes, 15 s, 100 m).
 export function motion(fixes, now = Date.now()) {
-  const f = (fixes || []).filter(x => x && x.t >= now - SPAN_MS && x.lat != null && (x.acc ?? 0) <= 400).sort((a, b) => a.t - b.t);
+  const f = steadyFixes((fixes || []).filter(x => x && x.t >= now - SPAN_MS && x.lat != null && (x.acc ?? 0) <= 400).sort((a, b) => a.t - b.t));
   if (f.length < 2) return null;
-  const a = f[0];
-  const b = f.at(-1);
+  // (Ends: of the first three and the last three, the one nearest the other
+  // two: the newest fix, a jump, had read as going at a bus's pace.)
+  const a = f.length >= 6 ? medoid(f.slice(0, 3)) : f[0];
+  const b = f.length >= 6 ? medoid(f.slice(-3)) : f.at(-1);
   const secs = (b.t - a.t) / 1000;
-  const moved = meters(a.lat, a.lon, b.lat, b.lon);
+  // (Only what's beyond the two fixes' own error counts as moved: standing
+  // still, two rough fixes 80 m apart aren't a walk, nor 30 m in 4 s a bus.)
+  const moved = beyond(a, b);
   if (secs < 15 || moved < 100) return null;
   let top = 0;
   for (let k = 1; k < f.length; k++) {
-    const s = (f[k].t - f[k - 1].t) / 1000;
-    if (s >= 4) top = Math.max(top, meters(f[k - 1].lat, f[k - 1].lon, f[k].lat, f[k].lon) / s);
+    // (Over 15 s at least, beyond both fixes' error: a jump between two fixes 4 s apart isn't a train.)
+    let j = k - 1;
+    while (j > 0 && f[k].t - f[j].t < 15_000) j--;
+    const s = (f[k].t - f[j].t) / 1000;
+    if (s >= 4) top = Math.max(top, beyond(f[j], f[k], 0.25) / s);
   }
   // (The device's own speed, when it says one.)
   for (const x of f) if (Number.isFinite(x.speed) && x.speed > 0) top = Math.max(top, x.speed);
   const v = vec(a, b);
   return { lat: b.lat, lon: b.lon, first: a, fixes: f, avg: moved / secs, top, dir: v, secs, moved };
+}
+const medoid = xs => xs.reduce((best, x) => {
+  const sum = xs.reduce((n, y) => n + meters(x.lat, x.lon, y.lat, y.lon), 0);
+  return sum < best.sum ? { x, sum } : best;
+}, { x: xs[0], sum: Infinity }).x;
+// Metres between two fixes past what their own error (`share` of each's accuracy) could make of standing still.
+const beyond = (a, b, share = 0.5) => Math.max(0, meters(a.lat, a.lon, b.lat, b.lon) - ((a.acc ?? 0) + (b.acc ?? 0)) * share);
+// A phone's fixes without its jumps (Jay 2026-11-12: real GPS is rough; it jumps
+// 100 m and more with its accuracy still saying 20): a fix far from both its
+// neighbours while they're near each other is one. The newest has no
+// neighbour after it: kept, and whoever acts on it waits for the next (nav.mjs `held`).
+export function steadyFixes(f) {
+  if (f.length < 3) return f;
+  const d = (x, y) => meters(x.lat, x.lon, y.lat, y.lon);
+  return f.filter((x, k) => {
+    if (k === 0 || k === f.length - 1) return true;
+    const p = f[k - 1], q = f[k + 1];
+    const slack = 60 + (p.acc ?? 0) + (q.acc ?? 0) + 2 * (x.acc ?? 0);
+    return d(p, x) + d(x, q) <= 2 * d(p, q) + slack;
+  });
 }
 // East and north metres from a to b, as a unit vector (and its length).
 function vec(a, b) {
@@ -56,7 +83,9 @@ function vec(a, b) {
   return { x: x / m, y: y / m, m };
 }
 const dot = (u, v) => u.x * v.x + u.y * v.y;
-export const trainPace = m => Boolean(m) && (m.avg >= TRAIN_MS.avg || m.top >= TRAIN_MS.top);
+// (Its top alone only when moving on too: walking in a city, a jump of 300 m
+// had read as a train's pace and flipped 下車了 to 搭錯車; Jay 2026-11-12.)
+export const trainPace = m => Boolean(m) && (m.avg >= TRAIN_MS.avg || (m.top >= TRAIN_MS.top && m.avg >= 2));
 export const busPace = m => Boolean(m) && m.avg >= BUS_MS.avg && m.top >= BUS_MS.top;
 
 // The 台鐵 trains that could be the one you're on (`m`, motion's): those
