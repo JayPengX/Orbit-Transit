@@ -25,7 +25,7 @@ import { setTripPush } from './alerts.mjs';
 import { pickSig, boardEarly } from './plan.mjs';
 import { chaseOf, chaseNow, steadyLead } from './chase.mjs';
 import { steadyPlans, settled } from './steady.mjs';
-import { lateBy } from './nav.mjs';
+import { lateShown } from './nav.mjs';
 import { loadNotices, onNotices } from './service.mjs';
 import { mapsNear } from './metro.mjs';
 import { cleanPin, slotOf, tripOver, MAX_PINS, PLACE_ICONS } from './store.mjs';
@@ -672,7 +672,7 @@ export const tripWhy = st => (st?.error && !st.plans?.length ? st.error : st ? (
 // A way as one line through it (ui.mjs journeyLine): each ride its line's colour, a walk dotted.
 const wayLine = p => journeyLine(p.legs.filter(l => !(l.mode === 'walk' && l.dur < 120)).map(l => (l.mode === 'walk' ? { walk: true, min: l.dur / 60 } : { min: (l.dur || (l.arr - l.dep) / 1000) / 60, color: legColor(l) })));
 const warnOf = p => {
-  const late = lateBy(p, p.arr);
+  const late = lateShown(p, p.arr);
   return p.off || p.miss || p.late || (late ? W(`晚 ${late} 分到`, `${late} min late`) : '');
 };
 // A trip as its own card (Jay 2026-11-03: 交通 "boring"): on top its main ride's badge, its name,
