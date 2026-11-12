@@ -93,8 +93,14 @@ export const NEAR_MS = 10 * 60_000;
 export function wrongRide(l, fixes, nearAt, onWay, now = Date.now()) {
   if (!isRide(l) || l.from?.lat == null || !nearAt || now - nearAt > NEAR_MS || onWay) return false;
   const m = motion(fixes, now);
-  if (!(busPace(m) || trainPace(m))) return false;
-  return meters(m.lat, m.lon, l.from.lat, l.from.lon) > 400;
+  if (busPace(m) || trainPace(m)) return meters(m.lat, m.lon, l.from.lat, l.from.lon) > 400;
+  // (Or, after a silence (an iPhone in a pocket says nothing for minutes),
+  // further from the stop than walking could take you since: 1 km and more,
+  // at 3 m/s and more. Its pace went unseen; Jay 2026-11-12.)
+  const p = fixes?.at(-1);
+  if (!p || p.t !== now) return false;
+  const d = meters(p.lat, p.lon, l.from.lat, l.from.lon) - (p.acc ?? 0);
+  return d > 1000 && d / Math.max(1, (now - nearAt) / 1000) >= 3;
 }
 // On board and off its way: at a ride's pace it's another bus or train (a
 // branch, the wrong way), at a walk you got off. → 'wrong' | 'off'.

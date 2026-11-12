@@ -10,8 +10,14 @@
 //   bikes    every YouBike station (bike.mjs mergeBikes): empty · full (no docks) · low (1 bike)
 //   dayOff   today a day off, as a typhoon's (util.mjs holidayOn): weekly trips and 通勤小幫手 rest
 //   導航：已抵達  (an action) the trip being navigated there now (nav.mjs navArriveNow)
+//   模擬行程  (an action) the trip being navigated replayed into the GPS from its start
+//            (tripsim.mjs; kit playTrip), the way picked (simWay: as planned, the
+//            bus late, missed, stayed on, off early, the wrong one, walked away),
+//            the GPS as picked (simGps), the clock 4 or 10 times as fast (simRate)
 import { W } from '#kit/lang.mjs';
-import { navArriveNow } from './nav.mjs';
+import { navArriveNow, navNow, navRide, legPts } from './nav.mjs';
+import { truthPath, gpsFeed } from './tripsim.mjs';
+import { isRide } from './util.mjs';
 
 const app = 'transit';
 (globalThis.ORBIT_TEST_TOOLS ||= []).push(
@@ -52,6 +58,67 @@ const app = 'transit';
     ]
   },
   { app, title: W('今天放假', 'Day off today'), sub: W('今天當作颱風假：每週的行程今天休息', 'Today a typhoon day off: weekly trips rest'), flag: 'dayOff' },
+  {
+    app,
+    title: W('模擬：怎麼走', 'Replay: what happens'),
+    sub: W('模擬行程時這個人怎麼走（第一段車）', 'How the replayed trip goes (its first ride)'),
+    flag: 'simWay',
+    options: [
+      { id: 'late', label: W('車晚 6 分', 'Ride 6 min late') },
+      { id: 'miss', label: W('錯過車', 'Missed it') },
+      { id: 'over', label: W('坐過站', 'Stayed on') },
+      { id: 'early', label: W('提早下車', 'Off early') },
+      { id: 'wrong', label: W('搭錯車', 'Wrong ride') },
+      { id: 'stray', label: W('走錯路', 'Walked away') }
+    ]
+  },
+  {
+    app,
+    title: W('模擬：GPS', 'Replay: GPS'),
+    sub: W('關＝一般手機；其他越來越差（跳點、沒訊號、隧道）', 'Off = a phone on a normal day; the rest worse (jumps, gaps, tunnels)'),
+    flag: 'simGps',
+    options: [
+      { id: 'clean', label: W('很準', 'Clean') },
+      { id: 'city', label: W('市區', 'City') },
+      { id: 'background', label: W('常斷訊', 'Gaps') },
+      { id: 'train', label: W('火車上', 'On a train') }
+    ]
+  },
+  {
+    app,
+    title: W('模擬：速度', 'Replay: speed'),
+    sub: W('關＝真實時間', 'Off = real time'),
+    flag: 'simRate',
+    options: [
+      { id: '4', label: W('4 倍', '×4') },
+      { id: '10', label: W('10 倍', '×10') }
+    ]
+  },
+  {
+    app,
+    title: W('模擬行程', 'Replay the trip'),
+    sub: W('正在導航的行程從頭重走一次，位置照上面選的', 'The trip being navigated, from its start, as picked above'),
+    label: W('開始', 'Start'),
+    run: async () => {
+      const now = navNow();
+      if (!now) return W('先開始一段導航', 'Start a navigation first');
+      const tt = await import('#kit/testtools.mjs');
+      if (!tt.playTrip) return W('需要更新後才能用', 'Needs an update first');
+      const f = globalThis.ORBIT_TEST?.flags || {};
+      const plan = now.plan;
+      const k = plan.legs.findIndex(isRide);
+      const rs = k >= 0 ? navRide(k) : null;
+      const from = plan.dep - 60_000;
+      const truth = truthPath(plan, { scenario: f.simWay || 'plan', k: k >= 0 ? k : null, legPts, start: from, more: rs?.stops?.slice((rs.j ?? -2) + 1), before: rs?.stops?.[(rs.j ?? 0) - 1] });
+      const fixes = gpsFeed(truth, f.simGps || 'phone', Math.floor(Math.random() * 1e6)).map(x => [Math.round((x.got - from) / 1000), +x.lat.toFixed(6), +x.lon.toFixed(6), x.acc, Math.round((x.at - from) / 1000)]);
+      // (Navigation picked up again from the trip's start, as it was set out on.)
+      try {
+        localStorage.setItem('ot.nav.v1', JSON.stringify({ plan, i: 0, reached: 0, phase: 'before', min: false, at: from }));
+      } catch {}
+      document.querySelector('dialog.q-tester[open]')?.close();
+      tt.playTrip({ from, fixes, rate: Number(f.simRate) || 1 });
+    }
+  },
   {
     app,
     title: W('導航：已抵達', 'Navigation: arrived'),
