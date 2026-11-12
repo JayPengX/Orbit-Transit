@@ -98,7 +98,7 @@ function render() {
     )}
     ${section(
       W('規劃', 'Planning'),
-      rowCard(`${passRow}${modeRows(P)}<div class="q-ritem">${tile('bike', COLOR.bike)}<span class="q-ritem-text"><span class="q-ritem-title">${W('每 30 分換一台 YouBike', 'New YouBike every 30 min')}</span><small>${W('前 30 分鐘最便宜', 'The first half hour costs least')}</small></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${bikeSwap(P)}" aria-label="${W('每 30 分鐘換 YouBike', 'Swap YouBikes every 30 min')}"><i></i></button></div>${ebikeRow(P)}
+      rowCard(`${passRow}${modeRows(P)}<div class="q-ritem">${tile('bike', COLOR.bike)}<span class="q-ritem-text"><span class="q-ritem-title">${W('每 30 分換一台 YouBike', 'Swap YouBikes every 30 min')}</span><small>${W('前 30 分鐘最便宜', 'The first half hour costs least')}</small></span><button class="q-switch" type="button" role="switch" data-act="bike30" aria-checked="${bikeSwap(P)}" aria-label="${W('每 30 分鐘換 YouBike', 'Swap YouBikes every 30 min')}"><i></i></button></div>${ebikeRow(P)}
         <label class="q-ritem chevron ot-pick-row">${tile('pin', COLOR.place)}<span class="q-ritem-text"><span class="q-ritem-title">${W('導航 App', 'Maps app')}</span></span><span class="q-ritem-value">${P.maps === 'apple' ? W('Apple 地圖', 'Apple Maps') : W('Google 地圖', 'Google Maps')}</span><select id="me-maps" class="ot-cover" aria-label="${W('導航 App', 'Maps app')}"><option value="google" ${P.maps !== 'apple' ? 'selected' : ''}>${W('Google 地圖', 'Google Maps')}</option><option value="apple" ${P.maps === 'apple' ? 'selected' : ''}>${W('Apple 地圖', 'Apple Maps')}</option></select></label>`)
     )}
   </div></div></div>`;

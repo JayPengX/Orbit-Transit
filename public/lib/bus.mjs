@@ -293,7 +293,7 @@ function testEta(raw, kind) {
 export function said(v, now = Date.now()) {
   const raw = v?.raw || v;
   if (!raw?.rt) return v;
-  const st = globalThis.ORBIT_TEST?.flags?.busNow === 'off' ? { effect: 'off', label: W('今日停駛', 'Not running today') } : routeStatus(raw.rt.uid, raw.rt.name, now, raw.rt.stop);
+  const st = routeStatus(raw.rt.uid, raw.rt.name, now, raw.rt.stop);
   const flag = st ? { effect: st.effect, label: st.label } : null;
   const onRoad = (raw.status === 0 && raw.sec != null) || raw.more.length > 0;
   if (flag && (flag.effect === 'off' || flag.effect === 'likely') && !onRoad) return { ...raw, raw, sec: null, status: 4, next: null, more: [], flag };

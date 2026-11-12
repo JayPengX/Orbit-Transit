@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { etaOf, etaText } from '../public/lib/bus.mjs';
 import { mergeBikes } from '../public/lib/bike.mjs';
 import { holidayOn, tw } from '../public/lib/util.mjs';
+import { routeStatus, stoppedNow } from '../public/lib/service.mjs';
 
 afterEach(() => delete globalThis.ORBIT_TEST);
 const row = { RouteUID: 'HSZ0007', RouteName: { Zh_tw: '7' }, StopUID: 'HSZ1', StopStatus: 1, EstimateTime: null };
@@ -14,6 +15,11 @@ test('busNow: every bus as picked; off: 今日停駛; none set: as TDX said', ()
   assert.equal(etaText(etaOf(row)).tone, 'now');
   globalThis.ORBIT_TEST = { flags: { busNow: 'off' } };
   assert.equal(etaOf(row).status, 4);
+  // (The route's sheet and the plans read the route's status: off there too, never the timetable's times.)
+  assert.equal(stoppedNow('HSZ0007', '7')?.effect, 'off');
+  assert.equal(routeStatus('HSZ0007', '7').notices.length, 0);
+  globalThis.ORBIT_TEST = { flags: {} };
+  assert.equal(stoppedNow('HSZ0007', '7'), null);
 });
 
 test('bikes: empty stations; dayOff: today off', () => {

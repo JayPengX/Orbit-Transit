@@ -719,7 +719,7 @@ function tripCard({ t, w }) {
     when: whenHtml(p.dep, tw(p.dep).date === tw().date ? W('出發', 'Leave') : `${dayLabel(tw(p.dep).date)}${W(' 出發', '')}`, p.live),
     attrs: `data-all-trip="${e(w.id)}"`
   });
-  const way = `<button class="ob-trip-way q-press" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ob-trip-line">${wayLine(p)}<b>${e(hm(p.arr))}<small>${W('到', ' in')}</small></b></span><span class="ot-legs">${legChips(p.legs)}</span></button>`;
+  const way = `<button class="ob-trip-way q-press" type="button" data-nav-trip="${e(w.id)}" data-i="${i}"><span class="ob-trip-line">${wayLine(p)}<b>${e(hm(p.arr))}<small>${W('到', ' arrive')}</small></b></span><span class="ot-legs">${legChips(p.legs)}</span></button>`;
   const more = otherWays(first, rest, p);
   const others = more.length
     ? `<div class="ob-ways"><span class="ob-ways-h">${W('其他班次', 'Other ways')}</span>${more
