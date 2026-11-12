@@ -89,3 +89,14 @@ test('a plan in a minute after the time asked says so (抵達 13:30, in 13:31); 
   assert.equal(lateBy({ deadline: dl }, dl + 60_000), 0);
   assert.equal(lateShown({}, dl), 0);
 });
+
+test('buses by when: a timetabled one in 5 minutes before a live one in 36', async () => {
+  const { etaRank } = await import('../public/lib/bus.mjs');
+  const now = Date.parse('2026-11-12T13:12:00+08:00');
+  const live36 = { status: 0, sec: 36 * 60, more: [] };
+  const sched5 = { status: 1, sec: null, next: now + 5 * 60_000, more: [] };
+  const sched40 = { status: 1, sec: null, next: now + 40 * 60_000, more: [] };
+  const list = [live36, sched40, sched5].sort((a, b) => etaRank(a, now) - etaRank(b, now));
+  assert.deepEqual(list, [sched5, live36, sched40]);
+  assert.ok(etaRank({ status: 0, sec: 300, more: [] }, now) < etaRank({ status: 1, next: now + 300_000, more: [] }, now), 'live first at the same time');
+});
