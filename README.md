@@ -16,42 +16,30 @@
 Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planned the way people really travel. Part of **Orbit**, a family of apps for life in Taiwan that share one sign-in, the Orbit Pass. See them all at [orbit.jaypengx.com](https://orbit.jaypengx.com/pass/).
 
 <p align="center">
-  <img src="docs/screenshots/transit-1.webp" width="30%" alt="Your trip on Google Maps">
-  <img src="docs/screenshots/transit-2.webp" width="30%" alt="Just say where you're going">
-  <img src="docs/screenshots/transit-3.webp" width="30%" alt="The fastest way, at a glance">
+  <img src="docs/screenshots/transit-1.webp" width="30%" alt="Train, bus and YouBike in one plan">
+  <img src="docs/screenshots/transit-2.webp" width="30%" alt="Every station's next train, live">
+  <img src="docs/screenshots/transit-3.webp" width="30%" alt="Every train between two stations">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/transit-4.webp" width="30%" alt="Every train between two stations">
-  <img src="docs/screenshots/transit-5.webp" width="30%" alt="How long until the bus">
-  <img src="docs/screenshots/transit-6.webp" width="30%" alt="YouBike docks, live">
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/transit-7.webp" width="30%" alt="Live trains at the station">
-  <img src="docs/screenshots/transit-8.webp" width="30%" alt="Metro maps, true to the lines">
-  <img src="docs/screenshots/transit-9.webp" width="30%" alt="High-speed rail, booked through">
+  <img src="docs/screenshots/transit-4.webp" width="30%" alt="Minutes until your bus">
+  <img src="docs/screenshots/transit-5.webp" width="30%" alt="YouBike docks, live">
+  <img src="docs/screenshots/transit-6.webp" width="30%" alt="Every metro, drawn true to its lines">
 </p>
 
 <details>
 <summary>中文畫面</summary>
 
 <p align="center">
-  <img src="docs/screenshots/transit-1.zh.webp" width="30%" alt="路線畫在 Google 地圖上">
-  <img src="docs/screenshots/transit-2.zh.webp" width="30%" alt="用說的查路線">
-  <img src="docs/screenshots/transit-3.zh.webp" width="30%" alt="最快的走法，一眼看懂">
+  <img src="docs/screenshots/transit-1.zh.webp" width="30%" alt="火車、公車、YouBike，一次排好">
+  <img src="docs/screenshots/transit-2.zh.webp" width="30%" alt="每個車站的下一班，即時">
+  <img src="docs/screenshots/transit-3.zh.webp" width="30%" alt="兩站之間，每一班車">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/transit-4.zh.webp" width="30%" alt="兩站之間每一班車">
-  <img src="docs/screenshots/transit-5.zh.webp" width="30%" alt="公車還要等多久">
-  <img src="docs/screenshots/transit-6.zh.webp" width="30%" alt="YouBike 即時車位">
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/transit-7.zh.webp" width="30%" alt="車站即時班次">
-  <img src="docs/screenshots/transit-8.zh.webp" width="30%" alt="捷運路網，照真的路線畫">
-  <img src="docs/screenshots/transit-9.zh.webp" width="30%" alt="高鐵訂位一路帶到底">
+  <img src="docs/screenshots/transit-4.zh.webp" width="30%" alt="公車還要等幾分鐘">
+  <img src="docs/screenshots/transit-5.zh.webp" width="30%" alt="YouBike 車位，即時">
+  <img src="docs/screenshots/transit-6.zh.webp" width="30%" alt="全台捷運，照真的路線畫">
 </p>
 
 </details>
