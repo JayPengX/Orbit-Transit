@@ -1517,6 +1517,19 @@ test('a bus stop’s card reads its signs’ stops, one ask a city at the live s
   assert.equal(asked.length, 2, 'read again only at the live speed');
 });
 
+test('at the platform, the train past a minute and more: 已開走, never 就要到了 for half an hour (2026-11-12)', () => {
+  const t0 = Date.UTC(2026, 9, 5, 12);
+  const at = m => t0 + m * 60_000;
+  const plan = finish({ src: 't', legs: [
+    { mode: 'walk', dur: 300, dep: at(0), arr: at(5), from: { lat: 24.8212, lon: 121.0176 }, to: { name: '竹北', lat: 24.8392, lon: 121.0093 } },
+    { mode: 'tra', short: '區間 1247', dur: 600, dep: at(10), arr: at(20), from: { name: '竹北', lat: 24.8392, lon: 121.0093 }, to: { name: '新竹', lat: 24.8016, lon: 120.9716 } }
+  ] });
+  const t = navTimes(plan, 1, 'board', { lat: 24.8392, lon: 121.0093 }, new Map(), at(10));
+  assert.match(paceOf(plan, 1, 'board', t, new Map(), at(10.5)).text, /就要到了/);
+  const gone = paceOf(plan, 1, 'board', t, new Map(), at(30));
+  assert.match(gone.text, /已開走/);
+});
+
 test('navigating, live: when you’ll be at the train from where you are (early, only just, late), when you’re there; a bus by when it really comes', () => {
   const t0 = Date.UTC(2026, 9, 5, 12);
   const at = m => t0 + m * 60_000;
