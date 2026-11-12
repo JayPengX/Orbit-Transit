@@ -4146,6 +4146,9 @@ button.ot-trip-foot {
   font: 500 13px/18px var(--q-font);
   white-space: nowrap;
 }
+.ot-jny-day {
+  color: var(--q-label-2);
+}
 .ot-jny-next b {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
