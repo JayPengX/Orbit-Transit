@@ -143,6 +143,12 @@ export function register(c) {
   };
 }
 
+// The map's place when it didn't load: plain words (never the error's) and, online, 重試.
+export const mapFailedHtml = online =>
+  online
+    ? kitUI.emptyHtml({ icon: 'map', title: W('地圖沒有載入', 'The map didn’t load'), action: { label: W('重試', 'Retry'), data: { 'map-retry': '1' } } })
+    : `<p class="ot-empty">${W('沒有網路連線，地圖連上網路後載入', 'Offline. The map loads once you’re back.')}</p>`;
+
 export async function init(c) {
   ctx = c;
   $('fab-locate').innerHTML = icon('locate');
@@ -156,8 +162,13 @@ export async function init(c) {
   try {
     map = await createMap($('map'), { provider: cfg.provider, key: cfg.key, center, zoom: view?.z || 16, onPick: pick, onTap: tap, onIdle: idle, onPlace: googlePlace, onDrag: dragged });
   } catch (err) {
-    // (No connection the first time, before the phone kept the map: said plainly, not a script's address.)
-    $('map').innerHTML = `<p class="ot-empty">${netState() === 'online' ? W(`地圖載入失敗：${e(err.message)}`, `Map failed to load: ${e(err.message)}`) : W('沒有網路連線，地圖連上網路後載入', 'Offline. The map loads once you’re back.')}</p>`;
+    // (No connection the first time, before the phone kept the map: said plainly, not a script's address.
+    // Online, the script's error is the log's, never the screen's: it was the map's
+    // address, Google's key in it, or "maps timeout"; one tap opens it again.)
+    rec('error', { where: 'transit map', message: String(err?.message || err).replace(/key=[^&\s]+/g, 'key=…').slice(0, 160) });
+    const online = netState() === 'online';
+    $('map').innerHTML = mapFailedHtml(online);
+    $('map').querySelector('[data-map-retry]')?.addEventListener('click', () => location.reload());
     return isReady();
   }
   // Each opening, the map goes to where you are now once the phone says
