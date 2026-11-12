@@ -6539,6 +6539,21 @@ html[lang='en'] .ot-sn-tap {
     height: max(300px, calc(100svh - 24px));
   }
 }
+/* A phone on its side: a trip's first plan whole under its from, to and options (the map's sheet beside it). */
+@media (max-height: 520px) {
+  .ot-ms-grab {
+    height: 14px;
+  }
+  .ot-ms-grab i {
+    top: 5px;
+  }
+  #card .ot-opts {
+    margin-top: 6px;
+  }
+  #card .ot-opts + .ot-plans {
+    margin-top: 4px;
+  }
+}
 /* A phone on its side: a sheet's rows a little tighter (圖層's four fit whole). */
 @media (max-height: 520px) {
   .ot-sheet .q-rowcard > .q-ritem {

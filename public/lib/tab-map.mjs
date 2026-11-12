@@ -267,7 +267,7 @@ function showPlan(p, from, to, resume = null) {
     return navigate(card.plans[0], resume);
   }
   card.sel = 0;
-  if (msheet && msheet.detent !== 'medium') msheet.set('medium');
+  if (msheet && msheet.detent !== half()) msheet.set(half());
   renderCard();
   drawPlan(p, { fit: true });
 }
@@ -1168,12 +1168,16 @@ const SIDE_Q = '(min-width: 640px)';
 const PIN_Q = '(min-width: 640px) and (min-height: 521px)';
 const sideMode = () => Boolean(globalThis.matchMedia?.(SIDE_Q).matches);
 const pinMode = () => Boolean(globalThis.matchMedia?.(PIN_Q).matches);
+// Where a card or a trip sits: at half, the map above it; on a phone on its side the sheet is beside the
+// map and half of a short screen hid even the first plan (the owner, 2026-11-12), so there it opens tall.
+const half = () => (sideMode() && !pinMode() ? 'large' : 'medium');
 const navBar = () => (document.body.classList.contains('ot-nav-min') ? NAV_BAR : 0);
 const sheetRoom = () => $('panel-map').clientHeight - navBar();
 const sheetTop = () => {
   const b = $('top-actions')?.getBoundingClientRect();
-  // (Beside the map: up to the top, level with the account buttons.)
-  if (sideMode()) return Math.max(10, Math.round(b?.top || 0));
+  // (Beside the map: up to the top. The account buttons sit at the rail's foot there, so they are no measure:
+  // on a phone on its side they made the tallest stop 260 px and hid a trip's plans, 2026-11-12.)
+  if (sideMode()) return 10;
   return b?.height ? Math.round(b.bottom + 10) : 64;
 };
 // What covers the map, px in from each of its edges: the buttons at the top and the right, the sheet
@@ -1242,7 +1246,7 @@ function frameStep(k) {
   const was = box.querySelector('.ot-steps li.lit');
   const li = Number.isFinite(k) && k >= 0 ? box.querySelector(`.ot-steps li[data-leg="${k}"]`) : Number.isNaN(k) ? box.querySelector('.ot-steps li.end') : null;
   was?.classList.remove('lit');
-  if (msheet.detent !== 'medium') msheet.set('medium');
+  if (msheet.detent !== half()) msheet.set(half());
   const end = (later.at(-1) || p).legs.at(-1)?.to;
   const whole = () => legs.flatMap(l => legPath(l).map(([lat, lon]) => ({ lat, lon })));
   if (!li || li === was) return void map.fit(whole(), fitPad(30, 0.5));
@@ -1284,11 +1288,11 @@ function buildSheet() {
     // A card sits at half, the map above it showing what was tapped: from the lowest stop it lifts the sheet,
     // from the top (the shelves scrolled up, a nearby YouBike tapped) it lowers it. Closed, it goes to the lowest.
     if (mode === 'card') {
-      liftedFor = msheet.detent !== 'medium' || backToPeek;
+      liftedFor = msheet.detent !== half() || backToPeek;
       backToPeek = false;
-      if (msheet.detent !== 'medium') msheet.set('medium');
+      if (msheet.detent !== half()) msheet.set(half());
     } else if (was === 'card') {
-      if (liftedFor && msheet.detent === 'medium' && mode === 'home') msheet.set('peek');
+      if (liftedFor && msheet.detent === half() && mode === 'home') msheet.set('peek');
       liftedFor = false;
     }
     // (The shelves showing again: read now if their last read is past its 20 s; kept as they were under the card.)
@@ -1581,7 +1585,7 @@ async function chooseResult(r) {
   const from = searchFrom;
   closeResults({ keep: true });
   if (msheet.detent === 'large') {
-    msheet.set('medium');
+    if (half() !== 'large') msheet.set(half());
     backToPeek = from === 'peek';
   }
   const known = p => {
@@ -2332,9 +2336,9 @@ function selectPlan(i) {
   // the lowest stop it showed nothing, pulled up it hid the map). Closed, the list goes back where it was.
   if (card.sel >= 0) {
     if (listDetent == null) listDetent = msheet.detent;
-    if (msheet.detent !== 'medium') msheet.set('medium');
+    if (msheet.detent !== half()) msheet.set(half());
   } else if (listDetent != null) {
-    if (msheet.detent === 'medium' && listDetent !== 'peek') msheet.set(listDetent);
+    if (msheet.detent === half() && listDetent !== 'peek') msheet.set(listDetent);
     listDetent = null;
   }
   renderCard();
