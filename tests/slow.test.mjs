@@ -22,6 +22,8 @@ test('slow: the delay with where it is and when it gets there; no notice, no cau
   assert.doesNotMatch(spec.line, /會車|多半|可能/);
   assert.equal(spec.sections.length, 1);
   assert.equal(spec.sections[0].rows.find(r => r.value === '08:06')?.sub, '原本 08:00');
+  // (The row lit, in the app's green, is when it gets there; the delay is never green, as if good.)
+  assert.deepEqual(spec.sections[0].rows.filter(r => r.on).map(r => r.value), ['08:06']);
   const told = slowSpec({ label: '自強 162', delay: 6, arr: now, toName: '新竹', pos: null, alerts: traAlertsNow(j, now).slice(0, 1) });
   assert.equal(told.sections[1].rows[0].label, '新竹－竹北間號誌故障');
   assert.match(slowSpec({ label: '自強 162', delay: 0, pos: null }).line, /準點/);
