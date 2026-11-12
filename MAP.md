@@ -18,7 +18,7 @@ Jay's, dated (Taiwan day), newest wins; the family's are in Orbit-Core `docs/RUL
 - 11-06 Google's places on the map keep Google's own colours; a tap on one opens it at once. Google's own bus stops stay off (ours have live times). A place's or spot's card shows the YouBike near it, never its bus stops.
 - Bus times: TDX's live estimates are right, TDX's timetables between the ends are often wrong, Google's planner's ride time is right (`busLink`, `liveRide`). The islands (金門, 馬祖) stay supported.
 - Every real choice is shown, with official names, times and live data first. There is always a recommendation. Taxis never.
-- The map opens on where you are and follows you, and never pulls you back once a finger has moved it. Navigation never takes the app over: the tabs stay, it shrinks to a bar. Status bar `black`.
+- The map opens on where you are and follows you, and never pulls you back once a finger has moved it. Navigation never takes the app over: the tabs stay, it shrinks to a bar. On a phone on its side a card or a trip opens tall: half of a short screen hid the first plan. Status bar `default`, as the family.
 - Logs hold places: keep them in `captures/` (git-ignored).
 
 **Planning.**
