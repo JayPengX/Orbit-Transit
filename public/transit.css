@@ -2749,9 +2749,7 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   font: 400 13px/18px var(--q-font);
 }
 .ot-step-line {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  display: block; /* (q-fit-wrap: shrinks to fit, then wraps evenly: the stops count was cut at 320) */
 }
 .ot-step-dur {
   color: var(--q-label-2);
