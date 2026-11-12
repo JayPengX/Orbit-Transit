@@ -449,7 +449,8 @@ export function paceOf(plan, i, phase, times, liveAt = new Map(), now = Date.now
   const when = r.mode === 'bus' ? W(`${liveAt.has(ri) ? '' : '約 '}${hm(dep)} 到站`, `due ${liveAt.has(ri) ? '' : '~'}${hm(dep)}`) : W(`${hm(dep)} 開`, `leaves ${hm(dep)}`);
   if (ri === i) {
     const m = Math.round((dep - now) / 60_000);
-    return { text: `${at}${when}${m > 0 ? W(`・${m} 分後`, `・in ${m} min`) : W('・就要到了', '・any moment')}${live && !/到站|due/.test(live) ? `・${live}` : ''}`, tone: m > 0 ? '' : 'warn' };
+    const gone = dep - now < -60_000;
+    return { text: `${at}${when}${m > 0 ? W(`・${m} 分後`, `・in ${m} min`) : gone ? (r.mode === 'bus' ? W('・可能已經過站', '・may have passed') : W('・已開走', '・gone')) : W('・就要到了', '・any moment')}${live && !/到站|due/.test(live) ? `・${live}` : ''}`, tone: m > 0 ? '' : 'warn' };
   }
   // (How early or late you'll be there says when: beside Google (or Apple) 地圖, on to a
   // second line between its parts when the stop's name is long, never cut.)
@@ -617,7 +618,9 @@ export const leftText = m => (m < 60 ? W(`${m} 分`, `${m} min`) : W(`${Math.flo
 // What's left of a walk or ride, big: metres under a kilometre.
 const distBig = m => (m < 1000 ? `<b>${Math.round(m / 10) * 10}</b><small>${W('公尺', 'm')}</small>` : `<b>${(m / 1000).toFixed(1)}</b><small>${W('公里', 'km')}</small>`);
 // The countdown to a bus or train, big: to the second under ten minutes.
-const countBig = (ms, what) => (ms >= 600_000 ? `<b>${Math.round(ms / 60_000)}</b><small>${W('分', 'min')}</small>` : `<b>${countText(ms)}</b><small>${e(what)}</small>`);
+// (Past it a minute and more, still before you: gone, never 0:00 for half an hour
+// under a 搭錯車 card; 2026-11-12.)
+const countBig = (ms, what) => (ms < -60_000 ? `<b>${what === W('後到站', 'to arrival') ? W('可能已過', 'Passed?') : W('已開走', 'Gone')}</b>` : ms >= 600_000 ? `<b>${Math.round(ms / 60_000)}</b><small>${W('分', 'min')}</small>` : `<b>${countText(ms)}</b><small>${e(what)}</small>`);
 
 // Coming to your stop: its last few stops on a line, yours at the end, the
 // bus or train where it is now (on a stop, or between two), what it's at.
@@ -1589,7 +1592,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           // train runs at six metres a second and more, your station still
           // 400 m and more on: asked if you got off. (Never by standing
           // still: a train waits at a signal or for the one coming the other way.)
-          const k0 = state.track.find(x => x.t <= t - WALK_OFF_MS);
+          // (Over the last four minutes, not since the oldest point kept: ten minutes
+          // back the train's own pace held the average up, off noticed 9 minutes on.)
+          const k0 = state.track.findLast(x => x.t <= t - WALK_OFF_MS);
           const last = state.track.at(-1);
           const legPace = rs.cum.at(-1) && l.arr > l.dep ? (rs.cum[rs.j] - rs.cum[rs.i ?? 0]) / ((l.arr - l.dep) / 1000) : 0;
           const walkPace = k0 && last && last.t - k0.t >= WALK_OFF_MS ? (last.d - k0.d - (p.acc ?? 0)) / ((last.t - k0.t) / 1000) : null;

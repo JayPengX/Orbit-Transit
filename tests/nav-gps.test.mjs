@@ -33,6 +33,14 @@ test('a train past your station, by the door 30 m off, is not there', () => ok('
 test('off a train a station early, walking along the line: noticed', () => {
   for (const pr of ['phone', 'city', 'train']) ok('train', 'early', pr, 1);
 });
+test('off a train a station early, walking on: asked within five minutes, not nine (2026-11-12)', () => {
+  for (const pr of ['phone', 'city', 'clean']) {
+    const r = ok('train', 'early', pr, 1);
+    const off = r.truth.find(s => s.phase === 'off').t;
+    const tr = r.ev.find(e => e.what === 'trouble' && e.kind === 'off' && e.t > off);
+    assert.ok(tr && tr.t - off <= 5 * 60_000, `${pr}: ${tr ? Math.round((tr.t - off) / 1000) + ' s' : 'never'}`);
+  }
+});
 test('a trip to the station itself ends there; staying on past it is noticed', () => {
   const r = ok('station', 'plan', 'phone', 1);
   assert.ok(r.ends.length, 'ended');
