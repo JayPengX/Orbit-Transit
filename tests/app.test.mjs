@@ -842,6 +842,11 @@ test('by a departure time: a plan that has you leave before it sinks out; riding
   const lateL = finish({ legs: [leg('tra', '區間 1828', '16:20', '17:15')] });
   const out = rank([lateL, soonL], { now: T('08:00'), by: 'arrive', deadline: T('08:00'), clock: T('07:21'), o, d });
   assert.equal(out[0].legs[0].short, '快捷8號');
+  // Late already, every minute waited is a minute later there: the train now,
+  // in at 08:18, over the bus in 34 minutes, in at 08:50 (上學 at 07:20, 2026-11-12).
+  const nowT = finish({ legs: [leg('bike', 'YouBike', '07:20', '07:45'), leg('tra', '區間 1806', '07:47', '08:12'), leg('walk', '', '08:12', '08:18', { dist: 500 })] });
+  const waitB = finish({ legs: [leg('bus', '5700', '07:54', '08:44'), leg('walk', '', '08:44', '08:50', { dist: 400 })] });
+  for (const opts of [{ now: T('07:30'), by: 'arrive', deadline: T('07:30'), clock: T('07:20') }, { now: T('07:20'), late: true }]) assert.equal(rank([waitB, nowT], { ...opts, o, d })[0].legs[1].short, '區間 1806', JSON.stringify(opts));
   // 55 minutes on a bike against 50 by bus with a change: the bus first.
   const ride = finish({ legs: [leg('bike', 'YouBike', '06:05', '07:00')] });
   const mid = { name: '竹東', lat: 24.777, lon: 121.053 };
