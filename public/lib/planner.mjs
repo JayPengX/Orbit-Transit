@@ -227,7 +227,7 @@ export const missedRetry = (at, now, wide = false) => (wide ? null : at - now > 
 // `ebike`: 偏好電輔車, this trip's own (withBikes); not said, the person's own in 我的.
 // `chase: false`: no YouBike to a bus further on (a trip replanned under way).
 // `wet`: the stretches it rains on the trip (rain.mjs rainFor): rides and long walks in them cost more, and are marked.
-export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null, wide = false, ebike = null, chase = true, wet = null } = {}) {
+export async function planTrip(data, from, to, { at = null, by = 'depart', modes: only = null, wide = false, ebike = null, chase = true, wet = null, late = false } = {}) {
   ebike ??= data.prefs?.ebike === true;
   const prefs = only ? { ...data.prefs, modes: { ...data.prefs.modes, ...only } } : data.prefs;
   const modes = prefs.modes;
@@ -395,7 +395,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     const bikes = await bikesNow;
     await streetWalks(bikes, from, to);
     const t2 = performance.now();
-    const bikeOpts = { modes, swap: bikeSwap(prefs), ebike, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now, wet };
+    const bikeOpts = { modes, swap: bikeSwap(prefs), ebike, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now, wet, late };
     let ranked = withBikes(list, from, to, bikes, t0, bikeOpts);
     // Nothing gets there within three hours (a place in the country past its
     // station, no bus on from it now and no YouBike there): the trains with
@@ -517,7 +517,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const retry = by === 'arrive' && at && !first.some(inTime) ? missedRetry(at, now, wide) : null;
   if (retry === 'wide') return planTrip(data, from, to, { at, by, modes: only, wide: true, ebike, chase, wet });
   if (retry === 'now') {
-    const r = await planTrip(data, from, to, { modes: only, ebike, chase, wet });
+    const r = await planTrip(data, from, to, { modes: only, ebike, chase, wet, late: true });
     const mark = list => list.map(p => ({ ...p, deadline: at }));
     const nowLater = r.later?.then(o => (o ? { ...o, plans: mark(o.plans) } : o)) || Promise.resolve(null);
     const after = (later || Promise.resolve(null)).then(o => (o?.plans?.some(inTime) ? o : nowLater));
