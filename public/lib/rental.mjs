@@ -4,11 +4,13 @@
 // TPASS's free half hour (or 每 30 分鐘換車): a notice 5 minutes before it
 // runs out, and the docks near you to return it at and take another
 // (`swapDocks`), the way you're going first. Kept on this device (12 hours
-// at most), the notice sent with the alerts' (the Worker tells you once the
+// at most) and on the Pass (underway.mjs: wherever Transit is opened next
+// has it), the notice sent with the alerts' (the Worker tells you once the
 // phone is locked).
 
 import { meters, readJson, writeJson } from './util.mjs';
 import { canRent, canReturn } from './bike.mjs';
+import { underWay, changed } from './underway.mjs';
 
 import { W } from '#kit/lang.mjs';
 const KEY = 'orbit-transit.rental';
@@ -24,8 +26,18 @@ function load() {
 }
 function keep() {
   writeJson(KEY, cur || null);
+  changed('rental', cur || null);
   listeners.forEach(f => f(cur));
 }
+// (Another place's: taken as it is, said to the map; never sent back.)
+underWay('rental', {
+  now: () => rental(),
+  take(r) {
+    cur = r && Number.isFinite(r.at) && Date.now() - r.at < TTL ? r : null;
+    keep();
+  },
+  until: r => (Number.isFinite(r.at) ? r.at + TTL : undefined)
+});
 
 export const rental = () => (cur && Date.now() - cur.at < TTL ? cur : null);
 export const onRental = f => listeners.add(f);

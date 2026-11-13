@@ -2,7 +2,8 @@
 // Checked every 20 s while the app is open (TDX's estimates at that stop,
 // every alert's stops in one ask a city: near.mjs etaStops),
 // told by a notification (and a buzz, a chime on an iPhone, and the status line), then gone. Kept
-// on this device for two hours, so a reload doesn't lose one.
+// on this device for two hours, so a reload doesn't lose one, and on the
+// Pass (underway.mjs), so Transit opened anywhere else keeps it.
 // The Worker gets the list too (the kit's schedulePush, check `bus` in
 // push.js) and checks each 2 minutes itself: an iPhone stops the app once
 // it's locked or in the background, so that's what tells you then.
@@ -11,6 +12,7 @@ import { stationEtaAsk, etaOf, routeCity } from './bus.mjs';
 import { etaStops } from './near.mjs';
 import { uid, readSaved, UNREAD, writeJson } from './util.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
+import { underWay, changed } from './underway.mjs';
 
 import { W } from '#kit/lang.mjs';
 const KEY = 'orbit-transit.alerts';
@@ -27,8 +29,10 @@ function load() {
   unread = all === UNREAD;
   return Array.isArray(all) ? all.filter(a => a && Date.now() - a.at < TTL) : [];
 }
-function keep() {
+// (`mine`: changed here, sent to the Pass; not for a notice list redone.)
+function keep(mine = false) {
   if (!unread) writeJson(KEY, list);
+  if (mine && !unread) changed('alerts', list.length ? list : null);
   listeners.forEach(f => f());
   push?.schedule([...list.map(pushItem), ...navItems, ...bikeItems, ...tripItems]);
   if (list.length && !timer) timer = setInterval(check, 20_000);
@@ -94,14 +98,24 @@ export async function addAlert({ station, routeUID, route, dir, min, stopUID }) 
   // it in place of its 會提醒你 (said after, that toast replaced it at once, so
   // a phone with notices off never heard alerts come only while it's open).
   const why = push?.allow() || '';
-  keep();
+  keep(true);
   check();
   return why;
 }
 export function removeAlert(id) {
   list = list.filter(a => a.id !== id);
-  keep();
+  keep(true);
 }
+// (Another place's alerts: taken as they are, checked here from now on; never sent back.)
+underWay('alerts', {
+  now: () => (list.length ? list : null),
+  take(all) {
+    if (unread) return;
+    list = (Array.isArray(all) ? all : []).filter(a => a && a.station && a.routeUID && Date.now() - a.at < TTL);
+    keep();
+  },
+  until: all => (Array.isArray(all) && all.length ? Math.max(...all.map(a => a.at || 0)) + TTL : undefined)
+});
 
 // The status line and the like (app.mjs).
 // `withPush`: { schedule(items), allow() → why the lock screen won't hear of it, or '' }.
@@ -126,6 +140,7 @@ let checking = false;
 async function check() {
   if (checking || !list.length) return;
   checking = true;
+  const had = list.length;
   try {
     list = list.filter(a => Date.now() - a.at < TTL);
     // (An alert set before its sign was kept is the Worker's to tell.)
@@ -140,6 +155,6 @@ async function check() {
     }
   } finally {
     checking = false;
-    keep();
+    keep(list.length !== had);
   }
 }

@@ -25,6 +25,7 @@ import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
 import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown, distText } from './util.mjs';
+import { changed } from './underway.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 let nav = null;
@@ -45,15 +46,26 @@ const noPromises = (k, v) => (v instanceof Promise ? undefined : v);
 // (Kept at the step you're at, not one looked at ahead: opened again after
 // Google or Apple 地圖, a look at the YouBike step was taken as begun, its
 // ride redrawn from you; the owner, 2026-10-28.)
-const saveNav = state => writeJson(NAV_KEY, { plan: state.plan, i: state.reached, reached: state.reached, phase: state.i === state.reached ? state.phase : state.reachedPhase || 'before', min: Boolean(state.min), at: Date.now() }, noPromises);
+// (And on the Pass, for wherever Transit is opened next: underway.mjs.)
+const saveNav = state => {
+  const kept = { plan: state.plan, i: state.reached, reached: state.reached, phase: state.i === state.reached ? state.phase : state.reachedPhase || 'before', min: Boolean(state.min), at: Date.now() };
+  writeJson(NAV_KEY, kept, noPromises);
+  changed('nav', kept);
+};
 export function savedNav(now = Date.now()) {
   const x = readSaved(NAV_KEY);
   if (x === UNREAD) return null; // (kept, not dropped)
   if (x?.plan?.legs?.length && x.plan.arr > now - NAV_KEEP) return x;
-  writeJson(NAV_KEY, null);
+  if (x) writeJson(NAV_KEY, null);
   return null;
 }
-const dropNav = () => writeJson(NAV_KEY, null);
+const dropNav = () => {
+  writeJson(NAV_KEY, null);
+  changed('nav', null);
+};
+// A ride from the Pass (another place moved it on or ended it), kept here as
+// that place left it: never sent back up.
+export const keepNav = x => writeJson(NAV_KEY, x?.plan?.legs?.length ? x : null, noPromises);
 // (The map's: a kept ride it couldn't take up again, forgotten.)
 export const forgetNav = dropNav;
 

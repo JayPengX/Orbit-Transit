@@ -23,7 +23,8 @@ import { aboardName, motion, busPace, trainPace } from './aboard.mjs';
 import { liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround, etaAround } from './near.mjs';
 import { nearBikes as nearBikeCards } from './near-ui.mjs';
-import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown } from './nav.mjs';
+import { underWay } from './underway.mjs';
+import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, keepNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown } from './nav.mjs';
 import { fastest } from './trouble.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
@@ -219,6 +220,8 @@ export async function init(c) {
   rentalTick();
   idle();
   // A ride being followed when the app was swiped away: on with it.
+  // (From here on, a ride the Pass brings is taken up in place: navFromPass.)
+  navReady = true;
   const was = savedNav();
   if (was) pendingTrip = { nav: was.plan, from: was.plan.legs[0].from, to: was.plan.legs.at(-1).to, resume: { i: was.i, reached: was.reached, phase: was.phase, min: Boolean(was.min) } };
   // (Started behind another tab, for a shrunk ride: only the ride, not the map's own refreshing.)
@@ -270,6 +273,48 @@ function showPlan(p, from, to, resume = null) {
   if (msheet && msheet.detent !== half()) msheet.set(half());
   renderCard();
   drawPlan(p, { fit: true });
+}
+
+// The ride as another place left it (one account, many places: underway.mjs),
+// taken up here: kept on the phone first (an opening on its way picks it up
+// from there), then, once the map has begun, the one here put down quietly
+// and this one gone on with, where it was; ended there, ended here.
+let navReady = false;
+function navFromPass(x) {
+  if (!navReady) return keepNav(x);
+  const was = navigating();
+  if (was) putDown();
+  keepNav(x);
+  // (Over, or past keeping: nothing to go on with.)
+  const go = savedNav();
+  if (!go) {
+    if (pendingTrip?.nav) pendingTrip = null;
+    if (was) ctx.status(W('這趟已在別處結束', 'This trip was ended elsewhere'));
+    return;
+  }
+  pendingTrip = { nav: go.plan, from: go.plan.legs[0].from, to: go.plan.legs.at(-1).to, resume: { i: go.i, reached: go.reached, phase: go.phase, min: Boolean(go.min) } };
+  // (Shrunk to its bar it goes on behind the tab you're on; else on the map, as at an opening.)
+  if (!go.min) return ctx.goTab('map');
+  if (map) takePending();
+}
+underWay('nav', { now: () => savedNav(), take: navFromPass, until: x => (x.plan?.arr ? x.plan.arr + 90 * 60_000 : undefined) });
+// The ride here put down without ending it (another place has it now).
+function putDown() {
+  try {
+    stopNav();
+  } catch {}
+  follows(false);
+  document.body.classList.remove('ot-navigating', 'ot-nav-min', 'ot-planning');
+  $('nav').hidden = true;
+  $('nav-mini').innerHTML = '';
+  try {
+    closeCard();
+  } catch {
+    card = null;
+    $('card').hidden = true;
+  }
+  map?.resize();
+  msheet?.relayout();
 }
 
 // A trip another tab sent before the map was made (or a ride to go on with).

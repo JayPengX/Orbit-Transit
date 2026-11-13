@@ -21,6 +21,7 @@ import { warmRail } from './lib/raildata.mjs';
 import { setHome, onNotices } from './lib/service.mjs';
 import { startAlerts } from './lib/alerts.mjs';
 import { savedNav, useMapsApp } from './lib/nav.mjs';
+import { useUnderWay } from './lib/underway.mjs';
 import { planLink } from './lib/links.mjs';
 import { shareFamily } from './lib/family-share.mjs';
 import { useEbikeFirst } from './lib/look.mjs';
@@ -60,6 +61,8 @@ if (en) {
 }
 const q = orbitSession('transit', { lang });
 useSession(q);
+// (What's under way here, the trip above all, on the Pass: wherever Transit opens next goes on with it.)
+useUnderWay(q);
 // (建議's guesses learn on the family's engine, kept on the Pass: lib/learn.mjs.)
 keepLearning(q);
 
@@ -211,6 +214,7 @@ async function boot() {
   // kept from last time — and the pass and the settings read behind it
   // Signed out, or the first time, they're waited for.
   const merge = first => {
+    tookPass = true;
     const theirs = decodeData(first?.payload);
     const merged = mergeData(ctx.data, theirs);
     const changed = encodeData(merged) !== (first?.payload || '');
@@ -308,7 +312,26 @@ window.addEventListener('hashchange', () => {
   const id = m && (m[1] === 'nav' ? 'map' : m[1]);
   if (id && bar && bar.current !== id) select(id);
 });
-q.on('active', live => live && ctx.data.t && q.write({ payload: encodeData(ctx.data) }).catch(() => {}));
+// Live again here (在這裡繼續, after the app was used somewhere else): the
+// Pass's copy read first, the newer of the two kept (a trip saved in the other
+// place stays), and this one sent up only when it's the newer.
+// (At the opening the sign-in's own copy is merged: boot's `merge`.)
+let tookPass = false;
+q.on('active', live => live && tookPass && takeBack().catch(() => {}));
+async function takeBack() {
+  const res = await q.read({ data: true });
+  if (typeof res?.payload !== 'string') return;
+  const theirs = decodeData(res.payload);
+  if (theirs && (theirs.t || 0) >= (ctx.data.t || 0)) {
+    if (encodeData(theirs) === encodeData(ctx.data)) return;
+    ctx.data = theirs;
+    local.data = encodeData(theirs);
+    saveLocal();
+    shareFamily(theirs);
+    return ctx.refreshTabs();
+  }
+  if (ctx.data.t) await q.write({ payload: encodeData(ctx.data) });
+}
 if (!gated) boot();
 
 document.addEventListener('visibilitychange', () => {
