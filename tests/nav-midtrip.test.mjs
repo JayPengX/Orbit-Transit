@@ -352,3 +352,67 @@ test('opened again at the end, or where a later walk starts, off its line: that 
     assert.equal(s.i, i);
   }
 });
+
+// Jay's case again (2026-11-13, 16:13): on 1825 after all, found, its stops
+// right (竹中 16:27), but the change at 竹中 still 1758 at 17:41 and 18:04.
+// Two ways it stayed: the planned train's live arrival (1831 at 竹中) heard
+// before the train was found, and still taken as when you're off; and a
+// later plan picked from the list (its trains marked picked), the change
+// after it kept as picked though the train it was picked for isn't the one
+// you're on.
+async function earlierTrain({ picked = false, slow = false, ticket = false } = {}) {
+  const { useRail } = await import('../public/lib/nav.mjs');
+  const A = { lat: 24.7382, lon: 121.0947 };
+  const sts = ['竹東', '榮華', '上員', '竹中', '新竹'].map((name, n) => ({ key: `tra:${n}`, sys: 'tra', name, ...off(A, n * 1400, -n * 1400) }));
+  const S = n => ({ name: sts[n].name, lat: sts[n].lat, lon: sts[n].lon });
+  const run = (no, a, b, t0) => ({ sys: 'tra', no, type: '區間', stops: sts.slice(a, b + 1).map((s, n) => ({ st: s.key, arr: t0 + n * 4 * 60e3 - 30e3, dep: t0 + n * 4 * 60e3 })) });
+  const trips = [run('1825', 0, 3, T(16, 12)), run('1831', 0, 3, T(17, 12)), run('1754', 3, 4, T(16, 43)), run('1758', 3, 4, T(17, 41))];
+  const wait = async n => {
+    for (let k = 0; k < n; k++) await new Promise(r => setImmediate(r));
+  };
+  const board = new Map([['1825', { delay: 1, st: 'tra:0', status: 2 }], ['1831', { delay: 0, st: 'tra:0', status: 0 }]]);
+  useRail({
+    // (The day's timetable slower to come than the one train's board: as on a phone.)
+    dayTrips: async () => (slow && (await wait(8)), trips),
+    railStations: async () => sts,
+    traLive: async () => board
+  });
+  const dest = { name: '巨城', ...off(sts[4], 300, 0) };
+  const path = (a, b) => sts.slice(a, b + 1).map(s => [s.lat, s.lon]);
+  const legs = [
+    { mode: 'walk', from: { name: 'Home', ...off(A, -300, 0) }, to: S(0), dep: T(17, 5), arr: T(17, 9), dur: 240 },
+    { mode: 'tra', name: '區間', short: '區間 1831', train: { no: '1831', type: '區間' }, from: S(0), to: S(3), dep: T(17, 12), arr: T(17, 24) - 30e3, dur: 690, path: path(0, 3), ...(picked ? { picked: true } : {}) },
+    { mode: 'tra', name: '區間', short: '區間 1758', train: { no: '1758', type: '區間' }, from: S(3), to: S(4), dep: T(17, 41), arr: T(17, 45) - 30e3, dur: 210, path: path(3, 4), ...(picked ? { picked: true } : {}), ...(ticket ? { picked: true, ticket: true } : {}) },
+    { mode: 'walk', from: S(4), to: dest, dep: T(17, 45), arr: T(17, 50), dur: 300 }
+  ];
+  const plan = { legs, dep: legs[0].dep, arr: legs.at(-1).arr, tags: [], dest };
+  clock.set(T(16, 12));
+  const { st: s } = start(plan, { here: { ...off(A, -60, 0), at: T(16, 12) } });
+  await settle();
+  for (let k = 0; k <= 12; k++) {
+    clock.set(T(16, 13) + k * 20_000);
+    const f = (k / 12) * 0.7;
+    pos({ lat: sts[0].lat + (sts[1].lat - sts[0].lat) * f, lon: sts[0].lon + (sts[1].lon - sts[0].lon) * f });
+    await settle();
+  }
+  useRail({});
+  return s;
+}
+test('on an earlier train than planned, the planned one’s live times heard first: the change after it still moved sooner', async () => {
+  const s = await earlierTrain({ slow: true });
+  assert.deepEqual(show(s), { i: 1, phase: 'on', reached: 1 });
+  assert.equal(String(s.plan.legs[1].train.no), '1825');
+  assert.equal(String(s.plan.legs[2].train.no), '1754', 'the change at 竹中 the train 1825 makes');
+  assert.equal(s.plan.arr, T(16, 52));
+});
+test('on an earlier train than the later plan picked: the change after it moved sooner too', async () => {
+  const s = await earlierTrain({ picked: true });
+  assert.equal(String(s.plan.legs[1].train.no), '1825');
+  assert.equal(String(s.plan.legs[2].train.no), '1754', 'picked for 1831, not for the train you’re on');
+  assert.equal(s.plan.arr, T(16, 52));
+});
+test('on an earlier train, the change after it a train you hold a ticket for: that one kept', async () => {
+  const s = await earlierTrain({ ticket: true });
+  assert.equal(String(s.plan.legs[1].train.no), '1825');
+  assert.equal(String(s.plan.legs[2].train.no), '1758', 'your ticket’s train');
+});

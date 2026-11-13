@@ -611,7 +611,7 @@ export async function planTicket(data, from, to, ticket, { modes = null, ebike =
   const rides = ridesIn(net, ticket, { from, to });
   if (!rides) return { plans: [], sources: {}, error: Object.assign(new Error('no train'), { text: W('這天的時刻表裡找不到這班車', 'This train isn’t in that day’s timetable') }) };
   // (The train you hold a ticket for: picked, never switched off by navigation.)
-  const trainLegs = rides.map(r => ({ ...trainLeg(net, r), picked: true }));
+  const trainLegs = rides.map(r => ({ ...trainLeg(net, r), picked: true, ticket: true }));
   const first = trainLegs[0];
   const last = trainLegs.at(-1);
   const ready = first.dep - (first.mode === 'hsr' ? 5 : 3) * 60_000;

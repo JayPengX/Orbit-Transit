@@ -1250,8 +1250,11 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         }
       } else if (l?.mode === 'tra' && l.train?.no) {
         // (The train followed alone: 台鐵's own page, no TDX; that failing, every train's board.)
+        const g = state.gen;
         const lv = await rail.traTrain(String(l.train.no)).catch(() => null);
         const d = lv?.delay || 0;
+        // (Another train found under you meanwhile: this one's times aren't it.)
+        if (state.gen !== g) return;
         if (lv) {
           state.liveAt.set(ri, l.dep + d * 60_000);
           state.delay = d;
@@ -1931,6 +1934,14 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         retimeRide(plan, k, t);
         // (Taken as missed, the next one said, and on it after all: that's no longer so.)
         if (/沒趕上|Missed/.test(state.swap?.text || '')) state.swap = null;
+        // The planned train's own arrival, heard live, isn't yours now; and a
+        // later plan picked from the list was picked for that train: the
+        // changes after it move to the one you're on, sooner too (Jay
+        // 2026-11-13: on 1825 at 16:13, the change at 竹中 still 1758 at 17:41).
+        // (A train you hold a ticket for stays as it is.)
+        state.arrAt = null;
+        state.delay = 0;
+        for (let m = k; m < plan.legs.length; m++) if (!plan.legs[m].ticket) delete plan.legs[m].picked;
         state.gen++;
         for (const m of [state.ride, state.liveAt]) for (const key of [...m.keys()]) if (key >= k) m.delete(key);
       }
