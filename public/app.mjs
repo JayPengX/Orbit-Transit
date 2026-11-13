@@ -60,6 +60,8 @@ if (en) {
   seg('metro', 'Metro');
 }
 const q = orbitSession('transit', { lang });
+// One language (Jay 11-13): in English, what has no English of its own (an operator's notice, a stop TDX names only in Chinese) put into English by plain translation (kit).
+if (en) import('#kit/orbit.mjs').then(k => k.translateMarked?.(document.body)).catch(() => {});
 useSession(q);
 // (What's under way here, the trip above all, on the Pass: wherever Transit opens next goes on with it.)
 useUnderWay(q);
