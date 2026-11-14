@@ -193,10 +193,13 @@ function sendGps(city, all) {
 // TDX's estimates as busEta gives them (a stop card, a trip's bus, a ride
 // aboard), each bus whose estimates lag over 2 minutes counted again from
 // its GPS along its route's line (busgps.mjs), for up to 8 routes at once;
-// what isn't ready in 2.5 s is left as it was (the card never waits on it).
+// what isn't ready in 1.5 s is left as it was (the card never waits on it;
+// the GPS read goes on, and the next beat mends with it). (2.5 s till
+// 2026-11-14: 公路客運's GPS read from 公路局's site took 3 s now and then,
+// and every trip with a 1815 waited the whole 2.5 s.)
 const MEND_OLD = 120;
 const MEND_ROUTES = 8;
-const MEND_WAIT = 2500;
+const MEND_WAIT = 1500;
 export async function busEtaMended(city, opts = {}, { ask = busEta, now = Date.now, stopsOf = routeStops, gpsOf = routeGps, linesOf = routeLines } = {}) {
   const got = await ask(city, opts);
   try {

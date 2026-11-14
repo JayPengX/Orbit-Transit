@@ -18,7 +18,7 @@ import * as kit from '#kit/orbit.mjs';
 import { liveMs } from './api.mjs';
 import { pack } from './packs.mjs';
 import { stationsNear, etaOf, routeCity, busEtaMended } from './bus.mjs';
-import { cityBikes, bikesNear } from './bike.mjs';
+import { cityBikesNear, bikesNear } from './bike.mjs';
 import { meters, zh } from './util.mjs';
 
 // where.json (kept a day, the kit's packJson): { cell, packs: [name…], cells: { "<i>_<j>": [k…] } }; null when it can't be had.
@@ -89,6 +89,14 @@ export async function stationsAround(lat, lon, opts) {
 
 const ETA_FRESH = 20_000;
 const CHUNK = 300; // stops an ask (the Worker takes 400)
+// 新竹's and 公路客運's stops (Orbit-Core transit-free.js freeEta): the Worker
+// reads 30 of an ask's stops from 新竹's own site side by side, and only then
+// the rest from 公路局's site and TDX, one after the other. 157 stops around
+// 新竹站 in one ask took 6 s (2026-11-14) and every plan's buses waited on it;
+// 30 an ask, each is in at the first read (and none of them is TDX's).
+export const SITE_CHUNK = 30;
+const SITE_SCOPES = new Set(['Hsinchu', 'HsinchuCounty', 'InterCity']);
+export const chunkOf = scope => (SITE_SCOPES.has(scope) ? SITE_CHUNK : CHUNK);
 const etaKept = new Map(); // `${scope}|${uid}` → { at (the data's), got (when asked), rows }
 const pending = new Map(); // `${scope}|${uid}` → the batch asking for it
 let batch = null;
@@ -110,8 +118,9 @@ async function flush(asks, ask) {
   const jobs = [];
   for (const [scope, set] of asks) {
     const uids = [...set].sort();
-    for (let i = 0; i < uids.length; i += CHUNK) {
-      const part = uids.slice(i, i + CHUNK);
+    const size = chunkOf(scope);
+    for (let i = 0; i < uids.length; i += size) {
+      const part = uids.slice(i, i + size);
       jobs.push(
         ask(scope, { stops: part }).then(({ rows: list, at }) => {
           // (When the data is from: the Worker's copy can be older.)
@@ -177,7 +186,7 @@ export async function etaAround(lat, lon, r = 150, { ask = busEtaMended, near = 
 
 // The stations within a kilometre, bikes and docks now: each city's whole
 // list (one ask a city, shared with the map), the near ones kept.
-export async function bikesAround(lat, lon, { bikes = cityBikes } = {}) {
+export async function bikesAround(lat, lon, { bikes = c => cityBikesNear(c, lat, lon) } = {}) {
   const w = await where();
   if (!w) return bikesNear(lat, lon);
   const cities = namesAround(w, lat, lon, 1000)

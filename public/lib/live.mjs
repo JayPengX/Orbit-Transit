@@ -435,12 +435,16 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
 // A bus today on these legs its operator says isn't running (a typhoon), or
 // likely not (none on the road in its city), and not seen live: '5801 今日停駛'.
 // (Every plan is asked, not only the soon ones adjustPlan sees: the ranking drops them.)
-export async function stoppedOn(legs, now = Date.now()) {
+// `wait` (ms): the notices not in by then, the ones known so far (the plans'
+// first round: a slow read of 公路客運's notices held every plan up to 4 s;
+// the second round, the one shown, waits for them).
+export async function stoppedOn(legs, now = Date.now(), { wait = 0 } = {}) {
   // (Seen: the very bus boarded, a live estimate at its time; a later time copied from it is not.)
   const seen = x => x.live && !x.live.planned && Math.abs(x.live.at - x.dep) < 3 * MIN;
   const buses = legs.filter(x => x.mode === 'bus' && x.route?.uid && !seen(x) && tw(x.dep).date === tw(now).date);
   if (!buses.length) return '';
-  await ensureBus(buses.map(l => routeCity(l.route.uid))).catch(() => {});
+  const asked = ensureBus(buses.map(l => routeCity(l.route.uid))).catch(() => {});
+  await (wait > 0 ? Promise.race([asked, new Promise(r => setTimeout(r, wait))]) : asked);
   for (const x of buses) {
     const st = stoppedNow(x.route.uid, x.short || x.name, now);
     if (st) return `${x.short || x.name} ${st.label}`;
