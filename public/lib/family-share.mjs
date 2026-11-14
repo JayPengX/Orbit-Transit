@@ -1,8 +1,7 @@
 // Transit's own places and saved trips, told to the family's notebook on this
 // phone (the kit's family.mjs: one origin, so every app reads it; Weather's
 // 下雨改搭公車 card reads them; Jay 2026-11-10, the family's links). Only
-// when they changed since the last time told; on an older kit without the
-// notebook, nothing (read with a dynamic import, never by name).
+// when they changed since the last time told (read with a dynamic import).
 //   trips: [{ name, from: { lat, lon, name } | null (where you are then), to }]
 //   places: home, school, work (a place saved with that icon), each { lat, lon, name }
 

@@ -917,7 +917,7 @@ async function openSlow(id) {
   const s = kitUI.sheet({ title: W('這班為什麼慢', 'Why it’s late'), cls: 'ot-slow-sheet', body: [body] });
   const [pos, alerts] = await Promise.all([traTrain(x.no).catch(() => null), tdx('basic/v3/Rail/TRA/Alert', { fresh: 3 * 60_000 }).catch(() => null)]);
   if (!s.el?.isConnected) return;
-  const ic = kitUI.icons || {};
+  const ic = kitUI.icons;
   const spec = slowSpec({ label: (x.first || x.label).replace(/\u00a0/g, ' '), delay: pos ? pos.delay : x.delay, arr: x.arrAt, toName: stationLabel(p.to), pos, alerts: alertsOn(traAlertsNow(alerts), x.stops || []) }, { train: ic.train, clock: ic.clock, flag: ic.flag, bell: ic.bell });
   body.replaceChildren(ai?.aiAnswer?.(spec) || kitUI.h('p', { class: 'ot-note', text: spec.line }));
 }
