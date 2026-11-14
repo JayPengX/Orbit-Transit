@@ -146,6 +146,9 @@ export const stale = new Map();
 // every transitLive seconds, YouBike every transitBike; a copy here good a
 // second less, so each beat asks the Worker (whose own cache follows tdxLive).
 export const liveMs = () => dev('transitLive') * 1000;
+// A live beat only while it's seen: a hidden page (the phone's other app, or Orbit's other tab:
+// kit suite.mjs reports a hidden frame as hidden) asks nothing; the next beat after it's back does.
+export const whileSeen = fn => (...a) => (globalThis.document?.visibilityState === 'hidden' ? undefined : fn(...a));
 export const bikeMs = () => dev('transitBike') * 1000;
 // `swr` (ms): no copy here yet (a launch), the device's copy that old at
 // most answers at once, the fresh one asked behind it; `onFresh` tells who

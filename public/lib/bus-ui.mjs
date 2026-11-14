@@ -8,7 +8,7 @@ import { emptyNote, saidRows, focus } from './look.mjs';
 import { routeFares, fareBetween, fareRows, fareGroups } from './fare.mjs';
 import { cityRoutes, routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
-import { errorText, liveMs, busEta } from './api.mjs';
+import { errorText, liveMs, busEta, whileSeen } from './api.mjs';
 import { CITY_CODES, cityShort } from './city.mjs';
 import { cleanItem, MAX_GROUPS, MAX_ITEMS } from './store.mjs';
 import { sheet, sheetHead, icon, ago } from './ui.mjs';
@@ -561,7 +561,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   }
   draw();
   refresh();
-  const t = setInterval(refresh, liveMs());
+  const t = setInterval(whileSeen(refresh), liveMs());
   d.onclosed = () => clearInterval(t);
   // Scrolled to the stop asked for.
   if (stopUID) requestAnimationFrame(() => d.querySelector(`[data-stop="${CSS.escape(stopUID)}"]`)?.scrollIntoView({ block: 'center' }));

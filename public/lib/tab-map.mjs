@@ -10,7 +10,7 @@
 import { createMap } from './map.mjs';
 import { watchHeading, askCompass, gpsFix, unwrap } from './compass.mjs';
 import { fitNumbers, netState, rec } from '#kit/orbit.mjs';
-import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh } from './api.mjs';
+import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh, whileSeen } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
 import { railStations, metroSystems, traBoard, hsrBoard, railNetwork } from './raildata.mjs';
@@ -821,7 +821,7 @@ function refreshCard() {
     if (card === c) renderCard();
   };
   load();
-  if (card && card.kind !== 'plans') cardTimer = setInterval(load, liveMs());
+  if (card && card.kind !== 'plans') cardTimer = setInterval(whileSeen(load), liveMs());
 }
 // A place's or a spot's card: the buses due at the stops by it and the YouBike
 // stations beside it (Jay, 2026-10-28: the card was its name, 路線 and ☆ over

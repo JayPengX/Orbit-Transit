@@ -13,7 +13,7 @@ import { schematic, mountMap, trainFrom } from './metromap.mjs';
 import DRAWINGS from './metro-drawings.mjs';
 import { codesHtml, linesOf, loadBoards, boardHtml, firstLastHtml, exitsHtml } from './metro-ui.mjs';
 import { createMap } from './map.mjs';
-import { errorText, liveMs, keptLocal, keepLocal } from './api.mjs';
+import { errorText, liveMs, keptLocal, keepLocal, whileSeen } from './api.mjs';
 import { sheet, sheetHead, icon, inkOn } from './ui.mjs';
 import { tile, tick, noticesHtml, rowCard } from './look.mjs';
 import { loadNotices } from './service.mjs';
@@ -517,7 +517,7 @@ async function stationSheet(n) {
     if (!d.open || !x.count) return;
     d.querySelector('#mex').innerHTML = `<div class="q-rowcard"><button class="q-ritem chevron" type="button" data-exits>${tile('walk', '#8e8e93', 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${W('出口', 'Exits')}</span><small>${x.lifts ? W(`${x.lifts} 個有電梯`, `${x.lifts} with a lift`) : W('每個出口在哪裡', 'Where each comes out')}</small></span><span class="q-ritem-value">${x.count}</span></button></div>`;
   });
-  const t = setInterval(load, liveMs());
+  const t = setInterval(whileSeen(load), liveMs());
   const ticker = setInterval(() => tick(d), 5000);
   d.onclosed = () => {
     clearInterval(t);
