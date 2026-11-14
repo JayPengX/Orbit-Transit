@@ -1057,7 +1057,9 @@ body.tab-map {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* (none, not contain: its end stops there, never bounced past into the
+     empty sheet below it. Jay 2026-11-14, a trip's 開始導航.) */
+  overscroll-behavior: none;
   /* (24px, and the 40px the sheet runs on below the panel's foot.) */
   padding: 0 var(--q-margin) calc(64px + var(--ot-kb, 0px));
   -webkit-overflow-scrolling: touch;
