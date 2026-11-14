@@ -887,7 +887,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     list.push([Math.round((Date.now() - state.trace.t0) / 1000), ...x]);
     if (list.length > 2000) list.splice(0, list.length - 2000);
   };
-  const traceSave = () => kit.rec?.('navtrip', state.trace);
+  const traceSave = () => kit.rec('navtrip', state.trace);
   state.traceSave = traceSave;
   state.trace = { v: 1, t0: Date.now(), here: here?.lat != null ? { lat: here.lat, lon: here.lon } : null, resume: resume ? { i: resume.i, phase: resume.phase, reached: resume.reached ?? null } : null, plan: JSON.parse(JSON.stringify(plan)), fixes: [], steps: [], trouble: [] };
   // The buses' official routes, ways and stations, then the lock screen's notices.
@@ -1493,7 +1493,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         const key = `wrong|${rk}`;
         if (held(key, state.troubleNo !== key && state.trouble?.kind !== 'wrong' && wrongRide(rl, state.fixes, state.nearAt?.k === rk ? state.nearAt.t : 0, onWay, state.posAt))) {
           state.trouble = { kind: 'wrong', k: rk, key, at: state.posAt };
-          kit.rec?.('wrong', { ride: rideName(rl), fixes: (state.fixes || []).slice(-12) });
+          kit.rec('wrong', { ride: rideName(rl), fixes: (state.fixes || []).slice(-12) });
           buzz();
         }
       }
@@ -1733,7 +1733,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.asking = null;
     state.trouble = { kind: 'miss', k, key, ride: was || rideName(l), mode: l.mode, next, taken, best: undefined };
     onAction?.('fastest', { k, next: next ? { leg: l, dep: next.dep } : null });
-    kit.rec?.('miss', { taken, ride: rideName(l), dep: l.dep, next: next?.dep ?? null });
+    kit.rec('miss', { taken, ride: rideName(l), dep: l.dep, next: next?.dep ?? null });
   };
   // To be there by a time and late this way: 最快 asked for.
   const askLate = k => {

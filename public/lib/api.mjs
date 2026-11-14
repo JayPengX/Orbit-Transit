@@ -9,7 +9,7 @@ import { WALK_M_MIN, readJson, readSaved, UNREAD, writeJson } from './util.mjs';
 
 import { W } from '#kit/lang.mjs';
 // (api.<domain> on the family's own domain: the kit's API, kit/domain.mjs.)
-const PROXY = kit.API || 'https://orbit-workers-proxy.pengzjay.workers.dev';
+const PROXY = kit.API;
 const DATA_CACHE = 'orbit-transit-data';
 
 let session = null;

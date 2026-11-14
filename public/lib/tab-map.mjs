@@ -53,7 +53,7 @@ import * as kitUI from '#kit/ui.mjs';
 import { rainFor } from './rain.mjs';
 
 // 下雨改搭車: Orbit Weather's wet stretches near the trip's ends (the family's
-// notebook, on this phone; an older kit without it: nothing).
+// notebook, on this phone).
 let familyKit = null;
 import('#kit/family.mjs').then(f => (familyKit = f)).catch(() => {});
 const wetFor = (a, b) => {
@@ -2858,7 +2858,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       // Arrived at a stop with places after it: on to the next (its plans from here, ready to go).
       const next = how.arrived && how.plan?.then?.length ? how.plan.then : null;
       // Arrived: one more toward the 十趟旅程 milestone.
-      if (how.arrived) kit.milestone?.(ctx.q, 'transit');
+      if (how.arrived) kit.milestone(ctx.q, 'transit');
       if (how.arrived) ctx.status(next ? W(`已抵達 ${how.arrived}，接著去 ${next[0].name || '下一站'}`, `Arrived at ${how.arrived}; next, ${next[0].name || 'the next stop'}`) : W(`已抵達 ${how.arrived}，導航結束`, `Arrived at ${how.arrived}`));
       // (Navigation over: the map no longer follows you, until 我的位置 is tapped.)
       follows(false);

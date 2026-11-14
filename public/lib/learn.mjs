@@ -3,7 +3,6 @@
 // kept on the Pass as `fb:transit`): each card of a place drawn (home.mjs)
 // and each trip planned anywhere (tab-map.mjs). A card shown and no trip
 // planned there that day sinks; one gone to rises (suggest.mjs `fb`).
-// An older kit without it: the cards as before, nothing learnt.
 import { placeItem } from './suggest.mjs';
 
 let fb = null;

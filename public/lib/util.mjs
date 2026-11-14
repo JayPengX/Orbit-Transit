@@ -223,8 +223,8 @@ const offAllDay = o => Boolean(o && (!o.from || o.from <= '08:00'));
 // (The 測試工具's 今天放假 switch, testing.mjs: today a day off, as a typhoon's.)
 export const holidayOn = (date, trip = null) => Boolean(globalThis.ORBIT_TEST?.flags?.dayOff && date === tw().date) || Boolean(twHoliday(date)) || Boolean(trip?.to && Number.isFinite(trip.to.lat) && offAllDay(dayOffOn(date, { lat: trip.to.lat, lon: trip.to.lon }, tripNeed(trip))));
 // A working day on Taiwan's calendar: not a weekend or a holiday, and a 補班
-// Saturday is one (an older kit without twWorkday: a weekday that isn't a holiday).
-export const workday = date => kitDays.twWorkday?.(date) ?? (![0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay()) && !twHoliday(date));
+// Saturday is one.
+export const workday = date => kitDays.twWorkday(date);
 export const weekdaysOnly = days => days.length > 0 && !days.includes(0) && !days.includes(6);
 
 // Google's and TDX's names for one route differ (快捷8經興隆大橋, 快捷8號;
