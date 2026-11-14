@@ -12,7 +12,7 @@
 // What's recommended is never pinned by itself: ☆ pins it.
 
 import * as kitUI from '#kit/ui.mjs';
-import { errorText, liveMs, tdx } from './api.mjs';
+import { errorText, liveMs, tdx, whileSeen } from './api.mjs';
 import { traAlertsNow, alertsOn, slowSpec } from './slow.mjs';
 import { stopsEta, etaRank, etaFor } from './bus.mjs';
 import { nearBikes } from './near-ui.mjs';
@@ -89,7 +89,7 @@ export function show() {
   const run = refresh(true);
   firstLook ||= run.catch(() => {});
   clearInterval(timer);
-  timer = setInterval(() => refresh(false), liveMs());
+  timer = setInterval(whileSeen(() => refresh(false)), liveMs());
   clearInterval(ticker);
   ticker = setInterval(() => tick($('panel-go')), 5000);
 }
@@ -819,7 +819,7 @@ function openPlace(id) {
   S.open.add(id);
   draw();
   loadPlace(id).then(draw);
-  const t = setInterval(() => loadPlace(id).then(draw), liveMs());
+  const t = setInterval(whileSeen(() => loadPlace(id).then(draw)), liveMs());
   d.onclosed = () => {
     clearInterval(t);
     S.open.delete(id);
