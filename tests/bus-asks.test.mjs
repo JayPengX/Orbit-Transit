@@ -81,15 +81,16 @@ test('bus times: not asked again before the next estimate can be there; asked ev
   };
   api.useSession({ ensureToken: async () => 'tok' });
   try {
-    // A stop card's beat (10 s) for 3 minutes, in each city.
-    for (let s = 0; s < 180; s += 10) {
+    // A stop card's beat (transitLive, the kit's default) for 3 minutes, in each city.
+    const beat = api.liveMs() / 1000;
+    for (let s = 0; s < 180; s += beat) {
       clock = Date.parse('2026-11-06T03:00:00Z') + s * 1000;
       await api.busEta('Hsinchu', { stops: ['HSZ1'] });
       await api.busEta('Taipei', { stops: ['TPE1'] });
     }
     const of = city => asked.filter(x => x.city === city).map(x => (x.at - Date.parse('2026-11-06T03:00:00Z')) / 1000);
     // Taipei: every beat.
-    assert.equal(of('Taipei').length, 18);
+    assert.equal(of('Taipei').length, Math.ceil(180 / beat));
     // Hsinchu: once the 30 s rhythm is seen, one ask an estimate, and never a new estimate missed.
     const h = of('Hsinchu');
     assert.ok(h.length <= 8, `Hsinchu asked ${h.length} times: ${h}`);
@@ -100,7 +101,7 @@ test('bus times: not asked again before the next estimate can be there; asked ev
     const seen = new Set();
     for (const at of h) seen.add(made(Date.parse('2026-11-06T03:00:00Z') + at * 1000));
     const all = new Set();
-    for (let s = 0; s < 180; s += 10) all.add(made(Date.parse('2026-11-06T03:00:00Z') + s * 1000));
+    for (let s = 0; s < 180; s += beat) all.add(made(Date.parse('2026-11-06T03:00:00Z') + s * 1000));
     assert.equal(seen.size, all.size, 'every estimate the beat would have caught was caught');
   } finally {
     globalThis.fetch = was.fetch;
@@ -124,9 +125,9 @@ test("a route's next beat says how old the phone's copy is, its city's routes to
   api.useSession({ ensureToken: async () => 'tok' });
   try {
     await Promise.all([api.busEta('HsinchuCounty', { route: 'HSQ0090' }), api.busEta('HsinchuCounty', { route: 'HSQ0091' })]);
-    clock += 10_000;
+    clock += api.liveMs();
     await Promise.all([api.busEta('HsinchuCounty', { route: 'HSQ0090' }), api.busEta('HsinchuCounty', { route: 'HSQ0091' })]);
-    assert.deepEqual(asked, ['/transit/eta?city=HsinchuCounty&routes=HSQ0090,HSQ0091', '/transit/eta?city=HsinchuCounty&routes=HSQ0090,HSQ0091&had=10']);
+    assert.deepEqual(asked, ['/transit/eta?city=HsinchuCounty&routes=HSQ0090,HSQ0091', `/transit/eta?city=HsinchuCounty&routes=HSQ0090,HSQ0091&had=${api.liveMs() / 1000}`]);
   } finally {
     globalThis.fetch = was.fetch;
     Date.now = was.now;
