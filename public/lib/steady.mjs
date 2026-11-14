@@ -57,10 +57,12 @@ export function samePlanAt(list, open) {
 }
 
 // The whole plan before its first show: planTrip's second round (the direct
-// buses, every bus's times, 追公車) when it's in within `ms` (about 1.5–2 s
-// after the first, warm), else the first round, the second still coming
-// (`pending`, merged by steadyPlans when it lands). → planTrip's answer.
-export const SETTLE_MS = 6000;
+// buses, every bus's times, 追公車) when it's in within `ms` (its looks begun
+// with the first's since 2026-11-14: half a second after it, warm), else the
+// first round, the second still coming (`pending`, merged by steadyPlans when
+// it lands). (6 s till then: one slow bus estimate from the Worker, 3.6 s for
+// three 公路客運 stops, held the whole trip that long.) → planTrip's answer.
+export const SETTLE_MS = 3000;
 const PAST = Symbol('past');
 export async function settled(out, ms = SETTLE_MS) {
   if (!out?.later) return { ...out, pending: null };

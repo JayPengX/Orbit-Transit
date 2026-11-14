@@ -209,6 +209,10 @@ function joinPlanners(a, b) {
 const ARRIVE_EARLY = 2 * 3_600_000;
 // The longest the first plans wait on the buses' live times (ms).
 const FIRST_WAIT = 1500;
+// The stops near the start whose buses are asked while the planners think.
+const WARM_STOPS = 30;
+// The first round's wait for the buses' notices (the second waits for them all).
+const NOTICE_WAIT = 400;
 // A deadline further off than this (08:00 tomorrow, asked at 22:00): when
 // nothing in the usual window gets there, the search goes back further from
 // the deadline, not "leave now" (tonight's trains).
@@ -258,7 +262,9 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const netAsk = useRail ? railNetwork(span.date, span) : null;
   if (useRail && modes.metro !== false && !metroMapAt(from)) metroWarm(to);
   netAsk?.catch(() => {});
+  const tC = performance.now();
   const findCity = await cityFinder();
+  lap('cities', tC);
   // Each point's city as it was looked up, for the 除錯紀錄 (a replay needs no township list).
   const cities = {};
   const cityOf = pt => (pt?.lat != null ? (cities[`${pt.lat.toFixed(3)},${pt.lon.toFixed(3)}`] = findCity(pt)) : findCity(pt));
@@ -274,8 +280,28 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   if (modes.bike) Promise.all([from, to].map(p => bikesAround(p.lat, p.lon).catch(() => []))).then(x => streetWalks(x.flat(), from, to)).catch(() => {});
   if (modes.bus) {
     stopsAround(to.lat, to.lon, 1100).catch(() => {});
-    if (soonish) stopsAround(from.lat, from.lon, 900).then(list => list?.length && etaStops(list.map(s => ({ uid: s.uid, scope: s.scope })))).catch(() => {});
+    // (The nearest ones: 157 stops around 新竹站 in one go held every bus behind them, 2026-11-14.)
+    if (soonish) stopsAround(from.lat, from.lon, 900).then(list => list?.length && etaStops(list.slice(0, WARM_STOPS).map(s => ({ uid: s.uid, scope: s.scope })))).catch(() => {});
   }
+  // The second round's own looks (the direct buses, the buses to the
+  // stations), started now beside the first: neither needs the first
+  // round's plans, and the whole plan is what's shown (steady.mjs settled),
+  // so a look begun only after the first round added its seconds to every
+  // trip (新竹站 → 新竹高中: 2.4 s, then 5 more; 2026-11-14).
+  const laterTrace = {};
+  const directAsk = modes.bus ? busLink(from, to, tS, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: laterTrace }).catch(err => ((laterTrace.error = String(err?.message || err)), [])) : null;
+  const toRailAsk =
+    modes.bus && useRail
+      ? netAsk
+          .then(async n => {
+            // (By a time: the buses from the start of the window and from half way through it.)
+            const starts = by === 'arrive' ? [tS, (tS + t0) / 2] : [t0];
+            const toRail = (await Promise.all(starts.map(s => busToRail(n, from, to, s, { use: useTrain, now, bike: modes.bike, trace: (laterTrace.rail ||= []) }).catch(() => [])))).flat();
+            const on = await trainThenBus(toRail, to, now).catch(() => []);
+            return [...toRail, ...on];
+          })
+          .catch(() => [])
+      : null;
   let net = null;
   // Google's plans with our trains for the first plans; TDX's with them when
   // they're in by then, else with the second round's.
@@ -287,9 +313,10 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     !useRail
       ? []
       : netAsk
+          .then(n => (lap('net', t), n))
           .then(n => railPlans((net = n), from, to, tS, { n: by === 'arrive' ? 8 : 4, bike: modes.bike, bus: modes.bus, use: useTrain }))
           // (Their fares read now, while the buses are looked at: the plans' price line.)
-          .then(list => (faresIn(list, net, 0), list))
+          .then(list => (lap('railPlans', t), faresIn(list, net, 0), list))
           // (Into a metro's area: on by the metro from the trains' stops there too.)
           // (Its network asked at the start, kept a week: never waited on past METRO_WAIT.)
           .then(async list => [...list, ...((await Promise.race([trainThenMetro(list, net, to).catch(() => []), new Promise(r => setTimeout(r, METRO_WAIT, []))])) || [])])
@@ -379,6 +406,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     // city where they all are off): no plan, never its timetable instead.
     // (Nothing left: which buses, said, not 找不到.)
     // (A 台鐵 ride the alerts stop that only a planner still has: the same.)
+    const tN = performance.now();
     const tra = (await traNotices().catch(() => null))?.rules || [];
     const stationAt = pt => net && [...net.st.entries()].filter(([, s]) => s.sys === 'tra').map(([key, s]) => ({ key, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m).find(x => x.m < 400)?.key;
     const offs = await Promise.all(
@@ -386,14 +414,19 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
         const t = p.legs.find(l => traLegOff(l, tra, stationAt));
         if (t) return t.short || t.name;
         // (Which bus: its name, before the label.)
-        const off = p.stopped ? p.off : p.off ? '' : await stoppedOn(p.legs, now).catch(() => '');
+        const off = p.stopped ? p.off : p.off ? '' : await stoppedOn(p.legs, now, { wait: stage === 1 && twoRounds ? NOTICE_WAIT : 0 }).catch(() => '');
         return off.replace(/ \S+$/, '');
       })
     );
     for (const o of offs) if (o) stopped.add(o);
     list = list.filter((p, i) => !offs[i]);
+    lap(`notices${stage}`, tN);
+    const tB = performance.now();
     const bikes = await bikesNow;
+    lap(`bikesWait${stage}`, tB);
+    const tW = performance.now();
     await streetWalks(bikes, from, to);
+    lap(`walks${stage}`, tW);
     const t2 = performance.now();
     const bikeOpts = { modes, swap: bikeSwap(prefs), ebike, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now, wet, late };
     let ranked = withBikes(list, from, to, bikes, t0, bikeOpts);
@@ -453,7 +486,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
             const all = await bikesNow;
             bikesNow = Promise.resolve([...new Map([...all, ...more].map(s => [s.uid, s])).values()]);
           }
-          busTrace = {};
+          busTrace = laterTrace;
           // Side by side: TDX's plans come since the first round (as the
           // planners' were: their buses the official routes, the soon ones
           // live), the direct buses, and the buses to the stations too far to
@@ -468,16 +501,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
                   return Promise.all(official.map(p => (by !== 'arrive' && t0 - now < 60 * 60_000 && p.legs.some(l => l.mode === 'bus' && !l.live) ? adjustPlan(p, now, { start: t0 }).catch(() => p) : p)));
                 })
               : [],
-            busLink(from, to, tS, { fromM: 900, toM: 1100, n: 8, routes: 14, now, trace: busTrace }).catch(err => ((busTrace.error = String(err?.message || err)), [])),
-            useRail && net
-              ? (async () => {
-                  // (By a time: the buses from the start of the window and from half way through it.)
-                  const starts = by === 'arrive' ? [tS, (tS + t0) / 2] : [t0];
-                  const toRail = (await Promise.all(starts.map(s => busToRail(net, from, to, s, { use: useTrain, now, bike: modes.bike, trace: (busTrace.rail ||= []) }).catch(() => [])))).flat();
-                  const on = await trainThenBus(toRail, to, now).catch(() => []);
-                  return [...toRail, ...on].filter(bused).filter(p => allowed(p, { ...modes, bike: true }));
-                })()
-              : []
+            directAsk,
+            toRailAsk ? toRailAsk.then(list => list.filter(bused).filter(p => allowed(p, { ...modes, bike: true }))) : []
           ]);
           plans.push(...lateLive.filter(bused));
           let list = [...plans, ...direct.filter(p => allowed(p, { ...modes, bike: true })), ...toTrains];

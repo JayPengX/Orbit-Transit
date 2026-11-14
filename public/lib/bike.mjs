@@ -168,6 +168,31 @@ export async function cityBikes(city) {
   return list;
 }
 
+// A city's stations within `r` of a point, live: only YouBike's circles
+// that can hold one of them (a station is within YB_REACH of its circle's
+// centre, so that centre is within YB_REACH + r of the point). A trip into
+// 臺北 read every circle of 臺北 and 新北, 30 asks of up to 80 KB each,
+// for the stations near its two ends (2026-11-14); the map's whole-city
+// read shares these circles' copies.
+export async function cityBikesNear(city, lat, lon, r = 1000) {
+  if (!BIKE_CITIES.has(city)) return [];
+  const st = await tdx(`basic/v2/Bike/Station/City/${city}?${STATION_FIELDS}`, { fresh: 86_400_000, persist: true });
+  const near = rows(st).filter(s => {
+    const a = Number(s.StationPosition?.PositionLat);
+    const b = Number(s.StationPosition?.PositionLon);
+    return Math.abs(a - lat) < (r + 300) / 111_000 && metres(lat, lon, a, b) <= r + 300;
+  });
+  if (!near.length) return [];
+  let live;
+  if (Object.values(YB_PRE).some(p => near[0].StationUID?.startsWith(p))) {
+    if (!circles.has(st)) circles.set(st, circlesOf(st));
+    const mine = circles.get(st).filter(([a, b]) => metres(lat, lon, a, b) <= YB_REACH + r + 300);
+    live = mine.length ? await ybLive(mine, 10_000).catch(() => null) : null;
+  }
+  live ||= await tdx(`basic/v2/Bike/Availability/City/${city}?${LIVE_FIELDS}`, { fresh: 'bike', swr: 20 * 60_000, late: 2500, max: 2e6 });
+  return mergeBikes(near, live);
+}
+
 // Stations within about a kilometre of a point (the planner): YouBike's
 // counts there, names from their cities' lists; YouBike away, the proxy's.
 export async function bikesNear(lat, lon) {
