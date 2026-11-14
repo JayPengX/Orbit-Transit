@@ -868,6 +868,10 @@ export function ownWayNow(plan, now = Date.now()) {
   return { ...plan, legs, dep: legs[0].dep, ...(r < 0 ? { arr: legs.at(-1).arr } : {}) };
 }
 
+// Held in Orbit (the all-in-one app): its app switcher is a button on the
+// trip's own bar while navigating (Jay 2026-11-14: switch apps without
+// minimizing first; the switcher floating over the step's card was "ugly").
+const inOrbit = () => typeof document !== 'undefined' && document.documentElement.classList.contains('q-in-suite');
 export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, here = null, resume = null, push = null, dest = null, swap30 = false }) {
   // Started by a tap (mostly): the iPhone's chime may sound from now on.
   primeBuzz();
@@ -1067,6 +1071,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       </div>`;
     const etaHtml = `<div class="ot-nav-eta">
           <span><b>${e(hm(state.done && !plan.later?.length ? now : whole))}</b><small>${state.done && !plan.later?.length ? W('已抵達', 'Arrived') : plan.later?.length ? `${driftText ? `${driftText}・` : ''}${W(`到 ${e(stopName)} 還要 `, `${e(stopName)} in `)}${leftText(minsLeft)}` : driftText ? `${driftText}・${W('剩 ', '')}${leftText(minsLeft)}` : `${W('抵達・還要 ', 'arrive・')}${leftText(minsLeft)}`}</small></span>
+          ${inOrbit() ? `<button class="q-icon-btn ot-nav-apps" type="button" data-nav="apps" aria-label="${W('切換 App', 'Switch apps')}">${icon('apps')}</button>` : ''}
           <button class="q-icon-btn" type="button" data-nav="more" aria-label="${W('更多：縮小、改搭別班、換一條路、編輯行程', 'More: minimize, another departure, another way, edit trip')}">${icon('more')}</button>
           <button class="q-btn ot-nav-end" type="button" data-nav="end">${W('結束', 'End')}</button>
         </div>`;
@@ -1813,9 +1818,9 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const k = state.i;
     const l = plan.legs[k];
     if (!isRide(l) || state.phase === 'on' || state.done || !state.pos || Date.now() - (state.posAt || 0) > 2 * 60_000) return;
-    if (meters(state.pos.lat, state.pos.lon, l.from.lat, l.from.lon) > 300) return;
     const gone = l.mode === 'bus' ? !state.liveAt.has(k) && Date.now() > l.dep + 2 * 60_000 : Date.now() > l.dep + state.delay * 60_000 + 150_000;
     if (state.missing === k) return;
+    if (meters(state.pos.lat, state.pos.lon, l.from.lat, l.from.lon) > 300) return gone && missedAway(k);
     if (!gone) return sooner(k);
     // (Seen there after it left, not only before: a phone quiet since on board
     // has its last fix at the stop. Jay 2026-11-07, 普悠瑪 107 taken as missed.)
@@ -1841,6 +1846,34 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     }
     // (And 最快 from here, beside it: or alone when there's no next run, the metro's, the last one gone.)
     askMiss(k, Boolean(next), name);
+  };
+  // Gone while you were still on your way to it (Jay 2026-11-14: 區間 1735
+  // 已開走 at 六家, the trip just sat there): the next run from that stop you
+  // can still walk to, said and buzzed, the changes after it moved too. Not
+  // while you might be on it: three minutes past its time (with its delay),
+  // and nowhere near its line. Once a run: the next one has its own time,
+  // so it never goes back and forth.
+  const missedAway = async k => {
+    const l = plan.legs[k];
+    if (Date.now() < l.dep + (l.mode === 'bus' ? 0 : state.delay * 60_000) + 3 * 60_000) return;
+    // (On another ride, the wrong bus: its own card says so, wrongRide.)
+    if (state.trouble || state.away) return;
+    // (Near its way, a train's line or a bus's road: maybe aboard, never taken as missed.)
+    const pts = legPts(l);
+    const on = pts && alongRoute(pts, state.pos, routeCum(pts));
+    if (!pts || !on || on.off < Math.max(400, ON_WAY[l.mode] || 0)) return;
+    state.missing = k;
+    const ready = Date.now() + walkSec(meters(state.pos.lat, state.pos.lon, l.from.lat, l.from.lon)) * 1000 + 60_000;
+    const opts = await rideOptions(l, state.info.get(k), ready).catch(() => []);
+    state.missing = null;
+    if (nav !== state || state.i !== k || state.phase === 'on' || plan.legs[k] !== l) return;
+    const next = opts.find(o => !sameRun(o, l) && o.dep + (o.delay || 0) * 60_000 >= ready);
+    if (next) {
+      buzz();
+      takeOther(k, next, W(`${rideName(l)} 已開走，改搭 ${optText(next, l)}`, `${rideName(l)} has left; now ${optText(next, l)}`), false, true);
+    }
+    // (And 最快 from here beside it, or alone when nothing more runs from there.)
+    askMiss(k, Boolean(next), rideName(l));
   };
   // Waiting at the station for a train with one there sooner still to come
   // (there early, or an earlier one running late): that one, said and

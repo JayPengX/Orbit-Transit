@@ -203,3 +203,30 @@ test('sameRun and runDelay: the very run by its number (else its time), its dela
   assert.equal(nav.runDelay([{ dep: T(12, 54), live: false, delay: 0, train: { no: '1198' } }], l), null, 'not on the live board: unknown');
   assert.equal(nav.runDelay([{ dep: T(12, 54), live: true, delay: 0 }], { mode: 'bus', dep: T(12, 54) }), null, 'trains only');
 });
+
+test('a train gone while you were still on your way to it, far from the station: the next one you can still walk to, taken by itself (Jay 2026-11-14, 區間 1735 已開走)', async () => {
+  const { plan } = trainTrip();
+  // (08:14, still 1.2 km short of A站, away from the line: 1001 left at 08:10.)
+  clock.set(T(8, 14));
+  const { st: s } = start(plan, { resume: { i: 1, phase: 'before', reached: 1 } });
+  pos(off(sts[0], -1200, 0));
+  await settle();
+  assert.equal(String(s.plan.legs[1].train.no), '1003', 'the next train taken');
+  s.render();
+  assert.match(topText(), /已開走，改搭/);
+});
+
+test('gone only a minute ago, or you near its line: never taken as missed (you may be aboard)', async () => {
+  const { plan } = trainTrip();
+  clock.set(T(8, 11));
+  const { st: s } = start(plan, { resume: { i: 1, phase: 'before', reached: 1 } });
+  pos(off(sts[0], -1200, 0));
+  await settle();
+  assert.equal(String(s.plan.legs[1].train.no), '1001', 'a minute past: kept');
+  const { plan: p2 } = trainTrip();
+  clock.set(T(8, 16));
+  const { st: s2 } = start(p2, { resume: { i: 1, phase: 'before', reached: 1 } });
+  pos(off(sts[1], 100, 200));
+  await settle();
+  assert.equal(String(s2.plan.legs[1].train.no), '1001', 'by its line: kept');
+});
