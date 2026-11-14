@@ -6360,8 +6360,10 @@ html[lang='en'] .ot-sn-tap {
 .ot-msheet.ot-trip .ot-plans-head > .ot-od,
 .ot-msheet.ot-trip .ot-ph-swap,
 .ot-msheet.ot-trip .ot-opts,
+/* (A list without the trip opened, never the list it is in: one opened from
+   其他走法 had left the sheet blank; Jay 2026-11-14.) */
 .ot-msheet.ot-trip .ot-plans-more,
-.ot-msheet.ot-trip .ot-plans-rest,
+.ot-msheet.ot-trip .ot-plans:not(:has(.ot-plan.on)),
 .ot-msheet.ot-trip .ot-plan:not(.on) {
   display: none;
 }
