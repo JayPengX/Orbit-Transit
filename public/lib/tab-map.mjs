@@ -10,6 +10,7 @@
 import { createMap } from './map.mjs';
 import { watchHeading, askCompass, gpsFix, unwrap } from './compass.mjs';
 import { fitNumbers, netState, rec } from '#kit/orbit.mjs';
+import * as suite from '#kit/suite.mjs';
 import { recentFixes, searchPlaces, placeDetails, errorText, watchPosition, roadPath, walkTo, walksTo, walkKnown as walkKnownAt, whereIs, liveMs, bikeMs, onFresh, whileSeen } from './api.mjs';
 import { cityBikes, bikeLevel } from './bike.mjs';
 import { stationsNear, cityRoutes, BEARING, stopSides, stopGroups } from './bus.mjs';
@@ -223,7 +224,15 @@ export async function init(c) {
   // (From here on, a ride the Pass brings is taken up in place: navFromPass.)
   navReady = true;
   const was = savedNav();
+  // (Opened from Orbit's 進行中 tab: the ride in full, not its bar. Jay 2026-11-14.)
+  if (was && suite.takeFull?.('transit')) was.min = false;
   if (was) pendingTrip = { nav: was.plan, from: was.plan.legs[0].from, to: was.plan.legs.at(-1).to, resume: { i: was.i, reached: was.reached, phase: was.phase, min: Boolean(was.min) } };
+  // Orbit's 進行中 tab tapped while this app is held there: the ride in full.
+  globalThis.addEventListener?.('orbit-full', () => {
+    if (!suite.takeFull?.('transit')) return;
+    if (navigating()) shrinkNav(false);
+    else if (pendingTrip?.resume) ((pendingTrip.resume.min = false), ctx.goTab('map'));
+  });
   // (Started behind another tab, for a shrunk ride: only the ride, not the map's own refreshing.)
   if (pendingTrip) document.body.classList.contains('tab-map') ? show() : takePending();
   settle().finally(isReady);

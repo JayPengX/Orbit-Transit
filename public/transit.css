@@ -908,6 +908,14 @@ body.tab-map {
 .tab-map.ot-navigating:not(.ot-nav-min) .q-appbar #tabs {
   visibility: visible;
 }
+/* In Orbit, its app switcher stays (Jay 2026-11-14: "while navigating you
+   should be able to still switch app"), the step's card just under it. */
+html.q-in-suite:not(.q-tabrail) .tab-map.ot-navigating:not(.ot-nav-min) .q-appbar .q-suite {
+  visibility: visible;
+}
+html.q-in-suite:not(.q-tabrail) .tab-map.ot-navigating:not(.ot-nav-min) .ot-nav-top {
+  top: calc(56px + env(safe-area-inset-top));
+}
 .ot-nav-min #nav {
   display: none;
 }
