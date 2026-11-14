@@ -754,7 +754,7 @@ function boardTrains() {
     const rows = trainNext(p).filter(x => x.dep != null);
     const [x, y] = rows;
     const main = `${e(stationLabel(p.from))} → ${e(stationLabel(p.to))}`;
-    if (!x) return boardRow({ glyph: p.from.sys === 'hsr' ? 'hsr' : 'tra', color: p.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, main, note: e(!got ? W('載入中…', 'Loading…') : got.error || W('今天沒有車了', 'No more trains today')), attrs: `data-times="${e(p.id)}"` });
+    if (!x) return boardRow({ glyph: p.from.sys === 'hsr' ? 'hsr' : 'tra', color: p.from.sys === 'hsr' ? COLOR.hsr : COLOR.tra, main, note: !got ? '<span class="q-skel q-skel-line"></span>' : e(got.error || W('今天沒有車了', 'No more trains today')), attrs: `data-times="${e(p.id)}"` });
     const sys = x.sys || p.from.sys;
     const note = [e(x.label), x.delay ? `<span class="ot-late${x.sys === 'tra' && x.no ? ' ot-slow" role="button" tabindex="0" data-slow="' + e(p.id) + '" aria-label="' + e(W('這班為什麼慢', 'Why it’s late')) + '">' + (kitUI.icons?.ai || '') : '">'}${e(W(`晚 ${x.delay} 分`, `${x.delay} min late`))}</span>` : '', ''].filter(Boolean).join(' · ') + (y ? `<span class="ot-drop"> · ${e(W(`下一班 ${hm(y.dep)}`, `then ${hm(y.dep)}`))}</span>` : '');
     return boardRow({ no: kindOf({ ...x, sys }), color: trainColor({ sys, type: x.type }), main, note, when: whenHtml(x.dep, whenSmall(x.dep)), attrs: `data-times="${e(p.id)}"` });
@@ -809,7 +809,7 @@ function openPlace(id) {
     const here = ctx.here;
     const buses = x ? placeBuses(x.stops) : [];
     d.innerHTML = `${sheetHead(e(p.name), here ? e(distText(meters(here.lat, here.lon, p.lat, p.lon))) : '', tile(PLACE_ICONS[p.icon] || 'pin', PLACE_COLOR[p.icon] || COLOR.place))}
-      ${!x ? `<p class="ot-note">${W('載入中…', 'Loading…')}</p>` : x.error ? `<p class="ot-note bad">${e(x.error)}</p>` : ''}
+      ${!x ? `<div class="q-skel-lines" role="status" aria-label="${W('載入中', 'Loading')}"><i class="q-skel"></i><i class="q-skel"></i></div>` : x.error ? `<p class="ot-note bad">${e(x.error)}</p>` : ''}
       ${buses.length ? `<h3 class="q-sheet-h">${W('公車', 'Buses')}</h3>${rowCard(buses.map(busRow).join(''))}` : ''}
       ${x?.bikes.length ? `<h3 class="q-sheet-h">YouBike</h3>${nearBikes(x.bikes)}` : ''}
       <button class="q-btn primary block ot-sheet-go" type="button" data-go-place="${e(id)}">${icon('route')} ${W('怎麼去', 'Directions')}</button>`;

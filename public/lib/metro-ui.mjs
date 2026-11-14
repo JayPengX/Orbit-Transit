@@ -44,7 +44,7 @@ export async function loadBoards(list) {
 
 // The next trains each way: a row a line and way, its countdown on the right.
 export function boardHtml(boards, lines) {
-  if (!boards) return `<div class="q-rowcard mb-board"><div class="q-ritem mb-wait"><span class="q-ritem-text"><span class="q-ritem-title">${W('載入中…', 'Loading…')}</span></span></div></div>`;
+  if (!boards) return `<div class="q-rowcard mb-board"><div class="q-ritem mb-wait"><span class="q-ritem-text"><span class="q-skel q-skel-line" role="status" aria-label="${W('載入中', 'Loading')}"></span></span></div></div>`;
   const rows = boards.flatMap(b => b.rows.map(r => ({ ...r, l: lineFor(lines, b.op, r.line) })));
   if (!rows.length) {
     if (boards.every(b => b.none && b.op === 'TMRT')) return emptyNote(W('台中捷運沒有提供即時或時刻資料', 'Taichung Metro shares no live or timetable data'));
