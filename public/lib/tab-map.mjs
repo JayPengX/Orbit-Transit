@@ -974,7 +974,7 @@ function drawCard() {
             return `${heading}<div class="ot-strip">${strip({ no: r.route, main: r.toward ? `${W('往', 'to')} ${e(shown(r.toward))}` : '', eta: { ...t, sub: al ? W(`${al.min} 分前提醒你`, `alert ${al.min} min before`) : t.sub }, attrs: `data-route="${e(r.route)}" data-city="${e(r.city)}" data-route-uid="${e(r.routeUID)}" data-stop="${e(r.stopUID)}" data-dir="${r.dir}"` })}<button class="q-icon-btn ot-bell ot-strip-act${al ? ' on' : ''}" type="button" data-alert="${e(JSON.stringify({ uid: (r.st || s).uid, routeUID: r.routeUID, route: r.route, dir: r.dir, stop: r.stopUID }))}" aria-label="${W('到站提醒', 'Arrival alert')}">${icon('bell')}</button></div>`;
           })
           .join('') || emptyNote(W('現在沒有公車資料', 'No buses right now'))
-      : `<p class="ot-note">${W('載入中…', 'Loading…')}</p>`;
+      : `<div class="q-skel-lines" role="status" aria-label="${W('載入中', 'Loading')}"><i class="q-skel"></i><i class="q-skel"></i></div>`;
     html = `${head(s.name, [sides.length > 1 ? '' : BEARING[s.bearing], s.routes.length ? W(`${s.routes.length} 條路線`, `${s.routes.length} routes`) : ''].filter(Boolean).join(' · '), 'bus')}${err}<div class="q-rowcard ot-eta-list">${rowsHtml}</div>${goThere(c)}${actions(c)}`;
   } else if (c.kind === 'tra') {
     const s = c.item;
@@ -983,14 +983,14 @@ function drawCard() {
       <div class="ot-board">${
         list
           ? list.map(r => `<div class="ot-board-row"><span class="ot-time">${e(hm(r.sched))}</span><span class="ot-train"><b>${e(trainKind(r.type))} ${e(r.no)}</b><small>${W('往', 'to')} ${e(shown(r.dest))}${r.platform ? W(` · 第 ${e(r.platform)} 月台`, ` · platform ${e(r.platform)}`) : ''}</small></span><span class="ot-delay ${r.status === 2 ? 'bad' : r.delay ? 'warn' : 'ok'}">${r.status === 2 ? W('取消', 'Cancelled') : r.delay ? W(`晚 ${r.delay} 分`, `${r.delay} min late`) : W('準點', 'On time')}</span></div>`).join('') || `<p class="ot-note">${W('接下來一小時沒有列車。', 'No trains in the next hour.')}</p>`
-          : `<p class="ot-note">${W('載入中…', 'Loading…')}</p>`
+          : `<div class="q-skel-lines" role="status" aria-label="${W('載入中', 'Loading')}"><i class="q-skel"></i><i class="q-skel"></i></div>`
       }</div>
       ${actions(c, { more: `<button class="q-btn" type="button" data-card="train">${icon('clock')} ${W('時刻', 'Times')}</button>` })}`;
   } else if (c.kind === 'hsr') {
     const s = c.item;
     const list = Array.isArray(c.live) ? c.live : null;
     html = `${head(W(`高鐵${s.name}站`, `HSR ${s.name}`), W('台灣高鐵', 'Taiwan High Speed Rail'), 'hsr')}${err}
-      <div class="ot-board">${list ? list.map(r => `<div class="ot-board-row"><span class="ot-time">${e(hm(r.dep))}</span><span class="ot-train"><b>${e(r.no)}${W(' 次', '')}</b><small>${W('往', 'to')} ${e(shown(r.dest))}</small></span><span class="ot-delay">${W('', 'in ')}${minsText((r.dep - Date.now()) / 1000)}${W('後', '')}</span></div>`).join('') || `<p class="ot-note">${W('今天已經沒有車了。', 'No more trains today.')}</p>` : `<p class="ot-note">${W('載入中…', 'Loading…')}</p>`}</div>
+      <div class="ot-board">${list ? list.map(r => `<div class="ot-board-row"><span class="ot-time">${e(hm(r.dep))}</span><span class="ot-train"><b>${e(r.no)}${W(' 次', '')}</b><small>${W('往', 'to')} ${e(shown(r.dest))}</small></span><span class="ot-delay">${W('', 'in ')}${minsText((r.dep - Date.now()) / 1000)}${W('後', '')}</span></div>`).join('') || `<p class="ot-note">${W('今天已經沒有車了。', 'No more trains today.')}</p>` : `<div class="q-skel-lines" role="status" aria-label="${W('載入中', 'Loading')}"><i class="q-skel"></i><i class="q-skel"></i></div>`}</div>
       ${actions(c, { more: `<button class="q-btn" type="button" data-card="train">${icon('clock')} ${W('時刻', 'Times')}</button>` })}`;
   } else if (c.kind === 'metro') {
     const s = c.item;
