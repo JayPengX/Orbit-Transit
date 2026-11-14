@@ -25,8 +25,8 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 
 <p align="center">
   <img src="docs/screenshots/transit-4.webp" width="30%" alt="Minutes until your bus">
-  <img src="docs/screenshots/transit-5.webp" width="30%" alt="YouBike docks, live">
-  <img src="docs/screenshots/transit-6.webp" width="30%" alt="Every metro, drawn true to its lines">
+  <img src="docs/screenshots/transit-5.webp" width="30%" alt="Every metro, drawn true to its lines">
+  <img src="docs/screenshots/transit-6.webp" width="30%" alt="YouBike docks, live">
 </p>
 
 <details>
@@ -40,8 +40,8 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 
 <p align="center">
   <img src="docs/screenshots/transit-4.zh.webp" width="30%" alt="公車還要等幾分鐘">
-  <img src="docs/screenshots/transit-5.zh.webp" width="30%" alt="YouBike 車位，即時">
-  <img src="docs/screenshots/transit-6.zh.webp" width="30%" alt="全台捷運，照真的路線畫">
+  <img src="docs/screenshots/transit-5.zh.webp" width="30%" alt="全台捷運，照真的路線畫">
+  <img src="docs/screenshots/transit-6.zh.webp" width="30%" alt="YouBike 車位，即時">
 </p>
 
 </details>
