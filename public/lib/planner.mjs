@@ -27,7 +27,7 @@ import { routeStops, routeSchedule, routeCity, busEtaMended } from './bus.mjs';
 import { chases } from './chase.mjs';
 import { coverage, fareOf, tpassOf, inPass, passOk, passTrainTrip, bikeSwap } from './tpass.mjs';
 import { cityAt } from './city.mjs';
-import { traNotices, traLegOff } from './service.mjs';
+import { traNotices, traNoticesSoon, traLegOff } from './service.mjs';
 import { modeList } from './store.mjs';
 import { meters, hm, isRide, tw } from './util.mjs';
 import { crossings } from './rivers.mjs';
@@ -407,7 +407,8 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     // (Nothing left: which buses, said, not 找不到.)
     // (A 台鐵 ride the alerts stop that only a planner still has: the same.)
     const tN = performance.now();
-    const tra = (await traNotices().catch(() => null))?.rules || [];
+    // (The first round on the notices at hand; the second waits for the fresh ones.)
+    const tra = (await (stage === 1 && twoRounds ? traNoticesSoon(NOTICE_WAIT) : traNotices()).catch(() => null))?.rules || [];
     const stationAt = pt => net && [...net.st.entries()].filter(([, s]) => s.sys === 'tra').map(([key, s]) => ({ key, m: meters(pt.lat, pt.lon, s.lat, s.lon) })).sort((a, b) => a.m - b.m).find(x => x.m < 400)?.key;
     const offs = await Promise.all(
       list.map(async p => {
