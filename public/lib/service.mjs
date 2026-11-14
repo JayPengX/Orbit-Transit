@@ -17,7 +17,7 @@
 // "部分", "減班", "視…" or a time of day, is shown as written and never
 // taken as a stop (Jay: never invent). A bus seen on the road beats a notice.
 
-import { tdx, rows, busesRunning } from './api.mjs';
+import { tdx, tdxLast, rows, busesRunning } from './api.mjs';
 import { tw, zh, addDays, routeNorm } from './util.mjs';
 import { CITIES, CITY_CODES, cityShort } from './city.mjs';
 
@@ -233,14 +233,19 @@ export function traCut(trips, rules, date) {
 
 let traP = null;
 let traAt = 0;
+let traDone = false;
+const TRA_ALERT = 'basic/v3/Rail/TRA/Alert';
+const traLines = () => Promise.all([tdx('basic/v3/Rail/TRA/StationOfLine', { fresh: 7 * 86_400_000, persist: true }), tdx('basic/v3/Rail/TRA/Line', { fresh: 7 * 86_400_000, persist: true })]);
 // Today's 台鐵 rules (asked every 3 minutes at most; a failed ask: none, and asked again).
 export function traNotices() {
   if (traP && Date.now() - traAt < NOTICE_FRESH) return traP;
   traAt = Date.now();
-  traP = Promise.all([tdx('basic/v3/Rail/TRA/Alert', { fresh: NOTICE_FRESH }), tdx('basic/v3/Rail/TRA/StationOfLine', { fresh: 7 * 86_400_000, persist: true }), tdx('basic/v3/Rail/TRA/Line', { fresh: 7 * 86_400_000, persist: true })])
-    .then(([a, sol, ln]) => {
+  traDone = false;
+  traP = Promise.all([tdx(TRA_ALERT, { fresh: NOTICE_FRESH }), traLines()])
+    .then(([a, [sol, ln]]) => {
       const out = traRules(a, { ...sol, Lines: ln?.Lines || [] });
       changed(JSON.stringify(out.notes));
+      traDone = true;
       return out;
     })
     .catch(() => {
@@ -248,6 +253,30 @@ export function traNotices() {
       return { rules: [], notes: [] };
     });
   return traP;
+}
+// The rules for a plan's first round, never held up by a slow ask: the
+// fresh ones when they're in within `wait`, else those of the notices last
+// read on this device (a day old at most), the fresh ones going on behind.
+// (TDX's 台鐵 notices took 1.3–2.7 s some asks, and every plan's trains
+// waited on them; Jay 2026-11-14 "trip planning still really slow".) A
+// notice newer than the copy: told (onNotices), the network cut again, and
+// the second round's check (planner finishOff, `traNotices`) takes it.
+const TRA_KEPT = 86_400_000;
+export async function traNoticesSoon(wait = 400) {
+  const fresh = traNotices();
+  if (traDone) return fresh;
+  const last = await tdxLast(TRA_ALERT).catch(() => null);
+  if (!last?.data || last.at > Date.now() || Date.now() - last.at > TRA_KEPT) return fresh;
+  let timer = 0;
+  const quick = new Promise(r => (timer = setTimeout(r, wait))).then(() =>
+    traLines().then(([sol, ln]) => {
+      const out = traRules(last.data, { ...sol, Lines: ln?.Lines || [] });
+      // (So that fresh notices that differ are told, not taken as the first.)
+      if (!traDone) changed(JSON.stringify(out.notes));
+      return out;
+    })
+  );
+  return Promise.race([fresh.finally(() => clearTimeout(timer)), quick]);
 }
 
 // ---- 高鐵 ----------------------------------------------------------------------------------------

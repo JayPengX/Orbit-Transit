@@ -6,7 +6,7 @@ import { tdx, rows, keptLocal, keepLocal } from './api.mjs';
 import { traStations, hsrStations, traTrips, hsrTrips, network, links, traFare, hsrFare } from './rail.mjs';
 import { loadSystem, mapsNear } from './metro.mjs';
 import { tw, zh, twAt, addDays } from './util.mjs';
-import { traNotices, traCut, onNotices } from './service.mjs';
+import { traNoticesSoon, traCut, onNotices } from './service.mjs';
 
 const DAY = 86_400_000;
 
@@ -70,7 +70,7 @@ onNotices(() => {
 });
 export function dayTrips(date) {
   if (!cut.has(date)) {
-    const p = Promise.all([rawTrips(date), traNotices()]).then(([trips, n]) => traCut(trips, n.rules, date));
+    const p = Promise.all([rawTrips(date), traNoticesSoon()]).then(([trips, n]) => traCut(trips, n.rules, date));
     p.catch(() => cut.delete(date));
     cut.set(date, p);
   }
@@ -83,29 +83,42 @@ function rawTrips(date) {
       (async () => {
         const old = await keptLocal(tripsKey(date));
         if (old && Date.now() - old.at < TRIPS_FRESH) return unpackTrips(old.data);
-        const [a, b] = await Promise.all([
-          tdx(`basic/v3/Rail/TRA/DailyTrainTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(traTrips).catch(() => null),
-          tdx(`basic/v2/Rail/THSR/DailyTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(hsrTrips).catch(() => null)
-        ]);
-        // Nothing came: the last copy kept, however old, else nothing (asked again next time).
-        if (!a?.length && !b?.length) {
-          if (old) return unpackTrips(old.data);
-          days.delete(date);
-          return [];
+        // (The day's copy kept, older: used now, read again behind for the next
+        // network. A first plan of the day waited 1.5–3 s on TDX's timetable
+        // for a day already kept the evening before; Jay 2026-11-14.)
+        if (old && old.at <= Date.now()) {
+          readTrips(date, old).catch(() => {});
+          return unpackTrips(old.data);
         }
-        const trips = [...(a || []), ...(b || [])];
-        if (a?.length && b?.length) keepLocal(tripsKey(date), packTrips(date, trips));
-        return trips;
+        return readTrips(date, old);
       })()
     );
   }
   return days.get(date);
 }
+async function readTrips(date, old = null) {
+  const [a, b] = await Promise.all([
+    tdx(`basic/v3/Rail/TRA/DailyTrainTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(traTrips).catch(() => null),
+    tdx(`basic/v2/Rail/THSR/DailyTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(hsrTrips).catch(() => null)
+  ]);
+  // Nothing came: the last copy kept, however old, else nothing (asked again next time).
+  if (!a?.length && !b?.length) {
+    if (old) return unpackTrips(old.data);
+    days.delete(date);
+    return [];
+  }
+  const trips = [...(a || []), ...(b || [])];
+  if (a?.length && b?.length) keepLocal(tripsKey(date), packTrips(date, trips));
+  return trips;
+}
 
 // Ready before it's asked for: the day's network, built while the app is idle.
+// (From the afternoon, tomorrow's timetable read and kept too: the first
+// plan of the morning then builds on it at once.)
 export function warmRail() {
-  const { date, ...days } = railSpan(Date.now());
-  return railNetwork(date, days).catch(() => null);
+  const { date, ...span } = railSpan(Date.now());
+  if (tw().min >= 15 * 60 && !span.next) setTimeout(() => keptLocal(tripsKey(addDays(date, 1))).then(k => k || readTrips(addDays(date, 1))).catch(() => {}), 8000);
+  return railNetwork(date, span).catch(() => null);
 }
 
 // Which days' trains a search needs, from `start` (ms) up to `end` (an

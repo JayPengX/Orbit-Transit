@@ -224,6 +224,8 @@ async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr
 export const keptLocal = key => kept(`local/${key}`);
 export const keepLocal = (key, data) => keep(`local/${key}`, data, Date.now());
 
+// A path's last answer here or kept on the device, however old: { at, data } or null.
+export const tdxLast = async path => memory.get(path) || (await kept(path));
 // When a path's data is from (ms), or 0.
 export const dataAt = path => memory.get(path)?.at || 0;
 

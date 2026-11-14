@@ -64,3 +64,44 @@ test("the second round's looks (direct buses, buses to the trains) start with th
   assert.ok(at('list.slice(0, WARM_STOPS)') > 0, "the start's warm-up keeps to the nearest stops");
   assert.ok(SETTLE_MS <= 3000);
 });
+
+test("a slow ask for 台鐵's notices never holds the trains: the notices last read answer within the wait, the fresh ones after (Jay 2026-11-14: 1.3–2.7 s on every plan)", async () => {
+  const { traNotices, traNoticesSoon } = await import('../public/lib/service.mjs');
+  useSession({ ensureToken: async () => 'T' });
+  const was = globalThis.fetch;
+  const wasNow = Date.now;
+  let slow = 0;
+  globalThis.fetch = async url => {
+    const u = decodeURIComponent(String(url?.url || url));
+    const j = b => new Response(JSON.stringify(b), { headers: { 'Content-Type': 'application/json' } });
+    if (u.includes('TRA/Alert')) {
+      if (slow) await new Promise(r => setTimeout(r, slow));
+      return j({ Alerts: [] });
+    }
+    if (u.includes('StationOfLine')) return j({ StationOfLines: [] });
+    if (u.includes('TRA/Line')) return j({ Lines: [] });
+    return j([]);
+  };
+  try {
+    await traNotices();
+    // Four minutes on (past the 3 minutes they're fresh), TDX answering in 3 s.
+    const t = wasNow() + 4 * 60_000;
+    Date.now = () => t;
+    slow = 3000;
+    const t0 = performance.now();
+    const got = await traNoticesSoon(100);
+    assert.ok(performance.now() - t0 < 1500, `${Math.round(performance.now() - t0)} ms`);
+    assert.deepEqual(got.rules, []);
+  } finally {
+    globalThis.fetch = was;
+    Date.now = wasNow;
+  }
+});
+
+test("the day's trains kept on the phone are used at once, read again behind; tomorrow's read in the afternoon", () => {
+  const src = readFileSync(new URL('../public/lib/raildata.mjs', import.meta.url), 'utf8');
+  const raw = src.slice(src.indexOf('function rawTrips'), src.indexOf('async function readTrips'));
+  assert.match(raw, /if \(old && old\.at <= Date\.now\(\)\) \{\s*readTrips\(date, old\)\.catch\(\(\) => \{\}\);\s*return unpackTrips\(old\.data\);/);
+  assert.match(src, /dayTrips[\s\S]*traNoticesSoon\(\)/);
+  assert.match(src.slice(src.indexOf('export function warmRail')), /readTrips\(addDays\(date, 1\)\)/);
+});
