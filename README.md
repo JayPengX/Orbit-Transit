@@ -6,14 +6,16 @@
 
 <p align="center">
   <b>Bus, train and bike.</b><br>
-  <a href="https://orbit.jaypengx.com/transit/"><b>orbit.jaypengx.com/transit</b></a>
+  <a href="https://orbit.jaypengx.com/app/"><b>Use it in Orbit</b></a> · on its own at <a href="https://orbit.jaypengx.com/transit/">orbit.jaypengx.com/transit</a>
 </p>
 
 <p align="center">
   <img alt="JavaScript" src="https://img.shields.io/badge/JavaScript-ES_modules-F7DF1E?logo=javascript&logoColor=000"> <img alt="PWA" src="https://img.shields.io/badge/PWA-works_offline-5A0FC8?logo=pwa&logoColor=fff"> <img alt="Cloudflare" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=fff"> <img alt="Tests" src="https://img.shields.io/badge/Tests-node_--test-339933?logo=nodedotjs&logoColor=fff">
 </p>
 
-Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planned the way people really travel. Part of **Orbit**, a family of apps for life in Taiwan that share one sign-in, the Orbit Pass. See them all at [orbit.jaypengx.com](https://orbit.jaypengx.com/pass/).
+Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planned the way people really travel. Part of **Orbit**, a family of apps for life in Taiwan that share one sign-in, the Orbit Pass.
+
+> **Best in Orbit.** Add [Orbit](https://orbit.jaypengx.com/app/) to your home screen: every Orbit app in one, signed in once, switching between them without reloading. Orbit Transit also works on its own at [orbit.jaypengx.com/transit](https://orbit.jaypengx.com/transit/) if it's the only one you want.
 
 <p align="center">
   <img src="docs/screenshots/transit-1.webp" width="30%" alt="Train, bus and YouBike in one plan">
@@ -154,6 +156,8 @@ node scripts/live.mjs --against HEAD
 Push to `main`. GitHub Actions runs the tests, stamps every file with its content hash (so a phone downloads only what changed) and publishes `public/` to Cloudflare at its orbit.jaypengx.com address (Orbit-Core `deploy/cf-site.mjs`). There are no pull requests or release branches.
 
 ## Part of Orbit
+
+Every app below is in **[Orbit](https://orbit.jaypengx.com/app/)**, one home-screen app for them all; each also works on its own.
 
 | App | What it is |
 | --- | --- |
