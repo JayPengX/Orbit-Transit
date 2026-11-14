@@ -3049,6 +3049,7 @@ function navAction(a, info) {
     if (n && needsRoad(info)) roadLegs(n.plan).then(() => navNow() === n && !navFollow && drawPlan(n.plan, { fit: false, lit: n.i })).catch(() => {});
     return map.fit(pts, navPad());
   }
+  if (a === 'apps') return suite.openSwitcher?.();
   if (a === 'more') return navMore();
   if (a === 'replan') return replanFromHere(null, null, '', { now: Boolean(info?.aboard) });
   if (a === 'fastest') return navFastest(info);
