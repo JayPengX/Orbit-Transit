@@ -828,6 +828,12 @@ body.tab-map {
 .ot-map-chips:empty {
   display: none;
 }
+/* (In Orbit, its app capsule stands at the top line's left: the chip under
+   it, beside the round buttons, never behind it, Jay 11-16.) */
+html.q-in-suite:not(.q-tabrail) .ot-map-chips {
+  top: calc(var(--q-top, 0px) + 58px);
+  right: 84px;
+}
 .ot-map-chips .q-chip {
   min-height: 44px;
   padding: 0 14px;

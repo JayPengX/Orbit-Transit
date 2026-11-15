@@ -164,7 +164,11 @@ function swapAt(cur, bikes) {
     // (The way round it, past returning one bike and taking another.)
     const round = first.dur + rest.dur - cur.dur - DOCK_SEC;
     if (round > Math.max(4 * 60, cur.dur * 0.1)) continue;
-    const cost = Math.abs(first.dur - SWAP_AT) / 60 + Math.max(0, first.dur - SWAP_SEC) / 20 + Math.max(0, round) / 30;
+    // (A train station's dock, the big one everyone knows, is where to swap
+    // when it's in the window: 臺鐵上員車站, not 竹東公5停車場 a minute nearer
+    // the 26, Jay 11-16.)
+    const station = /車站|火車站/.test(s.name || '') && first.dur >= 15 * 60;
+    const cost = Math.abs(first.dur - SWAP_AT) / 60 + Math.max(0, first.dur - SWAP_SEC) / 20 + Math.max(0, round) / 30 - (station ? 6 : 0);
     if (!best || cost < best.cost) best = { cost, first, rest };
   }
   return best;

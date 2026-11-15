@@ -685,6 +685,17 @@ export function bikeRides(froms, tos) {
 // a plan's legs when it's opened), kept for the session.
 const OSRM = { bike: 'https://routing.openstreetmap.de/routed-bike', walk: 'https://routing.openstreetmap.de/routed-foot' };
 const roads = new Map();
+// A ride by the bike lane where one goes the way (頭前溪南岸自行車道 from 上員
+// to 竹東, not 中興路's traffic beside it: Jay 11-16): of the router's ways,
+// the one with the most of it named a bike lane (自行車道, 自行車專用道),
+// at most a tenth longer than the shortest. → a route or undefined.
+const LANE = /自行車|cycleway|bikeway/i;
+export function bikeLaneFirst(routes) {
+  if (routes.length < 2) return routes[0];
+  const lane = r => (r.legs || []).reduce((a, l) => a + (l.steps || []).reduce((x, s) => x + (LANE.test(s.name || '') ? s.distance || 0 : 0), 0), 0);
+  const short = Math.min(...routes.map(r => r.distance));
+  return routes.filter(r => r.distance <= short * 1.1).reduce((best, r) => (lane(r) > lane(best) + 200 ? r : best), routes[0]);
+}
 // → { poly (Google-encoded), dist (m), dur (s) } or null.
 export function roadPath(mode, a, b) {
   const base = OSRM[mode];
@@ -693,9 +704,12 @@ export function roadPath(mode, a, b) {
   if (!roads.has(k))
     roads.set(
       k,
-      fetch(`${base}/route/v1/driving/${a.lon.toFixed(5)},${a.lat.toFixed(5)};${b.lon.toFixed(5)},${b.lat.toFixed(5)}?overview=full&geometries=polyline`, { signal: AbortSignal.timeout?.(8000) })
+      fetch(`${base}/route/v1/driving/${a.lon.toFixed(5)},${a.lat.toFixed(5)};${b.lon.toFixed(5)},${b.lat.toFixed(5)}?overview=full&geometries=polyline${mode === 'bike' ? '&alternatives=3&steps=true' : ''}`, { signal: AbortSignal.timeout?.(8000) })
         .then(r => (r.ok ? r.json() : null))
-        .then(j => (j?.routes?.[0] ? { poly: j.routes[0].geometry, dist: Math.round(j.routes[0].distance), dur: Math.round(j.routes[0].duration) } : null))
+        .then(j => {
+          const r = bikeLaneFirst(j?.routes || []);
+          return r ? { poly: r.geometry, dist: Math.round(r.distance), dur: Math.round(r.duration) } : null;
+        })
         .catch(() => (roads.delete(k), null))
     );
   return roads.get(k);

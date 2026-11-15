@@ -3136,3 +3136,22 @@ test('place search: the store before the shops in it, any case (桃園sogo, Jay 
   const rows = ['JINS遠東SOGO百貨桃園中壢店', 'IKIGAI燒肉專門店-中壢SOGO店', '九亀製麵 桃園SOGO中壢店 烏龍麵餐廳', '遠東SOGO 中壢店', '饗食天堂 桃園中壢店'].map(name => ({ name }));
   assert.equal(mainFirst(rows, '桃園sogo')[0].name, '遠東SOGO 中壢店');
 });
+
+test('a YouBike ride by the bike lane where it is about as long (上員 → 竹東 by 頭前溪南岸自行車道, Jay 11-16)', async () => {
+  const { bikeLaneFirst } = await import('../public/lib/api.mjs');
+  const road = { distance: 6612, legs: [{ steps: [{ name: '中興路二段', distance: 3000 }] }] };
+  const lane = { distance: 6699, legs: [{ steps: [{ name: '頭前溪南岸自行車道', distance: 2500 }] }] };
+  const far = { distance: 9000, legs: [{ steps: [{ name: '頭前溪南岸自行車道', distance: 8000 }] }] };
+  assert.equal(bikeLaneFirst([road, lane]), lane);
+  assert.equal(bikeLaneFirst([road, far]), road);
+});
+
+test('a ride over half an hour swaps at the train station dock in the window (臺鐵上員車站, Jay 11-16)', async () => {
+  const { rideLeg } = await import('../public/lib/plan.mjs');
+  const st = (uid, name, lat, lon) => ({ uid, name, lat, lon, bikes: 5, ebike: 5, ret: 10, ok: true });
+  const rent = st('a', '新竹縣體育場', 24.81913, 121.01859);
+  const ret = st('z', '竹東高中', 24.73327, 121.08814);
+  // (竹東公5停車場 the nearer the 26 minutes, 26 to the station's 23: the station all the same.)
+  const legs = swapRides([rideLeg(rent, ret, 0, true, 13000)], [rent, ret, st('s', '臺鐵上員車站', 24.77827, 121.05532), st('p', '竹東公5停車場', 24.77241, 121.05632)]);
+  assert.equal(legs[0].to.name, '臺鐵上員車站');
+});
