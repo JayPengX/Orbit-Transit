@@ -17,7 +17,7 @@ import { bikesAround, stopsAround, etaStops } from './near.mjs';
 import { railNetwork, railSpan, stationPoint } from './raildata.mjs';
 import { metroPlans, metroMapAt, metroWarm } from './metroroute.mjs';
 import { markWet } from './rain.mjs';
-import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, useStreetRides, ARRIVE_WINDOW } from './plan.mjs';
+import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, wrongWay, onlyOnce, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, useStreetRides, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
 import { motion, trainPace, trainAboard, trainsNear, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
@@ -333,6 +333,10 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
   const walked = walkAsk && !res.plans.some(allWalk) ? await walkAsk : null;
   if (res.err && !trains.length && !metros.length && !walked) return { plans: [], sources: res.sources || {}, error: res.err };
   let plans = [...res.plans.map(tidy), ...trains, ...metros, ...(walked ? [walked] : [])].filter(p => allowed(p, { ...modes, bike: true }));
+  // No time spent on a way that's never shown (its buses, its notices, its
+  // fares): the wrong way for a change out, each plan once. (Nothing else: kept.)
+  const right = onlyOnce(plans.filter(p => !wrongWay(p, to)));
+  if (right.length) plans = right;
   // YouBike near both ends and the stations, asked now, while the buses are
   // looked at (it doesn't wait for them; a train-then-bus's stop is asked after).
   const bikeCities = modes.bike && bikeSwap(prefs) ? [...new Set([cityOf(from), cityOf(to)].filter(Boolean))] : [];
@@ -507,6 +511,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
           ]);
           plans.push(...lateLive.filter(bused));
           let list = [...plans, ...direct.filter(p => allowed(p, { ...modes, bike: true })), ...toTrains];
+          { const right = onlyOnce(list.filter(p => !wrongWay(p, to))); if (right.length) list = right; }
           // (Once a line and stop: many plans board the same bus at the same stop.)
           const once = new Map();
           const key = p => {

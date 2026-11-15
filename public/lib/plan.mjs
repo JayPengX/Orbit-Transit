@@ -417,6 +417,24 @@ const wasted = (j, could, chased) =>
 // when o is a station a bus gets you to on the way.
 // `walkM`: how far a station may be walked to or from (RAIL_FAR_WALK_M for
 // the trip nothing else reaches: 池上's fields, no bus and no YouBike there).
+// Back the wrong way for a change: a ride, not the last, that ends over
+// 1 km further from there than it began (Jay 11-15, home → 中壢 SOGO: "no to
+// 新竹 from 六家 train", the 六家線 down to 新竹 for a 自強 back north).
+// Never built (railPlans), never looked at further (planner), never shown (rank).
+export function wrongWay(p, d) {
+  if (d?.lat == null) return false;
+  const dist = x => meters(x.lat, x.lon, d.lat, d.lon);
+  return rides(p).slice(0, -1).some(l => l.from?.lat != null && l.to?.lat != null && dist(l.to) > dist(l.from) + 1000);
+}
+
+// The same plan twice (two stations' searches finding one train, two planners
+// one ride): once. By every leg's ride and time, so another departure stays.
+export const planKey = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${l.from?.name || ''}>${l.to?.name || ''}@${Math.round((l.dep || 0) / 60_000)}`).join('|');
+export function onlyOnce(list) {
+  const seen = new Set();
+  return list.filter(p => !seen.has(planKey(p)) && seen.add(planKey(p)));
+}
+
 export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use = () => true, chase = [], walkM = RAIL_WALK_M } = {}) {
   if (!net || meters(o.lat, o.lon, d.lat, d.lon) < 3000) return [];
   // A station near both ends (千甲, 北新竹 between 竹北 and 巨城) is the
@@ -457,7 +475,7 @@ export function railPlans(net, o, d, at, { n = 4, bike = false, bus = false, use
     else if (b?.bus) legs.push({ ...w2, bus: true, arr: last.arr + b.sec * 1000, dur: b.sec });
     else if (w2.dist > 20) legs.push(w2);
     return finish({ src: 'rail', legs });
-  });
+  }).filter(p => !wrongWay(p, d));
 }
 // A train of our router's as a plan's leg.
 export function trainLeg(net, l) {
@@ -1051,8 +1069,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // Back the wrong way for a change: a ride, not the last, that ends over
     // 1.5 km further from there than it began (Jay 11-15, home → 中壢 SOGO:
     // "no to 新竹 from 六家 train", 六家線 down to 新竹 for a 自強 back north).
-    const dist = l => meters(l.lat, l.lon, d.lat, d.lon);
-    const back = d?.lat != null && rides(p).slice(0, -1).some(l => l.from?.lat != null && l.to?.lat != null && dist(l.to) > dist(l.from) + 1500);
+    const back = wrongWay(p, d);
     if (back) wrong.add(p);
     if (back || beaten || changes || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }

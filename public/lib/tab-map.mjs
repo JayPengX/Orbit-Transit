@@ -1486,7 +1486,7 @@ function wireSearch() {
     try {
       const c = ctx.here || map.center();
       const out = await searchPlaces(t, { lat: c.lat, lon: c.lon, session: searchSession });
-      if (n === ask) draw(out.items.map(i => ({ kind: i.lat != null ? 'geo' : 'google', id: i.id, name: i.name, sub: i.sub, lat: i.lat, lon: i.lon, dist: i.dist })));
+      if (n === ask) draw(mainFirst(out.items.map(i => ({ kind: i.lat != null ? 'geo' : 'google', id: i.id, name: i.name, sub: i.sub, lat: i.lat, lon: i.lon, dist: i.dist })), t));
     } catch (err) {
       if (n === ask) draw([]);
       ctx.status(errorText(err));
@@ -1507,6 +1507,21 @@ function closeResults({ keep = false } = {}) {
 // place on the map), the first copy kept (yours, then stations, then the
 // search's). The owner, 2026-10-18: 巨城購物中心 listed over and over.
 const STATION_KINDS = new Set(['tra', 'hsr', 'metro']);
+// The place before its parts: a search's rows by how much they are the place
+// asked for, the search's own order kept within each (Jay 11-15, 高雄駁二: 駁二藝術特區
+// under 高雄駁二藝術特區 大勇區 C5倉庫). A part: a name with more after a space or
+// in brackets (… 大勇區 C5倉庫), or a car park, door, warehouse or stop of it.
+// Then: a name that starts with what was typed (the city in front aside), then one
+// that has it, then the rest.
+const CITY = /^(臺|台)?(北|中|南|東)?(新北|桃園|新竹|苗栗|彰化|南投|雲林|嘉義|屏東|宜蘭|花蓮|臺東|台東|澎湖|金門|連江|基隆|高雄|臺北|台北|臺中|台中|臺南|台南)(市|縣)?/;
+const PART = /(停車場|停車格|出口|入口|出入口|\d+號?門|門口|倉庫|廁所|站牌|月台|服務台|售票處|ATM)$/i;
+export function mainFirst(rows, typed) {
+  const core = String(typed || '').replace(/\s+/g, '').replace(CITY, '') || String(typed || '');
+  const bare = s => String(s || '').replace(/\s+/g, '').replace(CITY, '');
+  const part = r => /\S\s+.*[一-鿿]/.test(String(r.name || '').trim()) || /[(（]/.test(r.name || '') || PART.test(String(r.name || '').trim());
+  const tier = r => (part(r) ? 3 : 0) + (bare(r.name).startsWith(core) ? 0 : bare(r.name).includes(core) ? 1 : 2);
+  return rows.map((r, i) => ({ r, i, t: tier(r) })).sort((a, b) => a.t - b.t || a.i - b.i).map(x => x.r);
+}
 export function uniqueResults(rows) {
   const norm = s => String(s || '').replace(/台/g, '臺').replace(/[\s()（）・·\-]/g, '').toLowerCase();
   const kept = [];
@@ -1570,7 +1585,7 @@ function pickPoint(title, { here = false, onMap = true, q = '' } = {}) {
         const c = ctx.here || map?.center() || FALLBACK;
         const out = await searchPlaces(t, { lat: c.lat, lon: c.lon, session });
         if (n !== ask) return;
-        const remote = out.items.map(i => ({ kind: i.lat != null ? 'geo' : 'google', id: i.id, name: i.name, sub: i.sub, lat: i.lat, lon: i.lon, dist: i.dist }));
+        const remote = mainFirst(out.items.map(i => ({ kind: i.lat != null ? 'geo' : 'google', id: i.id, name: i.name, sub: i.sub, lat: i.lat, lon: i.lon, dist: i.dist })), t);
         box.innerHTML = uniqueResults([...local, ...remote]).map(resultRow).join('') || `<p class="ot-note">${W('找不到符合的地點', 'No matching place')}</p>`;
       } catch (err) {
         if (n === ask) box.innerHTML = `${local.map(resultRow).join('')}<p class="ot-note bad">${e(errorText(err))}</p>`;
