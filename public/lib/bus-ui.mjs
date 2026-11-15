@@ -247,8 +247,21 @@ export const busAt = (lives, k) => coming(lives[k]) && etaText(lives[k]).tone ==
 // a run still to come today, and no bus on its way (the last run left its
 // first stop but is still coming to the rest: 快捷8號支 at 18:32 said
 // 今天已收班 with its 18:33 at 下公館 to come; the owner, 2026-11-03).
+// A way the timetable has hardly any of (TDX's 988, 2026-11-15: 板橋 → 新市站
+// only its five 23:40 runs, Monday to Friday, while 新市站 → 板橋 has 80 a week
+// and the bus runs both ways all day; Jay: 今天不行駛 beside a plan taking it at
+// 22:11): the timetable is missing runs, never "not running". Under a fifth of
+// the other way's runs, the other way with 20 or more.
+export function thinWay(sched, w) {
+  if (!sched?.length || w?.dir == null) return false;
+  const runs = d => sched.filter(r => Number(r.Direction) === d).reduce((n, r) => n + (r.Timetables || []).length + (r.Frequencys || []).length * 10, 0);
+  const mine = runs(Number(w.dir));
+  const other = Math.max(...[0, 1].filter(d => d !== Number(w.dir)).map(runs));
+  return other >= 20 && mine * 5 < other;
+}
 export function doneToday(sched, w, lives = [], now = Date.now()) {
   if (!sched?.length || !w?.stops?.length) return false;
+  if (thinWay(sched, w)) return false;
   const first = nextRun(sched, w, 0, now);
   if (!first || first.day === 0) return false;
   if (lives.some(v => v?.status === 0 && v.sec != null)) return false;
@@ -283,7 +296,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   const today = () => tw();
   // The timetable's next bus at each stop (公路客運's first-stop times plus
   // the ride there), today or the nearest day the route runs.
-  const planned = (w, k) => (sched?.length ? nextRun(sched, w, k, Date.now()) : null);
+  const planned = (w, k) => (sched?.length && !thinWay(sched, w) ? nextRun(sched, w, k, Date.now()) : null);
   const dayName = n => {
     const t = today();
     return n === 1 ? W(`明天（週${WEEK[(t.dow + 1) % 7]}）`, `tomorrow (${WEEK_EN[(t.dow + 1) % 7]})`) : wk((t.dow + n) % 7);
@@ -310,7 +323,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
         const x = stopTable(sched, w, w.stops.indexOf(s), addDays(t0.date, n), (t0.dow + n) % 7);
         return x.times.length || x.every.length;
       };
-      const n = has(0) ? 0 : [1, 2, 3, 4, 5, 6].find(has);
+      const thin = thinWay(sched, w);
+      const n = has(0) || thin ? 0 : [1, 2, 3, 4, 5, 6].find(has);
+      if (thin) moved = W('時刻表少了這個方向的班次，以即時到站為準', 'The timetable is missing runs this way; go by the live times');
       if (n) {
         day = n;
         moved = W(`今天不行駛，顯示${dayName(n)}的時刻`, `Not running today; showing ${dayName(n)}`);

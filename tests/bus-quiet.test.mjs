@@ -51,3 +51,15 @@ test('a quiet stop: asked about once an estimate, never missing one', async () =
     api.useSession(null);
   }
 });
+
+// TDX's 988 (Jay 2026-11-15): one way with five night runs, the other with 80:
+// the timetable missing runs, never 今天不行駛.
+test('a way the timetable hardly has is missing runs, not off', async () => {
+  const { thinWay, doneToday } = await import('../public/lib/bus-ui.mjs');
+  const trip = d => ({ ServiceDay: { Sunday: d, Monday: 1, Tuesday: 1, Wednesday: 1, Thursday: 1, Friday: 1, Saturday: 1 }, StopTimes: [{ StopUID: 'A', DepartureTime: '23:40' }] });
+  const sched = [{ Direction: 0, Timetables: Array.from({ length: 80 }, () => trip(1)) }, { Direction: 1, Timetables: Array.from({ length: 5 }, () => trip(0)) }];
+  const w = { dir: 1, stops: [{ uid: 'A', name: 'A' }] };
+  assert.equal(thinWay(sched, w), true);
+  assert.equal(thinWay(sched, { ...w, dir: 0 }), false);
+  assert.equal(doneToday(sched, w), false);
+});
