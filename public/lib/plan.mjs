@@ -1004,6 +1004,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     if (g) river.add(groups.get(pickSig(g)));
   }
   const other = (q, p) => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && !over.has(groups.get(pickSig(q)));
+  const wrong = new Set();
   for (const p of leads) {
     // Another way onto the same bus or train (a bike to it, not a walk and a
     // bus): no earlier out of the door, no later there, less bother. Another
@@ -1047,10 +1048,24 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // A ride for nothing: there no sooner than walking it all, and walking
     // most of that anyway (a 40-minute wait for one stop, beside a 4-minute walk).
     const idle = rides(p).length && list.some(q => !q.legs.some(l => l.mode !== 'walk') && q.arr <= p.arr && (p.walk || 0) >= (q.walk || 0) * 0.8);
-    if (beaten || changes || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    // Back the wrong way for a change: a ride, not the last, that ends over
+    // 1.5 km further from there than it began (Jay 11-15, home → 中壢 SOGO:
+    // "no to 新竹 from 六家 train", 六家線 down to 新竹 for a 自強 back north).
+    const dist = l => meters(l.lat, l.lon, d.lat, d.lon);
+    const back = d?.lat != null && rides(p).slice(0, -1).some(l => l.from?.lat != null && l.to?.lat != null && dist(l.to) > dist(l.from) + 1500);
+    if (back) wrong.add(p);
+    if (back || beaten || changes || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // Never nothing: the best way stays when every way was set aside.
   if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
+  // Never one way alone (Jay 11-15, home → 中壢 SOGO: "why is there only one trip
+  // plan"; 高鐵 and bus 170, 3 minutes later with changes, all set aside by the
+  // one train): the best way set aside on another main line comes back, a choice to see.
+  const still = leads.filter(p => !weak.has(p));
+  if (still.length < 2) {
+    const alt = leads.filter(p => weak.has(p) && !wrong.has(p) && rides(p).length && !still.some(q => mainLine(q) === mainLine(p))).sort((a, b) => a.score - b.score)[0];
+    if (alt) for (const q of groups.get(pickSig(alt))) weak.delete(q);
+  }
   // A route's other departures: the next few, within an hour and a half of
   // its first; and a route that runs seldom (5615, a few buses a day) its
   // next three all the same, up to four hours on: its card always offers a
