@@ -12,6 +12,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - No riding the wrong way for a change (六家 → 新竹 for a 自強 back north): never built, never looked at, never shown; each plan once; never one way alone — `public/lib/plan.mjs`: `wrongWay`, `onlyOnce`, `Never one way alone`
 - Place search: the place itself before its parts (駁二藝術特區 over … C5倉庫, its 停車場) — `public/lib/tab-map.mjs`: `mainFirst`
 - A bus way the timetable hardly has (988 板橋 → 新市站: five night runs against 80 the other way) says the timetable is missing runs and goes by the live times, never 今天不行駛 — `public/lib/bus-ui.mjs`: `thinWay`
+- Leaving now on an hour or more, a way with fewer changes that is shorter door to door (there at most 30 minutes later) sets the many-change ways aside: 高鐵 to 板橋 and the 988 over 高鐵, 機場線 and 990 (home → 八里); one brought back as the second way ranks under the one that stood — `public/lib/plan.mjs`: `rank`
 - 偏好電輔車 in 我的, off by default (every trip's ⚡ starts on) — `public/lib/tab-me.mjs`: `ebikeRow`
 - 電輔車 counted first on station cards when preferred — `public/lib/look.mjs`: `ebikeFirst`
 - 換附近的站 only when a station runs low — `public/lib/nav.mjs`: `換附近的站`

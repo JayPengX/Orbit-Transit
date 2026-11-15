@@ -1035,7 +1035,11 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // minutes) and less bother: off the train at 北新竹 for the 5608, when
     // staying on to 新竹 and riding is sooner.
     const n = segs(p).length;
-    const changes = n > 1 && list.some(q => other(q, p) && segs(q).length >= 1 && segs(q).length < n && bother(q) <= bother(p) && q.arr <= p.arr + 5 * 60_000);
+    // Or, leaving now on an hour or more, a way with fewer changes (itself
+    // no bus to a bus, no long walk) that is shorter door to door, there at most half an hour later: leaving later beats more
+    // changes (Jay 11-15, home → 八里: 高鐵 to 桃園, the 機場線 and the 990,
+    // or 高鐵 to 台北, the metro to 關渡 and 紅22, over 高鐵 to 板橋 and the 988).
+    const changes = n > 1 && list.some(q => other(q, p) && segs(q).length >= 1 && segs(q).length < n && ((bother(q) <= bother(p) && q.arr <= p.arr + 5 * 60_000) || (by !== 'arrive' && p.arr - p.dep >= 60 * 60_000 && !q.off && !busChain(q) && !trek(q) && q.arr - q.dep <= p.arr - p.dep - 10 * 60_000 && q.arr <= p.arr + 30 * 60_000)));
     // A change for a hop: onto a bus or metro for a stop or two (a few
     // minutes, under 1.5 km) that a walk or a bike from where you got off
     // would do (新竹站, then 綠線 one stop, then a bike again).
@@ -1070,7 +1074,9 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // 1.5 km further from there than it began (Jay 11-15, home → 中壢 SOGO:
     // "no to 新竹 from 六家 train", 六家線 down to 新竹 for a 自強 back north).
     const back = wrongWay(p, d);
-    if (back) wrong.add(p);
+    // (Set aside for good: back the wrong way, a bus to a bus, a 2 km walk, a
+    // ride for nothing. Never brought back as the second way.)
+    if (back || idle || (noChain && busChain(p)) || (noTrek && trek(p))) wrong.add(p);
     if (back || beaten || changes || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // Never nothing: the best way stays when every way was set aside.
@@ -1081,7 +1087,14 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const still = leads.filter(p => !weak.has(p));
   if (still.length < 2) {
     const alt = leads.filter(p => weak.has(p) && !wrong.has(p) && rides(p).length && !still.some(q => mainLine(q) === mainLine(p))).sort((a, b) => a.score - b.score)[0];
-    if (alt) for (const q of groups.get(pickSig(alt))) weak.delete(q);
+    if (alt) {
+      for (const q of groups.get(pickSig(alt))) weak.delete(q);
+      // (Brought back, it's the other choice, under the way that stood:
+      // never ★ first over the 988 that set it aside, Jay 11-15.)
+      const under = Math.max(...still.map(q => q.score)) + 1;
+      if (still.length && alt.score < under) for (const q of groups.get(pickSig(alt))) q.score += under - alt.score;
+      list.sort((a, b) => a.score - b.score || a.arr - b.arr);
+    }
   }
   // A route's other departures: the next few, within an hour and a half of
   // its first; and a route that runs seldom (5615, a few buses a day) its
