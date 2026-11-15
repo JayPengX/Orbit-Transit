@@ -1039,7 +1039,11 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // no bus to a bus, no long walk) that is shorter door to door, there at most half an hour later: leaving later beats more
     // changes (Jay 11-15, home → 八里: 高鐵 to 桃園, the 機場線 and the 990,
     // or 高鐵 to 台北, the metro to 關渡 and 紅22, over 高鐵 to 板橋 and the 988).
-    const changes = n > 1 && list.some(q => other(q, p) && segs(q).length >= 1 && segs(q).length < n && ((bother(q) <= bother(p) && q.arr <= p.arr + 5 * 60_000) || (by !== 'arrive' && p.arr - p.dep >= 60 * 60_000 && !q.off && !busChain(q) && !trek(q) && q.arr - q.dep <= p.arr - p.dep - 10 * 60_000 && q.arr <= p.arr + 30 * 60_000)));
+    const fewer = q => other(q, p) && segs(q).length >= 1 && segs(q).length < n;
+    const changes = n > 1 && list.some(q => fewer(q) && bother(q) <= bother(p) && q.arr <= p.arr + 5 * 60_000);
+    // (Such a way makes no sense: never brought back as the second choice;
+    // one way alone is fine then. Jay 11-15.)
+    const tedious = n > 1 && by !== 'arrive' && p.arr - p.dep >= 60 * 60_000 && list.some(q => fewer(q) && !q.off && !busChain(q) && !trek(q) && q.arr - q.dep <= p.arr - p.dep - 10 * 60_000 && q.arr <= p.arr + 30 * 60_000);
     // A change for a hop: onto a bus or metro for a stop or two (a few
     // minutes, under 1.5 km) that a walk or a bike from where you got off
     // would do (新竹站, then 綠線 one stop, then a bike again).
@@ -1076,8 +1080,8 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     const back = wrongWay(p, d);
     // (Set aside for good: back the wrong way, a bus to a bus, a 2 km walk, a
     // ride for nothing. Never brought back as the second way.)
-    if (back || idle || (noChain && busChain(p)) || (noTrek && trek(p))) wrong.add(p);
-    if (back || beaten || changes || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    if (back || tedious || idle || (noChain && busChain(p)) || (noTrek && trek(p))) wrong.add(p);
+    if (back || beaten || changes || tedious || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // Never nothing: the best way stays when every way was set aside.
   if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
