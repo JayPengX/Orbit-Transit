@@ -3130,3 +3130,9 @@ test("a station's board: every live train each way, soonest first, then the time
   const both = withLive(rows(), [{ dest: '老街溪站', min: 5, status: 0, line: 'A' }], now);
   assert.deepEqual(both.map(x => [x.dest, x.times.length, x.live]), [['台北車站', 3, false], ['老街溪站', 1, true]]);
 });
+
+test('place search: the store before the shops in it, any case (桃園sogo, Jay 11-15)', async () => {
+  const { mainFirst } = await import('../public/lib/tab-map.mjs');
+  const rows = ['JINS遠東SOGO百貨桃園中壢店', 'IKIGAI燒肉專門店-中壢SOGO店', '九亀製麵 桃園SOGO中壢店 烏龍麵餐廳', '遠東SOGO 中壢店', '饗食天堂 桃園中壢店'].map(name => ({ name }));
+  assert.equal(mainFirst(rows, '桃園sogo')[0].name, '遠東SOGO 中壢店');
+});

@@ -10,7 +10,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - YouBike logo, 一般 and 電輔車 counted apart — `public/lib/look.mjs`: `bikeTile`, `bikeStats`
 - 偏好電輔車 per trip — `public/lib/plan.mjs`: `偏好電輔車`, `PREFER_SEC`
 - No riding the wrong way for a change (六家 → 新竹 for a 自強 back north): never built, never looked at, never shown; each plan once; never one way alone — `public/lib/plan.mjs`: `wrongWay`, `onlyOnce`, `Never one way alone`
-- Place search: the place itself before its parts (駁二藝術特區 over … C5倉庫, its 停車場) — `public/lib/tab-map.mjs`: `mainFirst`
+- Place search: the place itself before its parts (駁二藝術特區 over … C5倉庫, its 停車場), and the store before the shops in it, any case (桃園sogo: 遠東SOGO 中壢店 over JINS遠東SOGO百貨… and IKIGAI…-中壢SOGO店) — `public/lib/tab-map.mjs`: `mainFirst`
 - A bus way the timetable hardly has (988 板橋 → 新市站: five night runs against 80 the other way) says the timetable is missing runs and goes by the live times, never 今天不行駛 — `public/lib/bus-ui.mjs`: `thinWay`
 - Leaving now on an hour or more, a way with fewer changes that is shorter door to door (there at most 30 minutes later) sets the many-change ways aside: 高鐵 to 板橋 and the 988 over 高鐵, 機場線 and 990 (home → 八里), and none of them is brought back as a second choice (one sensible way alone is shown alone) — `public/lib/plan.mjs`: `rank`
 - A YouBike ride over 20 minutes after the train counts as a change: a way without one, no later (5 minutes) and no more bother, sets it aside for good (高鐵桃園 → 中壢 SOGO: the 機場線 on and 5′ on a bike, never 32′ on one), and the way brought back as a second choice is the one with the fewest things to do — `public/lib/plan.mjs`: `rank`

@@ -1515,11 +1515,22 @@ const STATION_KINDS = new Set(['tra', 'hsr', 'metro']);
 // that has it, then the rest.
 const CITY = /^(臺|台)?(北|中|南|東)?(新北|桃園|新竹|苗栗|彰化|南投|雲林|嘉義|屏東|宜蘭|花蓮|臺東|台東|澎湖|金門|連江|基隆|高雄|臺北|台北|臺中|台中|臺南|台南)(市|縣)?/;
 const PART = /(停車場|停車格|出口|入口|出入口|\d+號?門|門口|倉庫|廁所|站牌|月台|服務台|售票處|ATM)$/i;
+// (Any case: 桃園sogo finds 遠東SOGO. A branch after a space, 遠東SOGO 中壢店,
+// is the place, not a part of it. A shop in it is under it: another brand in
+// front of what was typed, JINS遠東SOGO百貨…, or a dash, IKIGAI燒肉專門店-中壢SOGO店,
+// Jay 11-15: four shops in 中壢 SOGO over SOGO itself.)
 export function mainFirst(rows, typed) {
-  const core = String(typed || '').replace(/\s+/g, '').replace(CITY, '') || String(typed || '');
-  const bare = s => String(s || '').replace(/\s+/g, '').replace(CITY, '');
-  const part = r => /\S\s+.*[一-鿿]/.test(String(r.name || '').trim()) || /[(（]/.test(r.name || '') || PART.test(String(r.name || '').trim());
-  const tier = r => (part(r) ? 3 : 0) + (bare(r.name).startsWith(core) ? 0 : bare(r.name).includes(core) ? 1 : 2);
+  const core = (String(typed || '').replace(/\s+/g, '').replace(CITY, '') || String(typed || '')).toLowerCase();
+  const bare = s => String(s || '').replace(/\s+/g, '').replace(CITY, '').toLowerCase();
+  const name = r => String(r.name || '').trim();
+  const branch = r => /^\S+\s+\S{1,6}(分)?店$/.test(name(r));
+  const part = r => (!branch(r) && /\S\s+.*[一-鿿]/.test(name(r))) || /[(（]/.test(r.name || '') || PART.test(name(r));
+  const shop = r => {
+    const b = bare(r.name);
+    const at = b.indexOf(core);
+    return at > 0 && (/[a-z]{2,}/.test(b.slice(0, at)) || /[-－–]/.test(name(r)));
+  };
+  const tier = r => (part(r) ? 3 : 0) + (shop(r) ? 1 : 0) + (bare(r.name).startsWith(core) ? 0 : bare(r.name).includes(core) ? 1 : 2);
   return rows.map((r, i) => ({ r, i, t: tier(r) })).sort((a, b) => a.t - b.t || a.i - b.i).map(x => x.r);
 }
 export function uniqueResults(rows) {
