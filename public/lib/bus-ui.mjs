@@ -348,7 +348,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
           .join('')}</div>`
       : every.length
         ? `<div class="ot-list">${every.map(f => `<div class="ot-order-row"><span>${e(f.from)}–${e(f.to)}</span><b>${f.min && f.max && f.min !== f.max ? W(`每 ${f.min}–${f.max} 分`, `every ${f.min}–${f.max} min`) : f.min || f.max ? W(`每 ${f.min || f.max} 分`, `every ${f.min || f.max} min`) : W('首末班', 'First and last')}</b></div>`).join('')}</div>`
-        : `<p class="ot-note">${W(`${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。`, `No timetable at this stop for ${named.toLowerCase()} (none published, or not running).`)}</p>`;
+        : thinWay(sched, w)
+          ? ''
+          : `<p class="ot-note">${W(`${named}這個站牌沒有排班資料（業者沒提供，或${named}停駛）。`, `No timetable at this stop for ${named.toLowerCase()} (none published, or not running).`)}</p>`;
     // (Times the stop has none of its own for: its first stop's plus the ride, said so.)
     const est = guess && times.length ? `<p class="ot-note">${W(`依起站 ${e(shown(w.stops[0].name))} 的發車時間推估`, `Estimated from ${e(shown(w.stops[0].name))}’s departures`)}</p>` : '';
     return `${days}${moved ? `<p class="ot-note ot-off-note">${e(moved)}</p>` : ''}<div class="ot-tt-head">${stopPick}<small>${e(named)}${times.length ? ` ${W(`${times.length} 班`, `${times.length} buses`)}${day ? '' : next ? `・${W('下一班', 'next')} ${e(next)}` : `・${W('已收班', 'done')}`}` : ''}</small></div>${est}${body}`;
@@ -432,10 +434,17 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // already seen further on: nextUnseen), today's last kept 15 minutes
     // past its time until a bus is seen beyond the stop (it runs late, and
     // shows up live only once it's out: the owner, 2026-11-03).
+    const thin = Boolean(w && sched?.length && thinWay(sched, w));
     const nexts = (w?.stops || []).map((s, k) => {
       const v = lives[k];
       if (stopped || (v?.status === 0 && v.sec != null) || !sched?.length) return null;
       const now = Date.now();
+      // (A way the timetable is missing runs of: only today's from it, never
+      // its next night run tomorrow shown as the next bus, Jay 11-15 988.)
+      if (thin) {
+        const q = nextUnseen(sched, w, k, lives, now);
+        return q && !q.day ? q : null;
+      }
       const p = nextUnseen(sched, w, k, lives, now);
       if (!p?.day) return p;
       const late = departuresAt(sched, w, k, now - 15 * 60_000, 1)[0];
