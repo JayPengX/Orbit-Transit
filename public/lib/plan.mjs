@@ -1035,35 +1035,43 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const other = (q, p) => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && !over.has(groups.get(pickSig(q)));
   const wrong = new Set();
   for (const p of leads) {
-    // Another way onto the same bus or train (a bike to it, not a walk and a
-    // bus): no earlier out of the door, no later there, less bother. Another
-    // line altogether is never this: it's a choice of its own.
-    const m = main(p);
-    // (Its rides only, each one of this plan's: a change onto another train
-    // after it, 1242 to 竹北 rather than 1758 to 六家, is a way of its own.)
-    const beaten = m && list.some(q => other(q, p) && bother(q) < bother(p) && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000 && rides(q).some(l => sameRide(l, m)) && rides(q).every(l => rides(p).some(x => sameRide(l, x))));
-    // More changes than another bus-or-train way that's no later (within 5
-    // minutes) and less bother: off the train at 北新竹 for the 5608, when
-    // staying on to 新竹 and riding is sooner.
+    // Beaten: another way, itself not set aside, no more bother (everything
+    // but time: changes, buses, walks, rides, money) and there no later. How
+    // much later it may be is all that differs:
+    //   - as much to do: a minute, and out of the door no earlier (a bike to
+    //     the same train over a walk and a bus to it);
+    //   - less to do (a change fewer; a ride on the bike over 20 minutes after
+    //     the train is one): 5 minutes (off at 北新竹 for the 5608, when staying
+    //     on to 新竹 and riding is sooner; 高鐵 and 32 minutes on a YouBike
+    //     from 高鐵桃園 is no fewer than the 5087 from the station);
+    //   - less to do, leaving now on an hour or more, and 10 minutes shorter
+    //     door to door: half an hour (高鐵 to 板橋 and the 988 over 高鐵, the
+    //     機場線 and the 990 to 八里, Jay 11-15).
+    // One rule for all of it (Jay 11-16: "simplify those rules so we don't
+    // fuck ourselves up"): each case once a rule of its own, catching the others.
     const n = steps(p);
-    // Or, leaving now on an hour or more, a way with fewer changes (itself
-    // no bus to a bus, no long walk) that is shorter door to door, there at most half an hour later: leaving later beats more
-    // changes (Jay 11-15, home → 八里: 高鐵 to 桃園, the 機場線 and the 990,
-    // or 高鐵 to 台北, the metro to 關渡 and 紅22, over 高鐵 to 板橋 and the 988).
-    // (A long ride on the bike after the train is a change of its own: 高鐵
-    // to 桃園 and 32 minutes on a YouBike is no fewer than the 5087 from the
-    // station, Jay 11-15.)
-    const fewer = q => other(q, p) && segs(q).length >= 1 && steps(q) < n;
-    const changes = n > 1 && list.some(q => fewer(q) && bother(q) <= bother(p) && q.arr <= p.arr + 5 * 60_000);
-    // (Such a way makes no sense: never brought back as the second choice;
-    // one way alone is fine then. Jay 11-15.)
-    const tedious = n > 1 && by !== 'arrive' && p.arr - p.dep >= 60 * 60_000 && list.some(q => fewer(q) && !q.off && !busChain(q) && !trek(q) && q.arr - q.dep <= p.arr - p.dep - 10 * 60_000 && q.arr <= p.arr + 30 * 60_000);
-    // A long ride on the bike after the train (over 20 minutes), when a way
-    // without one, no more to do, gets there no later (5 minutes) and is no
-    // more bother: the bus or the metro on from the station, never 32
-    // minutes on a YouBike from 高鐵桃園 to 中壢 SOGO (Jay 11-15).
-    const longAfter = x => (k => k >= 0 && x.legs.slice(k + 1).some(l => l.mode === 'bike' && (l.dur || 0) > LONG_RIDE_SEC))(x.legs.findIndex(isRide));
-    const ridesOn = longAfter(p) && list.some(q => other(q, p) && rides(q).length && !longAfter(q) && !q.off && !busChain(q) && !trek(q) && steps(q) <= n && q.arr <= p.arr + 5 * 60_000 && bother(q) <= bother(p));
+    const m = main(p);
+    const last = rides(p).at(-1);
+    const beatenBy = q => {
+      if (!other(q, p) || !rides(q).length || q.off || (noChain && busChain(q)) || (noTrek && trek(q))) return false;
+      // (The same first train, off it sooner and riding home no more than 8
+      // minutes longer, there no later: on further was for nothing, however
+      // the bother adds up: off at 竹中 for the 六家線, not on to 北新竹.)
+      if (offSooner(q, p) && q.arr <= p.arr) return true;
+      if (bother(q) > bother(p)) return false;
+      // (As much to do: onto the same train (its main ride, or its last from
+      // another first one), out of the door no earlier; another line is a choice of its own.)
+      const same = l => rides(q).some(x => sameRide(x, l));
+      if (steps(q) >= n) return steps(q) === n && bother(q) < bother(p) && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000 && ((m && same(m) && rides(q).every(l => rides(p).some(x => sameRide(l, x)))) || (rides(p).length > 1 && rides(q).length === rides(p).length && same(last) && !sameRide(rides(q)[0], rides(p)[0])));
+      if (q.arr <= p.arr + 5 * 60_000) return true;
+      const long = by !== 'arrive' && p.arr - p.dep >= 60 * 60_000 && q.arr - q.dep <= p.arr - p.dep - 10 * 60_000;
+      return long && q.arr <= p.arr + 30 * 60_000 ? 'long' : false;
+    };
+    const by_ = list.map(beatenBy);
+    const beaten = by_.some(Boolean);
+    // (Beaten only by leaving later for less to do, it makes no sense: never
+    // brought back as the second choice, one sensible way alone is fine, Jay 11-15.)
+    const tedious = beaten && !by_.includes(true);
     // A change for a hop: onto a bus or metro for a stop or two (a few
     // minutes, under 1.5 km) that a walk or a bike from where you got off
     // would do (新竹站, then 綠線 one stop, then a bike again).
@@ -1071,18 +1079,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     const short = l => (l.from?.lat != null && l.to?.lat != null ? meters(l.from.lat, l.from.lon, l.to.lat, l.to.lon) < 1500 : (l.stops != null && l.stops <= 2) || (l.dur || 0) <= 6 * 60);
     const hop = n > 1 && rides(p).some(l => l !== m && short(l));
     const mostlyRidden = bikeAll != null && rides(p).length && longRideM(p) >= Math.max(3000, bikeAll * 0.6);
-    // The same first bus or train, then on further (or onto another) only to
-    // ride a little less after it, or no less, home no sooner (offSooner):
-    // the extra train is for nothing. (However each sets out for that first
-    // train: walking to it a minute sooner is no reason to keep the other.)
     const overByBike = over.has(groups.get(pickSig(p)));
-    const further = m && list.some(q => other(q, p) && offSooner(q, p) && q.arr <= p.arr);
-    // The same last train, onto it from another first one, out no earlier,
-    // there no later, less bother: the way to it is all that differs (by
-    // bike to 六家 and the 六家線 to 竹中 for the 1804, over riding to 竹北
-    // and changing at 北新竹 for it; the owner, 2026-10-12).
-    const lastOf = x => rides(x).at(-1);
-    const feeder = rides(p).length > 1 && list.some(q => other(q, p) && rides(q).length === rides(p).length && sameRide(lastOf(q), lastOf(p)) && !sameRide(rides(q)[0], rides(p)[0]) && bother(q) < bother(p) && q.dep >= p.dep - 60_000 && q.arr <= p.arr + 60_000);
     // Far behind the best, unless it gets there sooner than ways ahead of
     // it (off at 竹中 and ride, over the change to the 六家線: more riding, but
     // home sooner, a real choice).
@@ -1100,8 +1097,8 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     const back = wrongWay(p, d);
     // (Set aside for good: back the wrong way, a bus to a bus, a 2 km walk, a
     // ride for nothing. Never brought back as the second way.)
-    if (back || tedious || ridesOn || idle || (noChain && busChain(p)) || (noTrek && trek(p))) wrong.add(p);
-    if (back || beaten || changes || tedious || ridesOn || hop || mostlyRidden || further || feeder || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
+    if (back || tedious || idle || (noChain && busChain(p)) || (noTrek && trek(p))) wrong.add(p);
+    if (back || beaten || hop || mostlyRidden || idle || (overByBike && !river.has(groups.get(pickSig(p)))) || far) for (const q of groups.get(pickSig(p))) weak.add(q);
   }
   // Never nothing: the best way stays when every way was set aside.
   if (leads.every(p => weak.has(p))) for (const q of groups.get(pickSig(leads[0]))) weak.delete(q);
@@ -1113,7 +1110,10 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     // (The fewest things to do first, a bike after the train one of them:
     // 高鐵 and the 5087 over 高鐵, the 機場線 and a bike, Jay 11-15.)
     const did = p => segs(p).length + p.legs.slice(p.legs.findIndex(isRide) + 1).filter(l => l.mode === 'bike').length;
-    const alt = leads.filter(p => weak.has(p) && !wrong.has(p) && rides(p).length && !still.some(q => mainLine(q) === mainLine(p))).sort((a, b) => did(a) - did(b) || a.score - b.score)[0];
+    // (Another way: no bus or train of the way shown, not the same ones on
+    // past it to 橫山 and a bus back, 新豐 → 竹東站.)
+    const apart = p => !still.some(q => rides(q).some(l => rides(p).some(x => sameRide(l, x))));
+    const alt = leads.filter(p => weak.has(p) && !wrong.has(p) && rides(p).length && apart(p) && !still.some(q => mainLine(q) === mainLine(p))).sort((a, b) => did(a) - did(b) || a.score - b.score)[0];
     if (alt) {
       for (const q of groups.get(pickSig(alt))) weak.delete(q);
       // (Brought back, it's the other choice, under the way that stood:
