@@ -7,7 +7,7 @@
 // (stationRows), in tiles of 0.05°.
 
 import * as kit from '#kit/orbit.mjs';
-import { TDX_DAYS, meters } from './util.mjs';
+import { TDX_DAYS, meters, readJson, writeJson } from './util.mjs';
 
 const SQUARE = 0.25;
 export const squareOf = (lat, lon) => `${(Math.floor(lat / SQUARE) * SQUARE).toFixed(2)}_${(Math.floor(lon / SQUARE) * SQUARE).toFixed(2)}`;
@@ -18,9 +18,19 @@ const FRESH = 20 * 3_600_000;
 // 20 hours old, else the site's; the kept one, any age, when the site can't
 // be reached). null: no pack. (Each pack indexed once.)
 const indexed = new WeakMap();
+// (Built again since the copy kept here, as the builds' index says, read
+// each hour: the site's at once, once a build. 988's timetable and fares
+// rebuilt at 15:06 were still the old ones on the phone at 15:26, Jay 11-16.)
+const SEEN = 'ot-pack-built';
 export async function pack(name) {
-  const raw = await kit.packJson(`bus/${name}.json`, { ttl: FRESH }).catch(() => null);
+  let raw = await kit.packJson(`bus/${name}.json`, { ttl: FRESH }).catch(() => null);
   if (!raw) return null;
+  const built = (await kit.packJson('index.json', { ttl: 3_600_000 }).catch(() => null))?.cities?.[name.split('/')[0]]?.built;
+  const seen = readJson(SEEN, {}) || {};
+  if (built && raw.built && built > raw.built && seen[name] !== built) {
+    writeJson(SEEN, { ...seen, [name]: built });
+    raw = (await kit.packJson(`bus/${name}.json`, { ttl: 0 }).catch(() => null)) || raw;
+  }
   if (!indexed.has(raw)) indexed.set(raw, { raw, byUid: new Map((raw.routes || []).map(r => [r.uid, r])) });
   return indexed.get(raw);
 }
