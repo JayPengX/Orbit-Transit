@@ -8,11 +8,12 @@
 //     off inside it, that line isn't paid for;
 //   1 OD: a fare for each pair of stops (公路客運);
 //   2 stages: a fare for each pair of stages, a stop in the stage it's in.
-// fareBetween → { kind, sections?, fares: [{ who, ticket, price }] } or null
+// fareBetween → { kind, sections?, unsure?, fares: [{ who, ticket, price }] } or null
 // (nothing published for that ride).
 
 import { tdx, rows } from './api.mjs';
 import { INTERCITY } from './bus.mjs';
+import { meters } from './util.mjs';
 
 const scope = city => (city === INTERCITY ? 'InterCity' : `City/${city}`);
 
@@ -62,6 +63,14 @@ function forWay(list, way) {
 }
 
 // From stop `a` to stop `b` (`way`'s stops, a before b).
+// A ride longer than one section is likely to be (a section is about 10 km
+// on 臺北's and 新北's routes that publish theirs).
+const LONG_SECTION_M = 15_000;
+const rideMeters = (stops, i, j) => {
+  let m = 0;
+  for (let k = i; k < j; k++) if (stops[k].lat != null && stops[k + 1].lat != null) m += meters(stops[k].lat, stops[k].lon, stops[k + 1].lat, stops[k + 1].lon);
+  return m;
+};
 export function fareBetween(list, way, a, b) {
   const stops = way?.stops || [];
   const ia = stops.indexOf(a);
@@ -88,7 +97,12 @@ export function fareBetween(list, way, a, b) {
       const all = priceList(sec.Fares);
       const named = all.filter(f => segsIn(f.name) != null);
       const fares = named.length ? named.filter(f => segsIn(f.name) === n) : all.map(f => ({ ...f, price: f.price * n }));
-      if (fares.length) return { kind: 'section', sections: n, fares };
+      // (No section lines published at all and a long ride: TDX may just not
+      // have them. 新北's 988 is 4 段票 and TDX has it one section with none,
+      // Jay 11-16: so 起, never a sure 15.)
+      const lines = (r.SectionFares || []).some(x => (x.BufferZones || []).length);
+      const unsure = !lines && !named.length && rideMeters(stops, ia, ib) > LONG_SECTION_M;
+      if (fares.length) return { kind: 'section', sections: n, ...(unsure ? { unsure } : {}), fares };
     } else if (type === 2) {
       const sts = byDir(r.StageFares || [], way.dir);
       // A stop's stage: the last stage's first stop at or before it along the way.

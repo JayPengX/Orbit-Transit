@@ -132,3 +132,12 @@ test("routeFares: one read a route (the 公路客運's own, a city's, 臺南's i
     globalThis.fetch = was;
   }
 });
+
+test('fareBetween: one section and no section lines published, a long ride is 起, a short one sure (988, Jay 11-16)', () => {
+  const s = (uid, lat) => ({ uid, id: uid, name: uid, lat, lon: 121.4 });
+  const way = { dir: 0, stops: [s('a', 25.0), s('b', 25.02), s('c', 25.3)] };
+  const list = [{ FarePricingType: 0, SectionFares: [{ Fares: [{ TicketType: 1, FareClass: 1, Price: 15 }], BufferZones: [] }] }];
+  const [a, b, c] = way.stops;
+  assert.equal(fareBetween(list, way, a, b).unsure, undefined);
+  assert.equal(fareBetween(list, way, a, c).unsure, true);
+});

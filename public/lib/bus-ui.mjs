@@ -400,10 +400,13 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const price = r => nt(r.cash ?? r.card);
     const byCard = r => (r.cash == null ? W('刷卡', 'by card') : r.card != null ? W(`刷卡 ${nt(r.card)}`, `${nt(r.card)} by card`) : '');
     const facts = [f.sections > 1 ? W(`${f.sections} 段票`, `${f.sections} sections`) : '', byCard(main)];
+    // (No section lines published for a long ride: the one section's fare, 起, and said why.)
+    const from = f.unsure ? W(' 起', ' and up') : '';
+    const unsure = f.unsure ? `<p class="ot-note">${W('交通部資料只有一段的票價，沒有分段點；這段路長，可能分段收費，以車上公告為準。', 'The published data has one section’s fare and no section lines; this ride is long and may cost more. Go by the fare shown on the bus.')}</p>` : '';
     const groups = fareGroups(rows.filter(r => r !== main));
     const named = g => g.who.map(x => WHO_NAME[x] || x).join('・');
     const figs = groups.length ? `<div class="q-focus-figs ot-fare-figs">${groups.map(g => `<div><small>${e(named(g))}</small><b>${e(price(g))}</b>${byCard(g) ? `<small>${e(byCard(g))}</small>` : ''}</div>`).join('')}</div>` : '';
-    return `${picks}${focus({ eyebrow: WHO_NAME[main.who] || W('票價', 'Fare'), big: `<strong class="q-focus-value">${e(price(main))}</strong>`, facts, body: figs })}`;
+    return `${picks}${focus({ eyebrow: WHO_NAME[main.who] || W('票價', 'Fare'), big: `<strong class="q-focus-value">${e(price(main))}${from}</strong>`, facts, body: figs })}${unsure}`;
   };
   let offDay = 0;
   const draw = () => {
