@@ -54,7 +54,8 @@ export function expand(p, uid) {
     })),
     Frequencys: freq.map(([bits, from, to, min, max]) => ({ ServiceDay: days(bits), StartTime: from, EndTime: to, MinHeadwayMins: min, MaxHeadwayMins: max }))
   }));
-  return { stops, sched };
+  // (A city's own list of the route's fare, where TDX's lacks it: builders/ntpc.js fareOf.)
+  return { stops, sched, fare: r.fare || null };
 }
 
 // A route's pack: its city's, or (公路客運) the square of a point on it (`near`).

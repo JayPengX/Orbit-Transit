@@ -141,3 +141,23 @@ test('fareBetween: one section and no section lines published, a long ride is �
   assert.equal(fareBetween(list, way, a, b).unsure, undefined);
   assert.equal(fareBetween(list, way, a, c).unsure, true);
 });
+
+test('fareBetween: no section lines in TDX, the city’s own list’s (Jay 11-16: 988 a 四段票 TDX has as one)', () => {
+  const s = (uid, name, lat) => ({ uid, id: uid, name, lat, lon: 121.4 });
+  const list = [{ FarePricingType: 0, SectionFares: [{ Fares: [{ TicketType: 1, FareClass: 1, Price: 15 }], BufferZones: [] }] }];
+  // 307-like: two lines, each a buffer zone of stops: exact.
+  const way = { dir: 0, stops: [s('a', '萬大國小[向北]', 25.0), s('b', '中和國稅局', 25.01), s('c', 'C', 25.02), s('d', '高公局', 25.03), s('e', 'E', 25.04), s('f', 'F', 25.05)] };
+  const own = [3, [['萬大國小', '中和國稅局'], ['高公局']], []];
+  const price = (a, b) => fareBetween(list, way, way.stops[a], way.stops[b], own);
+  assert.equal(price(0, 5).sections, 2, 'on in the first zone: that line not paid');
+  assert.equal(price(2, 5).sections, 2);
+  assert.equal(price(2, 3).sections, 1);
+  assert.equal(price(2, 3).about, undefined);
+  // 988-like: four sections and two lines, a bridge no stop is named for: the whole way four, a part about.
+  const far = { dir: 0, stops: [s('x', '新市站', 25.2), s('y', '八里', 25.14), s('z', '台64線2.8Km(虛擬站不停靠)', 25.12), s('w', '新北板橋公車站', 25.01)] };
+  const own988 = [4, [['淡江大橋'], ['台64']], [['淡江大橋'], ['台64']]];
+  const whole = fareBetween(list, far, far.stops[0], far.stops[3], own988);
+  assert.deepEqual([whole.sections, whole.fares[0].price, whole.about], [4, 60, undefined]);
+  assert.equal(fareBetween(list, far, far.stops[0], far.stops[1], own988).about, true);
+  assert.equal(fareBetween(list, far, far.stops[0], far.stops[1], [0, [], []]).kind, 'free');
+});

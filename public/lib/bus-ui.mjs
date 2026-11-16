@@ -6,6 +6,7 @@
 
 import { emptyNote, saidRows, focus } from './look.mjs';
 import { routeFares, fareBetween, fareRows, fareGroups } from './fare.mjs';
+import { packRoute } from './packs.mjs';
 import { cityRoutes, routeStops, routeEta, routeEtaMended, routeEtaAt, etaKey, etaText, etaOf, said as saidNow, routeSchedule, stationsNear, etaRank, routeCity, INTERCITY } from './bus.mjs';
 import { fitNumbers } from '#kit/orbit.mjs';
 import { errorText, liveMs, busEta, whileSeen } from './api.mjs';
@@ -358,6 +359,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
   // 票價: the route's fares read the first time they're shown (fare.mjs:
   // kept a week); on at the stop asked for, off at the way's last.
   let fares = null;
+  let fareOwn = null;
   let fareErr = '';
   let fareOn = '';
   let fareOff = '';
@@ -365,8 +367,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     if (fares) return;
     fares = 'wait';
     fareErr = '';
-    routeFares(route)
-      .then(x => (fares = x))
+    Promise.all([routeFares(route), packRoute(route, c?.here).catch(() => null)])
+      .then(([x, own]) => ((fares = x), (fareOwn = own?.fare || null)))
       .catch(x => {
         fares = null;
         fareErr = errorText(x);
@@ -390,7 +392,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const picks = `<div class="ot-fare-picks">${pick('data-fare-on', W('上車', 'Board'), on, w.stops.slice(0, -1))}${pick('data-fare-off', W('下車', 'Get off'), off, w.stops.slice(a + 1))}</div>`;
     if (!fares || fares === 'wait') return `${picks}<p class="ot-note${fareErr ? ' bad' : ''}">${fareErr ? e(fareErr) : W('載入票價…', 'Loading fares…')}</p>`;
     const none = `${picks}<p class="ot-note">${W('業者沒有公布這段的票價', 'No fare published for this ride')}</p>`;
-    const f = fareBetween(fares, w, on, off);
+    const f = fareBetween(fares, w, on, off, fareOwn);
     if (!f) return none;
     if (f.kind === 'free') return `${picks}${focus({ eyebrow: W('票價', 'Fare'), big: `<strong class="q-focus-value">${W('免費', 'Free')}</strong>`, sub: W('這條路線免費搭乘', 'This route is free to ride') })}`;
     const rows = fareRows(f.fares);
@@ -402,11 +404,12 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     const facts = [f.sections > 1 ? W(`${f.sections} 段票`, `${f.sections} sections`) : '', byCard(main)];
     // (No section lines published for a long ride: the one section's fare, 起, and said why.)
     const from = f.unsure ? W(' 起', ' and up') : '';
+    const about = f.about ? W('約 ', 'about ') : '';
     const unsure = f.unsure ? `<p class="ot-note">${W('交通部資料只有一段的票價，沒有分段點；這段路長，可能分段收費，以車上公告為準。', 'The published data has one section’s fare and no section lines; this ride is long and may cost more. Go by the fare shown on the bus.')}</p>` : '';
     const groups = fareGroups(rows.filter(r => r !== main));
     const named = g => g.who.map(x => WHO_NAME[x] || x).join('・');
     const figs = groups.length ? `<div class="q-focus-figs ot-fare-figs">${groups.map(g => `<div><small>${e(named(g))}</small><b>${e(price(g))}</b>${byCard(g) ? `<small>${e(byCard(g))}</small>` : ''}</div>`).join('')}</div>` : '';
-    return `${picks}${focus({ eyebrow: WHO_NAME[main.who] || W('票價', 'Fare'), big: `<strong class="q-focus-value">${e(price(main))}${from}</strong>`, facts, body: figs })}${unsure}`;
+    return `${picks}${focus({ eyebrow: WHO_NAME[main.who] || W('票價', 'Fare'), big: `<strong class="q-focus-value">${about}${e(price(main))}${from}</strong>`, facts, body: figs })}${unsure}`;
   };
   let offDay = 0;
   const draw = () => {

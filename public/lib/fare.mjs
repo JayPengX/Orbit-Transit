@@ -8,7 +8,7 @@
 //     off inside it, that line isn't paid for;
 //   1 OD: a fare for each pair of stops (公路客運);
 //   2 stages: a fare for each pair of stages, a stop in the stage it's in.
-// fareBetween → { kind, sections?, unsure?, fares: [{ who, ticket, price }] } or null
+// fareBetween → { kind, sections?, about?, unsure?, fares: [{ who, ticket, price }] } or null
 // (nothing published for that ride).
 
 import { tdx, rows } from './api.mjs';
@@ -71,11 +71,63 @@ const rideMeters = (stops, i, j) => {
   for (let k = i; k < j; k++) if (stops[k].lat != null && stops[k + 1].lat != null) m += meters(stops[k].lat, stops[k].lon, stops[k + 1].lat, stops[k + 1].lon);
   return m;
 };
-export function fareBetween(list, way, a, b) {
+// The sections of a ride by a city's own list of the route's fare (the
+// pack's, builders/ntpc.js fareOf: [sections, [lines going], [lines back]],
+// a line the stops of its buffer zone or a place's name): the lines it
+// crosses, each found among the way's stops by name. Every line found and
+// as many as the sections between: so many; else the whole way its
+// sections, a part of it about its share by distance (988's 淡江大橋 is no
+// stop's name, and its four sections have two lines: Jay 11-16).
+const ROAD = /國道|高速|北二高|北宜|快速|高架|交流道|橋|^台\d|^省道|高公局/;
+const bare = t => String(t || '').replace(/\[[^\]]*\]|[\s()（）]/g, '');
+export function ownSections(own, way, ia, ib) {
+  const [n, go, back] = own;
+  const stops = way.stops || [];
+  const names = stops.map(s => bare(s.name));
+  const one = (x, from) => {
+    if (!x) return -1;
+    const k = names.findIndex((y, i) => i >= from && y === x);
+    return k >= 0 ? k : names.findIndex((y, i) => i >= from && (y.includes(x) || (y.length >= 3 && x.includes(y))));
+  };
+  // (A name may be two, a space between: 「捷運永寧站 佳和公園」.)
+  const find = (t, from = 0) => {
+    for (const x of [bare(t), ...String(t || '').split(/\s+/).map(bare)]) {
+      const k = one(x, from);
+      if (k >= 0) return k;
+    }
+    return -1;
+  };
+  const zones = (Number(way.dir) === 1 ? back : go).map(([a, b]) => {
+    const i = find(a);
+    const j = b ? (find(b, Math.max(0, i)) >= 0 ? find(b, Math.max(0, i)) : find(b)) : i;
+    // (One end on this way and not the other: the line at it, the rest past
+    // where a branch ends: 878's 捷運淡水站-新市一路 on its way to 淡水.)
+    if (i < 0 !== j < 0 && b) return [Math.max(i, j), Math.max(i, j)];
+    return i >= 0 && j >= 0 ? [Math.min(i, j), Math.max(i, j)] : null;
+  });
+  // A highway or a bridge no stop is named for (國道3號, 北二高, 高公局,
+  // 淡江大橋): the way's longest hop between two stops no other line is at.
+  const taken = new Set(zones.filter(Boolean).flatMap(([p, q]) => [p - 1, p, q, q + 1]));
+  const hops = stops.slice(0, -1).map((_, k) => [k, rideMeters(stops, k, k + 1)]).sort((x, y) => y[1] - x[1]);
+  (Number(way.dir) === 1 ? back : go).forEach(([a, b], z) => {
+    if (zones[z] || b || !ROAD.test(a)) return;
+    const hop = hops.find(([k, m]) => m > 1500 && !taken.has(k) && !taken.has(k + 1));
+    if (!hop) return;
+    zones[z] = [hop[0], hop[0] + 1];
+    for (const k of [hop[0] - 1, hop[0], hop[0] + 1, hop[0] + 2]) taken.add(k);
+  });
+  const crossed = zones.filter(z => z && ia < z[0] && ib > z[1]).length;
+  if (zones.every(Boolean) && zones.length === n - 1) return { n: 1 + crossed, about: false };
+  if (ia === 0 && ib === stops.length - 1) return { n, about: false };
+  const share = rideMeters(stops, ia, ib) / (rideMeters(stops, 0, stops.length - 1) || 1);
+  return { n: Math.min(n, Math.max(1 + crossed, Math.ceil(n * share))), about: true };
+}
+export function fareBetween(list, way, a, b, own = null) {
   const stops = way?.stops || [];
   const ia = stops.indexOf(a);
   const ib = stops.indexOf(b);
   if (ia < 0 || ib <= ia || !list?.length) return null;
+  if (own?.[0] === 0) return { kind: 'free', fares: [] };
   for (const r of forWay(list, way)) {
     if (r.IsFreeBus === true || r.IsFreeBus === 1) return { kind: 'free', fares: [] };
     const type = Number(r.FarePricingType);
@@ -101,7 +153,13 @@ export function fareBetween(list, way, a, b) {
       // have them. 新北's 988 is 4 段票 and TDX has it one section with none,
       // Jay 11-16: so 起, never a sure 15.)
       const lines = (r.SectionFares || []).some(x => (x.BufferZones || []).length);
-      const unsure = !lines && !named.length && rideMeters(stops, ia, ib) > LONG_SECTION_M;
+      // (None published to TDX: the city's own list's, when it has the route's.)
+      const city = !lines && !named.length && own?.[0] > 1 ? ownSections(own, way, ia, ib) : null;
+      const unsure = !lines && !named.length && !city && rideMeters(stops, ia, ib) > LONG_SECTION_M;
+      if (city) {
+        const per = all.filter(f => !segsIn(f.name));
+        if (per.length) return { kind: 'section', sections: city.n, ...(city.about ? { about: true } : {}), fares: per.map(f => ({ ...f, price: f.price * city.n })) };
+      }
       if (fares.length) return { kind: 'section', sections: n, ...(unsure ? { unsure } : {}), fares };
     } else if (type === 2) {
       const sts = byDir(r.StageFares || [], way.dir);
