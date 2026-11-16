@@ -18,14 +18,14 @@ const FRESH = 20 * 3_600_000;
 // 20 hours old, else the site's; the kept one, any age, when the site can't
 // be reached). null: no pack. (Each pack indexed once.)
 const indexed = new WeakMap();
-// (Built again since the copy kept here, as the builds' index says, read
-// each hour: the site's at once, once a build. 988's timetable and fares
+// (Built again since the copy kept here, as the builds' index says (30 KB, read
+// again after 5 minutes, unchanged a 304): the site's at once, once a build. 988's timetable and fares
 // rebuilt at 15:06 were still the old ones on the phone at 15:26, Jay 11-16.)
 const SEEN = 'ot-pack-built';
 export async function pack(name) {
   let raw = await kit.packJson(`bus/${name}.json`, { ttl: FRESH }).catch(() => null);
   if (!raw) return null;
-  const built = (await kit.packJson('index.json', { ttl: 3_600_000 }).catch(() => null))?.cities?.[name.split('/')[0]]?.built;
+  const built = (await kit.packJson('index.json', { ttl: 5 * 60_000 }).catch(() => null))?.cities?.[name.split('/')[0]]?.built;
   const seen = readJson(SEEN, {}) || {};
   if (built && raw.built && built > raw.built && seen[name] !== built) {
     writeJson(SEEN, { ...seen, [name]: built });
