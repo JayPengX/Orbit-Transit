@@ -3155,3 +3155,19 @@ test('a ride over half an hour swaps at the train station dock in the window (�
   const legs = swapRides([rideLeg(rent, ret, 0, true, 13000)], [rent, ret, st('s', '臺鐵上員車站', 24.77827, 121.05532), st('p', '竹東公5停車場', 24.77241, 121.05632)]);
   assert.equal(legs[0].to.name, '臺鐵上員車站');
 });
+
+test('rideTime: stops the timetable has no times at share its whole run by distance, past midnight too (988, Jay 11-16)', () => {
+  const s = (uid, lat) => ({ uid, name: uid, lat, lon: 121.4 });
+  const w = { dir: 1, stops: [s('a', 25.0), s('b', 25.01), s('c', 25.1), s('d', 25.11)] };
+  const sched = [{ Direction: 1, Timetables: [{ StopTimes: [{ StopUID: 'a', DepartureTime: '23:40' }, { StopUID: 'd', DepartureTime: '00:20' }] }] }];
+  assert.equal(rideTime(w, 0, 3, sched), 40 * 60);
+  // (Not 21 km/h, 33 minutes: the 10 km hop is 10 of the run's 12.2 km.)
+  assert.equal(Math.round(rideTime(w, 1, 2, sched) / 60), 33);
+});
+
+test('busNotice: a description opening as its title says it once (新北 1820, Jay 11-16)', async () => {
+  const { busNotice } = await import('../public/lib/service.mjs');
+  const n = busNotice({ Title: '為配合活動期間，本公司行經板橋地區路線影響停靠站點', Description: '為配合活動期間，本公司行經板橋地區【1820】路線取消停靠' });
+  assert.equal(n.text, '為配合活動期間，本公司行經板橋地區【1820】路線取消停靠');
+  assert.equal(busNotice({ Title: '颱風停駛', Description: '今日全線停駛' }).text, '颱風停駛\n今日全線停駛');
+});

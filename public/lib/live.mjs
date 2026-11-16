@@ -151,7 +151,7 @@ export function departuresAt(sched, w, i, after, n = 4) {
     const first = at(0).times;
     if (guessedAt(here.times, first)) {
       times = first;
-      shift = rideTime(w, 0, i) * 1000;
+      shift = rideTime(w, 0, i, sched) * 1000;
     }
   }
   const out = times.map(hm => twAt(d.date, hm.slice(0, 5)) + shift).filter(t => t >= after).sort((x, y) => x - y);
@@ -175,7 +175,7 @@ export function stopTable(sched, w, i, date, dow) {
   if (i > 0) {
     const first = at(0).times;
     if (first.length && guessedAt(here.times, first)) {
-      const shift = Math.round(rideTime(w, 0, i) / 60);
+      const shift = Math.round(rideTime(w, 0, i, sched) / 60);
       // (Past midnight as 24:13: tonight's last runs stay at the end, still to come.)
       const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
       const times = [...new Set(first.map(t => hhmm(Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) + shift)))].sort();
@@ -264,7 +264,7 @@ export function liveTrusted(sched, w, i, at) {
   const d = tw(at);
   const times = k => stopTimes(sched, { stopUID: w.stops[k].uid, name: w.stops[k].name, dir: w.dir }, d.date, d.dow).times;
   if (!guessedAt(times(i), times(0))) return false;
-  const left = departuresAt(sched, w, 0, at - rideTime(w, 0, i) * 1000 - 25 * MIN, 1)[0];
+  const left = departuresAt(sched, w, 0, at - rideTime(w, 0, i, sched) * 1000 - 25 * MIN, 1)[0];
   return left != null && left <= at + 10 * MIN;
 }
 
@@ -465,37 +465,59 @@ const STOP_SEC = 20;
 // for every hour (the owner, 2026-11-03). (A timetable's times between its
 // ends can be far off: its 15:23 says 10 minutes, the bus took 23. liveRide first.)
 export function rideTime(way, i, j, sched = null, at = null) {
-  if (sched?.length) {
-    const a = way.stops[i].uid;
-    const b = way.stops[j].uid;
-    const hm = s => {
-      const [h, m] = String(s?.DepartureTime || s?.ArrivalTime || '').split(':').map(Number);
-      return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
-    };
-    const d = at != null ? tw(at) : null;
-    const runs = [];
-    for (const r of sched) {
-      if (Number(r.Direction) !== way.dir) continue;
-      for (const t of r.Timetables || []) {
-        const x = hm((t.StopTimes || []).find(s => s.StopUID === a));
-        const y = hm((t.StopTimes || []).find(s => s.StopUID === b));
-        if (x == null || y == null || y <= x) continue;
-        runs.push({ x, ride: (y - x) * 60, today: d ? runsOn(t, d.date, d.dow) : true });
-      }
-    }
-    if (runs.length) {
-      if (d) {
-        const day = runs.some(r => r.today) ? runs.filter(r => r.today) : runs;
-        const near = day.reduce((p, r) => (Math.abs(r.x - d.min) < Math.abs(p.x - d.min) ? r : p));
-        if (Math.abs(near.x - d.min) <= 45) return near.ride;
-      }
-      const rides = runs.map(r => r.ride).sort((p, q) => p - q);
-      return rides[rides.length >> 1];
+  const timed = sched?.length ? (a, b) => timedRide(way, a, b, sched, at) : () => null;
+  const own = timed(i, j);
+  if (own != null) return own;
+  // (Stops the timetable has no times at: their share, by distance, of its
+  // whole run, never 21 km/h across a highway: 988's 40 minutes 板橋 to 新市站
+  // had its stops past 台64線 at 00:40, Jay 11-16.)
+  const n = way.stops.length - 1;
+  const whole = i > 0 || j < n ? timed(0, n) : null;
+  const all = whole != null ? along(way, 0, n) : 0;
+  if (all > 0) return Math.round((whole * along(way, i, j)) / all);
+  return Math.round(((along(way, i, j) * 1.15) / BUS_M_MIN) * 60 + (j - i - 1) * STOP_SEC);
+}
+// The meters from stop i to stop j, stop to stop.
+function along(way, i, j) {
+  let m = 0;
+  for (let k = i; k < j; k++) {
+    const [p, q] = [way.stops[k], way.stops[k + 1]];
+    if (p.lat != null && q.lat != null) m += meters(p.lat, p.lon, q.lat, q.lon);
+  }
+  return m;
+}
+// The timetable's ride from stop i to stop j (its run nearest `at`, else the
+// middle one), null when it has no run with times at both.
+function timedRide(way, i, j, sched, at) {
+  const a = way.stops[i].uid;
+  const b = way.stops[j].uid;
+  const hm = s => {
+    const [h, m] = String(s?.DepartureTime || s?.ArrivalTime || '').split(':').map(Number);
+    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+  };
+  const d = at != null ? tw(at) : null;
+  const runs = [];
+  for (const r of sched) {
+    if (Number(r.Direction) !== way.dir) continue;
+    for (const t of r.Timetables || []) {
+      const x = hm((t.StopTimes || []).find(s => s.StopUID === a));
+      let y = hm((t.StopTimes || []).find(s => s.StopUID === b));
+      // (Past midnight: on at 23:40, there at 00:20.)
+      if (x != null && y != null && y < x - 12 * 60) y += 24 * 60;
+      if (x == null || y == null || y <= x) continue;
+      runs.push({ x, ride: (y - x) * 60, today: d ? runsOn(t, d.date, d.dow) : true });
     }
   }
-  let m = 0;
-  for (let k = i; k < j; k++) m += meters(way.stops[k].lat, way.stops[k].lon, way.stops[k + 1].lat, way.stops[k + 1].lon);
-  return Math.round(((m * 1.15) / BUS_M_MIN) * 60 + (j - i - 1) * STOP_SEC);
+  if (runs.length) {
+    if (d) {
+      const day = runs.some(r => r.today) ? runs.filter(r => r.today) : runs;
+      const near = day.reduce((p, r) => (Math.abs(r.x - d.min) < Math.abs(p.x - d.min) ? r : p));
+      if (Math.abs(near.x - d.min) <= 45) return near.ride;
+    }
+    const rides = runs.map(r => r.ride).sort((p, q) => p - q);
+    return rides[rides.length >> 1];
+  }
+  return null;
 }
 
 

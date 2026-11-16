@@ -347,13 +347,23 @@ export function effectOf(text) {
   return 'info';
 }
 
+// Does `desc` open with most of `title` (spaces and punctuation aside)?
+function saysTitle(desc, title) {
+  const bare = t => t.replace(/[\s，、。：:,.!！「」『』（）()【】]/g, '');
+  const [d, t] = [bare(desc), bare(title)];
+  let n = 0;
+  while (n < t.length && d[n] === t[n]) n++;
+  return n === t.length || (n >= 8 && n >= t.length * 0.6);
+}
 // A TDX Bus Alert or News row → { id, city (null: 公路客運's), title, text,
 // routes (Set of RouteIDs), names (Set of routeNorm'd 【numbers】), stops
 // (Set of StopIDs), cities, effect, stop, typhoon, from, to, url }.
 export function busNotice(a, city = null) {
   const title = zh(a.Title).trim();
   const desc = zh(a.Description).trim();
-  const text = desc.startsWith(title) ? desc : `${title}\n${desc}`;
+  // (The description opening as the title does, most of it, says it: not twice.
+  // 新北's 1820: its title 「…板橋地區路線影響停靠站點」, its text 「…板橋地區【1820】…」.)
+  const text = !title || saysTitle(desc, title) ? desc || title : `${title}\n${desc}`;
   const end = Date.parse(a.EndTime);
   // (An end at midnight sharp is that day's: 「10/23 00:00」 for a notice about the 23rd.)
   const to = !Number.isFinite(end) ? Infinity : /T00:00(:00)?/.test(a.EndTime) ? end + 86_400_000 - 1 : end;

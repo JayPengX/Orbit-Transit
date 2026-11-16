@@ -6333,9 +6333,10 @@ html[lang='en'] .ot-sn-tap {
   color: var(--q-label-2);
   overflow-wrap: anywhere;
 }
-/* Open: the whole notice below, so the line above isn't said twice. */
+/* Open: the whole notice below, so the line above isn't said twice (nor
+   its room left blank over it). */
 .ot-said-row[open] > summary span {
-  visibility: hidden;
+  display: none;
 }
 .ot-said-row > p {
   margin: 0;

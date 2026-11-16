@@ -341,7 +341,7 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     // The coming week: the family's strip of days (drawn in after, ttDays).
     const days = '<div class="ot-tt-strip"></div>';
     // The stop: a native picker (an iPhone's wheel), its name the label.
-    const stopPick = `<label class="ot-tt-stop"><b>${e(shown(s.name))}</b>${icon('down')}<select data-pickstop aria-label="${W('換站牌', 'Change stop')}">${w.stops.map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(shown(x.name))}</option>`).join('')}</select></label>`;
+    const stopPick = `<label class="ot-tt-stop"><b>${e(shown(s.name))}</b>${icon('down')}<select data-pickstop aria-label="${W('換站牌', 'Change stop')}">${w.stops.filter(x => !/虛擬站/.test(x.name)).map(x => `<option value="${e(x.uid)}"${x.uid === s.uid ? ' selected' : ''}>${e(shown(x.name))}</option>`).join('')}</select></label>`;
     const body = times.length
       ? `<div class="ot-timetable">${hours(times)
           .map(([h, list]) => `<div class="ot-tt-hour"><b>${e(String(Number(h) % 24).padStart(2, '0'))}</b><span>${list.map(t => `<i class="${t < now ? 'past' : t === next ? 'next' : ''}">${e(t.slice(3, 5))}</i>`).join('')}</span></div>`)
@@ -439,11 +439,12 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
       const v = lives[k];
       if (stopped || (v?.status === 0 && v.sec != null) || !sched?.length) return null;
       const now = Date.now();
-      // (A way the timetable is missing runs of: only today's from it, never
-      // its next night run tomorrow shown as the next bus, Jay 11-15 988.)
+      // (A way the timetable is missing runs of: only its runs in the coming
+      // hour, never its night run tomorrow or tonight shown as the next bus
+      // with the runs it's missing before it, Jay 11-15 and 11-16 988.)
       if (thin) {
         const q = nextUnseen(sched, w, k, lives, now);
-        return q && !q.day ? q : null;
+        return q && !q.day && q.at - now < 60 * 60_000 ? q : null;
       }
       const p = nextUnseen(sched, w, k, lives, now);
       if (!p?.day) return p;
@@ -467,6 +468,8 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
             ? fareHtml(w)
             : `${off ? `<p class="ot-note ot-off-note ot-done-note">${e(off)}</p>` : ''}<ol class="ot-route-stops">${w.stops
             .map(s => {
+              // (A point the bus passes and never stops at, 台64線2.8Km(虛擬站不停靠): not a stop.)
+              if (/虛擬站/.test(s.name)) return '';
               const k = w.stops.indexOf(s);
               const v = lives[k];
               let t = etaText(v);
