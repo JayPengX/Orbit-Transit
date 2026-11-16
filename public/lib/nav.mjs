@@ -478,7 +478,8 @@ export function paceOf(plan, i, phase, times, liveAt = new Map(), now = Date.now
 
 // A step's chip at the bottom: its kind, and what tells it apart (a walk's
 // minutes, a ride's line and time).
-const chipText = l => (l.mode === 'walk' ? `${Math.max(1, Math.round((l.dur || 0) / 60))}′` : l.mode === 'bike' ? `${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${Math.max(1, Math.round((l.dur || 0) / 60))}′` : `${legLabel(l)} ${hm(l.dep)}`);
+// (`at`: the ride's time as live now, the card's own: 快捷8號支 at 08:27, not the plan's 08:30, Jay 11-16.)
+const chipText = (l, at = null) => (l.mode === 'walk' ? `${Math.max(1, Math.round((l.dur || 0) / 60))}′` : l.mode === 'bike' ? `${l.ebike ? W('電輔車', 'E-bike') : 'YouBike'} ${Math.max(1, Math.round((l.dur || 0) / 60))}′` : `${legLabel(l)} ${hm(at ?? l.dep)}`);
 
 // The YouBike ride coming up, now: bikes where you take one (until you've
 // left with it) and docks where you leave it, as they are there now; and
@@ -1039,7 +1040,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const chips = plan.legs
       // (A step the trip has got past by itself is done: shown, never tapped back to; one you only
       // looked ahead past stays a tap away; the owner, 2026-10-13.)
-      .map((x, k) => `<button class="ot-nav-chip${k < state.reached ? ' done' : k === state.i ? ' on' : ''}" type="button"${k < state.reached ? ' disabled' : ` data-nav-go="${k}"`} style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`)
+      .map((x, k) => `<button class="ot-nav-chip${k < state.reached ? ' done' : k === state.i ? ' on' : ''}" type="button"${k < state.reached ? ' disabled' : ` data-nav-go="${k}"`} style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x, state.liveAt.get(k)))}</span></button>`)
       .join('') +
       // (The stretches after each stop, as they're planned: the whole trip in one row.)
       (plan.later || []).map((q, n) => `<span class="ot-nav-chip stop">${icon('pin')}<span>${e(shortPlace([plan.dest, ...(plan.then || [])][n]?.name || ''))}</span></span>${q.legs.map((x, j) => `<button class="ot-nav-chip later" type="button" data-nav-peek="${n}:${j}" style="--c:${e(legColor(x))}">${icon(x.mode)}<span>${e(chipText(x))}</span></button>`).join('')}`).join('');
