@@ -369,6 +369,8 @@ test('route search: exact, then starting with, then containing, then by place', 
   ];
   assert.deepEqual(findRoutes(list, '2').map(r => r.name), ['2', '20', '藍2', '182']);
   assert.deepEqual(findRoutes(list, '竹東').map(r => r.name), ['5608']);
+  // (11-17) Typed in full-width, the same routes.
+  assert.deepEqual(findRoutes(list, '２').map(r => r.name), ['2', '20', '藍2', '182']);
   assert.deepEqual(findRoutes(list, '台北').map(r => r.name), ['藍2'], '台 and 臺 are one');
 });
 

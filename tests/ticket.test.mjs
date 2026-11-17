@@ -21,6 +21,8 @@ test('a number finds both railways’ trains first, then those it starts', () =>
   assert.deepEqual(got.map(t => `${t.sys}${t.no}`), ['tra128', 'hsr128', 'tra1281']);
   assert.deepEqual(trainsNumbered(net, ' 12 ').map(t => t.no)[0], '12');
   assert.deepEqual(trainsNumbered(net, ''), []);
+  // (11-17) Full-width digits find the train too.
+  assert.deepEqual(trainsNumbered(net, '１２８').map(t => t.no), trainsNumbered(net, '128').map(t => t.no));
 });
 
 test('on at the stop nearest the start, off at the stop after it nearest the end', () => {

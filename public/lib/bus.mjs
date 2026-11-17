@@ -15,7 +15,8 @@ import { W, en } from '#kit/lang.mjs';
 export const INTERCITY = 'InterCity';
 const scope = city => (city === INTERCITY ? 'InterCity' : `City/${city}`);
 const q = s => `'${String(s).replace(/'/g, "''")}'`;
-export const norm = s => String(s || '').replace(/台/g, '臺').replace(/\s+/g, '').toUpperCase();
+// (NFKC: a route typed in full-width, ２０ or 藍１５, is 20 or 藍15; it found nothing, 11-17.)
+export const norm = s => String(s || '').normalize('NFKC').replace(/台/g, '臺').replace(/\s+/g, '').toUpperCase();
 
 // ---- Routes -----------------------------------------------------------------------------------
 

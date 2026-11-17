@@ -318,9 +318,11 @@ function allStations() {
     });
   return everyStation;
 }
-// The words as typed and a name, alike: 臺 as 台, no 站 at the end, no spaces, any case.
+// The words as typed and a name, alike: 臺 as 台, no 站 at the end, no spaces, any case,
+// full-width as half (ＢＬ１２ is BL12).
 const norm = s =>
   String(s || '')
+    .normalize('NFKC')
     .toLowerCase()
     .replace(/臺/g, '台')
     .replace(/\s+/g, '')

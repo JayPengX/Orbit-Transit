@@ -9,7 +9,8 @@ import { meters } from './util.mjs';
 // The day's trains with this number (both railways: 台鐵 and 高鐵 share
 // some), the exact ones first, then those whose number starts so. → trips.
 export function trainsNumbered(net, q, { n = 8 } = {}) {
-  const no = String(q || '').trim().replace(/[^0-9A-Za-z]/g, '');
+  // (NFKC: full-width digits, １０７, are 107: they were dropped, nothing found.)
+  const no = String(q || '').normalize('NFKC').trim().replace(/[^0-9A-Za-z]/g, '');
   if (!no || !net) return [];
   const exact = [];
   const starts = [];
