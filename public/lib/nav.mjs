@@ -165,9 +165,9 @@ export function navNotices(plan, i, info = new Map(), now = Date.now(), offAt = 
       const st = x?.station;
       if (st && x.leg.route?.uid && l.dep > now - 5 * 60_000) out.push({ at: Math.max(now, l.dep - 25 * 60_000), until: l.dep + 30 * 60_000, title: W(`${rideName(x.leg)} 快到了`, `${rideName(x.leg)} is almost here`), body: W(`{result}（${st.name}）`, `{result} (${st.name})`), tag: `nav:bus:${k}`, kind: 'nav', hash: 'nav', check: { bus: { path: stationEtaAsk(st), route: x.leg.route.uid, dir: Number(x.leg.route.dir), min: 5 } } });
     }
-    if ((l.mode === 'tra' || l.mode === 'hsr') && l.dep - 5 * 60_000 > now) out.push({ at: l.dep - 5 * 60_000, title: W(`${rideName(l)} ${hm(l.dep)} 開`, `${rideName(l)} leaves ${hm(l.dep)}`), body: `${W('在', 'At')} ${l.from?.name || ''}${l.train?.platform ? W(` ${l.train.platform} 月台`, `, platform ${l.train.platform}`) : ''}${wayText(l) ? `・${wayText(l)}` : ''}`, tag: `nav:train:${k}`, kind: 'nav', hash: 'nav' });
+    if ((l.mode === 'tra' || l.mode === 'hsr') && l.dep - 5 * 60_000 > now) out.push({ at: l.dep - 5 * 60_000, title: W(`${rideName(l)} ${hm(l.dep)} 開`, `${rideName(l)} leaves ${hm(l.dep)}`), body: `${W('在', 'At')} ${shown(l.from?.name || '')}${l.train?.platform ? W(` ${l.train.platform} 月台`, `, platform ${l.train.platform}`) : ''}${wayText(l) ? `・${wayText(l)}` : ''}`, tag: `nav:train:${k}`, kind: 'nav', hash: 'nav' });
     const ring = offAt.get(k) ?? l.arr - 2 * 60_000;
-    if (isRide(l) && ring > now) out.push({ at: ring, title: W(`下一站 ${l.to?.name || ''} 下車`, `Get off next: ${l.to?.name || ''}`), body: l.mode === 'bus' ? W('按下車鈴', 'Press the bell') : W(`準備下車${plan.legs[k + 1] ? `，接著${stepText(plan, k + 1, 'before').title}` : ''}`, `Get ready${plan.legs[k + 1] ? `, then ${stepText(plan, k + 1, 'before').title}` : ''}`), tag: `nav:off:${k}`, kind: 'nav', hash: 'nav' });
+    if (isRide(l) && ring > now) out.push({ at: ring, title: W(`下一站 ${l.to?.name || ''} 下車`, `Get off next: ${shown(l.to?.name || '')}`), body: l.mode === 'bus' ? W('按下車鈴', 'Press the bell') : W(`準備下車${plan.legs[k + 1] ? `，接著${stepText(plan, k + 1, 'before').title}` : ''}`, `Get ready${plan.legs[k + 1] ? `, then ${stepText(plan, k + 1, 'before').title}` : ''}`), tag: `nav:off:${k}`, kind: 'nav', hash: 'nav' });
   });
   return out;
 }
@@ -374,7 +374,7 @@ const toward = h => String(h || '').replace(/^往\s*/, '');
 export const wayText = l => {
   const h = toward(l.headsign);
   if (!h) return '';
-  return `${W('往', 'to')} ${h === String(l.from?.name || '').trim() && l.to?.name ? l.to.name : h}`;
+  return `${W('往', 'to')} ${shown(h === String(l.from?.name || '').trim() && l.to?.name ? l.to.name : h)}`;
 };
 // A step's title as HTML: each place or route name in it kept in one piece (it wraps between the words, never inside a name; a name too long for the line ends in an ellipsis).
 const titleHtml = (title, plan) => {
@@ -395,7 +395,7 @@ export const shortPlace = n => String(n || '').replace(/\s*[（(][^）)]*[）)]\
 function stepText(plan, i, phase) {
   const l = plan.legs[i];
   const next = plan.legs[i + 1];
-  const where = shortPlace(l.to?.name || (next?.from?.name ?? '')) || W('目的地', 'destination');
+  const where = shortPlace(shown(l.to?.name || (next?.from?.name ?? ''))) || W('目的地', 'destination');
   if (l.mode === 'walk') {
     const last = i === plan.legs.length - 1;
     return { title: `${W('走到', 'Walk to')} ${last && !l.to?.name ? W('目的地', 'destination') : where}`, sub: next?.mode === 'bike' ? `${W('在這裡借', 'Rent a')} ${next.ebike ? W('電輔車', 'e-bike') : 'YouBike'}${W('', ' here')}` : isRide(next) ? `${W('搭', 'Take')} ${rideName(next)}` : '' };

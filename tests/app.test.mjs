@@ -3241,3 +3241,17 @@ test('a TRA station’s board across midnight: at 23:40 the 00:05 is tonight’s
   const after = traBoardRows({ StationLiveBoards: [row('1301', '23:58:00', 30), row('1303', '00:35:00')] }, twAt('2026-11-18', '00:20'));
   assert.deepEqual(after.map(r => [r.no, r.sched]), [['1301', twAt('2026-11-17', '23:58')], ['1303', twAt('2026-11-18', '00:35')]]);
 });
+
+test('in English a stop named for a station says it in English: 新竹站, 苗栗站 (a headsign), 香山轉運站, a city’s 火車站; any other name as it is', async () => {
+  const { learnName, stopEn } = await import('../public/lib/util.mjs');
+  learnName('新竹', 'Hsinchu');
+  learnName('苗栗', 'Miaoli');
+  learnName('香山', 'Xiangshan');
+  assert.equal(stopEn('新竹站'), 'Hsinchu Station');
+  assert.equal(stopEn('苗栗站'), 'Miaoli Station');
+  assert.equal(stopEn('新竹火車站'), 'Hsinchu Station');
+  assert.equal(stopEn('香山轉運站'), 'Xiangshan Bus Station');
+  assert.equal(stopEn('火車站'), 'Train Station');
+  assert.equal(stopEn('大同路口'), '');
+  assert.equal(stopEn('不知名站'), '', 'a station it has no English for: left as it is');
+});

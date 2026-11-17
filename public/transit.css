@@ -2816,10 +2816,10 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   gap: 4px;
   min-width: 0;
 }
+/* (Shrunk to fit, else wrapped: an English name, Hsinchu Railway Station (Front#1), ran off the card.) */
 .ot-bike-name {
   display: block;
   font: 600 14px/20px var(--q-font);
-  white-space: nowrap;
 }
 .ot-bike-tags {
   display: flex;

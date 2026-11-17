@@ -200,7 +200,23 @@ export const zh = v => {
 const EN_NAMES = new Map();
 // (TDX joins some English names with _: Zhongli_Taoyuan.)
 export const cleanEn = s => String(s || '').replace(/\s*_\s*/g, ' ').trim();
-export const shown = name => (en && (EN_NAMES.get(name) || routeEn(name))) || name;
+export const shown = name => (en && (EN_NAMES.get(name) || routeEn(name) || stopEn(name))) || name;
+// A bus stop named for a station or a bus station TDX gives no English for
+// (新竹站, 苗栗站 as a bus's headsign, 香山轉運站, a city's 火車站): the
+// station's own English and the kind of place. (They were left in Chinese:
+// "Walk to 新竹站", "Bus 5803 to 苗栗站".) Anything else as it is.
+const STOP_WORDS = [[/^(.+?)(?:火車站|車站)(?:[（(][^)）]*[)）])?$/, 'Station'], [/^(.+?)(?:轉運站|總站)$/, 'Bus Station'], [/^(.+?)站$/, 'Station']];
+const ALONE = { 火車站: 'Train Station', 車站: 'Station', 轉運站: 'Bus Station', 總站: 'Bus Terminal' };
+export const stopEn = name => {
+  const s = String(name ?? '').trim();
+  if (ALONE[s]) return ALONE[s];
+  for (const [re, word] of STOP_WORDS) {
+    const m = re.exec(s);
+    const base = m && (EN_NAMES.get(m[1]) || EN_NAMES.get(`${m[1]}站`));
+    if (base) return `${base.replace(/\s+(?:Railway |Train |Bus )?Station$/i, '')} ${word}`;
+  }
+  return '';
+};
 // A route TDX names only in Chinese, when its words have plain English (藍線 Blue, 藍15區
 // Blue 15, 11甲 11A, 世博3號 Expo 3); any other, as it is.
 const ROUTE_WORDS = [[/藍線?/g, 'Blue '], [/綠線?/g, 'Green '], [/紅線?/g, 'Red '], [/[橘橙]線?/g, 'Orange '], [/黃線?/g, 'Yellow '], [/棕線?/g, 'Brown '], [/紫線?/g, 'Purple '], [/幹線/g, ' Trunk'], [/世博/g, 'Expo '], [/甲/g, 'A'], [/乙/g, 'B'], [/丙/g, 'C'], [/(\d)區/g, '$1'], [/號/g, '']];
