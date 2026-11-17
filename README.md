@@ -18,7 +18,7 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 > **Best in Orbit.** Add [Orbit](https://orbit.jaypengx.com/app/) to your home screen: every Orbit app in one, signed in once, switching between them without reloading. Orbit Transit also works on its own at [orbit.jaypengx.com/transit](https://orbit.jaypengx.com/transit/) if it's the only one you want.
 
 <p align="center">
-  <img src="docs/screenshots/transit-1.webp" width="30%" alt="Train, bus and YouBike in one plan">
+  <img src="docs/screenshots/transit-1.webp" width="30%" alt="Metro, bus and YouBike in one plan">
   <img src="docs/screenshots/transit-2.webp" width="30%" alt="Every station's next train, live">
   <img src="docs/screenshots/transit-3.webp" width="30%" alt="Every train between two stations">
 </p>
@@ -33,7 +33,7 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 <summary>中文畫面</summary>
 
 <p align="center">
-  <img src="docs/screenshots/transit-1.zh.webp" width="30%" alt="火車、公車、YouBike，一次排好">
+  <img src="docs/screenshots/transit-1.zh.webp" width="30%" alt="捷運、公車、YouBike，一次排好">
   <img src="docs/screenshots/transit-2.zh.webp" width="30%" alt="每個車站的下一班，即時">
   <img src="docs/screenshots/transit-3.zh.webp" width="30%" alt="兩站之間，每一班車">
 </p>
