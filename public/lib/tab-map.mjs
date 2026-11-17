@@ -1060,7 +1060,7 @@ async function cardClick(ev) {
   if (ev.target.closest('.ot-mtog[data-ebike]') && card?.kind === 'plans') {
     const next = !(tripEbike ?? ctx.data.prefs.ebike === true);
     tripEbike = next === (ctx.data.prefs.ebike === true) ? null : next;
-    return plan(card.fromHere ? null : card.from, card.to);
+    return replanCard();
   }
   const mode = ev.target.closest('.ot-mtog[data-mode]');
   if (mode && card?.kind === 'plans') {
@@ -1068,7 +1068,7 @@ async function cardClick(ev) {
     if (!Object.values(next).some(Boolean)) return;
     const same = Object.keys(MODE_CHIP).every(k => next[k] === (ctx.data.prefs.modes[k] !== false));
     tripModes = same ? null : next;
-    return plan(card.fromHere ? null : card.from, card.to);
+    return replanCard();
   }
   const pickWhen = ev.target.closest('[data-when]');
   if (pickWhen) return setWhen(pickWhen.dataset.when);
@@ -1879,6 +1879,10 @@ let tripEbike = null;
 const ebikeNow = () => (tripEbike ?? ctx.data.prefs.ebike === true) && modesNow().bike !== false;
 // A trip from `from` (null: where you are) to `to`. `opts.swapHere`: the
 // trip turned round, ending where you are.
+// The trip on the card planned again as it is (another time, a way of moving
+// on or off): its stops after the first and a YouBike kept, kept with it
+// (they had gone: a stop added, then 公車 off, was a trip without it).
+const replanCard = () => plan(card.fromHere ? null : card.from, card.to, { then: card.then, keep: card.keep, since: card.keep ? card.since : undefined });
 async function plan(from, to, opts = {}) {
   if (!map) {
     pendingTrip = { from, to, opts };
@@ -1902,7 +1906,7 @@ async function plan(from, to, opts = {}) {
   // `then`: the places after this one, in order (a trip with stops: here to
   // the first, and on from each to the next once there).
   const then = (opts.then || []).filter(x => x?.lat != null).slice(0, MAX_STOPS);
-  card = { kind: 'plans', from: fromPt, fromHere: !from, aboard, to: dest, then, have: Boolean(opts.keep || rental()), since: opts.since ?? rental()?.at ?? null, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
+  card = { kind: 'plans', from: fromPt, fromHere: !from, aboard, to: dest, then, keep: Boolean(opts.keep), have: Boolean(opts.keep || rental()), since: opts.since ?? rental()?.at ?? null, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
   ctx.status('');
   document.body.classList.add('ot-planning');
   renderCard();
@@ -2095,7 +2099,7 @@ async function laterFor(p) {
 // then, a bus long gone and no live times). A time already past today
 // means tomorrow's.
 function setWhen(kind) {
-  const replan = () => card?.kind === 'plans' && plan(card.fromHere ? null : card.from, card.to);
+  const replan = () => card?.kind === 'plans' && replanCard();
   if (kind === 'now') {
     when = { by: 'now', at: null };
     return replan();
@@ -2221,7 +2225,7 @@ function ticketSheet() {
       const auto = chosen.k === ka.k && chosen.j === ka.j;
       when = { by: 'train', at: r.dep, ticket: ticketOf([r], auto) };
       d.shut();
-      if (card?.kind === 'plans') return plan(card.fromHere ? null : card.from, card.to);
+      if (card?.kind === 'plans') return replanCard();
     };
   };
   const pick = d2 => {
