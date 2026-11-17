@@ -547,9 +547,18 @@ export function moreBuses(plan, now = Date.now(), { n = 3 } = {}) {
     .filter(t => Math.abs(t - l.dep) > 2 * 60_000)
     .slice(0, n)
     // (Without the stop's live times: each later bus is that bus, never caught again as the first one.)
-    .map(t => retime(plan, k, { dep: t, arr: t + (l.arr - l.dep), live: { at: t }, seen: null }, now))
+    .map(t => retime(plan, k, { dep: t, arr: t + (l.arr - l.dep), live: liveAt(l, t), seen: null }, now))
     .filter(Boolean);
 }
+// A later bus is live only when TDX's estimates had it (the leg's `seen`, or
+// `nextSeen` from busLink); a timetable time stays a timetable time. (Every
+// later time was marked live: 新竹站's 5608 at 17:00, 17:20 and 17:40, all
+// the timetable's, showed 即時, in green, and were left for 2 minutes before
+// the bus, a live bus's slack, not a timetable bus's 5, 11-17.)
+const liveAt = (l, t) => {
+  const s = [...(l.seen || []), ...(l.nextSeen || [])].find(x => Math.abs(x.at - t) < 30_000);
+  return s ? { at: t, ...(s.planned ? { planned: true } : {}) } : null;
+};
 
 // A planner's train named by its line only (TDX's 六家-新竹): its number and
 // kind from our day's timetable, as our own trains have them (區間 1817), so

@@ -2218,6 +2218,24 @@ test('the bus you’d catch is the first you can be at the stop for from now, no
   assert.equal(later.legs[1].dep, T('19:15'));
 });
 
+test('a second bus re-timed never moves the first: its live time stays (16:43, not 16:45) when the plan set out a minute or two ago', async () => {
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-11-17', x);
+  const A = { name: 'A站', lat: 24.8, lon: 121.0 }, X = { name: 'X站', lat: 24.83, lon: 121.02 }, B = { name: 'B站', lat: 24.831, lon: 121.021 }, D = { name: '學校', lat: 24.74, lon: 121.09 };
+  const now = T('16:32');
+  const p = finish({ legs: [
+    { mode: 'walk', dur: 480, dist: 600, dep: T('16:30'), arr: T('16:38'), from: { lat: 24.799, lon: 121.0 }, to: A },
+    { mode: 'bus', short: 'A1', dur: 1020, dist: 5000, dep: T('16:43'), arr: T('17:00'), from: A, to: X },
+    { mode: 'walk', dur: 180, dist: 200, dep: T('17:00'), arr: T('17:03'), from: X, to: B },
+    { mode: 'bus', short: 'B2', dur: 1500, dist: 9000, dep: T('17:05'), arr: T('17:30'), from: B, to: D }
+  ] });
+  const row = (name, sec) => [{ RouteName: { Zh_tw: name }, StopStatus: 0, EstimateTime: sec, DataTime: new Date(now).toISOString() }];
+  const q = await adjustPlan(p, now, { near: async lat => (lat === A.lat ? row('A1', 660) : row('B2', 37 * 60)), start: now });
+  assert.equal(q.legs[1].dep, T('16:43'), 'TDX’s 16:43 for the first bus');
+  assert.equal(q.legs[3].dep, T('17:09'), 'the second bus by its estimate');
+  assert.equal(q.legs[0].dep, now, 'setting out now, not in the past');
+});
+
 test('in navigation, another departure taken: the ride and what follows it move, up to a train that keeps its time, and a train it would now miss is said', () => {
   const P = (name, lat, lon) => ({ name, lat, lon });
   const plan = finish({ legs: [
@@ -2670,6 +2688,34 @@ test('a bus with live times keeps its later departures on its card (each later b
   const plan = finish({ src: 'google', live: true, legs: [{ mode: 'walk', from: o, to: stop, dep: T('08:02'), arr: T('08:05'), dur: 180, dist: 250 }, { mode: 'bus', short: '5608', name: '5608', from: stop, to: d, dep: T('08:06'), arr: T('08:36'), dur: 1800, live: { at: T('08:06') }, seen, next: [T('08:21'), T('08:36')] }] });
   const out = withBikes([plan, ...moreBuses(plan, T('08:00'))], o, d, [], T('08:00'), { modes: { bus: true, bike: false }, clock: T('08:00') });
   assert.deepEqual(out.map(p => hm(p.legs[1].dep)).sort(), ['08:06', '08:21', '08:36']);
+});
+
+test('a later bus is live only when TDX had it: the timetable’s later runs are never 即時 (新竹站 5608, 11-17)', async () => {
+  const { moreBuses, finish, busEarly } = await import('../public/lib/plan.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const T = x => twAt('2026-11-17', x);
+  const o = { name: 'home', lat: 24.8, lon: 121.0 };
+  const stop = { name: '站牌', lat: 24.802, lon: 121.0 };
+  const d = { name: 'school', lat: 24.74, lon: 121.09 };
+  const walk = { mode: 'walk', from: o, to: stop, dep: T('16:33'), arr: T('16:38'), dur: 300, dist: 350 };
+  // A timetable bus, its later runs the timetable's too: none live, each left for 5 minutes before it.
+  const sched = finish({ legs: [walk, { mode: 'bus', short: '5608', from: stop, to: d, dep: T('16:40'), arr: T('17:00'), dur: 1200, next: [T('17:00'), T('17:20')] }] });
+  const later = moreBuses(sched, T('16:30'));
+  assert.equal(later.length, 2);
+  for (const p of later) {
+    assert.equal(p.live, false);
+    assert.equal(p.legs[1].live, null);
+    assert.equal(busEarly(p.legs[1]), 5 * 60_000);
+  }
+  // TDX's: one estimate live, one 預計; the timetable's third stays the timetable's.
+  const seen = [{ at: T('16:40'), planned: false }, { at: T('16:55'), planned: false }];
+  const mixed = finish({ legs: [walk, { mode: 'bus', short: '5608', from: stop, to: d, dep: T('16:40'), arr: T('17:00'), dur: 1200, live: { at: T('16:40') }, seen, nextSeen: [{ at: T('17:10'), planned: true }], next: [T('16:55'), T('17:10'), T('17:20')] }] });
+  const [a, b, c] = moreBuses(mixed, T('16:30'));
+  assert.deepEqual(a.legs[1].live, { at: T('16:55') });
+  assert.equal(busEarly(a.legs[1]), 2 * 60_000, 'a live bus: 2 minutes');
+  assert.deepEqual(b.legs[1].live, { at: T('17:10'), planned: true });
+  assert.equal(busEarly(b.legs[1]), 5 * 60_000);
+  assert.equal(c.live, false);
 });
 
 test('a bus’s later buses are its own route’s (快捷8號支 at a stop 快捷8號 shares never shows 快捷8號’s)', async () => {

@@ -412,9 +412,12 @@ export async function adjustPlan(plan, now = Date.now(), { near = etaAround, sta
     if (k < legs.length && legs[k - 1].arr + 60_000 > legs[k].dep) miss = W(`可能趕不上 ${legs[k].short || legs[k].name}`, `May miss ${legs[k].short || legs[k].name}`);
     // The way to the first bus: you leave so as to be there a minute before it.
     if (i === first) for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + delta, arr: legs[a].arr + delta };
+    // (Never set out in the past: the way to the first ride starts now. Only
+    // that way: a second bus re-timed moved the first one too, its live 16:43
+    // shown as 16:45, while the plan had set out a minute or two before.)
     if (legs[0].dep < now - 60_000) {
       const back = now - legs[0].dep;
-      for (let a = 0; a < i; a++) legs[a] = { ...legs[a], dep: legs[a].dep + back, arr: legs[a].arr + back };
+      for (let a = 0; a < Math.min(i, first); a++) legs[a] = { ...legs[a], dep: legs[a].dep + back, arr: legs[a].arr + back };
     }
   }
   // A bus later today its operator says isn't running (a typhoon), or likely
@@ -628,6 +631,8 @@ export async function busLink(a, b, at = Date.now(), { fromM = 450, toM = 700, n
     const later = lt.times.filter(x => x.at > dep + MIN).map(x => x.at);
     for (const t of departuresAt(sched, w, i, dep + MIN, 4)) if (later.length < 3 && !later.some(x => Math.abs(x - t) < 3 * MIN)) later.push(t);
     bus.next = later.sort((x, y) => x - y).slice(0, 3);
+    // (Which of them TDX gave, live or 預計: the rest are the timetable's, moreBuses.)
+    bus.nextSeen = lt.times.filter(x => bus.next.includes(x.at)).map(x => ({ at: x.at, planned: Boolean(x.planned) }));
     const legs = [];
     if (w1.dist > 20) legs.push({ ...w1, dep: dep - 60_000 - w1.dur * 1000, arr: dep - 60_000 });
     legs.push(bus);
