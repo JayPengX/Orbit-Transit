@@ -5,6 +5,7 @@
 // keeps the room above. The numbers are detents.mjs; this is the touching.
 
 import { DETENTS, detentHeights, follow, settle, axis, bodyGesture, stepped } from './detents.mjs';
+import * as kit from '#kit/orbit.mjs';
 
 const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -134,6 +135,8 @@ export function persistentSheet(el, { head, body, grab, room, top = () => 64, de
   el.addEventListener('touchstart', ev => {
     if (ev.touches.length !== 1) return void (g = null);
     const t = ev.touches[0];
+    // (Along the body's right edge, where iOS's scroll bar sits: the bar's, never the sheet's drag.)
+    if (kit.onScrollBar?.(ev.target, t.clientX, body)) return void (g = null);
     start(t.clientY, t.clientX, head.contains(ev.target));
   }, { passive: true });
   el.addEventListener('touchmove', ev => g && move(ev.touches[0].clientY, ev.touches[0].clientX, ev), { passive: false });
