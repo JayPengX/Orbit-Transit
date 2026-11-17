@@ -1877,12 +1877,12 @@ const modesNow = () => ({ ...ctx.data.prefs.modes, ...(tripModes || {}) });
 // null until changed, starting as 我的's 偏好電輔車 (off unless turned on).
 let tripEbike = null;
 const ebikeNow = () => (tripEbike ?? ctx.data.prefs.ebike === true) && modesNow().bike !== false;
-// A trip from `from` (null: where you are) to `to`. `opts.swapHere`: the
-// trip turned round, ending where you are.
 // The trip on the card planned again as it is (another time, a way of moving
 // on or off): its stops after the first and a YouBike kept, kept with it
 // (they had gone: a stop added, then 公車 off, was a trip without it).
 const replanCard = () => plan(card.fromHere ? null : card.from, card.to, { then: card.then, keep: card.keep, since: card.keep ? card.since : undefined });
+// A trip from `from` (null: where you are) to `to`. `opts.swapHere`: the
+// trip turned round, ending where you are.
 async function plan(from, to, opts = {}) {
   if (!map) {
     pendingTrip = { from, to, opts };
