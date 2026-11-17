@@ -1,8 +1,7 @@
-// Transit's own places and saved trips, told to the family's notebook on this
-// phone (the kit's family.mjs: one origin, so every app reads it; Weather's
-// 下雨改搭公車 card reads them; Jay 2026-11-10, the family's links). Only
-// when they changed since the last time told (read with a dynamic import).
-//   trips: [{ name, from: { lat, lon, name } | null (where you are then), to }]
+// Transit's own places told to the family's notebook on this phone (the
+// kit's family.mjs: one origin, so every app reads them: Class's 怎麼去學校,
+// Weather's places; Jay 2026-11-10, the family's links). Only when they
+// changed since the last time told (read with a dynamic import).
 //   places: home, school, work (a place saved with that icon), each { lat, lon, name }
 
 const end = p => ({ lat: p.lat, lon: p.lon, name: p.name || '' });
@@ -10,13 +9,12 @@ const KINDS = ['home', 'school', 'work'];
 let told = '';
 
 export function familyOf(data) {
-  const trips = (data?.trips || []).filter(t => t?.to).map(t => ({ name: t.name || t.to.name || '', from: t.from ? end(t.from) : null, to: end(t.to) }));
   const places = {};
   for (const k of KINDS) {
     const p = (data?.places || []).find(x => x?.icon === k);
     if (p) places[k] = end(p);
   }
-  return { trips, places };
+  return { places };
 }
 
 // → a promise of whether it was told (false: nothing new, or no notebook here).
@@ -27,9 +25,8 @@ export function shareFamily(data, load = () => import('#kit/family.mjs')) {
   told = sig;
   return load()
     .then(f => {
-      if (typeof f?.tell !== 'function') return false;
-      f.tell('transit', 'trips', now.trips);
-      for (const [k, p] of Object.entries(now.places)) f.setPlace?.(k, p, 'transit');
+      if (typeof f?.setPlace !== 'function') return false;
+      for (const [k, p] of Object.entries(now.places)) f.setPlace(k, p, 'transit');
       return true;
     })
     .catch(() => {
