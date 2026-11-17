@@ -81,16 +81,22 @@ export const forgetNav = dropNav;
 
 // A bus leg as its official route and way, with its timetable (for which
 // live buses are in service), looked up once per leg.
+// (`miss`: when a read of it failed, TDX busy or a blip: read again MISS_MS
+// on, never kept as the bus's for the whole trip; one blip had left a ride
+// with no live times, no stops and no buzz at the stop before yours.)
 async function busInfo(l) {
-  const o = l.route?.uid ? l : await officialLeg(l).catch(() => l);
-  if (!o.route?.uid) return { leg: o };
+  let miss = 0;
+  const missed = v => () => ((miss = Date.now()), v);
+  const stops = (r, near) => routeStops(r, near).catch(err => ((miss = Date.now()), Promise.reject(err)));
+  const o = l.route?.uid ? l : await officialLeg(l, { stops }).catch(missed(l));
+  if (!o.route?.uid) return { leg: o, miss };
   const route = { uid: o.route.uid, name: o.short || o.name, city: o.route.city || routeCity(o.route.uid) };
-  const [ways, sched] = await Promise.all([routeStops(route, o.from).catch(() => []), routeSchedule(route, o.from).catch(() => [])]);
+  const [ways, sched] = await Promise.all([routeStops(route, o.from).catch(missed([])), routeSchedule(route, o.from).catch(missed([]))]);
   const w = ways.find(x => x.dir === o.route.dir && x.stops.some(y => y.uid === o.route.stopUID));
   const way = w ? { w, i: w.stops.findIndex(y => y.uid === o.route.stopUID) } : wayOf(ways, o.from, o.to);
   // The stop's station (the Worker's bus check asks by it).
-  const st = (await stationsNear(o.from.lat, o.from.lon).catch(() => [])).find(s => s.stops.some(x => x.stopUID === o.route.stopUID || (x.routeUID === o.route.uid && meters(s.lat, s.lon, o.from.lat, o.from.lon) < 80)));
-  return { leg: o, route, way, sched, station: st || null };
+  const st = (await stationsNear(o.from.lat, o.from.lon).catch(missed([]))).find(s => s.stops.some(x => x.stopUID === o.route.stopUID || (x.routeUID === o.route.uid && meters(s.lat, s.lon, o.from.lat, o.from.lon) < 80)));
+  return { leg: o, route, way, sched, station: st || null, miss };
 }
 
 // A bus leg the planner gave no shape: the line through its stops, from its
@@ -123,14 +129,19 @@ async function rideStops(l, info) {
     return j > w.i ? { stops, i: w.i, j } : null;
   }
   if (l.mode === 'tra' || l.mode === 'hsr') {
+    const find = !l.train?.no && l.dep && l.from?.lat != null && l.to?.lat != null;
+    if (!l.train?.no && !find) return null;
+    const all = await trainsAround(l.dep);
+    // (No trains at all: the day unread, TDX failing; not a train that isn't there.)
+    if (!all.length) throw new Error('trains unread');
     // Its number from the day's timetable when the planner gave only the line (the live board and its stops go by it).
-    if (!l.train?.no && l.dep && l.from?.lat != null && l.to?.lat != null) {
-      const t = trainFor(await trainsAround(l.dep), await rail.railStations(), l);
+    if (find) {
+      const t = trainFor(all, await rail.railStations(), l);
       if (t) l.train = { ...(l.train || {}), ...t };
     }
     if (!l.train?.no) return null;
     // (The run that calls where you board then: a number is the same train every day.)
-    const runs = (await trainsAround(l.dep)).filter(t => t.sys === l.mode && String(t.no) === String(l.train.no));
+    const runs = all.filter(t => t.sys === l.mode && String(t.no) === String(l.train.no));
     const trip = runs.find(t => t.stops[0].dep <= l.dep + 60_000 && t.stops.at(-1).arr >= l.dep - 60_000) || runs.at(-1);
     if (!trip) return null;
     const sts = new Map((await rail.railStations()).map(s => [s.key, s]));
@@ -252,6 +263,8 @@ const SILENT_MS = 10_000;
 const STALE_FIX_MS = 30_000;
 // How long a reading must hold, fix after fix, before the trip acts on it (`held`).
 const HOLD_MS = 10_000;
+// A bus's route, way and stops, or a train's run, whose read failed: read again this long on.
+const MISS_MS = 60_000;
 // Walking on along a train's line this long: off it (`walkOff`).
 const WALK_OFF_MS = 4 * 60_000;
 const RAIL = new Set(['tra', 'hsr']);
@@ -1210,6 +1223,17 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   // when it really comes to the stop at the time you'll be there and where it
   // is now; a train, its delay and where it is — or, on board, when it's at
   // each stop to go; and the YouBike stations of the ride coming up.
+  // A ride's stops kept, none too where it has none; never none for a read
+  // that failed (asked again at the next refresh: kept as none, the whole
+  // ride went without its stops, the stop you're coming to, the buzz at the
+  // one before yours).
+  const keepStops = (k, rs, miss) => {
+    if (rs || !(miss || state.info.get(k)?.miss)) state.ride.set(k, rs);
+  };
+  const infoDue = k => {
+    const x = state.info.get(k);
+    return !x || (x.miss > 0 && Date.now() - x.miss >= MISS_MS);
+  };
   const refreshLive = async () => {
     const at = state.i;
     const ri = rideOf(plan, state.i);
@@ -1219,13 +1243,20 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     let where = null;
     try {
       // Its stops, once: a bus's way (its official route first), a train's run today.
-      if (l?.mode === 'bus' && l.from?.lat && !state.info.has(ri)) state.info.set(ri, await busInfo(l).catch(() => ({ leg: l })));
+      // (One whose read failed, read again a minute on: busInfo `miss`.)
+      if (l?.mode === 'bus' && l.from?.lat && infoDue(ri)) {
+        const was = state.info.get(ri);
+        state.info.set(ri, await busInfo(l).catch(() => ({ leg: l, miss: Date.now() })));
+        // (Its stop's station now: the lock screen's notice of the bus coming.)
+        if (was?.miss && !state.info.get(ri)?.miss && nav === state) notices();
+      }
       if (l && !state.ride.has(ri)) {
         const had = l.train?.no;
         const g = state.gen;
-        const rs = await rideStops(l, state.info.get(ri)).catch(() => null);
+        let miss = false;
+        const rs = await rideStops(l, state.info.get(ri)).catch(() => ((miss = true), null));
         if (state.gen !== g || nav !== state) return;
-        state.ride.set(ri, rs);
+        keepStops(ri, rs, miss);
         // A ride the planner gave no shape: drawn through its stops (not a straight line across town).
         const noShape = rs && !l.poly && !l.path;
         if (noShape) l.path = rs.stops.slice(rs.i, rs.j + 1).filter(x => x.lat != null).map(x => [x.lat, x.lon]);
@@ -2297,12 +2328,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   (async () => {
     for (const [k, l] of plan.legs.entries()) {
       if (!isRide(l) || state.ride.has(k) || k < state.i) continue;
-      if (l.mode === 'bus' && l.from?.lat && !state.info.has(k)) state.info.set(k, await busInfo(l).catch(() => ({ leg: l })));
+      if (l.mode === 'bus' && l.from?.lat && !state.info.has(k)) state.info.set(k, await busInfo(l).catch(() => ({ leg: l, miss: Date.now() })));
       // (Its times moved meanwhile, another train: its stops are that one's, found again.)
       const g = state.gen;
-      const rs = await rideStops(l, state.info.get(k)).catch(() => null);
+      let miss = false;
+      const rs = await rideStops(l, state.info.get(k)).catch(() => ((miss = true), null));
       if (nav !== state) return;
-      if (!state.ride.has(k) && state.gen === g) state.ride.set(k, rs);
+      if (!state.ride.has(k) && state.gen === g) keepStops(k, rs, miss);
     }
     if (nav === state) draw(plan, state.i);
   })();
