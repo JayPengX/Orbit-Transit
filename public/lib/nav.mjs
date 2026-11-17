@@ -278,7 +278,9 @@ const ON_WAY = { walk: 50, bike: 60, bus: 90, tra: 250, hsr: 300, metro: 200, li
 // `anyTime`: by where you are alone (a plan whose clock is off: started
 // half way on a trip timed for another day, or a later train than planned).
 // → { i, phase: 'before' | 'on' } or null.
-export function tripAt(plan, pos, i = 0, now = Date.now(), { anyTime = false } = {}) {
+// (`live`: a ride's time as its live data says, by step: a bus come early
+// is one you can be on, Jay 11-17.)
+export function tripAt(plan, pos, i = 0, now = Date.now(), { anyTime = false, live = null } = {}) {
   if (!pos || pos.lat == null) return null;
   const at = k => {
     const pts = legPts(plan.legs[k]);
@@ -295,8 +297,9 @@ export function tripAt(plan, pos, i = 0, now = Date.now(), { anyTime = false } =
     if (!a?.on) continue;
     if (isRide(l)) {
       // (A bus that's due: a block on its way is on it, BUS_ON_M.)
-      const due = now >= (l.dep ?? 0) - 60_000 && !anyTime;
-      if (a.d > (l.mode === 'bus' && due ? BUS_ON_M : 200) && a.left > 150 && (anyTime || now >= (l.dep ?? 0) - 3 * 60_000)) return { i: k, phase: 'on', d: a.d };
+      const dep = Math.min(l.dep ?? 0, live?.get(k) ?? Infinity);
+      const due = now >= dep - 60_000 && !anyTime;
+      if (a.d > (l.mode === 'bus' && due ? BUS_ON_M : 200) && a.left > 150 && (anyTime || now >= dep - 3 * 60_000)) return { i: k, phase: 'on', d: a.d };
     } else if (k > i && a.d > 60 && !busy) return { i: k, phase: 'before' };
   }
   return null;
@@ -1443,7 +1446,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     } else if (sp) state.passed = null;
     // Moved on to a later step already (its start reached, or this one's end
     // missed): there at once, off the bus or train if that's where you were.
-    const on = tripAt(plan, p, state.i);
+    const on = tripAt(plan, p, state.i, Date.now(), { live: state.liveAt });
     const riding = state.phase === 'on' && isRide(plan.legs[state.i]);
     if (on && (on.i > state.i || (on.phase === 'on' && state.phase !== 'on')) && (on.phase !== 'on' || (on.i === state.i && riding) || aboard(on.i, on.d)) && (!riding || on.i === state.i || offEnd(p, state.i, true, true))) {
       if (on.i === state.i) {
