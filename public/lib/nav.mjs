@@ -20,7 +20,7 @@ import { etaAround, bikesAround } from './near.mjs';
 import { canRent, canReturn } from './bike.mjs';
 import { rideSec, DOCK_SEC, walkLeg, rideLeg, rentNear, returnNear } from './plan.mjs';
 import { rental, startRental, endRental, rentalStep, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
-import { traLive, traTrain, dayTrips, railStations } from './raildata.mjs';
+import { traLive, traTrain, dayTrips, railStations, railSpan, netDates } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
 import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
@@ -33,6 +33,16 @@ let nav = null;
 // (`traTrain`: the one train followed; a test's own board answers for it too.)
 let rail = { dayTrips, railStations, traLive, traTrain };
 export const useRail = x => (rail = { dayTrips, railStations, traLive, traTrain: x.traLive ? async no => (await x.traLive([])).get(no) || null : traTrain, ...x });
+// The trains running around `at`: its day's, and before 03:00 the day
+// before's still on their way (TDX files a train under the day it leaves its
+// first station: the 區間 that left at 23:40 is yesterday's at 00:10); with
+// `next`, from 21:00 tomorrow's too (the first one, after the last tonight).
+// (Today's alone: on the last train past midnight, navigation found no train
+// where you were, took you for off it, and 下一班 said nothing; 11-17.)
+export async function trainsAround(at, { next = false } = {}) {
+  const span = railSpan(at);
+  return (await Promise.all(netDates(span.date, { prev: span.prev, next: next && span.next }).map(d => rail.dayTrips(d)))).flat();
+}
 
 // The ride being followed, kept on the phone: swiped away and opened again,
 // it goes on where it was (savedNav, for tab-map), until it's over or ended.
@@ -115,11 +125,13 @@ async function rideStops(l, info) {
   if (l.mode === 'tra' || l.mode === 'hsr') {
     // Its number from the day's timetable when the planner gave only the line (the live board and its stops go by it).
     if (!l.train?.no && l.dep && l.from?.lat != null && l.to?.lat != null) {
-      const t = trainFor(await rail.dayTrips(tw(l.dep).date), await rail.railStations(), l);
+      const t = trainFor(await trainsAround(l.dep), await rail.railStations(), l);
       if (t) l.train = { ...(l.train || {}), ...t };
     }
     if (!l.train?.no) return null;
-    const trip = (await rail.dayTrips(tw(l.dep).date)).find(t => t.sys === l.mode && String(t.no) === String(l.train.no));
+    // (The run that calls where you board then: a number is the same train every day.)
+    const runs = (await trainsAround(l.dep)).filter(t => t.sys === l.mode && String(t.no) === String(l.train.no));
+    const trip = runs.find(t => t.stops[0].dep <= l.dep + 60_000 && t.stops.at(-1).arr >= l.dep - 60_000) || runs.at(-1);
     if (!trip) return null;
     const sts = new Map((await rail.railStations()).map(s => [s.key, s]));
     const stops = trip.stops.map(x => ({ id: x.st, name: sts.get(x.st)?.name || '', lat: sts.get(x.st)?.lat, lon: sts.get(x.st)?.lon, at: x.arr, dep: x.dep })).filter(x => x.lat != null);
@@ -709,7 +721,7 @@ async function rideOptions(l, info, now = Date.now()) {
   // (The delays from the boards of the stations it leaves from.)
   const lv = l.mode === 'tra' ? await rail.traLive([...a]).catch(() => new Map()) : new Map();
   const out = [];
-  for (const t of await rail.dayTrips(tw(now).date)) {
+  for (const t of await trainsAround(now, { next: true })) {
     if (t.sys !== l.mode) continue;
     const i = t.stops.findIndex(s => a.has(s.st));
     const j = i >= 0 ? t.stops.findIndex((s, k) => k > i && b.has(s.st)) : -1;
@@ -1963,7 +1975,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (l.mode === 'tra' || l.mode === 'hsr') {
       let t;
       try {
-        const [trips, sts] = await Promise.all([rail.dayTrips(tw(now).date), rail.railStations()]);
+        const [trips, sts] = await Promise.all([trainsAround(now), rail.railStations()]);
         // (The delays from the boards of the leg's two ends: a train on it passes both.)
         const ends = sts.filter(s => s.sys === 'tra' && s.lat != null && [l.from, l.to].some(x => x?.lat != null && meters(x.lat, x.lon, s.lat, s.lon) < 800)).map(s => s.key);
         const lv = l.mode === 'tra' ? await rail.traLive(ends).catch(() => new Map()) : new Map();
