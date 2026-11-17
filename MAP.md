@@ -96,7 +96,7 @@ npm test
 ```
 
 ```bash
-node scripts/live.mjs 竹東站 縣體育場
+node scripts/live.mjs 新竹站 清大
 ```
 
 ```bash
