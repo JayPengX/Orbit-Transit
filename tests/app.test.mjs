@@ -3230,3 +3230,14 @@ test('the plans under the recommendations: a bus and a short ride beside riding 
   const kept = goodRest([ride, train], [[bus, 2], [slow, 3]]).map(([p]) => p);
   assert.deepEqual(kept, [bus], 'the bus and 7 minutes kept; the same riding, slower, not');
 });
+
+test('a TRA station’s board across midnight: at 23:40 the 00:05 is tonight’s, after midnight a late 23:58 is last night’s', async () => {
+  const { traBoardRows } = await import('../public/lib/raildata.mjs');
+  const { twAt } = await import('../public/lib/util.mjs');
+  const row = (no, t, delay = 0) => ({ TrainNo: no, TrainTypeName: { Zh_tw: '區間車' }, EndingStationName: { Zh_tw: '新竹' }, Direction: 0, ScheduleDepartureTime: t, DelayTime: delay, RunningStatus: delay ? 1 : 0 });
+  const board = { StationLiveBoards: [row('1301', '23:50:00'), row('1303', '00:05:00'), row('1305', '22:10:00')] };
+  const late = traBoardRows(board, twAt('2026-11-17', '23:40'));
+  assert.deepEqual(late.map(r => [r.no, r.sched]), [['1305', twAt('2026-11-17', '22:10')], ['1301', twAt('2026-11-17', '23:50')], ['1303', twAt('2026-11-18', '00:05')]]);
+  const after = traBoardRows({ StationLiveBoards: [row('1301', '23:58:00', 30), row('1303', '00:35:00')] }, twAt('2026-11-18', '00:20'));
+  assert.deepEqual(after.map(r => [r.no, r.sched]), [['1301', twAt('2026-11-17', '23:58')], ['1303', twAt('2026-11-18', '00:35')]]);
+});

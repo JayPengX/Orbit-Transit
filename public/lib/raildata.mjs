@@ -161,15 +161,25 @@ export async function railNetwork(date, { next = false, prev = false } = {}) {
 // the Worker: a delay on a train on its way; no platforms; TDX's when the site
 // can't answer). [{ no, type, dest, dir, sched (ms), delay (min), platform, status }].
 export async function traBoard(id) {
-  const j = await tdx(`basic/v3/Rail/TRA/StationLiveBoard/Station/${id}`, { fresh: 'live' });
-  const today = tw().date;
+  return traBoardRows(await tdx(`basic/v3/Rail/TRA/StationLiveBoard/Station/${id}`, { fresh: 'live' }));
+}
+// The board's clock times on the day nearest now: it lists from two hours
+// back to three on, so at 23:40 its 00:05 is tonight's, and after midnight
+// its 23:58 (late) last night's. (Each on today's date, 00:05 was this
+// morning's, gone: 接下來一小時沒有列車 at 23:40 with a train at 00:05.)
+export function traBoardRows(j, now = Date.now()) {
+  const today = tw(now).date;
+  const near = hm => {
+    const t = twAt(today, hm);
+    return t - now > 12 * 3_600_000 ? t - 86_400_000 : now - t > 12 * 3_600_000 ? t + 86_400_000 : t;
+  };
   return rows(j)
     .map(r => ({
       no: r.TrainNo,
       type: zh(r.TrainTypeName).replace(/\(.*$/, ''),
       dest: zh(r.EndingStationName),
       dir: r.Direction,
-      sched: r.ScheduleDepartureTime || r.ScheduleArrivalTime ? twAt(today, r.ScheduleDepartureTime || r.ScheduleArrivalTime) : null,
+      sched: r.ScheduleDepartureTime || r.ScheduleArrivalTime ? near(r.ScheduleDepartureTime || r.ScheduleArrivalTime) : null,
       delay: Number(r.DelayTime) || 0,
       platform: r.Platform && r.Platform !== '00' ? r.Platform : '',
       status: Number(r.RunningStatus) || 0
