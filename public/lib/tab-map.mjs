@@ -2305,14 +2305,19 @@ function plansHtml(c) {
 // The ways under the recommendations worth a row: none another way beats (leaves no sooner, there no
 // later, no more changes), none half as long again as the quickest of the recommendations (and 20
 // minutes more), none setting out another day while a way goes today.
-function goodRest(tops, rest) {
+export function goodRest(tops, rest) {
   const all = [...tops, ...rest.map(([p]) => p)];
   const dur = p => p.arr - p.dep;
-  const quick = Math.min(...(tops.length ? tops : all).map(dur));
+  // (Each against the ways with no more riding on a YouBike than it: a bus
+  // and 7 minutes is an option beside riding 20, or the train and riding 15,
+  // however much sooner they are; Jay 11-17, 竹中站 → 綠41公園, 快捷8號.)
+  const rode = p => p.legs.reduce((a, l) => a + (l.mode === 'bike' ? l.dur || 0 : 0), 0);
+  const asMuch = (q, p) => rode(q) <= rode(p) + 3 * 60;
+  const quick = p => Math.min(...(tops.length ? tops : all).filter(q => asMuch(q, p)).map(dur));
   const day = p => tw(p.dep).date;
   const today = tw(Math.min(...all.map(p => p.dep))).date;
-  const beaten = p => all.some(q => q !== p && q.dep >= p.dep && q.arr <= p.arr && (q.transfers || 0) <= (p.transfers || 0) && (q.dep > p.dep || q.arr < p.arr || (q.transfers || 0) < (p.transfers || 0)));
-  return rest.filter(([p]) => !beaten(p) && dur(p) <= Math.max(quick * 1.5, quick + 20 * 60_000) && (day(p) === today || !all.some(q => day(q) === today)));
+  const beaten = p => all.some(q => q !== p && asMuch(q, p) && q.dep >= p.dep && q.arr <= p.arr && (q.transfers || 0) <= (p.transfers || 0) && (q.dep > p.dep || q.arr < p.arr || (q.transfers || 0) < (p.transfers || 0)));
+  return rest.filter(([p]) => !beaten(p) && dur(p) <= Math.max(quick(p) * 1.5, quick(p) + 20 * 60_000) && (day(p) === today || !all.some(q => day(q) === today)));
 }
 // A stretch of a trip with stops, short: its rides (YouBike too), or a walk of all its minutes.
 function stretchChips(q) {

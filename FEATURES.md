@@ -22,6 +22,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - Never one way alone unless it's the only sensible one: the way brought back as a second choice rides none of the shown way's buses or trains (新豐 → 竹東站: not the same trains on past to 橫山 and a bus back), the fewest things to do first — `public/lib/plan.mjs`: `rank`
 - 偏好電輔車 in 我的, off by default (every trip's ⚡ starts on) — `public/lib/tab-me.mjs`: `ebikeRow`
 - 電輔車 counted first on station cards when preferred — `public/lib/look.mjs`: `ebikeFirst`
+- Under the recommendations, a way is weighed against the ways with no more YouBike riding than it: a bus and a short ride is listed beside riding most of the way (竹中站 → 綠41公園: 快捷8號 and 7 minutes beside 20 minutes riding), never against how much sooner the long ride is — `public/lib/tab-map.mjs`: `goodRest`, `asMuch`
 - 換附近的站 only when a station runs low — `public/lib/nav.mjs`: `換附近的站`
 - 換附近的站 takes the station the planner would from where you are, its pin moving with it — `public/lib/nav.mjs`: `swapPick`, `l.rent = { ...station }`
 - Operators' notices: 今日停駛, 可能停駛 — `public/lib/service.mjs`, `public/lib/near-ui.mjs`: `可能停駛`, `今日停駛`

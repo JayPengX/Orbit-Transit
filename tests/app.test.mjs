@@ -3171,3 +3171,16 @@ test('busNotice: a description opening as its title says it once (新北 1820, J
   assert.equal(n.text, '為配合活動期間，本公司行經板橋地區【1820】路線取消停靠');
   assert.equal(busNotice({ Title: '颱風停駛', Description: '今日全線停駛' }).text, '颱風停駛\n今日全線停駛');
 });
+
+test('the plans under the recommendations: a bus and a short ride beside riding it all, against ways with no more riding (竹中站 → 綠41公園, Jay 11-17)', async () => {
+  const { goodRest } = await import('../public/lib/tab-map.mjs');
+  const t = Date.parse('2026-11-18T09:15:00+08:00');
+  const M = 60_000;
+  const plan = (dep, arr, bike, mode = 'bus') => ({ dep: t + dep * M, arr: t + arr * M, transfers: 0, legs: [...(mode ? [{ mode }] : []), { mode: 'bike', dur: bike * 60 }] });
+  const ride = plan(0, 23, 20, null);
+  const train = plan(8, 32, 15, 'tra');
+  const bus = plan(10, 64, 7);
+  const slow = plan(10, 70, 20);
+  const kept = goodRest([ride, train], [[bus, 2], [slow, 3]]).map(([p]) => p);
+  assert.deepEqual(kept, [bus], 'the bus and 7 minutes kept; the same riding, slower, not');
+});
