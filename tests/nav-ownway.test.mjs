@@ -76,6 +76,46 @@ test('the bike given up, walked straight to the station: on the walk to it by it
   assert.match(topText(), /改走去 竹中車站/);
 });
 
+test('one reading of your own way, then none, then one again minutes on: held again from that one, the trip not moved at once', async () => {
+  const { plan, O } = ownTrip();
+  clock.set(T(8));
+  const { st: s } = start(plan, { resume: { i: 0, phase: 'before', reached: 0 } });
+  // (When the trip began to hold a reading of it: none, -1.)
+  const own = () => Math.max(-1, ...Object.entries(s.held || {}).filter(([k]) => k.startsWith('own')).map(([, t]) => t));
+  // East toward the station till the trip first reads it (one reading), then straight back.
+  let e = 0;
+  while (own() < 0 && e < 400) {
+    clock.add(10e3);
+    pos(off(O, 0, (e += 14)));
+    await settle();
+  }
+  assert.ok(own() > 0, 'read once');
+  assert.equal(s.reached, 0);
+  while (e > 0) {
+    clock.add(10e3);
+    pos(off(O, 0, (e = Math.max(0, e - 14))));
+    await settle();
+  }
+  // Standing at home five minutes.
+  for (let n = 0; n < 30; n++) {
+    clock.add(10e3);
+    pos(O);
+    await settle();
+  }
+  // East again: the first reading of it holds; the trip stays put till it's held 10 s.
+  const t2 = clock.get();
+  while (own() < t2 && s.reached === 0 && e < 400) {
+    clock.add(10e3);
+    pos(off(O, 0, (e += 14)));
+    await settle();
+  }
+  assert.equal(s.reached, 0, 'not moved on one reading');
+  clock.add(10e3);
+  pos(off(O, 0, (e += 14)));
+  await settle();
+  assert.equal(s.reached, 2);
+});
+
 test('an e-bike taken at another station, ridden another way: on the bike step by itself (its timer running)', async () => {
   const { plan, O } = ownTrip();
   clock.set(T(8));

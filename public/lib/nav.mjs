@@ -1149,6 +1149,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     state.done = false;
     state.boarding = null;
     state.offJ = null;
+    // (A step started (over): what was held of the one before starts over too.)
+    state.held = {};
     saveNav(state);
     draw(plan, state.i);
     render();
@@ -1490,7 +1492,13 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       const lrOn = lrPts?.length > 1 ? alongRoute(lrPts, p, routeCum(lrPts)) : null;
       const gone = lrPts && Date.now() > (state.liveAt.get(state.i) ?? lr.dep + (state.delay || 0) * 60_000) + 5 * 60_000 && meters(p.lat, p.lon, lr.from.lat, lr.from.lon) - (p.acc ?? 0) > 1000 && !(lrOn && lrOn.off < (ON_WAY[lr.mode] || 80));
       state.lost = held('lost', Boolean(op?.lost) || Boolean(gone)) || (state.lost && op == null && off != null && off - (p.acc ?? 0) > 300);
-      if (held(`own|${op?.i}|${op?.phase}`, op?.i != null)) {
+      // (One reading held of the same step: another step, or none between,
+      // starts it over; a lone reading minutes after an earlier one had
+      // moved the trip at once.)
+      const own = op?.i != null ? `${op.i}|${op.phase}` : '';
+      if (state.ownAt !== own && state.held) delete state.held.own;
+      state.ownAt = own;
+      if (held('own', Boolean(own))) {
         state.fixes = [];
         const to = op.why === 'bike' ? plan.legs[op.i].to : plan.legs[op.i + 1] && isRide(plan.legs[op.i + 1]) ? plan.legs[op.i + 1].from : plan.legs[op.i].to;
         const name = shortPlace(to?.name || '') || W('下一站', 'the next stop');
