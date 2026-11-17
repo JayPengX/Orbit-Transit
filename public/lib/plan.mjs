@@ -670,13 +670,17 @@ const placeholder = (from, to, dep, arr, fix) => ({ mode: 'bike', placeholder: t
 //     riding north to 竹北's station for a train south costs its minutes and
 //     its ride, nothing more;
 //   - what it costs in money, and a train it would now miss.
+// 少騎車 (我的, Jay 11-17): past 8 minutes every minute on the bike costs
+// as two waiting, so a bus and a short ride beat riding most of the way
+// (竹中站 → 綠41公園: 快捷8號 and 7 minutes, not 20 minutes riding).
+const lessEffort = min => Math.min(min, 8) * 0.1 + Math.max(min - 8, 0) * 2 + Math.max(min - 30, 0) * 2.5;
 const rideEffort = min => Math.min(min, 10) * 0.1 + Math.min(Math.max(min - 10, 0), 8) * 0.6 + Math.min(Math.max(min - 18, 0), 12) * 2 + Math.max(min - 30, 0) * 4.5;
 export function score(p, opts = {}) {
   const parts = scoreParts(p, opts);
   return Object.values(parts).reduce((a, b) => a + b, 0);
 }
 // The score's parts, by name (scripts/replay.mjs --why shows them).
-export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0, wet = null, late = false } = {}) {
+export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline = null, fare = 0, wet = null, late = false, lessBike = false } = {}) {
   const out = {};
   const add = (k, v) => v && (out[k] = (out[k] || 0) + v);
   const ridden = rides(p);
@@ -719,7 +723,7 @@ export function scoreParts(p, { o, d, now = Date.now(), by = 'depart', deadline 
     else bikes.push((ride = { min: (l.dur || 0) / 60, ebike: !!l.ebike }));
   }
   for (const r of bikes) {
-    add('bike', 1.5 + rideEffort(r.ebike ? r.min * 0.95 : r.min));
+    add('bike', 1.5 + (lessBike ? lessEffort : rideEffort)(r.ebike ? r.min * 0.95 : r.min));
   }
   const placed = ridden.filter(l => l.from?.lat != null && l.to?.lat != null);
   if (placed.length) {
@@ -871,7 +875,7 @@ const mainLine = p => {
 export const inOrder = p => p.legs.every((l, i) => i === 0 || !isRide(l) || l.dep == null || p.legs[i - 1].arr == null || l.dep >= p.legs[i - 1].arr - 2 * 60_000);
 // To be there by a time: a way in by it, but not more than this before it.
 export const ARRIVE_WINDOW = 4 * 3_600_000;
-export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now(), keep = null, wet = null, late: late0 = false } = {}) {
+export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart', deadline = null, cost = () => 0, top = 4, clock = Date.now(), keep = null, wet = null, late: late0 = false, lessBike = false } = {}) {
   // Only what `keep` allows (inside your TPASS's area: what the pass takes), unless that's nothing.
   if (keep) {
     const kept = plans.filter(p => p?.legs?.length && keep(p));
@@ -915,7 +919,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const key = p => p.legs.map(l => `${l.mode}:${l.short || l.name || ''}:${l.dep}`).join('|');
   const order = (a, b) => a.s - b.s || a.p.arr - b.p.arr || named(b.p) - named(a.p) || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0);
   const scored = [];
-  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p), wet, late }), k: key(p) })).sort(order)) {
+  for (const x of ok.map(p => ({ p, s: score(p, { o, d, now, by, deadline, fare: cost(p), wet, late, lessBike }), k: key(p) })).sort(order)) {
     const i = scored.findIndex(y => sameWay(x.p, y.p));
     if (i < 0) scored.push(x);
     else if (named(x.p) > named(scored[i].p)) scored[i] = x;
@@ -990,7 +994,7 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   // point lower: home a little sooner never makes a worse way "beat" one.
   const bothers = new Map();
   const bother = x => {
-    if (!bothers.has(x)) bothers.set(x, Object.entries(scoreParts(x, { o, d, now, by, deadline, fare: cost(x), wet, late })).reduce((a, [k, v]) => (k === 'time' || k === 'wait' ? a : a + v), 0));
+    if (!bothers.has(x)) bothers.set(x, Object.entries(scoreParts(x, { o, d, now, by, deadline, fare: cost(x), wet, late, lessBike })).reduce((a, [k, v]) => (k === 'time' || k === 'wait' ? a : a + v), 0));
     return bothers.get(x);
   };
   // Over the river on the bike, before or after a bus or train, when a way

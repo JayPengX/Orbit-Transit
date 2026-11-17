@@ -433,7 +433,7 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
     await streetWalks(bikes, from, to);
     lap(`walks${stage}`, tW);
     const t2 = performance.now();
-    const bikeOpts = { modes, swap: bikeSwap(prefs), ebike, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now, wet, late };
+    const bikeOpts = { modes, swap: bikeSwap(prefs), ebike, lessBike: prefs.lessBike === true, cost, by, deadline: by === 'arrive' ? at : null, keep, clock: now, wet, late };
     let ranked = withBikes(list, from, to, bikes, t0, bikeOpts);
     // Nothing gets there within three hours (a place in the country past its
     // station, no bus on from it now and no YouBike there): the trains with

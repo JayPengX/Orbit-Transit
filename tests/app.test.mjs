@@ -3171,3 +3171,18 @@ test('busNotice: a description opening as its title says it once (新北 1820, J
   assert.equal(n.text, '為配合活動期間，本公司行經板橋地區【1820】路線取消停靠');
   assert.equal(busNotice({ Title: '颱風停駛', Description: '今日全線停駛' }).text, '颱風停駛\n今日全線停駛');
 });
+
+test('少騎車: a long ride costs more, so a bus and a short ride come near riding most of the way (竹中站 → 綠41公園, Jay 11-17)', async () => {
+  const { scoreParts } = await import('../public/lib/plan.mjs');
+  const t = Date.parse('2026-11-18T16:20:00+08:00');
+  const bike = (min, dep) => ({ mode: 'bike', dur: min * 60, dep, arr: dep + min * 60_000 });
+  const ride = { legs: [bike(20, t)], dep: t, arr: t + 23 * 60_000 };
+  const bus = { legs: [{ mode: 'bus', name: '快捷8號', dep: t + 7 * 60_000, arr: t + 50 * 60_000 }, bike(7, t + 51 * 60_000)], dep: t + 7 * 60_000, arr: t + 61 * 60_000 };
+  const gap = less => {
+    const s = p => Object.values(scoreParts(p, { now: t, lessBike: less })).reduce((a, b) => a + b, 0);
+    return s(bus) - s(ride);
+  };
+  assert.ok(gap(true) < gap(false) - 10, `the gap shrinks: ${gap(false).toFixed(1)} → ${gap(true).toFixed(1)}`);
+  assert.equal(cleanPrefs({ lessBike: true }).lessBike, true);
+  assert.equal(cleanPrefs({}).lessBike, false);
+});
