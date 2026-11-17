@@ -495,7 +495,9 @@ function follow() {
   follows(true);
   stopWatch();
   stopWatch = watchPosition(p => {
-    ctx.here = { ...p, at: Date.now() };
+    // (One handed over late, minutes old (an iPhone back from the background): not where you are, nor the map's.)
+    if (p.at != null && Date.now() - p.at > 30_000) return;
+    ctx.here = { ...p, at: p.at ?? Date.now() };
     drawMe(ctx.here);
     if (following && !navFull()) map.setView(p.lat, p.lon, undefined, aboveDy(), aboveDx());
   });
@@ -2878,7 +2880,7 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       navDraw(plan, i);
     },
     follow: pos => {
-      ctx.here = { ...pos, at: Date.now() };
+      ctx.here = { ...pos, at: pos.at ?? Date.now() };
       drawMe(ctx.here);
       // The stage you're at stays in view as you go (every few seconds; back a little after you've moved the map by hand).
       const n = navNow();

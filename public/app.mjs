@@ -150,7 +150,7 @@ async function locateNow(force) {
   const towns = townships().catch(() => null);
   const pos = await getPosition({ timeout: 10_000, maximumAge: force ? 10_000 : 60_000, kick: force });
   if (pos.error) return ctx.here;
-  ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: Date.now() };
+  ctx.here = { lat: pos.lat, lon: pos.lon, acc: pos.acc, at: pos.at ?? Date.now() };
   local.here = ctx.here;
   saveLocal();
   for (const fn of ctx.moved) fn(ctx.here);

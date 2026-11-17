@@ -470,6 +470,8 @@ const restartable = () => geo.answered || Date.now() - geo.at > UNANSWERED_MS;
 // background can hand over the last fix it had, minutes old, as if new; Jay
 // 2026-11-07, on 普悠瑪 107 past 香山, the trip took his fix at 新竹 as him still
 // there and said he'd missed it. A stamp a day off or ahead isn't believed.)
+// Older than this when it comes: handed over late, not where you are now.
+const LATE_MS = 30_000;
 const fixAt = (p, now = Date.now()) => (Number.isFinite(p?.timestamp) && p.timestamp <= now + 60_000 && p.timestamp > now - 86_400_000 ? Math.min(now, p.timestamp) : now);
 const fixOf = p => ({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, heading: p.coords.heading, speed: p.coords.speed, at: fixAt(p) });
 // The last three minutes of fixes, for telling whether you're on a bus or train (aboard.mjs).
@@ -484,14 +486,18 @@ function watchDevice(nav) {
     p => {
       geo.answered = true;
       const fix = fixOf(p);
+      const late = Date.now() - fix.at > LATE_MS;
       // (One taken a while ago, handed over late: never the last, nor in the track.)
-      if (!geo.last || Date.now() - fix.at <= 30_000) {
+      if (!geo.last || !late) {
         geo.last = { fix, t: fix.at };
         track.push({ ...fix, t: fix.at });
       }
       while (track.length && track[0].t < Date.now() - TRACK_MS) track.shift();
       for (const f of [...geo.fns]) f(fix);
-      for (const w of [...geo.waiting]) w(fix);
+      // (Nor the answer to "where am I now": the next is waited for. Taken as
+      // now, it put the map, "from here" and a trip started then where you
+      // were minutes before, on a train kilometres back.)
+      if (!late) for (const w of [...geo.waiting]) w(fix);
     },
     err => {
       geo.answered = true;
