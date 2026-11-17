@@ -54,10 +54,10 @@ export function boardHtml(boards, lines) {
     rows
       .map(r => {
         const [first, ...then] = r.times;
-        const sub = [r.l.name, r.note || (r.every ? W('依班距行駛', 'Runs every few minutes') : then.length ? W(`再來 ${then.map(hm).join('、')}`, `then ${then.map(hm).join(', ')}`) : '')].filter(Boolean).join(' · ');
+        const sub = [shown(r.l.name), r.note || (r.every ? W('依班距行駛', 'Runs every few minutes') : then.length ? W(`再來 ${then.map(hm).join('、')}`, `then ${then.map(hm).join(', ')}`) : '')].filter(Boolean).join(' · ');
         // (A live train at the platform: 進站, as the station's own sign says.)
         const right = r.every ? `<span class="mb-every"><small>${W('每', 'every')}</small>${e(r.every)}<small>${W('分', 'min')}</small></span>` : first == null ? `<span class="mb-none">—</span>` : r.live && first - Date.now() < 45_000 ? `<strong class="mb-count mb-now">${W('進站', 'Due')}</strong>` : countHtml(first, { floor: true, cls: 'mb-count' });
-        return `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(shown(r.dest))}` : e(r.l.name)}</span><small class="q-fit">${e(sub)}</small></span>${r.live ? `<span class="mb-live" title="${W('即時', 'Live')}">${icon('live')}</span>` : ''}${right}</div>`;
+        return `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(shown(r.dest))}` : e(shown(r.l.name))}</span><small class="q-fit">${e(sub)}</small></span>${r.live ? `<span class="mb-live" title="${W('即時', 'Live')}">${icon('live')}</span>` : ''}${right}</div>`;
       })
       .join('')
   ).replace('q-rowcard', 'q-rowcard mb-board');
@@ -69,7 +69,7 @@ export function firstLastHtml(boards, lines) {
   if (!rows.length) return '';
   return `<h3 class="q-sheet-h">${W('首末班車', 'First and last trains')}</h3>${rowCard(
     rows
-      .map(r => `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(shown(r.dest))}` : e(r.l.name)}</span><small>${e(shown(r.l.name))}</small></span><span class="mb-fl"><span><small>${W('首班', 'First')}</small><b>${e(hm(r.first))}</b></span><span><small>${W('末班', 'Last')}</small><b>${e(hm(r.last))}</b></span></span></div>`)
+      .map(r => `<div class="q-ritem mb-row" style="--c:${e(r.l.color)}"><span class="mb-bar" aria-hidden="true"></span><span class="q-ritem-text"><span class="q-ritem-title">${r.dest ? `${W('往', 'To')} ${e(shown(r.dest))}` : e(shown(r.l.name))}</span><small>${e(shown(r.l.name))}</small></span><span class="mb-fl"><span><small>${W('首班', 'First')}</small><b>${e(hm(r.first))}</b></span><span><small>${W('末班', 'Last')}</small><b>${e(hm(r.last))}</b></span></span></div>`)
       .join('')
   )}`;
 }

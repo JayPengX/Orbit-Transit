@@ -26,7 +26,7 @@ let ctx = null;
 let shownNow = '';
 // The nearest station filled in (the opening waits for it a moment: never popping in after the loading screen).
 export let ready = Promise.resolve();
-const state = { from: null, to: null, mode: 'all', date: null, time: null, results: null, open: -1, error: '', delays: new Map(), live: 0, fares: new Map(), passOnly: false };
+const state = { from: null, to: null, mode: 'all', date: null, time: null, asOf: null, results: null, open: -1, error: '', delays: new Map(), live: 0, fares: new Map(), passOnly: false };
 
 export function init(c) {
   ctx = c;
@@ -58,6 +58,10 @@ export function show() {
   }
   // The trains between the stations last asked, at once (no 查詢 to press).
   if (state.from && state.to && !state.results && !ctx.trainQuery) search();
+  // (Asked for now, and back hours later (another tab, the background, another
+  // app in Orbit): asked again from now once a train listed has left or the
+  // day has turned. The morning's trains stayed, 下一班 on one long gone.)
+  else if (!ctx.trainQuery && state.asOf && Array.isArray(state.results) && (state.asOf !== tw().date || (state.results.length && state.results.findIndex(j => leaveAt(j) >= Date.now() - 120_000) !== 0))) search({ again: true });
   // 交通's pinned connection: asked again now.
   if (ctx.trainQuery) {
     Object.assign(state, { from: ctx.trainQuery.from, to: ctx.trainQuery.to, time: null, date: null });
@@ -449,7 +453,8 @@ function detailHtml(j) {
   return `<ol class="ot-steps">${out.join('')}</ol><span class="ot-jny-plan" role="button" data-ride-plan="${state.results.indexOf(j)}">${icon('route')} ${W('用這班規劃路線', 'Plan a trip on it')}</span>`;
 }
 
-async function search() {
+// `again`: the same trains asked anew (not remembered again as a search).
+async function search({ again = false } = {}) {
   if (!state.from || !state.to) return;
   if (state.from.sys === state.to.sys && state.from.id === state.to.id) {
     state.error = W('起訖站相同', 'Same station both ends');
@@ -459,11 +464,15 @@ async function search() {
   state.results = 'loading';
   state.open = -1;
   render();
-  ctx.data.trains = remember(ctx.data.trains, { from: state.from, to: state.to, t: Date.now() }, trainKey, 8);
-  ctx.save();
+  if (!again) {
+    ctx.data.trains = remember(ctx.data.trains, { from: state.from, to: state.to, t: Date.now() }, trainKey, 8);
+    ctx.save();
+  }
   const today = tw().date;
   const date = state.date || today;
   const now = Date.now();
+  // (Asked for now: the day it was asked, to ask again once it's past.)
+  state.asOf = !state.time && !state.date ? today : null;
   const t = state.time ? twAt(date, state.time) : date === today ? now : twAt(date, '05:00');
   try {
     const span = railSpan(t);

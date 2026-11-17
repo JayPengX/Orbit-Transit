@@ -592,6 +592,9 @@ export async function openRoute(c, route, { stopUID = '', stopName = '', dir = n
     err = errorText(x);
     ways = [];
   }
+  // (Closed while its stops were read (a slow link): nothing started. Its
+  // times were asked every 20 s for the rest of the session.)
+  if (!d.open) return;
   draw();
   refresh();
   const t = setInterval(whileSeen(refresh), liveMs());

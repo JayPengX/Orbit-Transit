@@ -258,7 +258,9 @@ export function nextCatchable(sched, w, i, seen, ready, now = Date.now()) {
 // is the 17:00 from 台大竹東分院 (2026-11-03), not a bus resting.
 export function liveTrusted(sched, w, i, at) {
   if (!sched?.length || !nextRun(sched, w, 0, at - 86_400_000)) return true;
-  const t = departuresAt(sched, w, i, at - 25 * MIN, 1)[0];
+  // (The 25 minutes before it may be yesterday's: a bus at 00:20 is today's 00:20.)
+  const from = at - 25 * MIN;
+  const t = departuresAt(sched, w, i, from, 1)[0] ?? (tw(from).date !== tw(at).date ? departuresAt(sched, w, i, twAt(tw(at).date, '00:00'), 1)[0] : undefined);
   if (t != null && t <= at + 10 * MIN) return true;
   if (i === 0) return false;
   const d = tw(at);

@@ -31,6 +31,8 @@ let ctx = null;
 let current = null;
 let systems = [];
 let retry = 0;
+// The map whose network couldn't be read (tried again on the tab's return).
+let failed = '';
 // The metro map now drawn: its layout and its view.
 let schem = null;
 let view = null;
@@ -99,7 +101,8 @@ export async function show() {
     const away = m => (!h ? Infinity : meters(h.lat, h.lon, Math.min(Math.max(h.lat, m.box[0]), m.box[2]), Math.min(Math.max(h.lon, m.box[1]), m.box[3])));
     const here = h ? MAPS.map(m => [away(m), m]).sort((a, b) => a[0] - b[0])[0] : null;
     await open(here && here[0] < 10_000 ? here[1].id : MAPS.some(m => m.id === saved) ? saved : 'taipei');
-  } else {
+  } else if (failed === current) await open(current);
+  else {
     view?.resize();
     geo?.resize();
     trainsSoon();
@@ -116,6 +119,8 @@ export async function show() {
 }
 export function hide() {
   clearTimeout(trainTimer);
+  // (A failed network's 30-second retry too: it went on on other tabs.)
+  clearTimeout(retry);
   full(false);
 }
 
@@ -188,6 +193,7 @@ async function open(id) {
   $('m-msg').textContent = W('載入路網…', 'Loading the network…');
   clearTimeout(retry);
   clearTimeout(trainTimer);
+  failed = '';
   try {
     const got = (await Promise.all(m.systems.map(s => loadSystem(s).catch(() => null)))).filter(s => s?.stations.length);
     if (current !== id) return;
@@ -204,7 +210,9 @@ async function open(id) {
     geo?.layer('metro').set([]);
     $('m-legend').innerHTML = '';
     $('m-msg').textContent = errorText(err);
-    retry = setTimeout(() => current === id && open(id), 30_000);
+    failed = id;
+    // (Hidden then, another app shown in Orbit: tried again once the tab's back.)
+    retry = setTimeout(whileSeen(() => current === id && open(id)), 30_000);
     return;
   }
   // The drawing: kept from last time when the network's the same, else worked out (a moment, once).
@@ -293,7 +301,9 @@ async function trains() {
 }
 function trainsSoon() {
   clearTimeout(trainTimer);
-  trainTimer = setTimeout(() => !$('panel-metro').hidden && trains(), liveMs());
+  // (Out of sight, another app shown in Orbit: nothing asked, the timer kept
+  // for the return. The four LiveBoards were asked every 20 s behind it.)
+  trainTimer = setTimeout(() => (globalThis.document?.visibilityState === 'hidden' ? trainsSoon() : !$('panel-metro').hidden && trains()), liveMs());
 }
 
 // ---- 搜尋車站: every station of the nine systems ------------------------------------------------------

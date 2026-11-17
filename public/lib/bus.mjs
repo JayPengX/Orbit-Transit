@@ -6,7 +6,7 @@ import { tdx, rows, busEta, busGps, liveMs } from './api.mjs';
 import { etaStops } from './near.mjs';
 import { gpsFix } from './busgps.mjs';
 import { routeLines } from './shapes.mjs';
-import { zh, hm, etaAge, etaOld, ETA_STALE, ETA_GHOST, meters, TDX_DAYS } from './util.mjs';
+import { zh, hm, etaAge, etaOld, ETA_STALE, ETA_GHOST, meters, TDX_DAYS, addDays } from './util.mjs';
 import { CITY_CODES } from './city.mjs';
 import { routeStatus } from './service.mjs';
 
@@ -92,15 +92,25 @@ export function runsOn(trip, date, dow) {
 }
 // The day's times at one stop (by StopUID, else by its name), one direction:
 // { times: ['06:00', …] } from the trips, or { every: [{ from, to, min, max }] }.
+// A run past midnight (out at 23:50, at this stop 00:20) has its time there
+// written under the day it set out: it's at the stop the day after, so the
+// day's times are its own runs' before midnight and the day before's after.
+// (A Mon–Fri night bus was said Monday 00:20 on a Friday night, and on a
+// Sunday night when it doesn't run.)
+const timeOf = st => st?.DepartureTime || st?.ArrivalTime || '';
+const startOf = t => timeOf((t.StopTimes || []).reduce((a, x) => (!a || (Number(x.StopSequence) || 0) < (Number(a.StopSequence) || 0) ? x : a), null));
 export function stopTimes(sched, { stopUID, name, dir }, date, dow) {
   const times = new Set();
   const every = [];
+  const before = addDays(date, -1);
   for (const r of sched) {
     if (dir != null && Number(r.Direction) !== dir) continue;
     for (const t of r.Timetables || []) {
-      if (!runsOn(t, date, dow)) continue;
       const st = (t.StopTimes || []).find(x => x.StopUID === stopUID) || (name ? (t.StopTimes || []).find(x => zh(x.StopName) === name) : null);
-      if (st?.DepartureTime || st?.ArrivalTime) times.add(st.DepartureTime || st.ArrivalTime);
+      const at = timeOf(st);
+      if (!at) continue;
+      const past = at.slice(0, 5) < startOf(t).slice(0, 5);
+      if (past ? runsOn(t, before, (dow + 6) % 7) : runsOn(t, date, dow)) times.add(at);
     }
     for (const f of r.Frequencys || []) {
       if (f.ServiceDay && Number(f.ServiceDay[TDX_DAYS[dow]]) !== 1) continue;

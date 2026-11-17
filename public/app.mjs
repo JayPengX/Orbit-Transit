@@ -83,7 +83,12 @@ export const ctx = {
   city: local.city || null, // TDX City where the device is
   cfg: null,
   // The pass's copy written after a change (the newest wins on every device).
+  // (Before the Pass's copy is read at the opening, a save (查時刻's search, a
+  // #plan link, a headsign) is kept here unstamped: stamped, this phone's old
+  // copy beat what another device saved since. Stamped and sent after the
+  // merge if this copy is the one kept.)
   async save() {
+    if (!tookPass) return void ((held = true), (local.data = encodeData(ctx.data)), saveLocal());
     ctx.data.t = Date.now();
     local.data = encodeData(ctx.data);
     saveLocal();
@@ -217,15 +222,23 @@ async function boot() {
   // Signed out, or the first time, they're waited for.
   const merge = first => {
     tookPass = true;
+    const mine = ctx.data;
     const theirs = decodeData(first?.payload);
-    const merged = mergeData(ctx.data, theirs);
+    const merged = mergeData(mine, theirs);
     const changed = encodeData(merged) !== (first?.payload || '');
-    const was = encodeData(ctx.data);
+    const was = encodeData(mine);
     ctx.data = merged;
     local.data = encodeData(merged);
     saveLocal();
     shareFamily(merged);
-    if (changed && theirs == null && merged.t && q.active) q.write({ payload: local.data }).catch(() => {});
+    // (This copy kept: a save held for the Pass made now (offline, left
+    // unstamped: the Pass's copy read later is the newer); else this copy
+    // sent up whenever it's the newer, not only when the Pass had none: a
+    // change whose write failed here reached no other device, and came back undone.)
+    const wasHeld = held;
+    held = false;
+    if (merged === mine && wasHeld) !first?.offline && ctx.save();
+    else if (changed && merged === mine && (merged.t || 0) > (theirs?.t || 0) && q.active) q.write({ payload: local.data }).catch(() => {});
     return local.data !== was;
   };
   const getCfg = () =>
@@ -241,7 +254,7 @@ async function boot() {
   if (quick) {
     ctx.cfg = local.cfg;
     getCfg();
-    session.then(first => merge(first) && ctx.refreshTabs()).catch(() => {});
+    session.then(first => merge(first) && ctx.refreshTabs()).catch(() => (tookPass = true));
   } else {
     merge(await session);
     ctx.cfg = (await getCfg()) || { map: { provider: 'nlsc' }, search: 'osm' };
@@ -305,6 +318,7 @@ window.addEventListener('hashchange', () => {
 // place stays), and this one sent up only when it's the newer.
 // (At the opening the sign-in's own copy is merged: boot's `merge`.)
 let tookPass = false;
+let held = false;
 q.on('active', live => live && tookPass && takeBack().catch(() => {}));
 async function takeBack() {
   const res = await q.read({ data: true });

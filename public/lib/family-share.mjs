@@ -27,6 +27,9 @@ export function shareFamily(data, load = () => import('#kit/family.mjs')) {
     .then(f => {
       if (typeof f?.setPlace !== 'function') return false;
       for (const [k, p] of Object.entries(now.places)) f.setPlace(k, p, 'transit');
+      // (One deleted here, or its icon changed, let go too, if it was
+      // Transit's: Class and Weather went on using the old 家 or 學校.)
+      for (const k of KINDS) if (!now.places[k] && f.placeFor?.(k)?.from === 'transit') f.tell?.('place', k, null);
       return true;
     })
     .catch(() => {

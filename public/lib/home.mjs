@@ -111,8 +111,8 @@ export function createHome(box, ctx, act) {
       return {
         glyph: 'bus',
         eyebrow: W('釘選公車', 'Pinned bus'),
-        title: `${x.route} ${W('往', 'to')} ${x.toward || '—'}`,
-        sub: W(`${x.stop} 上車`, `Board at ${x.stop}`),
+        title: `${x.route} ${W('往', 'to')} ${shown(x.toward || '') || '—'}`,
+        sub: W(`${x.stop} 上車`, `Board at ${shown(x.stop)}`),
         at: x.at,
         floor: true,
         live: true,

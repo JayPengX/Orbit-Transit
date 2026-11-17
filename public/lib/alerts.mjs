@@ -11,6 +11,7 @@
 import { stationEtaAsk, etaOf, routeCity } from './bus.mjs';
 import { etaStops } from './near.mjs';
 import { uid, readSaved, UNREAD, writeJson } from './util.mjs';
+import { whileSeen } from './api.mjs';
 import { buzz, primeBuzz } from './buzz.mjs';
 import { underWay, changed } from './underway.mjs';
 
@@ -35,7 +36,9 @@ function keep(mine = false) {
   if (mine && !unread) changed('alerts', list.length ? list : null);
   listeners.forEach(f => f());
   push?.schedule([...list.map(pushItem), ...navItems, ...bikeItems, ...tripItems]);
-  if (list.length && !timer) timer = setInterval(check, 20_000);
+  // (Out of sight, nothing asked (RULEBOOK 11-14): the Worker tells it, every
+  // 2 minutes; checked again the moment the page is back.)
+  if (list.length && !timer) timer = setInterval(whileSeen(check), 20_000);
   if (!list.length && timer) {
     clearInterval(timer);
     timer = 0;
@@ -119,6 +122,7 @@ underWay('alerts', {
 
 // The status line and the like (app.mjs).
 // `withPush`: { schedule(items), allow() → why the lock screen won't hear of it, or '' }.
+globalThis.document?.addEventListener?.('visibilitychange', () => globalThis.document.visibilityState === 'visible' && list.length && check());
 export function startAlerts(status, withPush = null) {
   say = status;
   push = withPush;

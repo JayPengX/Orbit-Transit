@@ -991,12 +991,12 @@ function drawCard() {
   } else if (c.kind === 'hsr') {
     const s = c.item;
     const list = Array.isArray(c.live) ? c.live : null;
-    html = `${head(W(`高鐵${s.name}站`, `HSR ${s.name}`), W('台灣高鐵', 'Taiwan High Speed Rail'), 'hsr')}${err}
+    html = `${head(W(`高鐵${s.name}站`, `HSR ${s.en || shown(s.name)}`), W('台灣高鐵', 'Taiwan High Speed Rail'), 'hsr')}${err}
       <div class="ot-board">${list ? list.map(r => `<div class="ot-board-row"><span class="ot-time">${e(hm(r.dep))}</span><span class="ot-train"><b>${e(r.no)}${W(' 次', '')}</b><small>${W('往', 'to')} ${e(shown(r.dest))}</small></span><span class="ot-delay">${W('', 'in ')}${minsText((r.dep - Date.now()) / 1000)}${W('後', '')}</span></div>`).join('') || `<p class="ot-note">${W('今天已經沒有車了。', 'No more trains today.')}</p>` : `<div class="q-skel-lines" role="status" aria-label="${W('載入中', 'Loading')}"><i class="q-skel"></i><i class="q-skel"></i></div>`}</div>
       ${actions(c, { more: `<button class="q-btn" type="button" data-card="train">${icon('clock')} ${W('時刻', 'Times')}</button>` })}`;
   } else if (c.kind === 'metro') {
     const s = c.item;
-    html = `${head(stationTitle(s.name), OPERATORS[s.op] || W('捷運', 'Metro'), 'metro')}${err}${c.group ? `<div class="mm-codes">${codesHtml(c.group.list, c.group.lines)}</div>` : ''}${boardHtml(c.live?.boards || null, c.live?.lines || [])}
+    html = `${head(en ? s.en || shown(s.name) : stationTitle(s.name), OPERATORS[s.op] || W('捷運', 'Metro'), 'metro')}${err}${c.group ? `<div class="mm-codes">${codesHtml(c.group.list, c.group.lines)}</div>` : ''}${boardHtml(c.live?.boards || null, c.live?.lines || [])}
       ${actions(c, { more: `<button class="q-btn" type="button" data-card="metro">${icon('metro')} ${W('路網圖', 'Map')}</button>` })}`;
   } else if (c.kind === 'place' || c.kind === 'point') {
     const s = c.item;

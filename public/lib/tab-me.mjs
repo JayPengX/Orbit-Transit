@@ -52,7 +52,7 @@ function render() {
   const pass = tpassOf(P.tpass);
   // The pass: its name and price big, what it covers as tags; the whole card picks another.
   // TPASS: one row in 設定 (the owner, 2026-10-21: a big card of it opening 我的 made no sense), its price beside its name.
-  const passRow = `<button class="q-ritem chevron" type="button" data-act="tpass">${tpassTile()}<span class="q-ritem-text"><span class="q-ritem-title">TPASS${pass ? ` ${e(shown(pass.name))} <span class="ot-pass-price">NT$${pass.price}</span>` : ''}</span><small>${e(pass ? passModes(pass).join('、') : W('沒有月票', 'No pass'))}</small></span></button>`;
+  const passRow = `<button class="q-ritem chevron" type="button" data-act="tpass">${tpassTile()}<span class="q-ritem-text"><span class="q-ritem-title">TPASS${pass ? ` ${e(shown(pass.name))} <span class="ot-pass-price">NT$${pass.price}</span>` : ''}</span><small>${e(pass ? passModes(pass).join(W('、', ', ')) : W('沒有月票', 'No pass'))}</small></span></button>`;
   // Places in their order: two or more carry the kit's grip (reorder), the row itself opens its sheet.
   const placeBody = p => `${placeTile(p)}<span class="q-ritem-text"><span class="q-ritem-title">${e(shown(p.name))}</span>${p.address ? `<small>${e(p.address)}</small>` : ''}</span>${ctx.here ? `<span class="q-ritem-value">${e(distText(meters(ctx.here.lat, ctx.here.lon, p.lat, p.lon)))}</span>` : ''}`;
   const places = D.places
@@ -175,7 +175,7 @@ function tpassSheet() {
   const now = ctx.data.prefs.tpass || '';
   const row = (id, name, sub) =>
     `<button class="q-ritem" type="button" data-tp="${e(id)}" aria-pressed="${id === now}">${id ? tpassTile() : tile('x', 'var(--q-gray)')}<span class="q-ritem-text"><span class="q-ritem-title">${e(name)}</span>${sub ? `<small>${e(sub)}</small>` : ''}</span>${id === now ? `<span class="q-ritem-value ot-tick">${icon('check')}</span>` : ''}</button>`;
-  const d = sheet(`${sheetHead(W('選擇月票', 'Pick a pass'))}${rowCard(row('', W('沒有 TPASS', 'No TPASS'), '') + TPASSES.map(t => row(t.id, t.name, `NT$${t.price}${W(' / 月', ' a month')} · ${passModes(t).join('、')}`)).join(''))}`, 'ot-tpass-sheet');
+  const d = sheet(`${sheetHead(W('選擇月票', 'Pick a pass'))}${rowCard(row('', W('沒有 TPASS', 'No TPASS'), '') + TPASSES.map(t => row(t.id, shown(t.name), `NT$${t.price}${W(' / 月', ' a month')} · ${passModes(t).join(W('、', ', '))}`)).join(''))}`, 'ot-tpass-sheet');
   d.addEventListener('click', ev => {
     const b = ev.target.closest('[data-tp]');
     if (!b) return;
