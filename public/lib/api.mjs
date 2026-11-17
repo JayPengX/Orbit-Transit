@@ -346,9 +346,17 @@ async function phoneFirst(city, stops, route, had) {
     .catch(() => null);
   if (!got) return worker(stops);
   if (!got.missing.length) return { rows: got.rows, at: got.at };
-  const rest = await worker(stops.length ? got.missing : []).catch(err => (got.rows.length ? null : Promise.reject(err)));
+  // (With the city's own rows in hand, the Worker's for the stops it lacks are
+  // waited for REST_WAIT at most: the Worker reading TDX for 桃園's last stops
+  // hung its whole 8 s after the site's 1–2 s, and a trip's second round with
+  // it, 桃園 → 臺北車站 14–20 s, 11-17. Its answer still comes into the Worker's
+  // copy for the next beat.)
+  const ask = worker(stops.length ? got.missing : []);
+  const rest = await (got.rows.length ? Promise.race([ask, sleep(REST_WAIT).then(() => null)]) : ask).catch(err => (got.rows.length ? null : Promise.reject(err)));
+  ask.catch(() => {});
   return rest ? { rows: [...got.rows, ...rest.rows], at: Math.min(got.at, rest.at) } : { rows: got.rows, at: got.at };
 }
+const REST_WAIT = 3000;
 
 // Where routes' buses are (/transit/gps: the Worker reads a city's whole list
 // once for every route and every phone, 公路客運's by its routes), `had`: how
