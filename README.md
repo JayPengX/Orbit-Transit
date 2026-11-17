@@ -49,7 +49,7 @@ Taiwan's buses, 台鐵, 高鐵, metros and YouBike in one app, with trips planne
 ## Features
 
 - **Orbit AI:** 用說的查路線: say where and when (明天早上八點從新竹車站到台北101); plain phrases are read by code, a time by AI, shown as understood before 看路線. 下雨改搭車: rain due on the way (from Orbit Weather, on the phone) puts a bus or the metro before a YouBike or a long walk, the wet legs marked with a drop. 這班為什麼慢: a late train's 晚 N 分 opens where it is and when it reaches you.
-- **With the family:** a fare you set out on is offered to Orbit Money as a 交通 entry (車資記帳); other apps open a trip to a place (`#plan?to=`), and 問 Orbit's question opens 用說的查路線 asked.
+- **With the family:** a fare you set out on is offered to Orbit Money as a 交通 entry (車資記帳); other apps open a trip to a place (`#plan?to=`).
 - **Map:** every bus stop with live arrival times, YouBike stations with regular bikes, e-bikes (電輔車) and docks counted apart (the five nearest along the bottom), train and metro stations, search and your pins.
 - **Trip planning** across bus, 台鐵, 高鐵, the metros and YouBike, ranked by door-to-door minutes and how much bother each way is, first plans in a second or two. There is always a recommendation.
 - **建議 learns where you go:** a place you often go at about this hour comes up first as 常在這時候去.
