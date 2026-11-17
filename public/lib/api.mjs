@@ -722,7 +722,12 @@ export function roadPath(mode, a, b) {
     roads.set(
       k,
       fetch(`${base}/route/v1/driving/${a.lon.toFixed(5)},${a.lat.toFixed(5)};${b.lon.toFixed(5)},${b.lat.toFixed(5)}?overview=full&geometries=polyline${mode === 'bike' ? '&alternatives=3&steps=true' : ''}`, { signal: AbortSignal.timeout?.(8000) })
-        .then(r => (r.ok ? r.json() : null))
+        // (A refusal, the open router's 429 or a 5xx, is asked again next time: kept as null,
+        // the walk stayed a straight line all session.)
+        .then(r => {
+          if (!r.ok) throw new Error(`router ${r.status}`);
+          return r.json();
+        })
         .then(j => {
           const r = bikeLaneFirst(j?.routes || []);
           return r ? { poly: r.geometry, dist: Math.round(r.distance), dur: Math.round(r.duration) } : null;
