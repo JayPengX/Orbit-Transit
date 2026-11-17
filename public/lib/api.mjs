@@ -173,6 +173,10 @@ export async function tdx(path, opts = {}) {
   ask.catch(() => {});
   return Promise.race([ask, sleep(opts.late).then(() => (stale.set(path, last.at), last.data))]);
 }
+// TDX's shape: v2 a list, v3 an object with a list in it. Anything else (an
+// empty object, an error's JSON) is a failed ask, never "no trains today",
+// and never kept over the last copy.
+export const tdxShaped = j => Array.isArray(j) || Boolean(j && typeof j === 'object' && Object.values(j).some(Array.isArray));
 async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr = 0, max = 200_000 } = {}) {
   if (fresh === 'live') fresh = liveMs() - 1000;
   else if (fresh === 'bike') fresh = bikeMs() - 1000;
@@ -202,6 +206,7 @@ async function tdxAsk(path, { fresh = 30_000, persist = false, store = true, swr
     try {
       const meta = {};
       const data = await get(`/transit/tdx?p=${encodeURIComponent(path)}`, { meta });
+      if (!tdxShaped(data)) throw Object.assign(new Error('not TDX'), { code: 'SHAPE', status: 0 });
       // When the data is from (the proxy's copy can be older): its "N 秒前更新", and asked again sooner.
       memory.set(path, { at: Date.now() - meta.age * 1000, data });
       stale.delete(path);
