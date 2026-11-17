@@ -68,8 +68,14 @@ onNotices(() => {
   cut.clear();
   nets.clear();
 });
+// (A day read without 台鐵's or 高鐵's trains, TDX failing and no copy kept,
+// is asked again UNREAD_MS on: held as it was, one blip at the day's first
+// plan left every plan of the session without trains, 11-17.)
+const UNREAD_MS = 60_000;
+const unreadAt = new Map();
+const unreadOld = date => unreadAt.has(date) && Date.now() - unreadAt.get(date) > UNREAD_MS;
 export function dayTrips(date) {
-  if (!cut.has(date)) {
+  if (!cut.has(date) || unreadOld(date)) {
     const p = Promise.all([rawTrips(date), traNoticesSoon()]).then(([trips, n]) => traCut(trips, n.rules, date));
     p.catch(() => cut.delete(date));
     cut.set(date, p);
@@ -77,7 +83,8 @@ export function dayTrips(date) {
   return cut.get(date);
 }
 function rawTrips(date) {
-  if (!days.has(date)) {
+  if (!days.has(date) || unreadOld(date)) {
+    unreadAt.delete(date);
     days.set(
       date,
       (async () => {
@@ -90,7 +97,9 @@ function rawTrips(date) {
           readTrips(date, old).catch(() => {});
           return unpackTrips(old.data);
         }
-        return readTrips(date, old);
+        const trips = await readTrips(date, old);
+        if (trips.unread) unreadAt.set(date, Date.now());
+        return trips;
       })()
     );
   }
@@ -101,14 +110,15 @@ async function readTrips(date, old = null) {
     tdx(`basic/v3/Rail/TRA/DailyTrainTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(traTrips).catch(() => null),
     tdx(`basic/v2/Rail/THSR/DailyTimetable/TrainDate/${date}`, { fresh: TRIPS_FRESH, store: false }).then(hsrTrips).catch(() => null)
   ]);
-  // Nothing came: the last copy kept, however old, else nothing (asked again next time).
-  if (!a?.length && !b?.length) {
-    if (old) return unpackTrips(old.data);
-    days.delete(date);
-    return [];
-  }
-  const trips = [...(a || []), ...(b || [])];
+  // One unread: its trains from the last copy kept, however old (台鐵's
+  // failing never took 台鐵 out of a day 高鐵 answered for); none kept, the
+  // day is `unread` and asked again (dayTrips).
+  const kept = old ? unpackTrips(old.data) : [];
+  const tra = a?.length ? a : kept.filter(t => t.sys === 'tra');
+  const hsr = b?.length ? b : kept.filter(t => t.sys === 'hsr');
+  const trips = [...tra, ...hsr];
   if (a?.length && b?.length) keepLocal(tripsKey(date), packTrips(date, trips));
+  if (!tra.length || !hsr.length) trips.unread = true;
   return trips;
 }
 
@@ -141,20 +151,23 @@ export const netDates = (date, { next = false, prev = false } = {}) => [...(prev
 const nets = new Map();
 export async function railNetwork(date, { next = false, prev = false } = {}) {
   const key = `${prev ? '-' : ''}${date}${next ? '+' : ''}`;
-  if (!nets.has(key)) {
-    nets.set(
-      key,
-      (async () => {
-        const stations = await railStations();
-        const trips = (await Promise.all(netDates(date, { next, prev }).map(dayTrips))).flat();
-        return network(stations, trips, links(stations));
-      })().catch(err => {
-        nets.delete(key);
-        throw err;
-      })
-    );
+  const had = nets.get(key);
+  // (Built on a day read without its trains: built again once that day is asked again, dayTrips.)
+  if (!had || (had.unread && Date.now() - had.unread > UNREAD_MS)) {
+    const dates = netDates(date, { next, prev });
+    const entry = { p: null, unread: 0 };
+    entry.p = (async () => {
+      const stations = await railStations();
+      const trips = (await Promise.all(dates.map(dayTrips))).flat();
+      if (dates.some(d => unreadAt.has(d))) entry.unread = Date.now();
+      return network(stations, trips, links(stations));
+    })().catch(err => {
+      if (nets.get(key) === entry) nets.delete(key);
+      throw err;
+    });
+    nets.set(key, entry);
   }
-  return nets.get(key);
+  return nets.get(key).p;
 }
 
 // A TRA station's board: the trains due there (台鐵's own 車站時刻, read by
