@@ -145,7 +145,7 @@ node ../Orbit-Core/tools/preview.mjs transit --live --serve --port 8123
 Run a trip on today's real data, and compare the ranking before and after a change:
 
 ```bash
-node scripts/live.mjs 竹東站 縣體育場
+node scripts/live.mjs 新竹站 清大
 node scripts/live.mjs --against HEAD
 ```
 

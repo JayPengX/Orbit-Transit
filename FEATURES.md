@@ -6,8 +6,8 @@ drop a feature silently (2026-11-03, after the lost-features audit).
 To remove a feature on purpose, delete its line here in the same commit and say why.
 - Navigation by one standard table, following you off the plan — `public/lib/tab-map.mjs`, `public/lib/nav.mjs`: `navLook`, `offPlan`
 - Walks and YouBike rides drawn along the roads — `public/lib/tab-map.mjs`, `public/lib/api.mjs`: `roadLegs`, `roadPath`
-- A YouBike ride drawn by the bike lane where it goes the way, at most a tenth longer (上員 → 竹東 by 頭前溪南岸自行車道, not 中興路) — `public/lib/api.mjs`: `bikeLaneFirst`
-- A ride over half an hour swaps at a train station's dock when one is in the window (臺鐵上員車站 over 竹東公5停車場) — `public/lib/plan.mjs`: `swapAt`
+- A YouBike ride drawn by the bike lane where it goes the way, at most a tenth longer (along the river's bike path, not the main road beside it) — `public/lib/api.mjs`: `bikeLaneFirst`
+- A ride over half an hour swaps at a train station's dock when one is in the window (the dock at the station over the one at a car park) — `public/lib/plan.mjs`: `swapAt`
 - In Orbit, the map's YouBike timer chip stands under Orbit's app capsule, never behind it — `public/transit.css`: `.ot-map-chips`
 - A trip's YouBike stations with bikes and docks — `public/lib/tab-map.mjs`: `planBikes`
 - YouBike logo, 一般 and 電輔車 counted apart — `public/lib/look.mjs`: `bikeTile`, `bikeStats`
@@ -19,7 +19,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - A stop the timetable has no time at: its share, by distance, of the timetable's whole run (past midnight too), never 21 km/h across a highway (988's stops past 台64線 at 00:40 on a run there by 00:20); a 虛擬站不停靠 point the bus passes is no stop in the list — `public/lib/live.mjs`, `public/lib/bus-ui.mjs`: `rideTime`, `timedRide`, `虛擬站`
 - A notice whose text opens as its title says it once, and opened says only its kind over the text (新北 1820's 停靠異動: no blank title, no title twice) — `public/lib/service.mjs`, `public/transit.css`: `saysTitle`, `.ot-said-row[open]`
 - One rule sets a way aside for another (Jay 11-16: no rules catching each other): another way, no more bother and there no later: a minute later with as much to do, onto the same train; 5 minutes with less to do (a YouBike ride over 20 minutes after the train counts as one: 高鐵 and 32′ from 高鐵桃園 loses to 高鐵 and the 5087); half an hour on a trip of an hour or more, 10 minutes shorter door to door, and then never brought back (高鐵 to 板橋 and the 988 over 高鐵, 機場線 and 990 to 八里); off the same first train sooner, for nothing more on the bike — `public/lib/plan.mjs`: `rank`
-- Never one way alone unless it's the only sensible one: the way brought back as a second choice rides none of the shown way's buses or trains (新豐 → 竹東站: not the same trains on past to 橫山 and a bus back), the fewest things to do first — `public/lib/plan.mjs`: `rank`
+- Never one way alone unless it's the only sensible one: the way brought back as a second choice rides none of the shown way's buses or trains (not the same trains on past the stop and a bus back), the fewest things to do first — `public/lib/plan.mjs`: `rank`
 - 偏好電輔車 in 我的, off by default (every trip's ⚡ starts on) — `public/lib/tab-me.mjs`: `ebikeRow`
 - 電輔車 counted first on station cards when preferred — `public/lib/look.mjs`: `ebikeFirst`
 - Under the recommendations, a way is weighed against the ways with no more YouBike riding than it: a bus and a short ride is listed beside riding most of the way (竹中站 → 綠41公園: 快捷8號 and 7 minutes beside 20 minutes riding), never against how much sooner the long ride is — `public/lib/tab-map.mjs`: `goodRest`, `asMuch`
