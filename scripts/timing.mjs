@@ -31,9 +31,16 @@ const f = globalThis.fetch;
 const asked = [];
 globalThis.fetch = async (u, o = {}) => {
   const t = Date.now();
-  const r = await f(u, { ...o, headers: { ...(o.headers || {}), Origin: 'http://localhost:8080' } });
-  asked.push([Date.now() - t, String(u)]);
-  return r;
+  // (A failed or cut-off ask counted too, marked ✗: an ask that hung until its
+  // limit is the wait to find, and it never answers.)
+  try {
+    const r = await f(u, { ...o, headers: { ...(o.headers || {}), Origin: 'http://localhost:8080' } });
+    asked.push([Date.now() - t, String(u)]);
+    return r;
+  } catch (e) {
+    asked.push([Date.now() - t, `✗ ${e?.name || 'error'} ${u}`]);
+    throw e;
+  }
 };
 const { useSession } = await import('../public/lib/api.mjs');
 useSession({ ensureToken: async () => 'dev' });

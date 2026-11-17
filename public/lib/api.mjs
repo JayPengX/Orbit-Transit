@@ -101,6 +101,10 @@ async function get(path, opts = {}) {
     // Turned away for its token (signed before the proxy's secret changed, or run out): once more with a new one, as the kit's own asks do.
     if (err.status === 401 && err.code !== 'SIGNED_OUT') return ask(path, { ...opts, renew: true });
     if (!passing(err) || err.code === 'OFFLINE' || err.code === 'ABORTED' || err.code === 'SIGNED_OUT' || opts.signal?.aborted) throw err;
+    // (`once`: an ask that waited its whole time isn't asked again at once. A
+    // bus's estimates are asked again on the next beat anyway, and a second
+    // 8 s held a trip's second round 15–20 s on one slow city, 桃園 11-17.)
+    if (opts.once && err.code === 'TIMEOUT') throw err;
     await sleep(err.status === 429 ? 1500 : 700);
     return ask(path, opts);
   }
@@ -366,7 +370,7 @@ async function workerGps(city, routes, had = 0) {
 }
 async function etaAsk(path) {
   const meta = {};
-  const got = await get(path, { meta, wait: 8000 });
+  const got = await get(path, { meta, wait: 8000, once: true });
   return { rows: Array.isArray(got) ? got : [], at: Date.now() - (meta.age || 0) * 1000 };
 }
 const ROUTES_AT_ONCE = 20;

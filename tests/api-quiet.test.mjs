@@ -61,3 +61,34 @@ test('a body still coming is read to its end, however long; one gone quiet is a 
     useSession(null);
   }
 });
+
+// A bus's estimates that waited their whole 8 s aren't asked again at once:
+// the next beat asks anyway, and the second 8 s held a trip's second round
+// 15–20 s on one slow city (桃園 → 臺北車站, 2026-11-17). A failure that
+// passes (a 503) is still asked once more.
+test('a bus estimate that timed out is not asked again at once; a 503 is', async () => {
+  const { useSession, busEta } = await import('../public/lib/api.mjs');
+  const was = globalThis.fetch;
+  useSession({ ensureToken: async () => 'tok' });
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    let asks = 0;
+    globalThis.fetch = (url, init) => (asks++, new Promise((_, no) => init?.signal?.addEventListener('abort', () => no(new Error('aborted')))));
+    let failed = null;
+    busEta('Hsinchu', { stops: ['HSZ1'] }).then(() => (failed = 'answered'), e => (failed = e));
+    await run(9_000);
+    assert.equal(failed?.code, 'TIMEOUT');
+    assert.equal(asks, 1);
+    asks = 0;
+    globalThis.fetch = async () => (asks++, asks === 1 ? new Response('{}', { status: 503 }) : new Response('[]', { status: 200 }));
+    let got = null;
+    busEta('Hsinchu', { stops: ['HSZ2'] }).then(g => (got = g), e => (got = e));
+    await run(2_000);
+    assert.deepEqual(got?.rows, [], String(got?.code || got));
+    assert.equal(asks, 2);
+  } finally {
+    mock.timers.reset();
+    globalThis.fetch = was;
+    useSession(null);
+  }
+});
