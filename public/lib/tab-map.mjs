@@ -206,6 +206,7 @@ export async function init(c) {
   $('fab-layers').addEventListener('click', layersSheet);
   $('card').addEventListener('click', cardClick);
   ctx.togglePick = togglePick;
+  ctx.addPlace = addPlace;
   (ctx.onRefresh ||= []).push(() => {
     drawChips();
     if (card) renderCard();
@@ -1193,6 +1194,7 @@ async function hereNow() {
 function pickOnMap(text, near) {
   return new Promise(resolve => {
     const box = $('card');
+    const wasHidden = box.hidden;
     box.hidden = true;
     document.body.classList.add('ot-picking');
     if (near?.lat != null) map.setView(near.lat, near.lon, Math.max(map.zoom(), 16));
@@ -1206,7 +1208,7 @@ function pickOnMap(text, near) {
       const c = map.center();
       bar.remove();
       document.body.classList.remove('ot-picking');
-      box.hidden = false;
+      box.hidden = wasHidden;
       resolve(a === 'ok' ? { name: MAP_SPOT, lat: c.lat, lon: c.lon } : null);
     });
   });
@@ -1386,11 +1388,8 @@ function homeActs() {
       when = { by: 'now', at: null };
       plan(null, placeEnd(p));
     },
-    // ＋ (or 家 / 公司 not set yet): the pin sheet, at where you are.
-    add(kind) {
-      const c = ctx.here || map.center();
-      pinSheet({ name: { home: W('家', 'Home'), work: W('公司', 'Work') }[kind] || '', icon: kind || 'pin', lat: c.lat, lon: c.lon });
-    },
+    // ＋ (or 家 / 公司 not set yet): where it is first, typed (or 目前位置, or on the map), then its name.
+    add: kind => addPlace(kind),
     // 建議: the saved trip's plan (or all its ways), the pinned bus's route, the pinned train's times.
     trip(x) {
       const { w, plan: p } = x;
@@ -1819,6 +1818,28 @@ function drawChips() {
   drawPlaces();
   $('map-chips').innerHTML = rentalChip();
   home?.draw();
+}
+
+// A new place: where it is, typed as any search (Jay 2026-11-18: 家 and ＋ pinned only where you
+// stood, nothing to type), 目前位置 or a spot on the map; then the pin sheet names it.
+async function addPlace(kind = '') {
+  if (ctx.data.places.length >= MAX_PLACES) return ctx.status(W(`最多 ${MAX_PLACES} 個釘選地點`, `Up to ${MAX_PLACES} pinned places`));
+  const word = { home: W('家', 'Home'), work: W('公司', 'Work'), school: W('學校', 'School') }[kind] || '';
+  const pt = await pickPoint(word ? W(`${word}在哪裡`, `Where is ${word}?`) : W('要釘選哪裡', 'Pin where?'), { here: true });
+  if (!pt) return;
+  if (pt.here) {
+    const h = await hereNow();
+    if (!h) return;
+    Object.assign(pt, { lat: h.lat, lon: h.lon });
+  }
+  if (pt.map) {
+    ctx.goTab('map');
+    const spot = await pickOnMap(W('移動地圖，把地點放在中間', 'Move the map to put the place in the middle'), ctx.here);
+    if (!spot) return;
+    Object.assign(pt, spot);
+  }
+  const named = !pt.here && !pt.map && pt.name;
+  pinSheet({ name: word || named || '', icon: kind || 'pin', lat: pt.lat, lon: pt.lon, ...(pt.gid ? { gid: pt.gid } : {}) });
 }
 
 function pinSheet(p) {

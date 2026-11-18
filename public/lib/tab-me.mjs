@@ -158,10 +158,7 @@ function onClick(ev) {
   }
   if (act === 'groups') return manageSheet();
   if (act === 'times') return ctx.goTab('times');
-  if (act === 'add-place') {
-    ctx.goTab('map');
-    return setTimeout(() => document.getElementById('q')?.focus(), 200);
-  }
+  if (act === 'add-place') return ctx.addPlace?.();
   if (act === 'add-trip') return ctx.newTrip?.();
 }
 document.addEventListener('change', ev => {
