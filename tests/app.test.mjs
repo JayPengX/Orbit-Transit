@@ -1840,38 +1840,38 @@ test('paceOf: before setting out, from where you are: leaving at the planned tim
   assert.deepEqual(at({ lat: 24.8034, lon: 120.9470 }), { text: '從這裡趕不上 06:50 的車了', tone: 'bad' });
 });
 
-test("YouBike: the station to leave it at is the one that makes the whole way quickest from where you took it (六家 → 綠41公園: 綠41公園 on the way, not 成功國中 past it, a few metres nearer the door)", () => {
+test("YouBike: the station to leave it at is the one that makes the whole way quickest from where you took it (from the south-east: the south station on the way, not the north one past the door, a few metres nearer)", () => {
+  // (A made-up map, out at sea where no river runs: the stations named by where they sit.)
   const st = (uid, name, lat, lon, n = 10) => ({ uid, name, lat, lon, bikes: n, ebike: 2, ret: n, ok: true });
-  const bikes = [st('lj', '臺鐵六家車站', 24.80777, 121.03895), st('g41', '綠41公園', 24.81614, 121.0171), st('cg', '成功國中', 24.81872, 121.01597)];
-  const home = { lat: 24.81614, lon: 121.0171 };
-  // Nearest the door, with nothing else known: 成功國中.
-  assert.equal(returnNear(home, bikes).uid, 'cg');
-  // From 六家: 綠41公園.
-  assert.equal(returnNear(home, bikes, { from: bikes[0] }).uid, 'g41');
-  const legs = bikeTrip({ lat: 24.8078, lon: 121.0390 }, home, bikes, 0);
-  assert.equal(legs.find(l => l.mode === 'bike').to.name, '綠41公園');
-  // From the north (成功國中 is on the way then): 成功國中.
-  assert.equal(returnNear(home, bikes, { from: { lat: 24.8300, lon: 121.0120 } }).uid, 'cg');
+  const bikes = [st('lj', '東南車站', 24.39017, 120.32245), st('s', '南站', 24.39854, 120.3006), st('n', '北站', 24.40112, 120.29947)];
+  const home = { lat: 24.4, lon: 120.3 };
+  // Nearest the door, with nothing else known: the north one.
+  assert.equal(returnNear(home, bikes).uid, 'n');
+  // From the south-east: the south one.
+  assert.equal(returnNear(home, bikes, { from: bikes[0] }).uid, 's');
+  const legs = bikeTrip({ lat: 24.3902, lon: 120.3225 }, home, bikes, 0);
+  assert.equal(legs.find(l => l.mode === 'bike').to.name, '南站');
+  // From the north (the north one is on the way then): the north one.
+  assert.equal(returnNear(home, bikes, { from: { lat: 24.4124, lon: 120.2955 } }).uid, 'n');
   // Its last dock now changes nothing.
-  assert.equal(returnNear(home, [bikes[0], { ...bikes[1], ret: 1 }, bikes[2]], { from: bikes[0] }).uid, 'g41');
+  assert.equal(returnNear(home, [bikes[0], { ...bikes[1], ret: 1 }, bikes[2]], { from: bikes[0] }).uid, 's');
 });
 
-test("YouBike: the station to take a bike from is on the way, never behind you for a few metres less walk (綠41公園 → the bus at 文興嘉興路口, or 六家: 綠41公園, not 成功國中 and back past the door); never a walk past 5 minutes to save a little riding", () => {
+test("YouBike: the station to take a bike from is on the way, never behind you for a few metres less walk (to the bus south-east: the south station, not the north one and back past the door); never a walk past 5 minutes to save a little riding", () => {
   const st = (uid, name, lat, lon) => ({ uid, name, lat, lon, bikes: 10, ebike: 2, ret: 10, ok: true });
-  const bikes = [st('g41', '綠41公園', 24.81614, 121.0171), st('cg', '成功國中', 24.81872, 121.01597), st('ny', '陽明交通大學(六家校區)', 24.81287, 121.02331)];
-  const stop = { name: '文興嘉興路口', lat: 24.8125, lon: 121.0238 };
-  // Along 綠41公園, 成功國中 a little nearer (114 and 94 m, 綠41公園 196 and 221 m).
-  for (const home of [{ lat: 24.81774, lon: 121.0163 }, { lat: 24.81872, lon: 121.01597 }]) {
-    assert.equal(rentNear(home, bikes).uid, 'cg', 'nearest the door, with nothing else known');
-    assert.equal(rentNear(home, bikes, { to: stop }).uid, 'g41');
-    assert.equal(bikeTrip(home, stop, bikes, 0).find(l => l.mode === 'bike').from.name, '綠41公園');
-  }
-  // And to 六家's station, by the same rule.
-  assert.equal(rentNear({ lat: 24.81872, lon: 121.01597 }, bikes, { to: { lat: 24.80766, lon: 121.03941 } }).uid, 'g41');
-  // At 成功國中's door (48 m; 綠41公園 342 m): 成功國中.
-  assert.equal(rentNear({ lat: 24.81886, lon: 121.01552 }, bikes, { to: stop }).uid, 'cg');
-  // Going north, 成功國中 is on the way: 成功國中.
-  assert.equal(rentNear({ lat: 24.81774, lon: 121.0163 }, bikes, { to: { lat: 24.8300, lon: 121.0120 } }).uid, 'cg');
+  const bikes = [st('s', '南站', 24.39854, 120.3006), st('n', '北站', 24.40112, 120.29947), st('e', '東站', 24.39527, 120.30681)];
+  const stop = { name: '東南路口', lat: 24.3949, lon: 120.3073 };
+  // Between them, the north one a little nearer.
+  const home = { lat: 24.40014, lon: 120.2998 };
+  assert.equal(rentNear(home, bikes).uid, 'n', 'nearest the door, with nothing else known');
+  assert.equal(rentNear(home, bikes, { to: stop }).uid, 's');
+  assert.equal(bikeTrip(home, stop, bikes, 0).find(l => l.mode === 'bike').from.name, '南站');
+  // And to the south-east station, by the same rule.
+  assert.equal(rentNear(home, bikes, { to: { lat: 24.39006, lon: 120.32291 } }).uid, 's');
+  // At the north one's door: the north one.
+  assert.equal(rentNear({ lat: 24.40126, lon: 120.29902 }, bikes, { to: stop }).uid, 'n');
+  // Going north, the north one is on the way: the north one.
+  assert.equal(rentNear({ lat: 24.40014, lon: 120.2998 }, bikes, { to: { lat: 24.4124, lon: 120.2955 } }).uid, 'n');
   // 竹東街上 → 縣體育場, 10 km: 竹東信義立體停車場 2 minutes away, a little behind, not 客運竹東站 8 minutes on.
   const zd = [st('xy', '竹東信義立體停車場', 24.73871, 121.09028), st('ky', '客運竹東站', 24.73945, 121.08559)];
   const pick = rentNear({ lat: 24.74, lon: 121.09 }, zd, { to: { lat: 24.821, lon: 121.0184 } });

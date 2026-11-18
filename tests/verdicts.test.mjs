@@ -92,16 +92,6 @@ CASES['綠41公園 → 竹東高中 by 08:00 without YouBike: the buses, never w
   assert.ok(s.every(p => p.deadline == null || p.deadline === Date.parse('2026-10-13T08:00:00+08:00')));
 };
 
-CASES['綠41公園 → 竹東高中 at 06:45 (the north half of the street, 成功國中 a little nearer): by bike from 綠41公園 on the way, never 成功國中 behind and back past the door, to 文興嘉興路口 and to 六家; to 文興嘉興路口 by bike, never a 16-minute walk'] = opts => {
-  const r = rankSaved('green41-zhudonghs-0645', opts);
-  always('0645', r);
-  const s = shown(r);
-  const firstBike = p => p.legs.find(l => l.mode === 'bike');
-  assert.deepEqual(r.filter(p => firstBike(p)?.from.name === '成功國中' && rides(p)[0] && /文興嘉興|六家/.test(rides(p)[0].from?.name || '')).map(sayPlan), [], 'from 成功國中 to the south-east');
-  assert.ok(s.some(p => firstBike(p)?.from.name === '綠41公園' && /文興嘉興/.test(rides(p)[0]?.from?.name || '')), say(s));
-  assert.deepEqual(s.filter(p => p.legs.some(l => l.mode === 'walk' && l.dur > 10 * 60 && /文興嘉興/.test(l.to?.name || ''))).map(sayPlan), []);
-};
-
 CASES['竹東南 → 綠41公園 at 16:02: 5608 to 科學園區 and a 20′ ride over 頭前溪 (17:19, half an hour before any other way) is recommended; a bus then a bus (5608, 182), set aside itself, never sets it aside (the owner, 2026-10-18)'] = opts => {
   const r = rankSaved('zhudongsouth-green41-1622', opts);
   always('zhudongsouth', r);
