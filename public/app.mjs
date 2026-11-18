@@ -27,7 +27,6 @@ import { shareFamily } from './lib/family-share.mjs';
 import { useEbikeFirst } from './lib/look.mjs';
 import * as mapTab from './lib/tab-map.mjs';
 import * as goTab from './lib/tab-go.mjs';
-import * as timesTab from './lib/tab-times.mjs';
 import * as meTab from './lib/tab-me.mjs';
 import { readSaved, UNREAD, writeJson } from './lib/util.mjs';
 import { keepLearning } from './lib/learn.mjs';
@@ -172,6 +171,19 @@ useEbikeFirst(() => ctx.data.prefs?.ebike === true);
 
 // ---- Tabs --------------------------------------------------------------------------------------
 
+// 查時刻 (its trains, metros and line maps: 52 KB of the 450 KB of code a
+// first opening waited for on a slow link, 11-18) read when it's first
+// opened, and once the opening's tab is up: never before the map asks for
+// anything. Its init runs before its show (both on the one read).
+let timesMod = null;
+let timesRead = null;
+const timesCode = () => (timesRead ||= import('./lib/tab-times.mjs').then(m => (timesMod = m), error => ((timesRead = null), Promise.reject(error))));
+const timesTab = {
+  init: c => void timesCode().then(m => m.init(c), () => started.delete('times')),
+  show: o => void timesCode().then(m => bar?.current === 'times' && m.show(o), () => {}),
+  hide: () => timesMod?.hide(),
+  ready: () => timesCode().then(m => m.ready(), () => {})
+};
 const TABS = [
   { id: 'map', label: W('地圖', 'Map'), icon: '<path d="M9 4.5L3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>', mod: mapTab },
   { id: 'go', label: W('交通', 'Transit'), icon: '<rect x="4.5" y="3.5" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 18.5V21M16 18.5V21"/><path d="M12 3.5V11"/>', mod: goTab },
@@ -281,6 +293,8 @@ async function boot() {
   if (want === 'map') await Promise.race([mapTab.ready, new Promise(r => setTimeout(r, 4000))]);
   else await Promise.race([TABS.find(t => t.id === want)?.mod.ready?.(), new Promise(r => setTimeout(r, 1500))]);
   $('loading').hidden = true;
+  // (查時刻's code once the opening's tab is up: a tap on it opens at once.)
+  setTimeout(() => timesCode().catch(() => {}), 1500);
   ctx.locate();
   startAlerts(t => ctx.status(t), {
     schedule: items => schedulePush(q, items),
