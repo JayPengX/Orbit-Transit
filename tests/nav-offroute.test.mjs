@@ -82,7 +82,8 @@ const trainTrip = () => {
 
 test('the train missed, still at the station: the next one taken by itself, said and buzzed (never tomorrow’s)', async () => {
   const plan = trainTrip();
-  clock.set(T(8, 3));
+  // (Five minutes past it, 台鐵 not saying it's late: missed, not sitting late with you on it.)
+  clock.set(T(8, 5));
   const { st: s } = start(plan, { resume: { i: 1, phase: 'before', reached: 1 } });
   pos(off(S(0), 20, 0));
   await settle();

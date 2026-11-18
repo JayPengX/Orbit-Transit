@@ -37,7 +37,8 @@ const quick = (arr, dest) => ({ lead: true, dep: clock.get(), arr, legs: [{ mode
 
 test('a train missed at the station: the next one taken by itself, then one card: 下一班 (ticked) and 最快, each with when you are there; 最快 is a tap', async () => {
   const { plan, dest } = trainTrip();
-  clock.set(T(8, 13));
+  // (Five minutes past it, 台鐵 not saying it's late: missed, not sitting late with you on it.)
+  clock.set(T(8, 15));
   const { st: s, acts } = start(plan, { resume: { i: 1, phase: 'before', reached: 1 } });
   pos(off(sts[0], 20, 0));
   await settle();

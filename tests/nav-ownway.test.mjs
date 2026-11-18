@@ -28,14 +28,14 @@ test('a train that left a little late, the trip sure it was missed, fixes rough 
   ];
   clock.set(T(7, 58));
   const { st: s } = start({ legs, dep: legs[0].dep, arr: legs[2].arr, tags: [] }, { resume: { i: 1, phase: 'before', reached: 1 } });
-  // On the platform till 08:03: the trip takes the next one (103).
-  for (let n = 0; n < 30; n++) {
+  // On the platform till 08:05 (five minutes past it, 台鐵 not saying it's late): the trip takes the next one (103).
+  for (let n = 0; n < 42; n++) {
     clock.add(10e3);
     pos(off(S(0), 20, 0));
     await settle();
   }
   assert.equal(String(s.plan.legs[1].train.no), '103');
-  // 101 pulls out three minutes late; in the train, every fix 160 m out.
+  // 101 pulls out five minutes late; in the train, every fix 160 m out.
   for (let f = 0.02; f <= 0.6; f += 0.04) {
     clock.add(15e3);
     pos({ lat: 24.74, lon: 121.09 - f * 0.02 }, 160);

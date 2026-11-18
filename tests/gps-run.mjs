@@ -14,12 +14,12 @@ const send = f => geo._cb?.({ coords: { latitude: f.lat, longitude: f.lon, accur
 const realWatch = geo.watchPosition;
 geo.watchPosition = (cb, ...rest) => ((geo._cb = cb), realWatch.call(geo, cb, ...rest));
 
-export function run(tripName, scenario = 'plan', profile = 'phone', seed = 1, { k = null, reopenAt = null } = {}) {
+export function run(tripName, scenario = 'plan', profile = 'phone', seed = 1, { k = null, reopenAt = null, delay = 6 } = {}) {
   const trip = TRIPS[tripName]();
   const plan = trip.plan;
   const ride = k ?? plan.legs.findIndex(l => l.mode !== 'walk' && l.mode !== 'bike');
   const rs0 = trip.rides.get(ride);
-  const truth = truthPath(plan, { scenario, k: ride, more: trip.more.get(ride), before: rs0?.stops[rs0.j - 1] });
+  const truth = truthPath(plan, { scenario, k: ride, delay, more: trip.more.get(ride), before: rs0?.stops[rs0.j - 1] });
   const feed = gpsFeed(truth, profile, seed);
   clock.set(truth[0].t);
   let r = start(plan);

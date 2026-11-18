@@ -827,6 +827,8 @@ export function shiftDays(plan, k, now = Date.now()) {
 // station for it when it has one) is nearest you, within 2.5 km (stations on
 // a branch line are kilometres apart). → { dep, arr, delay, train } (a
 // rideOptions row), or null.
+// A train not on 台鐵's live board may be this late, unsaid (trainNow).
+const LATE_UNSAID = 10 * 60_000;
 export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.now(), within = 2500) {
   const byKey = new Map(stations.map(s => [s.key, s]));
   const near = pt => new Set(stations.filter(s => s.sys === l.mode && s.lat != null && meters(pt.lat, pt.lon, s.lat, s.lon) < 800).map(s => s.key));
@@ -839,22 +841,32 @@ export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.n
     if (b < 0) continue;
     const lv = live.get(String(t.no));
     const delay = (lv?.delay || 0) * 60_000;
+    // (Not on the live board: maybe running late, unsaid; up to LATE_UNSAID
+    // later, each minute of it counted as 150 m further: Jay 2026-11-18, 區間
+    // 1792 out of 竹中 late, its board silent, its timetable place km ahead.)
+    const unsaid = lv ? 0 : LATE_UNSAID;
     const st = t.stops.map(s => ({ ...s, p: byKey.get(s.st) }));
-    if (st[a].dep + delay > now + 2 * 60_000 || st[b].arr + delay < now - 2 * 60_000) continue;
+    if (st[a].dep + delay > now + 2 * 60_000 || st[b].arr + delay + unsaid < now - 2 * 60_000) continue;
     // Where it is by the clock: at a station, or part way between two.
-    let at = null;
-    for (let x = a; x < b && !at; x++) {
-      const [s0, s1] = [st[x], st[x + 1]];
-      const d0 = (s0.dep ?? s0.arr) + delay, a1 = (s1.arr ?? s1.dep) + delay;
-      if (now < d0 && x === a) at = s0.p;
-      else if (now >= d0 && now <= a1 && s0.p && s1.p) {
-        const f = a1 > d0 ? (now - d0) / (a1 - d0) : 1;
-        at = { lat: s0.p.lat + (s1.p.lat - s0.p.lat) * f, lon: s0.p.lon + (s1.p.lon - s0.p.lon) * f };
-      } else if (now > a1 && x + 1 < b && now < (s1.dep ?? a1) + delay) at = s1.p;
+    const place = late => {
+      let at = null;
+      for (let x = a; x < b && !at; x++) {
+        const [s0, s1] = [st[x], st[x + 1]];
+        const d0 = (s0.dep ?? s0.arr) + late, a1 = (s1.arr ?? s1.dep) + late;
+        if (now < d0 && x === a) at = s0.p;
+        else if (now >= d0 && now <= a1 && s0.p && s1.p) {
+          const f = a1 > d0 ? (now - d0) / (a1 - d0) : 1;
+          at = { lat: s0.p.lat + (s1.p.lat - s0.p.lat) * f, lon: s0.p.lon + (s1.p.lon - s0.p.lon) * f };
+        } else if (now > a1 && x + 1 < b && now < (s1.dep ?? a1) + late) at = s1.p;
+      }
+      return at || st[b].p;
+    };
+    let d = Infinity;
+    for (let m = 0; m <= unsaid; m += 60_000) {
+      const at = place(delay + m);
+      if (at) d = Math.min(d, meters(pos.lat, pos.lon, at.lat, at.lon) + (m / 60_000) * 150);
     }
-    at ||= st[b].p;
-    if (!at) continue;
-    let d = meters(pos.lat, pos.lon, at.lat, at.lon);
+    if (d === Infinity) continue;
     // TDX's own word on where it is: at (or just left) a station near you counts too.
     const ls = lv?.st && byKey.get(lv.st);
     if (ls && t.stops.slice(a, b + 1).some(s => s.st === lv.st)) d = Math.min(d, meters(pos.lat, pos.lon, ls.lat, ls.lon) + 300);
@@ -1880,6 +1892,14 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // (Seen there after it left, not only before: a phone quiet since on board
     // has its last fix at the stop. Jay 2026-11-07, 普悠瑪 107 taken as missed.)
     if (state.posAt < l.dep + (l.mode === 'bus' ? 0 : state.delay * 60_000) + 60_000) return;
+    // (A train whose delay 台鐵 hasn't said yet: still there at the platform
+    // is as likely on it, sitting late, as left behind; its delay asked for
+    // every 30 s, missed only five minutes past its time. Jay 2026-11-18:
+    // 區間 1792 left 竹中 a couple of minutes late with him on board, the
+    // trip moved him to 1794.)
+    const wait = RAIL.has(l.mode) && !state.delayLive && Date.now() < l.dep + state.delay * 60_000 + 5 * 60_000;
+    if (wait && Date.now() - (state.missAskAt || 0) < 30_000) return;
+    if (wait) state.missAskAt = Date.now();
     state.missing = k;
     const opts = await rideOptions(l, state.info.get(k)).catch(() => []);
     state.missing = null;
@@ -1892,6 +1912,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
       state.liveAt.set(k, l.dep + own * 60_000);
       return render();
     }
+    if (wait) return;
     // (Never "the next" that is the same run: a bus's timetable time, a train by its number.)
     const next = opts.find(o => !sameRun(o, l) && o.dep + (o.delay || 0) * 60_000 > Date.now() + 30_000);
     const name = rideName(l);
