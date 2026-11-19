@@ -2312,7 +2312,7 @@ function plansHtml(c) {
     return `<button class="ot-plan${on ? ' on' : ''}${mini ? ' mini' : ''}" type="button" data-plan="${i}">
         <div class="ot-plan-top">${picked(c, p) ? `<span class="ot-pinned" title="${W('釘選的方案', 'Pinned route')}">${icon('star')}</span>` : ''}<b class="ot-plan-dur">${e(minsText((arr - p.dep) / 1000))}</b><span class="ot-plan-time">${e(timeRange(p.dep, arr))}</span></div>
         <div class="ot-legs">${all.map((q, k) => `${k ? `<span class="ot-leg-stop" aria-label="${W(`第 ${k} 站`, `Stop ${k}`)}">${k}</span>` : ''}${chips(q)}`).join('')}</div>${on ? deps(lead, i) : ''}
-        ${mini ? '' : `<div class="ot-plan-sub facts">${[...p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').slice(0, 1).map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${t === '推薦' && kitUI.icons?.ai ? `<span class="ot-tag-ai" aria-hidden="true">${kitUI.icons.ai}</span>` : ''}${e(tagText(t))}</span>`), ...facts.filter(Boolean).map(e)].map((h, k, all) => `<span class="ot-plan-fact">${h}${k < all.length - 1 ? ' ·' : ''}</span>`).join(' ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then?.length ? W('騎著的這台，到這裡還', 'Return the bike you’re on here') : bikeSwap(ctx.data.prefs) ? W('同一台騎到底，快滿 30 分鐘時在站旁換一台', 'Keep riding; swap at a dock near 30 minutes') : W('同一台騎到最後才還，停留時也在計費', 'Keep one bike to the end; stops are charged too')}</div>` : ''}
+        ${mini ? '' : `<div class="ot-plan-sub facts">${[...p.tags.filter(t => t !== 'YouBike' && t !== '電輔車').slice(0, 1).map(t => `<span class="ot-tag${t === '推薦' ? ' best' : t === '即時' ? ' live' : ''}">${t === '推薦' && kitUI.icons?.ai ? `<span class="ot-tag-ai" aria-hidden="true">${kitUI.icons.ai}</span>` : ''}${e(tagText(t))}</span>`), ...facts.filter(Boolean).map(e)].map((h, k, all) => `<span class="ot-plan-fact">${h}${k < all.length - 1 ? ' ·' : ''}</span>`).join(' ')}</div>`}${!mini && short ? `<div class="ot-plan-sub warn">${e(short)}</div>` : ''}${!mini && p.keep ? `<div class="ot-plan-sub">${!c.then?.length ? W('騎著的這台，到這裡還', 'Return the bike you’re on here') : bikeSwap(ctx.data.prefs) ? W('同一台騎到底，快滿 30 分鐘時在站旁換一台', 'Keep riding; swap at a dock near 30 minutes') : W('同一台騎到最後才還，停留時也在計費', 'Keep one bike to the end; stops are charged too')}</div>` : !mini && later ? returnsAt(all) : ''}
         ${!mini && (p.miss || p.off || p.late || lateShown(p, p.arr) || p.note || p.rivers?.length) ? `<div class="ot-plan-sub${p.miss || p.off || p.late || lateShown(p, p.arr) ? ' warn' : ' note'}">${e(p.off || p.miss || p.late || (lateShown(p, p.arr) ? W(`比 ${hm(p.deadline)} 晚 ${lateShown(p, p.arr)} 分到`, `${lateShown(p, p.arr)} min after ${hm(p.deadline)}`) : '') || p.note || W(`${p.riverBy || '騎車'}過${p.rivers.join('、')}（汽車橋）`, `${tagText(p.riverBy || '騎車')} across ${p.rivers.join(', ')} (road bridge)`))}</div>` : ''}
         ${on ? stepsHtml(p, c) : ''}
       </button>`;
@@ -2347,6 +2347,17 @@ export function goodRest(tops, rest) {
   return rest.filter(([p]) => !beaten(p) && dur(p) <= Math.max(quick(p) * 1.5, quick(p) + 20 * 60_000) && (day(p) === today || !all.some(q => day(q) === today)));
 }
 // A stretch of a trip with stops, short: its rides (YouBike too), or a walk of all its minutes.
+// With stops, a way that isn't one kept bike: where its YouBike goes back (a
+// stretch riding into a stop), and whether another is rented on, said as the
+// kept way's line is, so the two read apart (Jay 2026-11-19).
+function returnsAt(all) {
+  const rides = q => q.legs.some(l => l.mode === 'bike');
+  const at = all.slice(0, -1).map((q, k) => (rides(q) ? k + 1 : 0)).filter(Boolean);
+  if (!at.length) return '';
+  const again = at.some(k => rides(all[k]));
+  const n = at.join('、');
+  return `<div class="ot-plan-sub">${W(`到第 ${n} 站先還車${again ? '，離開時再借一台' : ''}`, `Return the bike at stop ${at.join(', ')}${again ? '; rent another to go on' : ''}`)}</div>`;
+}
 function stretchChips(q) {
   const rides = q.legs.filter(l => l.mode !== 'walk');
   return legChips(rides.length ? rides : [{ mode: 'walk', dur: (q.arr - q.dep) / 1000 }]);
