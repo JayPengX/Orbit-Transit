@@ -3350,6 +3350,13 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   background: var(--q-fill-3);
   color: var(--q-label);
 }
+.ot-park-set small {
+  color: var(--q-label-2);
+}
+.ot-nav-ask.ot-park-set button {
+  background: var(--q-fill-3);
+  color: var(--q-accent);
+}
 .ot-nav-ask span {
   flex: 1;
   min-width: 0;
@@ -3379,16 +3386,19 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   width: 16px;
   height: 16px;
 }
-.ot-nav-late span {
+.ot-nav-late span,
+.ot-park-set span {
   display: flex;
   flex-direction: column;
   gap: 1px;
   white-space: normal;
 }
-.ot-nav-late b {
+.ot-nav-late b,
+.ot-park-set b {
   white-space: nowrap;
 }
-.ot-nav-late small {
+.ot-nav-late small,
+.ot-park-set small {
   color: var(--q-label);
   font: 500 12px/16px var(--q-font);
 }
