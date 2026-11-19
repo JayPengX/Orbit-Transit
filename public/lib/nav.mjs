@@ -637,23 +637,26 @@ export function laterEnd(plan, eta) {
 // there, ridden on) or return it (and the next stretch as planned:
 // another bike, a bus…), and which gets you on sooner, by how much.
 // → { keep, back, text } (minutes, null when not planned yet; the line
-// said), or null when it isn't asked.
+// said, `chosen` 'park' or 'return' once it's settled: answered, or kept as
+// planned), or null when it isn't asked. Settled is never final: the dock
+// full, or a mind changed, the other is a tap away (Jay 2026-11-19).
 export function parkAsk(plan, i) {
   const l = plan.legs[i];
   const next = plan.then?.[0];
-  if (l?.mode !== 'bike' || !next || l.asked || l.park || plan.legs.slice(i + 1).some(x => x.mode === 'bike' || isRide(x))) return null;
+  if (l?.mode !== 'bike' || !next || plan.legs.slice(i + 1).some(x => x.mode === 'bike' || isRide(x))) return null;
+  const chosen = l.park ? 'park' : l.asked ? 'return' : null;
   const stop = plan.dest || plan.legs.at(-1).to;
   const m = meters(stop.lat, stop.lon, next.lat, next.lon);
   const keep = Math.round((rideSec(m, l.ebike) + DOCK_SEC) / 60);
   // (Later stretches on this same bike: no way without it planned to tell.)
   const q = plan.later?.[0]?.legs?.some(x => x.kept) ? null : plan.later?.[0];
-  if (!q) return { keep, back: null, text: W(`停著騎過去 ${keep} 分`, `Keep it: ${keep} min on`) };
+  if (!q) return { keep, back: null, chosen, text: W(`停著騎過去 ${keep} 分`, `Keep it: ${keep} min on`) };
   const on = rides(q)[0];
   const how = on ? W(`搭 ${on.short || on.name} `, '') : q.legs.some(x => x.mode === 'bike') ? W('再借一台', '') : W('走路', '');
   const back = Math.round((q.arr - q.dep) / 60_000);
   const d = Math.abs(back - keep);
   const text = d <= 2 ? W(`差不多，都約 ${Math.max(back, keep)} 分`, `About ${Math.max(back, keep)} min either way`) : back < keep ? W(`還車${how}快 ${d} 分`, `Return: ${d} min sooner`) : W(`停著騎過去快 ${d} 分`, `Keep: ${d} min sooner`);
-  return { keep, back, text };
+  return { keep, back, chosen, text };
 }
 
 // How long till you're there, short enough to sit beside the time and its drift: 45 分, 1時29分.
@@ -909,6 +912,24 @@ export function ownWayNow(plan, now = Date.now()) {
   return { ...plan, legs, dep: legs[0].dep, ...(r < 0 ? { arr: legs.at(-1).arr } : {}) };
 }
 
+// Arrived at a stop with places after it: the next stretch as planned, begun
+// now, navigated straight on (Jay 2026-11-19: never out to the plans card and
+// back in). Only while it still holds: planned by this app, the bike kept or
+// returned as it assumed, and its first bus or train still made; else null
+// (planned again, quietly).
+export function nextStretch(plan, parked, now = Date.now(), v = null) {
+  const q = plan.later?.[0];
+  if (!q?.legs?.length || !plan.then?.length || (v != null && q.planV !== v)) return null;
+  if (parked !== q.legs.some(l => l.kept)) return null;
+  const p = ownWayNow(q, now);
+  const r = p.legs.findIndex(isRide);
+  if (r > 0 && p.legs[r - 1].arr > p.legs[r].dep) return null;
+  if (r === 0 && p.legs[0].dep < now + 60_000) return null;
+  if (!canNav(p, now)) return null;
+  const later = plan.later.slice(1);
+  return { ...p, then: plan.then.slice(1), later: Object.assign(later, plan.later.short != null && plan.later.short > 0 ? { short: plan.later.short - 1 } : {}) };
+}
+
 // Held in Orbit (the all-in-one app): its app switcher is a button on the
 // trip's own bar while navigating (Jay 2026-11-14: switch apps without
 // minimizing first; the switcher floating over the step's card was "ugly").
@@ -1049,7 +1070,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // On a YouBike to a stop with more after it: keep it or return it there (parkAsk).
     // (Asked in the last 5 minutes of the ride, not all the way.)
     const pa = !state.done && state.i === state.reached && left != null && rideSec(left, l.ebike) <= 5 * 60 ? parkAsk(plan, state.i) : null;
-    const park = pa ? `<div class="ot-nav-ask ot-nav-late"><span><b>${W('到了要還車嗎？', 'Return it there?')}</b><small>${e(pa.text)}</small></span><button type="button" data-nav="park">${W('停著', 'Keep')}</button><button type="button" data-nav="return">${W('還車', 'Return')}</button></div>` : '';
+    // (Settled, the choice stays said with the other a tap: a full dock, a mind changed.)
+    const park = !pa ? '' : pa.chosen ? `<div class="ot-nav-ask ot-park-set"><span><b>${pa.chosen === 'park' ? W('到了先停著，不還車', 'Keeping it there') : W('到了就還車', 'Returning it there')}</b><small>${e(pa.text)}</small></span><button type="button" data-nav="${pa.chosen === 'park' ? 'return' : 'park'}">${pa.chosen === 'park' ? W('改成還車', 'Return instead') : W('改成停著', 'Keep instead')}</button></div>` : `<div class="ot-nav-ask ot-nav-late"><span><b>${W('到了要還車嗎？', 'Return it there?')}</b><small>${e(pa.text)}</small></span><button type="button" data-nav="park">${W('停著', 'Keep')}</button><button type="button" data-nav="return">${W('還車', 'Return')}</button></div>`;
     // Whatever went wrong, one card (trouble.mjs): on board and off its way
     // (another bus at speed, got off at a walk), heading away from it all, or
     // what was set (missed, late, no bikes, the wrong ride).

@@ -3345,6 +3345,11 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   color: var(--q-orange);
   font: 600 13px/18px var(--q-font);
 }
+/* 停著 / 還車 settled: said quietly, the other a tap (not a warning). */
+.ot-nav-ask.ot-park-set {
+  background: var(--q-fill-3);
+  color: var(--q-label);
+}
 .ot-nav-ask span {
   flex: 1;
   min-width: 0;

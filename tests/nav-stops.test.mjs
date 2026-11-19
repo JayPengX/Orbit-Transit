@@ -4,7 +4,7 @@
 // stations to swap bikes at after 25 minutes on one.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitRide, parkAsk, laterEnd } from '../public/lib/nav.mjs';
+import { splitRide, parkAsk, laterEnd, nextStretch } from '../public/lib/nav.mjs';
 
 const MIN = 60_000;
 const T = m => Date.parse('2026-11-03T08:00:00+08:00') + m * MIN;
@@ -34,7 +34,7 @@ test('the whole trip ends when its last stretch does, later by as much as this o
   assert.equal(laterEnd(trip({ later: false }), T(30)), T(30));
 });
 
-test('on a YouBike to a stop with more after it: keep it or return it, with how long each takes on; asked once', () => {
+test('on a YouBike to a stop with more after it: keep it or return it, with how long each takes on; once settled, the other a tap', () => {
   const p = trip();
   const a = parkAsk(p, 1);
   assert.equal(a.back, 15);
@@ -50,15 +50,18 @@ test('on a YouBike to a stop with more after it: keep it or return it, with how 
   assert.equal(parkAsk({ ...p, then: [] }, 1), null);
   // A walk: not asked.
   assert.equal(parkAsk(p, 0), null);
-  // Answered: not again.
+  assert.equal(a.chosen, null);
+  // Answered: said as settled, the other still offered (a full dock, a mind changed).
   p.legs[1].asked = true;
-  assert.equal(parkAsk(p, 1), null);
+  assert.equal(parkAsk(p, 1).chosen, 'return');
+  p.legs[1].park = true;
+  assert.equal(parkAsk(p, 1).chosen, 'park');
   // Not planned on yet: the keeping alone.
   assert.equal(parkAsk(trip({ later: false }), 1).back, null);
-  // 全程 YouBike: kept already, not asked.
+  // 全程 YouBike: kept as planned, said so, returning it a tap.
   const k = trip();
   k.legs[1].park = true;
-  assert.equal(parkAsk(k, 1), null);
+  assert.equal(parkAsk(k, 1).chosen, 'park');
   // The stretch after on this same bike: no way to return it planned, the keeping alone.
   const s = trip();
   s.later = [{ legs: [{ mode: 'bike', kept: true, from: STOP, to: NEXT, dep: T(30), arr: T(40), dur: 600 }], dep: T(30), arr: T(40) }];
@@ -82,4 +85,22 @@ test('附近換車: the ride cut at a station on its way, the second a new renta
   assert.equal(p.arr, w.arr);
   // A walk can't be cut.
   assert.equal(splitRide(p, 0, mid, here, T(25)), false);
+});
+
+test('arrived at a stop: the next stretch as planned, navigated straight on while it still holds (Jay 2026-11-19)', () => {
+  const p = trip();
+  // On time: the walk to the bus begun now, the places after it carried on.
+  const q = nextStretch(p, false, T(30));
+  assert.equal(q.legs[1].short, '5608');
+  assert.equal(q.legs[0].dep, T(30));
+  assert.deepEqual(q.then, []);
+  // A minute late: the walk moves, the bus still made.
+  assert.equal(nextStretch(p, false, T(31)).legs[0].arr, T(34));
+  // Too late for its bus: planned again.
+  assert.equal(nextStretch(p, false, T(33)), null);
+  // The bike kept where the stretch returned it (or the other way): planned again.
+  assert.equal(nextStretch(p, true, T(30)), null);
+  // Planned by an older app, or not planned yet: planned again.
+  assert.equal(nextStretch({ ...p, later: [{ ...p.later[0], planV: 1 }] }, false, T(30), 2), null);
+  assert.equal(nextStretch(trip({ later: false }), false, T(30)), null);
 });

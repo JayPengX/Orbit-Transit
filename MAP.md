@@ -39,6 +39,7 @@ Jay's, dated (Taiwan day), newest wins; the family's are in Orbit-Core `docs/RUL
 - 10-29 換附近的站 is asked only when a station runs low (2 or fewer bikes or docks; no 電輔車 for an e-bike ride); otherwise the count is a quiet tap, and it takes the station the planner would, never the nearest to the old one (11-09).
 - 11-06 When something goes wrong under way, one card, any mode (`lib/trouble.mjs`): missed or late → 下一班 and 最快, each with when you're there; no bike or dock nearby → 最快; on the wrong ride (GPS) → 從這裡重新規劃. Steps move only by GPS.
 - 11-07 A trip with stops is one coherent trip while navigating: the chips run to the last place, each step after a stop a tap to look at it; the bottom bar's time is the next stop's arrival (replaced 11-03's end time); riding a YouBike to a stop it asks 停著 or 還車 with which is sooner; with the free half hour, 附近換車 from 25 minutes on a bike.
+- 11-19 停著 or 還車 at a stop is never final: once settled (answered, or kept as planned) it stays said with the other a tap (a full dock, a mind changed; `parkAsk` `chosen`). Arrived at a stop, the trip goes on in one go: the next stretch as planned when it still holds (`nextStretch`), else planned with no card and navigated at once; never out to the plans card and back in.
 - Every screen: on a wide screen the map's sheet is a panel at the map's left (pinned whole on a tablet or computer); 交通, 我的 and 查時刻 in two columns (`transit.css` §11).
 
 ## How it works

@@ -25,7 +25,7 @@ import { liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround, etaAround } from './near.mjs';
 import { nearBikes as nearBikeCards } from './near-ui.mjs';
 import { underWay } from './underway.mjs';
-import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, keepNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown } from './nav.mjs';
+import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, keepNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown, nextStretch } from './nav.mjs';
 import { fastest } from './trouble.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
@@ -776,6 +776,8 @@ function closeCard() {
 // Jay 2026-11-12, back on a YouBike trip with stops, its kept bike's card
 // reading the stops a reopened trip doesn't carry. What failed goes to 除錯紀錄.
 function renderCard() {
+  // (A quiet card stays unseen: goBest shows it only when nothing was found.)
+  if (card?.quiet) return;
   try {
     drawCard();
   } catch (err) {
@@ -1927,16 +1929,21 @@ async function plan(from, to, opts = {}) {
   // `then`: the places after this one, in order (a trip with stops: here to
   // the first, and on from each to the next once there).
   const then = (opts.then || []).filter(x => x?.lat != null).slice(0, MAX_STOPS);
-  card = { kind: 'plans', from: fromPt, fromHere: !from, aboard, to: dest, then, keep: Boolean(opts.keep), have: Boolean(opts.keep || rental()), since: opts.since ?? rental()?.at ?? null, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back };
-  ctx.status('');
-  document.body.classList.add('ot-planning');
+  card = { kind: 'plans', from: fromPt, fromHere: !from, aboard, to: dest, then, keep: Boolean(opts.keep), have: Boolean(opts.keep || rental()), since: opts.since ?? rental()?.at ?? null, lat: dest.lat, lon: dest.lon, plans: null, sel: -1, more: false, back: card?.kind !== 'plans' ? card : card.back, quiet: Boolean(opts.quiet && opts.go) };
+  // (Quiet: a trip going on from a stop, planned with no card till it's navigated; goBest.)
+  if (!card.quiet) {
+    ctx.status('');
+    document.body.classList.add('ot-planning');
+  }
   renderCard();
   if (!start) {
+    if (card.quiet) document.body.classList.add('ot-planning');
+    card.quiet = false;
     card.plans = [];
     card.error = W('需要你的位置（請在設定允許定位），或點上面的出發地選一個地點。', 'Needs your location (allow it in Settings), or tap the start above to pick one.');
     return renderCard();
   }
-  map.fit([fromPt, dest], fitPad(40, 0.48));
+  if (!card.quiet) map.fit([fromPt, dest], fitPad(40, 0.48));
   ctx.data.trips = rememberTrip(ctx.data.trips, dest, { went: true });
   wentTo(dest);
   ctx.save();
@@ -2017,8 +2024,17 @@ async function goBest(c, rest, said) {
   if (card !== c) return;
   const ok = (c.plans || []).filter(p => !p.gone && canNav(p));
   const best = ok.find(p => p.tags?.includes('推薦')) || ok[0];
+  // (Quiet: nothing found, the card after all, saying so.)
+  if (!best && c.quiet) {
+    c.quiet = false;
+    document.body.classList.add('ot-planning');
+    renderCard();
+    return ctx.status(W('找不到去下一站的走法', 'No way found to the next stop'));
+  }
   if (!best) return ctx.status(W('找不到新的走法，原本的導航還在', 'No new way found; the old directions go on'));
   await navigate(best);
+  // (Navigated: the card it came from is an ordinary one again, for 結束 by hand.)
+  c.quiet = false;
   ctx.status(said);
 }
 
@@ -2948,8 +2964,14 @@ async function navigate(p, resume = null, { swap = false } = {}) {
         const parked = Boolean(kp?.legs.some(l => l.mode === 'bike' && l.park));
         // (The rental's real start when it's timed; else from the plan.)
         const since = parked ? (rental()?.at ?? (kp.rentAt != null ? (kp.rentAt >= kp.dep ? Date.now() - (kp.arr - kp.rentAt) : kp.rentAt) : null)) : null;
-        // Straight on: the next stretch planned from here and navigated (no card to tap through).
-        return plan(null, next[0], { then: next.slice(1), keep: parked, since, go: W(`接著去 ${next[0].name || '下一站'}`, `Next: ${next[0].name || 'the next stop'}`) });
+        const said = W(`接著去 ${next[0].name || '下一站'}`, `Next: ${next[0].name || 'the next stop'}`);
+        // Straight on, in one go (Jay 2026-11-19): the next stretch as planned,
+        // when it still holds; else planned from here with no card shown, and
+        // navigated as soon as it's found (the card only when nothing is).
+        const q = nextStretch(kp, parked, Date.now(), PLAN_V);
+        if (q) return navigate(q, null, { swap: true }).then(() => ctx.status(said));
+        ctx.status(W(`已抵達 ${how.arrived}，正在找去 ${next[0].name || '下一站'} 的路…`, `Arrived at ${how.arrived}; finding the way to ${next[0].name || 'the next stop'}…`));
+        return plan(null, next[0], { then: next.slice(1), keep: parked, since, go: said, quiet: true });
       }
       if (how.arrived || !card) return closeCard();
       // (Ended by hand: the trip's way off the map, whatever card is open; the plans it came from draw theirs again.
