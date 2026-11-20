@@ -1063,9 +1063,10 @@ html.q-in-suite:not(.q-tabrail) .ot-map-chips {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  /* (none, not contain: its end stops there, never bounced past into the
-     empty sheet below it. Jay 2026-11-14, a trip's 開始導航.) */
-  overscroll-behavior: none;
+  /* (contain, not none: it bounces at its ends as every other page does,
+     but never hands the scroll on to the map. Jay 2026-11-20, the plans
+     and the search's results; replaces 11-14's stop dead at 開始導航.) */
+  overscroll-behavior: contain;
   /* (24px, and the 40px the sheet runs on below the panel's foot.) */
   padding: 0 var(--q-margin) calc(64px + var(--ot-kb, 0px));
   -webkit-overflow-scrolling: touch;
