@@ -832,15 +832,34 @@ export function shiftDays(plan, k, now = Date.now()) {
 // rideOptions row), or null.
 // A train not on 台鐵's live board may be this late, unsaid (trainNow).
 const LATE_UNSAID = 10 * 60_000;
-export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.now(), within = 2500) {
+export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.now(), within = 2500, { cut: cuts = false } = {}) {
   const byKey = new Map(stations.map(s => [s.key, s]));
   const near = pt => new Set(stations.filter(s => s.sys === l.mode && s.lat != null && meters(pt.lat, pt.lon, s.lat, s.lon) < 800).map(s => s.key));
   const [from, to] = [near(l.from), near(l.to)];
   let best = null;
+  // (The train planned, by its own stops: where another one that ends short of yours meets it again.)
+  const own = l.train?.no != null ? trips.find(t => t.sys === l.mode && String(t.no) === String(l.train.no)) : null;
+  const ownA = own ? own.stops.findIndex(s => from.has(s.st)) : -1;
   for (const t of trips) {
     if (t.sys !== l.mode) continue;
     const a = t.stops.findIndex(s => from.has(s.st));
-    const b = a >= 0 ? t.stops.findIndex((s, x) => x > a && to.has(s.st)) : -1;
+    let b = a >= 0 ? t.stops.findIndex((s, x) => x > a && to.has(s.st)) : -1;
+    // Along your line but ending short of your stop (Jay 2026-11-20: 1825
+    // out of 竹東 ends at 竹中, 1831 planned runs on to 千甲; on it, the trip
+    // had kept him on the walk to 竹東): to where it ends, where the train
+    // planned calls on its way, then that one (`end`, `rest`). Asked only
+    // with `cut`, once no train on to your stop is near: an express is never
+    // taken for the 區間 beside it that ends sooner.
+    let cut = null;
+    if (cuts && b < 0 && a >= 0 && a < t.stops.length - 1 && ownA >= 0) {
+      const last = t.stops.at(-1).st;
+      const c = own.stops.findIndex((s, x) => x > ownA && s.st === last);
+      const d = c > 0 ? own.stops.findIndex((s, x) => x > c && to.has(s.st)) : -1;
+      if (d > 0 && byKey.get(last)?.lat != null) {
+        b = t.stops.length - 1;
+        cut = { end: byKey.get(last), rest: { dep: own.stops[c].dep ?? own.stops[c].arr, arr: own.stops[d].arr ?? own.stops[d].dep, train: { sys: own.sys, no: own.no, type: own.type, code: own.code } } };
+      }
+    }
     if (b < 0) continue;
     const lv = live.get(String(t.no));
     const delay = (lv?.delay || 0) * 60_000;
@@ -873,9 +892,25 @@ export function trainNow(trips, stations, l, pos, live = new Map(), now = Date.n
     // TDX's own word on where it is: at (or just left) a station near you counts too.
     const ls = lv?.st && byKey.get(lv.st);
     if (ls && t.stops.slice(a, b + 1).some(s => s.st === lv.st)) d = Math.min(d, meters(pos.lat, pos.lon, ls.lat, ls.lon) + 300);
-    if (d < within && (!best || d < best.d)) best = { d, opt: { dep: st[a].dep, arr: st[b].arr, live: Boolean(lv), delay: delay / 60_000, train: { sys: t.sys, no: t.no, type: t.type, code: t.code } } };
+    if (d < within && (!best || d < best.d)) best = { d, opt: { dep: st[a].dep, arr: st[b].arr, live: Boolean(lv), delay: delay / 60_000, train: { sys: t.sys, no: t.no, type: t.type, code: t.code }, ...(cut && { end: { name: cut.end.name, lat: cut.end.lat, lon: cut.end.lon }, rest: cut.rest }) } };
   }
   return best?.opt || null;
+}
+// On a train that ends short of your stop (trainNow's `end`, `rest`): the
+// ride cut where it ends, that train to there, the train planned from there
+// on (a sooner one found after, as for any change). The legs after it are
+// one further on.
+export function cutRide(plan, k, opt) {
+  const l = plan.legs[k];
+  const end = { name: opt.end.name, lat: opt.end.lat, lon: opt.end.lon };
+  const r = opt.rest;
+  const rest = { ...l, from: end, dep: r.dep, arr: r.arr, dur: Math.round((r.arr - r.dep) / 1000), train: { ...(l.train || {}), ...r.train }, short: `${r.train.type || ''} ${r.train.no}`.trim() };
+  for (const x of ['poly', 'path', 'track', 'picked']) delete rest[x];
+  // (The leg itself stays the one ridden: whoever holds it sees it change.)
+  l.to = end;
+  delete l.ticket;
+  plan.legs.splice(k + 1, 0, rest);
+  return retimeRide(plan, k, opt);
 }
 // A bus or metro you're on, its times moved so you're where you are now
 // (`frac`: how far along the ride, 0–1). → retimeRide's word.
@@ -2068,13 +2103,20 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
         // stops: 普悠瑪 107 新竹 → 臺中 is 6 km off it past 香山; Jay 2026-11-07).
         const late = (lv.get(String(l.train?.no ?? ''))?.delay ?? state.delay ?? 0) * 60_000;
         if (!t && now < l.dep + late - 60_000 && l.from?.lat != null && meters(p.lat, p.lon, l.from.lat, l.from.lon) > 2000) t = trainNow(trips, sts, l, p, lv, now, 15_000);
+        // (None on to your stop: one along your line that ends short of it.)
+        if (!t) t = trainNow(trips, sts, l, p, lv, now, 2500, { cut: true });
       } catch {
         // (No timetable to go by: where you are says it.)
         return true;
       }
       if (!t) return false;
       if (String(t.train.no) !== String(l.train?.no ?? '') || Math.abs(t.dep - l.dep) > 60_000) {
-        retimeRide(plan, k, t);
+        if (t.end) {
+          cutRide(plan, k, t);
+          // (The legs after it one further on: what was kept by their places goes.)
+          for (const key of [...state.info.keys()]) if (key > k) state.info.delete(key);
+          state.swap = { at: Date.now(), text: W(`在 ${rideName(plan.legs[k])} 上，到 ${shortPlace(t.end.name)} 換車`, `On ${rideName(plan.legs[k])}, change at ${shortPlace(t.end.name)}`) };
+        } else retimeRide(plan, k, t);
         // (Taken as missed, the next one said, and on it after all: that's no longer so.)
         if (/沒趕上|Missed/.test(state.swap?.text || '')) state.swap = null;
         // The planned train's own arrival, heard live, isn't yours now; and a

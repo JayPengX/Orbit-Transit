@@ -52,6 +52,7 @@ To remove a feature on purpose, delete its line here in the same commit and say 
 - A trip with stops navigated as one: the stops and what's after them in the chips (each a tap to look at), the bottom bar's time the next stop's (Jay 2026-11-07) — `public/lib/nav.mjs`, `public/lib/tab-map.mjs`: `navLater`, `data-nav-peek`, `ot-nav-chip stop`, `stopShort`
 - A trip with stops: a way keeping one YouBike says so (同一台騎到底), a way returning it says at which stop and whether another is rented on — `public/lib/tab-map.mjs`: `returnsAt`, `先還車`, `同一台騎到底`
 - Navigating, a bus or train chip says its live time (the stop's next due, the card's own), not the plan's — `public/lib/nav.mjs`: `chipText`
+- Navigating, on a train sooner than planned that ends short of your stop: on it, the ride cut where it ends and the change there (the sooner train on, else the one planned) — `public/lib/nav.mjs`: `trainNow`, `cutRide`, `cut: true`
 - On a bus that comes back past itself, a rough fix never ends the ride early or takes it back (Jay 2026-11-09) — `public/lib/navlive.mjs`, `public/lib/nav.mjs`: `rideAlong`, `rideOn`
 - A step ahead looked at shows its own length and time, the trip's times unchanged — `public/lib/nav.mjs`: `state.reached`, `reachedPhase`
 - 停著 or 還車 at a stop, with which is sooner — `public/lib/nav.mjs`: `parkAsk`, `到了要還車嗎`
