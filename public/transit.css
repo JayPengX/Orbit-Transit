@@ -26,18 +26,22 @@
   --ot-shadow: 0 18px 44px -20px rgb(0 0 0 / 0.45);
   --ot-ink-green: #15803d;
   --ot-ink-amber: #a15c00;
+  /* (YouBike's yellow as a glyph on its own wash: deeper on a light page to be seen.) */
+  --ot-bike-ink: #c98f00;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --ot-shadow: 0 18px 44px -18px rgb(0 0 0 / 0.9);
     --ot-ink-green: #4ade80;
     --ot-ink-amber: #fcd34d;
+    --ot-bike-ink: var(--ot-bike);
   }
 }
 :root[data-theme='dark'] {
   --ot-shadow: 0 18px 44px -18px rgb(0 0 0 / 0.9);
   --ot-ink-green: #4ade80;
   --ot-ink-amber: #fcd34d;
+  --ot-bike-ink: var(--ot-bike);
 }
 html,
 body {
@@ -834,32 +838,96 @@ html.q-in-suite:not(.q-tabrail) .ot-map-chips {
   top: calc(var(--q-top, 0px) + 58px);
   right: 84px;
 }
-.ot-map-chips .q-chip {
-  min-height: 44px;
-  padding: 0 14px;
-  gap: 6px;
+/* The YouBike timer: one of the round buttons' family (their glass, their
+   46 px), a pill: the bike in YouBike's yellow on its wash, the minutes in the
+   light number face, a grey line under. With TPASS a ring round the bike
+   fills as the free half hour runs out: amber its last 5 minutes, red past. */
+.ot-rent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 16px 0 6px;
+  border: 0;
+  border-radius: 23px;
   background: var(--q-glass-strong);
-  font-weight: 600;
+  color: var(--q-label);
+  font: inherit;
+  text-align: left;
   pointer-events: auto;
   -webkit-backdrop-filter: var(--q-glass-blur);
   backdrop-filter: var(--q-glass-blur);
   box-shadow: var(--q-glass-rim), var(--q-glass-drop);
+  -webkit-tap-highlight-color: transparent;
 }
-.ot-rent-chip b {
+.ot-rent-chip:active {
+  transform: scale(0.96);
+}
+.ot-rent-ic {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ot-bike) 18%, transparent);
+  color: var(--ot-bike-ink);
+}
+.ot-rent-ic > svg:not(.ot-rent-ring) {
+  width: 18px;
+  height: 18px;
+}
+.ot-rent-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  fill: none;
+  stroke-width: 2.5;
+}
+.ot-rent-ring circle {
+  stroke: transparent;
+}
+.ot-rent-ring .on {
+  stroke: var(--ot-bike);
+  stroke-linecap: round;
+}
+.ot-rent-chip.warn .ot-rent-ring .on {
+  stroke: var(--q-orange);
+}
+.ot-rent-chip.over .ot-rent-ring .on {
+  stroke: var(--q-red);
+  stroke-dasharray: 100 0;
+}
+.ot-rent-t {
+  display: grid;
+  line-height: 1.1;
+}
+.ot-rent-t b {
+  font-family: var(--nv-display, inherit);
+  font-size: 20px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
-.ot-rent-chip small {
+.ot-rent-t b small {
+  margin-left: 2px;
+  color: var(--q-label-2);
+  font-family: var(--q-font);
+  font-size: 13px;
+  font-weight: 500;
+}
+.ot-rent-t > small {
   color: var(--q-label-2);
   font-size: 12px;
+  white-space: nowrap;
 }
-.ot-map-chips .ot-rent-chip {
-  box-shadow: inset 0 0 0 1.5px var(--q-accent), var(--q-glass-drop);
+.ot-rent-chip.warn .ot-rent-t > small {
+  color: var(--ot-ink-amber);
 }
-.ot-map-chips .ot-rent-chip.warn {
-  box-shadow: inset 0 0 0 1.5px var(--q-orange), var(--q-glass-drop);
-}
-.ot-map-chips .ot-rent-chip.over {
-  box-shadow: inset 0 0 0 1.5px var(--q-red), var(--q-glass-drop);
+.ot-rent-chip.over .ot-rent-t > small {
+  color: var(--q-red);
 }
 
 /* The round buttons: layers, where I am. At the map's top right under the

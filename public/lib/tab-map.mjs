@@ -1729,7 +1729,15 @@ function rentalChip() {
   const swap = bikeSwap(ctx.data.prefs);
   const left = FREE_MS - ms;
   const cls = swap ? (left <= 0 ? ' over' : ms >= WARN_MS ? ' warn' : '') : '';
-  return `<button class="q-chip ot-rent-chip${cls}" type="button" data-chip="rental" aria-label="${W('YouBike 計時', 'YouBike timer')}">${icon('bike')}<b>${e(rentClock(ms))}</b>${swap ? `<small>${left > 0 ? W(`免費剩 ${Math.ceil(left / 60_000)} 分`, `${Math.ceil(left / 60_000)} min free`) : W('已過 30 分', 'past 30 min')}</small>` : ''}</button>`;
+  // (As the round buttons beside it: their glass, their height. The bike in
+  // YouBike's yellow as on its pins; with TPASS a ring round it, the free
+  // half hour running out. Jay 2026-11-20: the green-ringed chip didn't look
+  // like the app.)
+  const min = Math.floor(ms / 60_000);
+  const used = Math.max(0, Math.min(1, ms / FREE_MS));
+  const ring = swap ? `<svg class="ot-rent-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16.5" pathLength="100"/><circle class="on" cx="18" cy="18" r="16.5" pathLength="100" stroke-dasharray="${(used * 100).toFixed(1)} 100"/></svg>` : '';
+  const sub = swap ? (left > 0 ? W(`免費剩 ${Math.ceil(left / 60_000)} 分`, `${Math.ceil(left / 60_000)} min free`) : W('已過 30 分', 'Past 30 min')) : 'YouBike';
+  return `<button class="ot-rent-chip${cls}" type="button" data-chip="rental" aria-label="${W(`YouBike 已騎 ${min} 分`, `YouBike, ${min} min`)}"><span class="ot-rent-ic">${ring}${icon('bike')}</span><span class="ot-rent-t"><b>${min}<small>${W('分', 'min')}</small></b><small>${e(sub)}</small></span></button>`;
 }
 let rentTimer = 0;
 function rentalTick() {
