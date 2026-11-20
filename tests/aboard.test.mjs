@@ -129,3 +129,29 @@ test('navigation of a trip planned on board starts on the ride, not walking to i
   const { st } = start(p, { here: { ...off(stops[2], 0, 100), at: clock.get() } });
   assert.deepEqual(show(st), { i: 0, phase: 'on', reached: 0 });
 });
+
+// Jay 2026-11-20: on 1825 between 上員 and 竹中, the GPS too weak to show a
+// train's pace, the plans from 目前位置 started on foot from the track.
+test('trainAboard loose: fixes too weak for a pace, on the line between stations with one train there by its clock: that one; on a platform, or two trains as near, none', () => {
+  const t0 = T(9);
+  const now = t0 + 6 * 60_000 + 15_000;
+  // One weak fix, 1201 about there by its clock (half way 站1 → 站2), standing still as far as the fixes say.
+  const here = { ...off(P, 5800, 150), fixes: [], dir: null };
+  assert.equal(A.trainAboard([trip('1201', t0)], st, here, new Map(), now), null, 'not without loose');
+  assert.equal(A.trainAboard([trip('1201', t0), trip('1203', t0 + 30 * 60_000)], st, here, new Map(), now, { loose: true })?.train.no, '1201');
+  // At a station: waiting there, not on board.
+  assert.equal(A.trainAboard([trip('1201', t0)], st, { ...off(st[1], 100, 0), fixes: [], dir: null }, new Map(), t0 + 4 * 60_000 + 10_000, { loose: true }), null);
+  // Two trains as near (one each way): none, never a guess.
+  assert.equal(A.trainAboard([trip('1201', t0), trip('1202', t0 - 8 * 60_000, { back: true })], st, here, new Map(), now, { loose: true }), null);
+});
+
+test('trainRide: the train navigation has you on, where it is by its clock and delay', () => {
+  const t0 = T(9);
+  const now = t0 + 6 * 60_000 + 15_000;
+  const r = A.trainRide([trip('1201', t0), trip('1203', t0 + 8 * 60_000)], st, '1201', new Map(), now);
+  assert.equal(r?.train.no, '1201');
+  assert.equal(r.at, 1, 'it left 站1 last');
+  // 3 minutes late: still at 站1's side of the way, left 站1 at 09:07:30.
+  assert.equal(A.trainRide([trip('1201', t0)], st, '1201', new Map([['1201', { delay: 3 }]]), now).at, 0);
+  assert.equal(A.trainRide([trip('1201', t0)], st, '1201', new Map(), t0 + 90 * 60_000), null, 'its run over');
+});

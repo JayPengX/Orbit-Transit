@@ -115,10 +115,17 @@ export function trainsNear(trips, stations, m, now = Date.now(), n = 3) {
 // with its delay, the nearest you (within 2.5 km, 6 for 高鐵) going your way.
 // → { mode, train, delay, at (the stop index it left last), stops (the trip's,
 // each with its place and its times with the delay) } or null.
-export function trainAboard(trips, stations, m, live = new Map(), now = Date.now()) {
-  if (!trainPace(m)) return null;
+// `loose`: the fixes too weak to say a pace or a way (in a train, often):
+// then by the clock alone, 500 m and more from any station (on the line, not
+// on a platform or a road near one; Jay 2026-11-20, on 1825 between 上員 and
+// 竹中, planned from the track), the one train within 1.5 km, any other
+// twice as far.
+export function trainAboard(trips, stations, m, live = new Map(), now = Date.now(), { loose = false } = {}) {
+  if (loose ? m?.lat == null : !trainPace(m)) return null;
   const byKey = new Map(stations.map(s => [s.key, s]));
+  if (loose && stations.some(s => s.lat != null && meters(m.lat, m.lon, s.lat, s.lon) < 500)) return null;
   let best = null;
+  let second = Infinity;
   for (const t of trips || []) {
     if (t.sys !== 'tra' && t.sys !== 'hsr') continue;
     const lv = live.get(String(t.no));
@@ -134,18 +141,37 @@ export function trainAboard(trips, stations, m, live = new Map(), now = Date.now
     const at = { lat: s0.lat + (s1.lat - s0.lat) * f, lon: s0.lon + (s1.lon - s0.lon) * f };
     let d = meters(m.lat, m.lon, at.lat, at.lon);
     // (And where it was at each fix, by the clock: a car beside the line keeps its own pace, not the train's.)
-    const far = t.sys === 'hsr' ? 6000 : 2500;
-    if (m.fixes.some(f => (clockAt(st, f.t) ? meters(f.lat, f.lon, clockAt(st, f.t).lat, clockAt(st, f.t).lon) : 0) > far)) continue;
+    const far = loose ? 1500 : t.sys === 'hsr' ? 6000 : 2500;
+    if (!loose && m.fixes.some(f => (clockAt(st, f.t) ? meters(f.lat, f.lon, clockAt(st, f.t).lat, clockAt(st, f.t).lon) : 0) > far)) continue;
     // (TDX's own word on where it is: its station near you counts too.)
     const ls = lv?.st && byKey.get(lv.st);
     if (ls && st.slice(x, x + 2).some(s => s.st === lv.st)) d = Math.min(d, meters(m.lat, m.lon, ls.lat, ls.lon) + 300);
     // Going its way: the way it runs between those two stations, near enough yours.
-    if (dot(vec(s0, s1), m.dir) < 0.3) continue;
-    if (d < far && (!best || d < best.d)) best = { d, t, st, x, delay, live: Boolean(lv) };
+    if (!loose && dot(vec(s0, s1), m.dir) < 0.3) continue;
+    if (d < far && (!best || d < best.d)) {
+      if (best) second = Math.min(second, best.d);
+      best = { d, t, st, x, delay, live: Boolean(lv) };
+    } else second = Math.min(second, d);
   }
-  if (!best) return null;
+  if (!best || (loose && second < 2 * best.d)) return null;
   const { t, st, x } = best;
   return { mode: t.sys, train: { sys: t.sys, no: t.no, type: t.type, code: t.code }, delay: best.delay / MIN, live: best.live, headsign: t.headsign, typeFull: t.typeFull, at: x, stops: st.map(s => ({ st: s.st, name: s.p?.name || '', lat: s.p?.lat, lon: s.p?.lon, arr: s.arr, dep: s.dep })) };
+}
+
+// The train you're on, said already (navigation follows you on it: `no`):
+// where it is by its clock and delay, as trainAboard's (`at`: the stop it left
+// last). → null when it isn't running now.
+export function trainRide(trips, stations, no, live = new Map(), now = Date.now()) {
+  const t = (trips || []).find(x => (x.sys === 'tra' || x.sys === 'hsr') && String(x.no) === String(no));
+  if (!t?.stops?.length) return null;
+  const byKey = new Map(stations.map(s => [s.key, s]));
+  const lv = live.get(String(t.no));
+  const delay = (lv?.delay || 0) * MIN;
+  const st = t.stops.map(s => ({ ...s, p: byKey.get(s.st), dep: (s.dep ?? s.arr) + delay, arr: (s.arr ?? s.dep) + delay }));
+  if (st[0].dep > now + MIN || st.at(-1).arr < now - MIN) return null;
+  let x = 0;
+  while (x < st.length - 2 && st[x + 1].dep <= now) x++;
+  return { mode: t.sys, train: { sys: t.sys, no: t.no, type: t.type, code: t.code }, delay: delay / MIN, live: Boolean(lv), headsign: t.headsign, typeFull: t.typeFull, at: x, stops: st.map(s => ({ st: s.st, name: s.p?.name || '', lat: s.p?.lat, lon: s.p?.lon, arr: s.arr, dep: s.dep })) };
 }
 
 // Where a train is at `t` by its stops' times (`st`, with places): at a

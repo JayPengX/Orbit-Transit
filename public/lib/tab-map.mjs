@@ -1923,7 +1923,11 @@ async function plan(from, to, opts = {}) {
   // point on the road or the track (Jay 2026-11-03). Only from where you are,
   // leaving now; 不在車上 plans from the street.
   const mayAboard = here && !opts.street && !opts.swapHere && !(opts.then || []).length && when.by === 'now' && !rental();
-  const aboard = opts.aboard || (mayAboard ? await Promise.race([findAboard(), wait(2500).then(() => null)]) : null);
+  // (Navigation on a train already: that train, never guessed again from the fixes.)
+  const nv = navNow();
+  const navLeg = nv?.aboard ? nv.plan.legs[nv.i] : null;
+  const onTrain = (navLeg?.mode === 'tra' || navLeg?.mode === 'hsr') && navLeg.train?.no != null ? { sys: navLeg.mode, no: navLeg.train.no } : null;
+  const aboard = opts.aboard || (mayAboard ? await Promise.race([findAboard(Date.now(), { train: onTrain }), wait(onTrain ? 4000 : 2500).then(() => null)]) : null);
   if (aboard?.kind === 'bus' && !aboard.bus) aboard.bus = aboard.buses[0];
   if (dest && aboard) fromPt = { ...fromPt, name: aboardName(aboard.kind === 'train' ? { short: trainShort(aboard.ride) } : { short: aboard.bus.route.name }) };
   if (!dest) return ctx.status(W('需要你的位置：請在設定允許定位', 'Needs your location: allow it in Settings'));

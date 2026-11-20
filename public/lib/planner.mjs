@@ -19,7 +19,7 @@ import { metroPlans, metroMapAt, metroWarm } from './metroroute.mjs';
 import { markWet } from './rain.mjs';
 import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, wrongWay, onlyOnce, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, useStreetRides, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
-import { motion, trainPace, trainAboard, trainsNear, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
+import { motion, trainPace, trainAboard, trainRide, trainsNear, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
 import { dayTrips, railStations, traTrain, planFare, faresIn } from './raildata.mjs';
 import { stationsAround } from './near.mjs';
@@ -561,23 +561,47 @@ export async function planTrip(data, from, to, { at = null, by = 'depart', modes
 // The bus or train you're on, from the last few minutes of fixes: a train
 // first (its pace and today's timetable say it), else the buses that fit.
 // → { kind: 'train', ride } | { kind: 'bus', buses } | null; never throws.
-export async function findAboard(now = Date.now()) {
+// `train`: the one navigation has you on already ({ sys, no }): that one, by
+// its clock (Jay 2026-11-20: on 1825 with navigation on it, the plans from
+// 目前位置 started on foot from the track).
+export async function findAboard(now = Date.now(), { train = null } = {}) {
   try {
-    const m = motion(recentFixes(now), now);
-    if (!m) return null;
-    if (trainPace(m)) {
-      const [trips, sts] = await Promise.all([dayTrips(tw(now).date), railStations()]);
-      // (The delays of the trains that could be it, each its own read: those in by a second and a half.)
-      const nos = trainsNear(trips, sts, m, now);
+    const fixes = recentFixes(now);
+    const m = motion(fixes, now);
+    const last = fixes.filter(f => f?.lat != null && (f.acc ?? 0) <= 400).sort((a, b) => a.t - b.t).at(-1) || null;
+    const rail = () => Promise.all([dayTrips(tw(now).date), railStations()]);
+    const delays = async nos => {
       const got = await Promise.race([Promise.all(nos.map(no => traTrain(no).then(x => [no, x], () => [no, null]))), new Promise(r => setTimeout(r, 1500, []))]);
-      const lv = new Map(got.filter(([, x]) => x));
+      return new Map(got.filter(([, x]) => x));
+    };
+    if (train?.no != null) {
+      const [trips, sts] = await rail();
+      const ride = trainRide(trips, sts, train.no, train.sys === 'hsr' ? new Map() : await delays([String(train.no)]), now);
+      if (ride) return { kind: 'train', ride, m: m || last };
+    }
+    if (!m && !last) return null;
+    if (trainPace(m)) {
+      const [trips, sts] = await rail();
+      // (The delays of the trains that could be it, each its own read: those in by a second and a half.)
+      const lv = await delays(trainsNear(trips, sts, m, now));
       const ride = trainAboard(trips, sts, m, lv, now);
       rec('aboard', aboardTrace(m, ride ? [ride] : []));
       if (ride) return { kind: 'train', ride, m };
     }
-    const buses = await busesAboard(m, { stationsAround, routeStops, busEta: busEtaMended, routeCity });
-    if (!trainPace(m) || buses.length) rec('aboard', aboardTrace(m, buses));
-    return buses.length ? { kind: 'bus', buses, m } : null;
+    const buses = m ? await busesAboard(m, { stationsAround, routeStops, busEta: busEtaMended, routeCity }) : [];
+    if (m && (!trainPace(m) || buses.length)) rec('aboard', aboardTrace(m, buses));
+    if (buses.length) return { kind: 'bus', buses, m };
+    // Fixes too weak for a pace (in a train, often): on the line between
+    // stations with one train there by its clock, that one.
+    const at = m || { lat: last.lat, lon: last.lon, fixes: [last] };
+    const [trips, sts] = await rail();
+    const near = { lat: at.lat, lon: at.lon, fixes: at.fixes || [], dir: at.dir || null };
+    const ride = trainAboard(trips, sts, near, await delays(trainsNear(trips, sts, near, now)), now, { loose: true });
+    if (ride) {
+      rec('aboard', { ...aboardTrace(m, [ride]), loose: true });
+      return { kind: 'train', ride, m: at };
+    }
+    return null;
   } catch {
     return null;
   }
