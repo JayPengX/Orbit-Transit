@@ -31,7 +31,7 @@ import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { railWay, railWayByStops, busWay } from './shapes.mjs';
 import { bikeSwap } from './tpass.mjs';
-import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins } from './plan.mjs';
+import { pickSig, bikeTrip, finish, chainOn, keepBike, keepWins, ownPick } from './plan.mjs';
 import { steadyLead } from './chase.mjs';
 import { steadyPlans, samePlanAt, settled, SETTLE_MS } from './steady.mjs';
 import { addAlert, removeAlert, alertFor, onAlerts } from './alerts.mjs';
@@ -2123,7 +2123,7 @@ async function laterFor(p) {
   for (const x of p.then || []) {
     const o = await planTrip(ctx.data, prev, x, { at: Math.max(at, Date.now()), by: 'depart', modes: tripModes, ebike: ebikeNow() }).catch(() => null);
     const list = ((await o?.later?.catch(() => null))?.plans?.length ? (await o.later).plans : o?.plans) || [];
-    const q = list.find(y => y.tags?.includes('推薦')) || list.find(y => y.lead !== false && !y.weak) || list[0];
+    const q = ownPick(list, ebikeNow());
     if (!q) return null;
     out.push(q);
     prev = x;
@@ -3398,9 +3398,9 @@ async function restFrom(stop, dest, at) {
   };
   if (d < 400) return walk();
   try {
-    const r = await planTrip(ctx.data, stop, dest, { at, by: 'depart' });
+    const r = await planTrip(ctx.data, stop, dest, { at, by: 'depart', modes: tripModes, ebike: ebikeNow() });
     const res = (await r.later) || r;
-    const best = res.plans?.find(p => p.top) || res.plans?.[0];
+    const best = ownPick(res.plans, ebikeNow());
     return best?.legs?.length ? best.legs : walk();
   } catch {
     return walk();

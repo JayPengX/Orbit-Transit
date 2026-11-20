@@ -1494,3 +1494,15 @@ export function dropOvershoots(list, net, d) {
   const direct = list.filter(p => !over.has(p) && p.legs.some(isRide));
   return list.filter(p => !over.has(p) || !direct.some(q => q.arr <= p.arr + OVERSHOOT_SLACK));
 }
+
+// A plan taken for you, with no card to choose on (navigation's rest from a
+// stop, a stretch after a stop): the trip's own kind of YouBike, never a
+// 電輔車 it didn't ask for (`ebike`: 偏好電輔車, the trip's or 我的's; Jay
+// 2026-11-20: off 1825 at 竹中, the rest came back on an e-bike with it off).
+// The 推薦 one of those, else the first shown, else the first.
+export function ownPick(plans, ebike = false) {
+  const all = plans || [];
+  const own = ebike ? all : all.filter(p => !p.legs?.some(l => l.ebike));
+  const pool = own.length ? own : all;
+  return pool.find(p => p.top || p.tags?.includes('推薦')) || pool.find(p => p.lead !== false && !p.weak) || pool[0] || null;
+}

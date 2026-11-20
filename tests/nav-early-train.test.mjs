@@ -104,3 +104,14 @@ test('on board, the dot on the ride’s line where weak GPS puts you beside it; 
   const far = { ...off(mid, 3000, 3000), acc: 30 };
   assert.equal(nav.onRideLine(plan, 1, 'on', far), far, '4 km off: where it says');
 });
+
+test('the rest planned for you from a stop: plain YouBike unless 偏好電輔車 asks for e-bikes, even when the e-bike way is 推薦', async () => {
+  const { ownPick } = await import('../public/lib/plan.mjs');
+  const ride = ebike => ({ mode: 'bike', ...(ebike ? { ebike: true } : {}) });
+  const e = { top: true, legs: [{ mode: 'walk' }, ride(true)] };
+  const plain = { legs: [{ mode: 'walk' }, ride(false)] };
+  assert.equal(ownPick([e, plain], false), plain);
+  assert.equal(ownPick([e, plain], true), e);
+  // (Only an e-bike way at all: that one, rather than nothing.)
+  assert.equal(ownPick([e], false), e);
+});
