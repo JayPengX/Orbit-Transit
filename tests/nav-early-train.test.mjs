@@ -86,3 +86,21 @@ test('trainNow: a train that ends short of your stop on the planned train’s wa
   // (No train planned to meet it again: none.)
   assert.equal(nav.trainNow(trips, sts, { ...leg, train: { no: '9999' } }, onTrain(D('16:15')), new Map(), D('16:15'), 2500, { cut: true }), null);
 });
+
+test('on board, the dot on the ride’s line where weak GPS puts you beside it; off it far, or not on board, where the fix says', () => {
+  const plan = trip();
+  const ride = plan.legs[1];
+  // 400 m north-east of the track between 竹東 and 上員 (Jay 2026-11-20, 1825 across the fields).
+  const mid = { lat: (ST[1250][1] + ST[1249][1]) / 2, lon: (ST[1250][2] + ST[1249][2]) / 2 };
+  const fix = { ...off(mid, 280, 280), acc: 300 };
+  const s = nav.onRideLine(plan, 1, 'on', fix);
+  assert.ok(s.snapped);
+  const k = ride.path.map(([lat, lon]) => ({ lat, lon }));
+  // (On the straight between the two stations: its cross product with them ~0.)
+  const cross = (k[1].lat - k[0].lat) * (s.lon - k[0].lon) - (k[1].lon - k[0].lon) * (s.lat - k[0].lat);
+  assert.ok(Math.abs(cross) < 1e-9, 'on the line');
+  assert.equal(nav.onRideLine(plan, 1, 'before', fix), fix, 'not on board yet: where it says');
+  assert.equal(nav.onRideLine(plan, 0, 'before', fix), fix, 'walking: where it says');
+  const far = { ...off(mid, 3000, 3000), acc: 30 };
+  assert.equal(nav.onRideLine(plan, 1, 'on', far), far, '4 km off: where it says');
+});

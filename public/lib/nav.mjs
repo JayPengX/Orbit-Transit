@@ -22,7 +22,7 @@ import { rideSec, DOCK_SEC, walkLeg, rideLeg, rentNear, returnNear } from './pla
 import { rental, startRental, endRental, rentalStep, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { traLive, traTrain, dayTrips, railStations, railSpan, netDates } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
-import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace } from './navlive.mjs';
+import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace, pointAlong } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
 import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown, distText } from './util.mjs';
 import { changed } from './underway.mjs';
@@ -2546,6 +2546,22 @@ export function navArriveNow() {
 }
 // A ride's stops as navigation knows them (`k`: its step), for the tester's 模擬行程.
 export const navRide = k => nav?.ride.get(k) || null;
+// Where your dot goes on board: on the ride's own line, at the point nearest
+// the fix (Jay 2026-11-20: on 1825 the weak GPS put him half a kilometre
+// off the track, across fields). Only the dot: the trip still goes by the
+// fixes themselves. Further off than a fix on board can be: where the fix says.
+const SNAP_M = { tra: 1500, hsr: 1500, metro: 800, lightrail: 300, bus: 200 };
+export function onRideLine(plan, i, phase, pos) {
+  const l = plan?.legs?.[i];
+  if (!l || !isRide(l) || phase !== 'on' || pos?.lat == null) return pos;
+  const pts = legPts(l);
+  if (!pts || pts.length < 2) return pos;
+  const cum = routeCum(pts);
+  const a = alongRoute(pts, pos, cum);
+  if (!a || a.off > Math.max(SNAP_M[l.mode] ?? 200, pos.acc ?? 0)) return pos;
+  return { ...pos, ...pointAlong(pts, cum, a.d), snapped: true };
+}
+export const navDot = pos => (nav ? onRideLine(nav.plan, nav.i, nav.phase, pos) : pos);
 export function navNow() {
   if (!nav) return null;
   const on = isRide(nav.plan.legs[nav.i]) && nav.phase === 'on';

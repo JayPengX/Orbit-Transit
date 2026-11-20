@@ -25,7 +25,7 @@ import { liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround, etaAround } from './near.mjs';
 import { nearBikes as nearBikeCards } from './near-ui.mjs';
 import { underWay } from './underway.mjs';
-import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, keepNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown, nextStretch } from './nav.mjs';
+import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, keepNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown, nextStretch, navDot } from './nav.mjs';
 import { fastest } from './trouble.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
@@ -464,7 +464,9 @@ const ridingNow = () => {
 };
 function drawMe(h) {
   riding = ridingNow();
-  map?.layer('me').set([{ id: 'me', lat: h.lat, lon: h.lon, cls: 'me', z: 50, html: '<b class="ot-beam"></b><i class="ot-me"></i>' }]);
+  // (On board: on the ride's line, never across the fields beside it.)
+  const at = navDot(h);
+  map?.layer('me').set([{ id: 'me', lat: at.lat, lon: at.lon, cls: 'me', z: 50, html: '<b class="ot-beam"></b><i class="ot-me"></i>' }]);
   gpsFix(h);
   stopFacing ||= watchHeading(turnBeam);
   turnBeam(facing);

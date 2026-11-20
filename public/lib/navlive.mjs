@@ -182,6 +182,17 @@ export function alongRoute(stops, pt, cum = routeCum(stops), from = 0, range = n
   }
   return best && { d: best.d, off: best.off };
 }
+// The point `d` metres along a way (its points and routeCum's distances).
+export function pointAlong(pts, cum, d) {
+  if (!pts?.length) return null;
+  if (d <= 0) return { lat: pts[0].lat, lon: pts[0].lon };
+  for (let k = 0; k + 1 < pts.length; k++) {
+    if (d > cum[k + 1]) continue;
+    const f = cum[k + 1] > cum[k] ? (d - cum[k]) / (cum[k + 1] - cum[k]) : 0;
+    return { lat: pts[k].lat + (pts[k + 1].lat - pts[k].lat) * f, lon: pts[k].lon + (pts[k + 1].lon - pts[k].lon) * f };
+  }
+  return { lat: pts.at(-1).lat, lon: pts.at(-1).lon };
+}
 // How far off a ride you are, in metres: from the line through its stops
 // and from its way on the map (its road; `way`, points), whichever is
 // nearer. The straight lines between stops cut a loop's corners (the
