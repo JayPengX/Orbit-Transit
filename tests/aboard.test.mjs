@@ -145,6 +145,26 @@ test('trainAboard loose: fixes too weak for a pace, on the line between stations
   assert.equal(A.trainAboard([trip('1201', t0), trip('1202', t0 - 8 * 60_000, { back: true })], st, here, new Map(), now, { loose: true }), null);
 });
 
+// Jay 2026-11-24: at home a kilometre east of the 竹北 line, standing, as 區間 1227
+// went by: his trip started "區間 1227 上". Loose is only for someone on the line, with the train.
+test('trainAboard loose: a kilometre off the line, or standing beside it while the train goes by, is never on it', () => {
+  const t0 = T(9);
+  const now = t0 + 6 * 60_000 + 15_000;
+  const one = [trip('1201', t0), trip('1203', t0 + 30 * 60_000)];
+  // 1201 half way 站1 → 站2 by its clock; you a kilometre east of the line, beside where it is.
+  assert.equal(A.trainAboard(one, st, { ...off(P, 6000, 1000), fixes: [], dir: null }, new Map(), now, { loose: true }), null, 'a kilometre off');
+  // On the line (150 m off it), but standing still for two minutes while 1201 went 2 km: watching it, not on it.
+  const still = Array.from({ length: 7 }, (_, k) => ({ ...off(P, 5800, 150), acc: 30, t: now - 120_000 + k * 20_000 }));
+  assert.equal(A.trainAboard(one, st, { ...off(P, 5800, 150), fixes: still, dir: null }, new Map(), now, { loose: true }), null, 'standing beside it');
+  // Moving with it on the line, the fixes rough: that one.
+  const riding = Array.from({ length: 4 }, (_, k) => {
+    const t = now - 60_000 + k * 20_000;
+    const f = (t - (t0 + 4 * 60_000 + 30_000)) / (3.5 * 60_000);
+    return { ...off(P, 4000 + 4000 * f, 120), acc: 150, t };
+  });
+  assert.equal(A.trainAboard(one, st, { ...riding.at(-1), fixes: riding, dir: null }, new Map(), now, { loose: true })?.train.no, '1201', 'riding it');
+});
+
 test('trainRide: the train navigation has you on, where it is by its clock and delay', () => {
   const t0 = T(9);
   const now = t0 + 6 * 60_000 + 15_000;

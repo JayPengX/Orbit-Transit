@@ -20,7 +20,7 @@ import { W } from '#kit/lang.mjs';
 
 const MIN = 60_000;
 // The fixes looked at: the last two and a half minutes.
-const SPAN_MS = 150_000;
+export const SPAN_MS = 150_000;
 // A train's pace (m/s): 20 km/h on average (北新竹 → 新竹 is 22 as the crow
 // flies), or 45 between two fixes.
 const TRAIN_MS = { avg: 5.5, top: 12.5 };
@@ -119,7 +119,12 @@ export function trainsNear(trips, stations, m, now = Date.now(), n = 3) {
 // then by the clock alone, 500 m and more from any station (on the line, not
 // on a platform or a road near one; Jay 2026-11-20, on 1825 between 上員 and
 // 竹中, planned from the track), the one train within 1.5 km, any other
-// twice as far.
+// twice as far. And on the line, really (Jay 2026-11-24: standing at home a
+// kilometre from the 竹北 line as 區間 1227 went by, his trip started "區間 1227
+// 上"): every fix of the last minutes within LINE_OFF of the line between that
+// train's stations (its own error added, 300 m of it at most), and over 20 s
+// and more, moved with the train (at least 40% of what it went).
+const LINE_OFF = 250;
 export function trainAboard(trips, stations, m, live = new Map(), now = Date.now(), { loose = false } = {}) {
   if (loose ? m?.lat == null : !trainPace(m)) return null;
   const byKey = new Map(stations.map(s => [s.key, s]));
@@ -148,6 +153,7 @@ export function trainAboard(trips, stations, m, live = new Map(), now = Date.now
     if (ls && st.slice(x, x + 2).some(s => s.st === lv.st)) d = Math.min(d, meters(m.lat, m.lon, ls.lat, ls.lon) + 300);
     // Going its way: the way it runs between those two stations, near enough yours.
     if (!loose && dot(vec(s0, s1), m.dir) < 0.3) continue;
+    if (loose && !onLine(m, st, x)) continue;
     if (d < far && (!best || d < best.d)) {
       if (best) second = Math.min(second, best.d);
       best = { d, t, st, x, delay, live: Boolean(lv) };
@@ -172,6 +178,26 @@ export function trainRide(trips, stations, no, live = new Map(), now = Date.now(
   let x = 0;
   while (x < st.length - 2 && st[x + 1].dep <= now) x++;
   return { mode: t.sys, train: { sys: t.sys, no: t.no, type: t.type, code: t.code }, delay: delay / MIN, live: Boolean(lv), headsign: t.headsign, typeFull: t.typeFull, at: x, stops: st.map(s => ({ st: s.st, name: s.p?.name || '', lat: s.p?.lat, lon: s.p?.lon, arr: s.arr, dep: s.dep })) };
+}
+
+// Loose's proof you're on it (trainAboard): your fixes (or the one place) all
+// on its line, and moving with it when they span 20 s or more.
+function onLine(m, st, x) {
+  const fx = m.fixes?.length ? m.fixes : [m];
+  const segs = [x - 1, x, x + 1].filter(k => k >= 0 && k < st.length - 1 && st[k].p && st[k + 1].p);
+  for (const f of fx) if (Math.min(...segs.map(k => segOff(f, st[k].p, st[k + 1].p))) > LINE_OFF + Math.min(f.acc ?? 0, 300)) return false;
+  const [a, b] = [fx[0], fx.at(-1)];
+  if (a === b || !(b.t - a.t >= 20_000)) return true;
+  const [pa, pb] = [clockAt(st, a.t), clockAt(st, b.t)];
+  const went = pa && pb ? meters(pa.lat, pa.lon, pb.lat, pb.lon) : 0;
+  return went < 400 || beyond(a, b, 0.25) >= 0.4 * went;
+}
+// Metres from p to the straight line a–b (its ends included).
+function segOff(p, a, b) {
+  const ab = vec(a, b);
+  const ap = vec(a, p);
+  const t = Math.max(0, Math.min(ab.m, dot(ab, ap) * ap.m));
+  return meters(p.lat, p.lon, a.lat + ((b.lat - a.lat) * t) / ab.m, a.lon + ((b.lon - a.lon) * t) / ab.m);
 }
 
 // Where a train is at `t` by its stops' times (`st`, with places): at a

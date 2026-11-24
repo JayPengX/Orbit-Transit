@@ -19,7 +19,7 @@ import { metroPlans, metroMapAt, metroWarm } from './metroroute.mjs';
 import { markWet } from './rain.mjs';
 import { rank, withBikes, dropOvershoots, bikePoints, railPlans, railStarts, wrongWay, onlyOnce, finish, allowed, moreTrains, moreBuses, dayTimes, nameTrains, tidy, boardEarly, trainLeg, walkLeg, RAIL_BIKE_M, RAIL_FAR_WALK_M, useStreetWalks, useStreetRides, ARRIVE_WINDOW } from './plan.mjs';
 import { adjustPlan, busLink, busTimes, officialPlan, stoppedOn, liveRide, rideTime } from './live.mjs';
-import { motion, trainPace, trainAboard, trainRide, trainsNear, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
+import { motion, steadyFixes, SPAN_MS, trainPace, trainAboard, trainRide, trainsNear, busesAboard, trainLegTo, busLegTo, getOffAt, joinRide, rideThenWalk, aboardTrace } from './aboard.mjs';
 import { recentFixes, busEta } from './api.mjs';
 import { dayTrips, railStations, traTrain, planFare, faresIn } from './raildata.mjs';
 import { stationsAround } from './near.mjs';
@@ -593,7 +593,8 @@ export async function findAboard(now = Date.now(), { train = null } = {}) {
     if (buses.length) return { kind: 'bus', buses, m };
     // Fixes too weak for a pace (in a train, often): on the line between
     // stations with one train there by its clock, that one.
-    const at = m || { lat: last.lat, lon: last.lon, fixes: [last] };
+    // (Every fix of the last minutes, not the last alone: standing still beside the line isn't riding it.)
+    const at = m || { lat: last.lat, lon: last.lon, fixes: steadyFixes(fixes.filter(f => f?.lat != null && (f.acc ?? 0) <= 400 && f.t >= now - SPAN_MS).sort((a, b) => a.t - b.t)) };
     const [trips, sts] = await rail();
     const near = { lat: at.lat, lon: at.lon, fixes: at.fixes || [], dir: at.dir || null };
     const ride = trainAboard(trips, sts, near, await delays(trainsNear(trips, sts, near, now)), now, { loose: true });
