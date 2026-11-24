@@ -1,5 +1,5 @@
 // Another app's way into a trip (Jay 2026-11-10: Sports' 去球場, Class's
-// 出門時間, Money's 車資記帳 to come): a link to Transit with
+// 出門時間): a link to Transit with
 //   #plan?to=<lat>,<lon>,<name>[&by=<ISO time>]
 // opens 規劃 from where you are to there, arriving by that time when one is
 // given (a game's start, a first class). The name may itself hold commas;
