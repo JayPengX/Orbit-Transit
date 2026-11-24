@@ -15,14 +15,14 @@ import { buzz, primeBuzz } from './buzz.mjs';
 import { liveTimes, officialLeg, liveTrusted, wayOf, departuresAt, seenAt, nextCatchable } from './live.mjs';
 import { troubleHtml, fastest, wrongRide, offKind } from './trouble.mjs';
 import { steadyFixes, motion, busPace, trainPace } from './aboard.mjs';
-import { routeStops, routeSchedule, routeCity, routeEta, stationsNear, stationEtaAsk } from './bus.mjs';
+import { routeStops, routeSchedule, routeCity, routeEta, routeGps, stationsNear, stationEtaAsk } from './bus.mjs';
 import { etaAround, bikesAround } from './near.mjs';
 import { canRent, canReturn } from './bike.mjs';
 import { rideSec, DOCK_SEC, walkLeg, rideLeg, rentNear, returnNear } from './plan.mjs';
 import { rental, startRental, endRental, rentalStep, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
 import { traLive, traTrain, dayTrips, railStations, railSpan, netDates } from './raildata.mjs';
 import { metroStops } from './metro.mjs';
-import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace, pointAlong } from './navlive.mjs';
+import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearestStop, countText, trainFor, routeCum, alongRoute, offRide, ridePace, aheadByPace, pointAlong, pickBus } from './navlive.mjs';
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
 import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown, distText } from './util.mjs';
 import { changed } from './underway.mjs';
@@ -670,7 +670,7 @@ const countBig = (ms, what) => (ms < -60_000 ? `<b>${what === W('後到站', 'to
 
 // Coming to your stop: its last few stops on a line, yours at the end, the
 // bus or train where it is now (on a stop, or between two), what it's at.
-function trackHtml(rs, w, l) {
+function trackHtml(rs, w, l, seen = null) {
   const i = rs.i;
   const far = w.far || w.k - 1 < i - 5;
   const s0 = Math.max(0, Math.min(far ? i - 5 : w.k - 1, i - 1));
@@ -687,7 +687,7 @@ function trackHtml(rs, w, l) {
   const dots = [];
   for (let m = s0; m <= i; m++) dots.push(`<i class="${m < w.k ? 'past' : ''}${m === i ? ' you' : ''}" style="left:${x(m).toFixed(1)}%"></i>`);
   return `<div class="ot-track">
-      <div class="ot-track-say"><span>${e(where)}${w.planned ? W('（依時刻表）', ' (timetable)') : ''}</span>${w.away ? `<b>${W(`還有 ${w.away} 站`, `${w.away} stops`)}</b>` : ''}</div>
+      <div class="ot-track-say"><span>${e(where)}${w.planned ? W('（依時刻表）', ' (timetable)') : ''}</span>${w.away ? `<b>${W(`還有 ${w.away} 站`, `${w.away} stops`)}</b>` : ''}${seen ? `<button class="ot-track-see q-chip" type="button" data-nav="seebus">${W('看車', 'Show bus')}</button>` : ''}</div>
       <div class="ot-track-line"><span class="ot-track-lit" style="left:${vx.toFixed(1)}%"></span>${dots.join('')}<span class="ot-track-car${there ? ' there' : ''}" style="left:${vx.toFixed(1)}%">${icon(l.mode)}</span></div>
     </div>`;
 }
@@ -969,7 +969,7 @@ export function nextStretch(plan, parked, now = Date.now(), v = null) {
 // trip's own bar while navigating (Jay 2026-11-14: switch apps without
 // minimizing first; the switcher floating over the step's card was "ugly").
 const inOrbit = () => typeof document !== 'undefined' && document.documentElement.classList.contains('q-in-suite');
-export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, here = null, resume = null, push = null, dest = null, swap30 = false }) {
+export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, onBus = null, here = null, resume = null, push = null, dest = null, swap30 = false }) {
   // Started by a tap (mostly): the iPhone's chime may sound from now on.
   primeBuzz();
   stopNav();
@@ -1085,7 +1085,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     // Where the bus or train is (coming to you), or the stops to go (on it).
     // Your stop the first of its way (藍線1區 at 火車站): no bus on its way to show; it sets out from here.
     const origin = ride && !on && !state.done && !coming && !w && rs && rs.i === 0 ? `<div class="ot-track"><div class="ot-track-say"><span>${l.mode === 'bus' ? W('起點站：公車從這裡發車', 'First stop: the bus starts here') : W('起點站：列車從這裡發車', 'First station: the train starts here')}</span></div></div>` : '';
-    const track = w && rs && !coming ? trackHtml(rs, w, l) : origin;
+    const track = w && rs && !coming ? trackHtml(rs, w, l, l.mode === 'bus' ? state.bus : null) : origin;
     const board = on && rs && state.next != null && !state.done ? boardHtml(rs, state.next, state.ahead, state.delay, times.end[state.i], state.paced, state.delayLive, navStopAt) : '';
     // YouBike where you take it and leave it, now: bikes (or none, and the nearest that has some), docks.
     const bikeLine = state.done ? '' : bikesText(state.bikes, plan, state.i, state.pos);
@@ -1310,6 +1310,7 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     const on = ri === state.i && state.phase === 'on';
     let live = '';
     let where = null;
+    let bus = null;
     try {
       // Its stops, once: a bus's way (its official route first), a train's run today.
       // (One whose read failed, read again a minute on: busInfo `miss`.)
@@ -1381,6 +1382,8 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
           // Where that bus is now: only when the route's estimates are of the same bus.
           const bw = rs && eta && next && !next.planned ? busWhere(rs.stops, rs.i, eta) : null;
           if (bw && Math.abs(Date.now() + bw.sec * 1000 - next.at) < 120_000) where = bw;
+          // The bus itself on the map: its GPS, this way's, nearest behind your stop (navlive.mjs pickBus).
+          if (rs && x?.route) bus = pickBus(await routeGps(x.route).catch(() => []), x.way?.w.dir ?? x.leg?.route?.dir ?? null, rs.stops, rs.i, where?.k ?? null);
           state.fresh = next && !next.planned ? Date.now() : 0;
         }
       } else if (l?.mode === 'tra' && l.train?.no) {
@@ -1414,6 +1417,10 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
     if (state.i === at) {
       const was = state.where;
       state.where = ri === state.i ? where : null;
+      // (The bus you're waiting for, to the map: tab-map draws it.)
+      const hadBus = state.bus;
+      state.bus = bus;
+      if (JSON.stringify(hadBus || null) !== JSON.stringify(state.bus || null)) onBus?.(state.bus, state.ride.get(ri) || null);
       state.live = live;
       // The bus pulling in, the train at the platform: a buzz, once.
       if (state.where && state.where.away === 0 && !(was && was.away === 0) && (l.mode === 'bus' ? state.where.in <= 60 : state.where.at)) buzz();

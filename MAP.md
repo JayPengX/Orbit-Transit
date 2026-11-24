@@ -78,6 +78,7 @@ Jay's, dated (Taiwan day), newest wins; the family's are in Orbit-Core `docs/RUL
 | `lib/near.mjs`, `packs.mjs`, `shapes.mjs` | R2 data: what's near, bus packs, shapes |
 | `lib/bike.mjs`, `rental.mjs`, `rivers.mjs`, `tpass.mjs` | YouBike; the rental timer; bridges; TPASS |
 | `lib/nav.mjs`, `navlive.mjs`, `trouble.mjs`, `buzz.mjs`, `alerts.mjs` | Navigation; 出狀況 (missed, late, no bikes, wrong ride); the buzz; bus alerts |
+| `lib/navlive.mjs` `pickBus` | The bus you're waiting for, from the route's GPS (bus.mjs `routeGps`), drawn by tab-map `drawBus` while navigating; 看車 fits it and your stop |
 | `lib/aboard.mjs` | On a train navigation has you on: the trip from its stops ahead (never guessed from the fixes, 11-24); how you're moving (`motion`, the paces) for navigation and the beam |
 | `lib/ticket.mjs` | 指定車次: a train by its number, where to get on and off, found again for the planner |
 | `lib/service.mjs`, `ebnotice.mjs` | What isn't running: operators' notices (台鐵, 高鐵, metros, buses) as rules; 臺中's and 高雄's bus notices read by the phone |

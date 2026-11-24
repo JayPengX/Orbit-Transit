@@ -3202,6 +3202,31 @@ html[data-look='native'] .q-rowcard .ot-rec .q-icon-btn.ot-rec-x:is(:active, [da
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.ot-track-see {
+  flex: none;
+  min-height: 28px;
+  padding: 0 10px;
+  font: 600 13px/1 var(--q-font);
+}
+/* The bus you're waiting for on the map (tab-map.mjs drawBus): its mark in the route's colour, its plate. */
+.ot-livebus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 999px;
+  background: var(--c);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--q-bg, #000), 0 2px 6px rgba(0, 0, 0, 0.3);
+  font: 600 12px/1 var(--q-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+.ot-livebus svg {
+  width: 18px;
+  height: 18px;
+}
 .ot-track-say b {
   flex: none;
   color: var(--q-label);

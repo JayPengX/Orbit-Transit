@@ -2942,7 +2942,9 @@ async function navigate(p, resume = null, { swap = false } = {}) {
       if (navFollow && navFull() && n && Date.now() - viewAt > 5_000) navView(n.plan, n.i);
     },
     onAction: navAction,
+    onBus: drawBus,
     onEnd: (how = {}) => {
+      drawBus(null, null);
       // Arrived at a stop with places after it: on to the next (its plans from here, ready to go).
       const next = how.arrived && how.plan?.then?.length ? how.plan.then : null;
       // Arrived: one more toward the 十趟旅程 milestone.
@@ -3079,6 +3081,8 @@ function shrinkNav(on) {
   if (!navigating()) return;
   setNavMin(on);
   document.body.classList.toggle('ot-nav-min', on);
+  // (Shrunk, the map is yours: the bus mark off; back, on again.)
+  drawBus(liveBus, liveStop ? { stops: [liveStop], i: 0 } : null);
   msheet?.relayout();
   if (on) {
     follows(false);
@@ -3122,6 +3126,20 @@ function refitNav() {
 
 // What the navigation card asks for: back to it (the bar), its ⋯, a new plan from here.
 let cardsTimer = 0;
+// The bus you're waiting for, where its GPS says (nav.mjs onBus, navlive.mjs
+// pickBus; Jay 11-24): a mark in the route's colour with its plate, moved at
+// each bus beat (30 s); none without a fix, gone once you're on it or the trip ends.
+let liveBus = null;
+let liveStop = null;
+function drawBus(b, rs) {
+  liveBus = b;
+  liveStop = b && rs ? rs.stops[rs.i] || null : null;
+  const n = navNow();
+  const l = n ? n.plan.legs.find((x, k) => k >= n.i && x.mode === 'bus') : null;
+  const c = l ? legColor(l) : 'var(--q-green)';
+  map?.layer('livebus').set(b && navFull() ? [{ id: 'livebus', lat: b.lat, lon: b.lon, cls: 'livebus', z: 40, html: `<span class="ot-livebus" style="--c:${e(c)}">${icon('bus')}${b.plate ? `<b>${e(b.plate)}</b>` : ''}</span>` }] : []);
+}
+
 function navAction(a, info) {
   if (a === 'open') return shrinkNav(false);
   // (The step you're on, tapped: the map back on it.)
@@ -3142,6 +3160,15 @@ function navAction(a, info) {
     const n = navNow();
     if (n && needsRoad(info)) roadLegs(n.plan).then(() => navNow() === n && !navFollow && drawPlan(n.plan, { fit: false, lit: n.i })).catch(() => {});
     return map.fit(pts, navPad());
+  }
+  // 看車 (Jay 11-24): the bus you're waiting for and its stop in view together, as
+  // a finger moving the map would (back on the trip by itself 10 s later).
+  if (a === 'seebus') {
+    if (!liveBus || !navFull()) return;
+    dragged();
+    viewAt = Date.now();
+    const stop = liveStop || navNow()?.pos;
+    return map.fit([liveBus, stop].filter(x => x?.lat != null), navPad());
   }
   if (a === 'apps') return suite.openSwitcher?.();
   if (a === 'more') return navMore();

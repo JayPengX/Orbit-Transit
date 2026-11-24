@@ -222,3 +222,34 @@ export function aheadByPace(cum, from, to, d, pace, now = Date.now()) {
   for (let k = from; k <= to; k++) out.set(k, now + (Math.max(0, cum[k] - d) / pace) * 1000);
   return out;
 }
+
+// The bus you're waiting for, on the map (Jay 2026-11-24: "bus live location
+// during a trip … where the bus is at right now"): of the route's GPS fixes
+// (TDX RealTimeByFrequency rows), those of this way (`dir`) a few minutes
+// fresh and on its stops (within 600 m of one), behind your stop (`i`); the
+// one the estimates say is coming (`k`, the stop it comes to next: busWhere),
+// else the nearest behind you. → { lat, lon, plate, at, idx (the stop it's
+// nearest), away (stops from yours) } or null.
+export function pickBus(rows, dir, stops, i, k = null, now = Date.now()) {
+  const out = [];
+  for (const b of rows || []) {
+    if (dir != null && (Number(b.Direction) || 0) !== Number(dir)) continue;
+    const lat = Number(b.BusPosition?.PositionLat);
+    const lon = Number(b.BusPosition?.PositionLon);
+    const at = Date.parse(b.GPSTime || '');
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !(now - at < 3 * 60_000)) continue;
+    let idx = -1;
+    let best = Infinity;
+    for (let j = 0; j <= i && j < stops.length; j++) {
+      const s = stops[j];
+      if (s?.lat == null) continue;
+      const m = meters(lat, lon, s.lat, s.lon);
+      if (m < best) (best = m), (idx = j);
+    }
+    if (idx < 0 || best > 600) continue;
+    out.push({ lat, lon, plate: b.PlateNumb && b.PlateNumb !== '-1' ? String(b.PlateNumb) : '', at, idx, away: i - idx });
+  }
+  if (!out.length) return null;
+  const by = k != null ? (a, b) => Math.abs(a.idx - (k - 1)) - Math.abs(b.idx - (k - 1)) || b.idx - a.idx : (a, b) => b.idx - a.idx;
+  return out.sort(by)[0];
+}
