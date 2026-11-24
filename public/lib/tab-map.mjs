@@ -1374,6 +1374,10 @@ function buildSheet() {
   vv?.addEventListener('resize', pinned);
   vv?.addEventListener('scroll', pinned);
   addEventListener('scroll', pinned, { passive: true });
+  // (The map's own panel too: no finger scrolls it, but a plan scrolled into
+  // view did, and navigation then started with the map and its card half off
+  // the top over a blank screen.)
+  $('panel-map').addEventListener('scroll', ev => ev.target === $('panel-map') && $('panel-map').scrollTop && ($('panel-map').scrollTop = 0), { passive: true });
   home.start();
   home.draw();
 }

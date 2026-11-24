@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pickBus } from '../public/lib/navlive.mjs';
+import { readFile } from 'node:fs/promises';
 
 const now = Date.parse('2026-11-24T18:00:00+08:00');
 // A way north: a stop every ~550 m; you wait at stop 6.
@@ -23,4 +24,12 @@ test('no bus to show: an old fix, one off the route, or none', () => {
   assert.equal(pickBus([fix('A-1', 24.81, 0, 5 * 60_000)], 0, stops, 6, null, now), null, 'five minutes old');
   assert.equal(pickBus([{ ...fix('A-1', 24.81), BusPosition: { PositionLat: 24.81, PositionLon: 121.1 } }], 0, stops, 6, null, now), null, 'kilometres off its stops');
   assert.equal(pickBus([], 0, stops, 6, null, now), null);
+});
+
+// Found testing the live bus (11-24): a plan picked low in the list scrolled the
+// map's own panel, and navigation began with the map and its card half off the
+// top over a blank screen. The panel is put back at once whatever scrolls it.
+test("the map's panel never stays scrolled", async () => {
+  const src = await readFile(new URL('../public/lib/tab-map.mjs', import.meta.url), 'utf8');
+  assert.match(src, /\$\('panel-map'\)\.addEventListener\('scroll', [^\n]*scrollTop = 0/);
 });
