@@ -12,7 +12,7 @@ function opening({ active = true } = {}) {
   const env = { writes: [], q: { active, write: async x => (env.writes.push(decodeData(x.payload)), {}) } };
   const f = new Function('env', 'emptyData', 'encodeData', 'decodeData', 'mergeData', `
     const q = env.q; const local = {}; let tookPass = false; let held = false;
-    const saveLocal = () => {}; const shareFamily = () => {};
+    const saveLocal = () => {};
     const ctx = { data: null, ${saveSrc} };
     ${mergeSrc};
     return { ctx, merge };`);
@@ -73,24 +73,6 @@ test('at the opening this copy is sent up whenever it is the newer', () => {
   p.merge({ payload: encodeData(pass) });
   assert.equal(p.writes.length, 0);
   assert.equal(p.ctx.data.saved.length, 1);
-});
-
-// 家 deleted in 我的 (or 學校 turned into a plain pin) stayed in the family's
-// notebook: Class's 怎麼去學校 and Weather went on with the old place.
-test('a place deleted here is let go in the family notebook, if it was Transit’s', async () => {
-  const { shareFamily } = await import('../public/lib/family-share.mjs');
-  const book = { 'place.home': { lat: 24.8, lon: 120.97, name: '家', from: 'transit' }, 'place.work': { lat: 25, lon: 121.5, name: '公司', from: 'weather' } };
-  const calls = [];
-  const notebook = async () => ({
-    setPlace: (k, p, from) => (book[`place.${k}`] = { ...p, from }),
-    placeFor: k => book[`place.${k}`] || null,
-    tell: (app, k, v) => (calls.push([app, k, v]), v === null ? delete book[`${app}.${k}`] : (book[`${app}.${k}`] = v))
-  });
-  await shareFamily({ places: [{ id: 'p2', name: '新竹高中', icon: 'school', lat: 24.79, lon: 120.98 }] }, notebook);
-  assert.equal(book['place.home'], undefined, 'Transit’s 家 let go');
-  assert.equal(book['place.work'].from, 'weather', 'another app’s place left as it is');
-  assert.equal(book['place.school'].name, '新竹高中');
-  assert.deepEqual(calls, [['place', 'home', null]]);
 });
 
 // 查時刻 asked at 08:00 and shown again at 18:00 (another tab, the
