@@ -1,17 +1,11 @@
-// Already on a bus or train when a trip is asked for (Jay 2026-11-03: 回家
-// tapped on a train "will reliably give you a trip, not use that mid train
-// point to calculate"): which one you're on, from the last few minutes of
-// fixes, and the trip from it: stay on it to one of its stops ahead, then on
-// from there.
-//
-//   - 台鐵 / 高鐵: moving at a train's pace, and today's train (its timetable
-//     with TDX's live delay) is where you are, going your way.
-//   - A bus: going faster than a bike rides, along a route's stops (two fixes
-//     going its way), and TDX sees that route's bus due at the stop just ahead
-//     of you in about the time you'll be there. Two routes that fit: asked.
-//   - The metro runs underground (no fixes): planned as before.
-//
-// Never a trip started by itself: only what 規劃 from 你的位置 plans from.
+// Already on a train when a trip is asked for (Jay 2026-11-03: 回家 tapped
+// on a train "will reliably give you a trip, not use that mid train point to
+// calculate"): only when navigation says you're on it (its leg's train), the
+// trip from it: stay on it to one of its stops ahead, then on from there.
+// Guessing a train or a bus from the fixes alone went (Jay 11-24: "not
+// reliable as I use it"; a kilometre from the line, a train going by was
+// taken for yours). How you're moving (motion, the paces) is still read:
+// navigation's own boarding and the beam on your dot use it.
 
 import { meters, isRide, tw } from './util.mjs';
 import { finish, walkLeg } from './plan.mjs';
@@ -20,7 +14,7 @@ import { W } from '#kit/lang.mjs';
 
 const MIN = 60_000;
 // The fixes looked at: the last two and a half minutes.
-export const SPAN_MS = 150_000;
+const SPAN_MS = 150_000;
 // A train's pace (m/s): 20 km/h on average (北新竹 → 新竹 is 22 as the crow
 // flies), or 45 between two fixes.
 const TRAIN_MS = { avg: 5.5, top: 12.5 };
@@ -82,91 +76,15 @@ function vec(a, b) {
   const m = Math.hypot(x, y) || 1;
   return { x: x / m, y: y / m, m };
 }
-const dot = (u, v) => u.x * v.x + u.y * v.y;
 // (Its top alone only when moving on too: walking in a city, a jump of 300 m
 // had read as a train's pace and flipped 下車了 to 搭錯車; Jay 2026-11-12.)
 export const trainPace = m => Boolean(m) && (m.avg >= TRAIN_MS.avg || (m.top >= TRAIN_MS.top && m.avg >= 2));
 export const busPace = m => Boolean(m) && m.avg >= BUS_MS.avg && m.top >= BUS_MS.top;
 
-// The 台鐵 trains that could be the one you're on (`m`, motion's): those
-// that by their timetable, up to half an hour late, would be within 3 km of
-// you now; their numbers, nearest first (`n` at most), for their delays to
-// be read (each train's own: there's no board of every train at once).
-export function trainsNear(trips, stations, m, now = Date.now(), n = 3) {
-  if (!m) return [];
-  const byKey = new Map(stations.map(s => [s.key, s]));
-  const out = [];
-  for (const t of trips || []) {
-    if (t.sys !== 'tra' || !t.stops?.length) continue;
-    const st = t.stops.map(s => ({ ...s, p: byKey.get(s.st), dep: s.dep ?? s.arr, arr: s.arr ?? s.dep }));
-    if (st[0].dep > now + MIN || st.at(-1).arr < now - 31 * MIN) continue;
-    let d = Infinity;
-    for (const late of [0, 5, 10, 15, 20, 25, 30]) {
-      const at = clockAt(st, now - late * MIN);
-      if (at) d = Math.min(d, meters(m.lat, m.lon, at.lat, at.lon));
-    }
-    if (d < 3000) out.push({ no: String(t.no), d });
-  }
-  return out.sort((a, b) => a.d - b.d).slice(0, n).map(x => x.no);
-}
-
-// The train you're on, of today's (`trips`, raildata dayTrips; `live`: the
-// delays read, by train number): where each running one is by its timetable
-// with its delay, the nearest you (within 2.5 km, 6 for 高鐵) going your way.
-// → { mode, train, delay, at (the stop index it left last), stops (the trip's,
-// each with its place and its times with the delay) } or null.
-// `loose`: the fixes too weak to say a pace or a way (in a train, often):
-// then by the clock alone, 500 m and more from any station (on the line, not
-// on a platform or a road near one; Jay 2026-11-20, on 1825 between 上員 and
-// 竹中, planned from the track), the one train within 1.5 km, any other
-// twice as far. And on the line, really (Jay 2026-11-24: standing at home a
-// kilometre from the 竹北 line as 區間 1227 went by, his trip started "區間 1227
-// 上"): every fix of the last minutes within LINE_OFF of the line between that
-// train's stations (its own error added, 300 m of it at most), and over 20 s
-// and more, moved with the train (at least 40% of what it went).
-const LINE_OFF = 250;
-export function trainAboard(trips, stations, m, live = new Map(), now = Date.now(), { loose = false } = {}) {
-  if (loose ? m?.lat == null : !trainPace(m)) return null;
-  const byKey = new Map(stations.map(s => [s.key, s]));
-  if (loose && stations.some(s => s.lat != null && meters(m.lat, m.lon, s.lat, s.lon) < 500)) return null;
-  let best = null;
-  let second = Infinity;
-  for (const t of trips || []) {
-    if (t.sys !== 'tra' && t.sys !== 'hsr') continue;
-    const lv = live.get(String(t.no));
-    const delay = (lv?.delay || 0) * MIN;
-    const st = t.stops.map(s => ({ ...s, p: byKey.get(s.st), dep: (s.dep ?? s.arr) + delay, arr: (s.arr ?? s.dep) + delay }));
-    if (st[0].dep > now + MIN || st.at(-1).arr < now - MIN) continue;
-    // Between which two of its stations it is by the clock, and how far.
-    const x = st.findIndex((s, k) => k < st.length - 1 && now >= s.dep - 30_000 && now <= st[k + 1].arr + 30_000);
-    if (x < 0) continue;
-    const [s0, s1] = [st[x].p, st[x + 1].p];
-    if (!s0 || !s1) continue;
-    const f = st[x + 1].arr > st[x].dep ? Math.max(0, Math.min(1, (now - st[x].dep) / (st[x + 1].arr - st[x].dep))) : 1;
-    const at = { lat: s0.lat + (s1.lat - s0.lat) * f, lon: s0.lon + (s1.lon - s0.lon) * f };
-    let d = meters(m.lat, m.lon, at.lat, at.lon);
-    // (And where it was at each fix, by the clock: a car beside the line keeps its own pace, not the train's.)
-    const far = loose ? 1500 : t.sys === 'hsr' ? 6000 : 2500;
-    if (!loose && m.fixes.some(f => (clockAt(st, f.t) ? meters(f.lat, f.lon, clockAt(st, f.t).lat, clockAt(st, f.t).lon) : 0) > far)) continue;
-    // (TDX's own word on where it is: its station near you counts too.)
-    const ls = lv?.st && byKey.get(lv.st);
-    if (ls && st.slice(x, x + 2).some(s => s.st === lv.st)) d = Math.min(d, meters(m.lat, m.lon, ls.lat, ls.lon) + 300);
-    // Going its way: the way it runs between those two stations, near enough yours.
-    if (!loose && dot(vec(s0, s1), m.dir) < 0.3) continue;
-    if (loose && !onLine(m, st, x)) continue;
-    if (d < far && (!best || d < best.d)) {
-      if (best) second = Math.min(second, best.d);
-      best = { d, t, st, x, delay, live: Boolean(lv) };
-    } else second = Math.min(second, d);
-  }
-  if (!best || (loose && second < 2 * best.d)) return null;
-  const { t, st, x } = best;
-  return { mode: t.sys, train: { sys: t.sys, no: t.no, type: t.type, code: t.code }, delay: best.delay / MIN, live: best.live, headsign: t.headsign, typeFull: t.typeFull, at: x, stops: st.map(s => ({ st: s.st, name: s.p?.name || '', lat: s.p?.lat, lon: s.p?.lon, arr: s.arr, dep: s.dep })) };
-}
-
-// The train you're on, said already (navigation follows you on it: `no`):
-// where it is by its clock and delay, as trainAboard's (`at`: the stop it left
-// last). → null when it isn't running now.
+// The train you're on, said by navigation (it follows you on it: `no`): where
+// it is by its clock and delay (`at`: the stop it left last). → null when it
+// isn't running now. (Guessing the train or bus from the fixes alone went,
+// Jay 11-24: "not reliable as I use it"; only navigation says you're on one.)
 export function trainRide(trips, stations, no, live = new Map(), now = Date.now()) {
   const t = (trips || []).find(x => (x.sys === 'tra' || x.sys === 'hsr') && String(x.no) === String(no));
   if (!t?.stops?.length) return null;
@@ -180,121 +98,8 @@ export function trainRide(trips, stations, no, live = new Map(), now = Date.now(
   return { mode: t.sys, train: { sys: t.sys, no: t.no, type: t.type, code: t.code }, delay: delay / MIN, live: Boolean(lv), headsign: t.headsign, typeFull: t.typeFull, at: x, stops: st.map(s => ({ st: s.st, name: s.p?.name || '', lat: s.p?.lat, lon: s.p?.lon, arr: s.arr, dep: s.dep })) };
 }
 
-// Loose's proof you're on it (trainAboard): your fixes (or the one place) all
-// on its line, and moving with it when they span 20 s or more.
-function onLine(m, st, x) {
-  const fx = m.fixes?.length ? m.fixes : [m];
-  const segs = [x - 1, x, x + 1].filter(k => k >= 0 && k < st.length - 1 && st[k].p && st[k + 1].p);
-  for (const f of fx) if (Math.min(...segs.map(k => segOff(f, st[k].p, st[k + 1].p))) > LINE_OFF + Math.min(f.acc ?? 0, 300)) return false;
-  const [a, b] = [fx[0], fx.at(-1)];
-  if (a === b || !(b.t - a.t >= 20_000)) return true;
-  const [pa, pb] = [clockAt(st, a.t), clockAt(st, b.t)];
-  const went = pa && pb ? meters(pa.lat, pa.lon, pb.lat, pb.lon) : 0;
-  return went < 400 || beyond(a, b, 0.25) >= 0.4 * went;
-}
-// Metres from p to the straight line a–b (its ends included).
-function segOff(p, a, b) {
-  const ab = vec(a, b);
-  const ap = vec(a, p);
-  const t = Math.max(0, Math.min(ab.m, dot(ab, ap) * ap.m));
-  return meters(p.lat, p.lon, a.lat + ((b.lat - a.lat) * t) / ab.m, a.lon + ((b.lon - a.lon) * t) / ab.m);
-}
-
-// Where a train is at `t` by its stops' times (`st`, with places): at a
-// station, or part way between two. → { lat, lon } or null.
-function clockAt(st, t) {
-  for (let k = 0; k < st.length - 1; k++) {
-    const [a, b] = [st[k], st[k + 1]];
-    if (!a.p || !b.p) continue;
-    if (t < a.arr && k === 0) return a.p;
-    if (t >= a.arr && t <= a.dep) return a.p;
-    if (t > a.dep && t <= b.arr) {
-      const f = b.arr > a.dep ? (t - a.dep) / (b.arr - a.dep) : 1;
-      return { lat: a.p.lat + (b.p.lat - a.p.lat) * f, lon: a.p.lon + (b.p.lon - a.p.lon) * f };
-    }
-  }
-  return st.at(-1).p || null;
-}
-
-// How far along a route's stops a point is, and how far off them: the stops
-// joined straight (a route's stops are a few hundred metres apart).
-// → { d (metres from its first stop), off, k (the stop before the point) } or null.
-export function alongStops(stops, p) {
-  let best = null;
-  let cum = 0;
-  for (let k = 0; k < stops.length - 1; k++) {
-    const a = stops[k];
-    const b = stops[k + 1];
-    if (a.lat == null || b.lat == null) continue;
-    const ab = vec(a, b);
-    const ap = vec(a, p);
-    const t = Math.max(0, Math.min(ab.m, dot(ab, ap) * ap.m));
-    const q = { lat: a.lat + ((b.lat - a.lat) * t) / ab.m, lon: a.lon + ((b.lon - a.lon) * t) / ab.m };
-    const off = meters(p.lat, p.lon, q.lat, q.lon);
-    if (!best || off < best.off) best = { d: cum + t, off, k };
-    cum += ab.m;
-  }
-  return best;
-}
-// On this way of a bus route (`w`: routeStops' { dir, stops }), from your
-// fixes: every fix near its stops (within 150 m of the stops joined straight),
-// going its way along them (most of what you moved), not past its last stop.
-// → { j (the next stop ahead), d (metres to it) } or null.
-export function onWay(w, m) {
-  if (!w?.stops?.length || w.stops.length < 2) return null;
-  const a = alongStops(w.stops, m.first);
-  const b = alongStops(w.stops, m);
-  if (!a || !b || a.off > 150 || b.off > 150) return null;
-  if (m.fixes.some(x => (alongStops(w.stops, x)?.off ?? Infinity) > 200)) return null;
-  if (b.d - a.d < 0.6 * m.moved) return null;
-  const j = b.k + 1;
-  if (j >= w.stops.length) return null;
-  const s = w.stops[j];
-  return { j, d: meters(m.lat, m.lon, s.lat, s.lon) };
-}
-// TDX's word that a bus of this way is where you are: one due at the stop
-// just ahead in about the time you'll be there (at a bus's pace, two minutes
-// either side), as its estimates (`rows`, the route's) say.
-// → { plate, eta (s) } or null.
-export function busDue(rows, w, j, d, m) {
-  const r = (rows || []).find(x => x.StopUID === w.stops[j].uid && Number(x.Direction) === w.dir);
-  if (!r || (Number(r.StopStatus) || 0) !== 0 || r.EstimateTime == null) return null;
-  const eta = Number(r.EstimateTime);
-  const mine = d / Math.max(4, m.avg);
-  if (!Number.isFinite(eta) || eta > Math.max(180, mine + 120) || eta < mine - 120) return null;
-  const plate = r.PlateNumb && r.PlateNumb !== '-1' ? r.PlateNumb : '';
-  return { plate, eta };
-}
-
-// Which bus you're on, if any: the routes stopping near you, each way of each
-// one you're going along, confirmed by its bus due just ahead. `deps`:
-// stationsAround, routeStops, busEta, routeCity (bus.mjs, near.mjs).
-// → [{ route: { uid, name, city }, w, j, eta, plate }] (one per route name).
-export async function busesAboard(m, { stationsAround, routeStops, busEta, routeCity }) {
-  if (!busPace(m)) return [];
-  const sts = (await stationsAround(m.lat, m.lon).catch(() => [])).filter(s => meters(m.lat, m.lon, s.lat, s.lon) <= 400);
-  const routes = new Map();
-  for (const s of sts) for (const x of s.stops || []) if (!routes.has(x.routeUID)) routes.set(x.routeUID, { uid: x.routeUID, name: x.route, city: routeCity(x.routeUID) });
-  const found = [];
-  await Promise.all([...routes.values()].slice(0, 12).map(async route => {
-    const ways = await routeStops(route, m).catch(() => null);
-    const fits = (ways || []).map(w => ({ w, at: onWay(w, m) })).filter(x => x.at);
-    if (!fits.length) return;
-    const rows = await busEta(route.city, { route: route.uid }).then(x => x.rows, () => []);
-    for (const { w, at } of fits) {
-      const due = busDue(rows, w, at.j, at.d, m);
-      if (due) found.push({ route, w, j: at.j, d: at.d, eta: due.eta, plate: due.plate });
-    }
-  }));
-  const one = new Map();
-  for (const f of found.sort((a, b) => a.d - b.d)) if (!one.has(f.route.name)) one.set(f.route.name, f);
-  return [...one.values()];
-}
-
-// The ride you're on as a plan's first leg, to stop `k` of its stops: from
+// The train you're on as a plan's first leg, to stop `k` of its stops: from
 // the stop it left last (its time then), `aboard` so navigation starts on it.
-// A train: `ride` from trainAboard. A bus: from busesAboard, `rideSec(j, k)`
-// how long it takes from the stop ahead to k.
 export function trainLegTo(ride, k, now = Date.now()) {
   const s0 = ride.stops[ride.at];
   const s1 = ride.stops[k];
@@ -317,33 +122,6 @@ export function trainLegTo(ride, k, now = Date.now()) {
     aboard: { at: now }
   };
 }
-export function busLegTo(bus, k, rideSec, now = Date.now()) {
-  const { w, j } = bus;
-  const s0 = w.stops[j - 1] || w.stops[j];
-  const s1 = w.stops[k];
-  const atJ = now + bus.eta * 1000;
-  const dep = Math.min(now, atJ - 60_000);
-  const arr = atJ + (k > j ? rideSec(j, k) * 1000 : 0);
-  return {
-    mode: 'bus',
-    name: bus.route.name,
-    short: bus.route.name,
-    headsign: w.headsign,
-    from: { name: s0.name, lat: s0.lat, lon: s0.lon },
-    to: { name: s1.name, lat: s1.lat, lon: s1.lon },
-    dep,
-    arr,
-    dur: Math.round((arr - dep) / 1000),
-    stops: k - (j - 1),
-    dist: Math.round(meters(s0.lat, s0.lon, s1.lat, s1.lon) * 1.3),
-    agency: '',
-    route: { uid: bus.route.uid, city: bus.route.city, dir: w.dir, stopUID: s0.uid },
-    live: { at: dep },
-    ...(bus.plate ? { plate: bus.plate } : {}),
-    aboard: { at: now }
-  };
-}
-
 // Where to get off, of the stops ahead (`stops`, from `from` on: each { lat,
 // lon, arr }): the one nearest the place, and another a kilometre and more
 // from it, nearer the place than you are (a change there may be quicker).
@@ -386,5 +164,3 @@ export function rideThenWalk(ride, to, now = Date.now()) {
 
 // Said of the ride on the plans card's start: 區間 1234 上 / On 5608.
 export const aboardName = l => (l ? W(`${l.short || l.name} 上`, `On ${l.short || l.name}`) : '');
-// For the 除錯紀錄: what was seen, no places.
-export const aboardTrace = (m, found) => ({ avg: m ? Math.round(m.avg * 3.6) : null, top: m ? Math.round(m.top * 3.6) : null, secs: m ? Math.round(m.secs) : null, n: m?.fixes.length ?? 0, found: (found || []).map(f => f.train?.no || f.route?.name || ''), at: tw().hm });

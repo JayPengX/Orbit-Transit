@@ -1101,11 +1101,7 @@ async function cardClick(ev) {
   if (act === 'back' && card.kind === 'plans' && card.sel >= 0 && card.plans.length > 1) return selectPlan(card.sel);
   if (act === 'back') return card.back ? openCard(card.back) : closeCard();
   // (With stops: the trip backwards, the last place first.)
-  // On board: another bus that fit, or none (planned from the street).
-  if (act === 'aboard-bus' && card?.aboard?.kind === 'bus') {
-    const b = card.aboard.buses.find(x => x.route.name === ev.target.closest('[data-bus]').dataset.bus);
-    return b && plan(null, card.to, { aboard: { ...card.aboard, bus: b } });
-  }
+  // On board, navigation says, but you aren't: planned from the street.
   if (act === 'not-aboard' && card?.aboard) return plan(null, card.to, { street: true });
   if (act === 'swap') {
     if (card.from?.lat == null) return;
@@ -1926,17 +1922,16 @@ async function plan(from, to, opts = {}) {
   const start = from || here;
   const dest = opts.swapHere ? await hereNow() : to;
   let fromPt = start ? { name: start.name || HERE, lat: start.lat, lon: start.lon } : { name: W('選擇出發地', 'Choose a start'), lat: null, lon: null };
-  // Already on a bus or train (aboard.mjs): the trip from it, never from the
-  // point on the road or the track (Jay 2026-11-03). Only from where you are,
-  // leaving now; 不在車上 plans from the street.
+  // On a train navigation has you on (aboard.mjs): the trip from it, never
+  // from the point on the track (Jay 2026-11-03). Only from where you are,
+  // leaving now; 不在車上 plans from the street. Never guessed from the fixes
+  // alone (Jay 11-24: "not reliable as I use it").
   const mayAboard = here && !opts.street && !opts.swapHere && !(opts.then || []).length && when.by === 'now' && !rental();
-  // (Navigation on a train already: that train, never guessed again from the fixes.)
   const nv = navNow();
   const navLeg = nv?.aboard ? nv.plan.legs[nv.i] : null;
   const onTrain = (navLeg?.mode === 'tra' || navLeg?.mode === 'hsr') && navLeg.train?.no != null ? { sys: navLeg.mode, no: navLeg.train.no } : null;
-  const aboard = opts.aboard || (mayAboard ? await Promise.race([findAboard(Date.now(), { train: onTrain }), wait(onTrain ? 4000 : 2500).then(() => null)]) : null);
-  if (aboard?.kind === 'bus' && !aboard.bus) aboard.bus = aboard.buses[0];
-  if (dest && aboard) fromPt = { ...fromPt, name: aboardName(aboard.kind === 'train' ? { short: trainShort(aboard.ride) } : { short: aboard.bus.route.name }) };
+  const aboard = opts.aboard || (mayAboard && onTrain ? await Promise.race([findAboard(Date.now(), { train: onTrain }), wait(4000).then(() => null)]) : null);
+  if (dest && aboard) fromPt = { ...fromPt, name: aboardName({ short: trainShort(aboard.ride) }) };
   if (!dest) return ctx.status(W('需要你的位置：請在設定允許定位', 'Needs your location: allow it in Settings'));
   if (dest.lat != null && !inTaiwan(dest.lat, dest.lon)) return ctx.status(OUTSIDE);
   // `then`: the places after this one, in order (a trip with stops: here to
@@ -2391,14 +2386,11 @@ function stretchChips(q) {
   const rides = q.legs.filter(l => l.mode !== 'walk');
   return legChips(rides.length ? rides : [{ mode: 'walk', dur: (q.arr - q.dep) / 1000 }]);
 }
-// On board (the plans are from the bus or train you're on): which one, the
-// other buses that fit to pick from, and 不在車上 to plan from the street.
+// On board (the plans are from the train navigation has you on; the start
+// field says which, 自強 128 上): 不在車上 to plan from the street.
 function aboardHtml(c) {
-  const a = c.aboard;
-  if (!a) return '';
-  // (Which one is the start field's own: 自強 128 上.)
-  const others = a.kind === 'bus' ? a.buses.filter(b => b !== a.bus) : [];
-  return `<div class="ot-aboard q-chips" role="group" aria-label="${W('你在車上', 'On board')}">${others.map(b => `<button class="q-chip" type="button" data-card="aboard-bus" data-bus="${e(b.route.name)}">${e(W(`在 ${b.route.name}`, `On ${b.route.name}`))}</button>`).join('')}<button class="q-chip" type="button" data-card="not-aboard">${W('不在車上', 'Not on it')}</button></div>`;
+  if (!c.aboard) return '';
+  return `<div class="ot-aboard q-chips" role="group" aria-label="${W('你在車上', 'On board')}"><button class="q-chip" type="button" data-card="not-aboard">${W('不在車上', 'Not on it')}</button></div>`;
 }
 const trainShort = r => (r.mode === 'hsr' ? W(`高鐵 ${r.train.no} 次`, `HSR ${r.train.no}`) : `${trainKind(r.train.type)} ${r.train.no}`);
 

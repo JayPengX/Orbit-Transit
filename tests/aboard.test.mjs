@@ -28,41 +28,11 @@ test('motion: too little to say, a walk, a train', () => {
   assert.ok(!A.busPace(A.motion(fixes(P, 12, 4, t), t + 110_000)), 'nor a bus: never faster than 8 m/s');
 });
 
-test('trainAboard: the train where you are, going your way, its stops ahead', () => {
-  const t0 = T(9);
-  const trains = [trip('1201', t0), trip('1203', t0 + 8 * 60_000), trip('1202', t0, { back: true })];
-  // Between 站1 and 站2, six minutes in: 1201 is half way.
-  const now = t0 + 6 * 60_000 + 15_000;
-  const m = A.motion(fixes(off(P, 5500, 0), 5, 17, now - 40_000), now);
-  const r = A.trainAboard(trains, st, m, new Map(), now);
-  assert.equal(r?.train.no, '1201');
-  assert.equal(r.at, 1, 'it left 站1 last');
-  // The other way round (1202) is never it, nor at walking pace.
-  assert.equal(A.trainAboard([trains[2]], st, m, new Map(), now), null);
-  assert.equal(A.trainAboard(trains, st, A.motion(fixes(off(P, 5500, 0), 5, 1.2, now - 40_000), now), new Map(), now), null);
-  // Late 8 minutes by its own page: the train due here by its timetable then is 1203's slot, but 1201 is the one.
-  const late = A.trainAboard([trip('1201', t0 - 8 * 60_000), trip('1203', t0)], st, m, new Map([['1201', { delay: 8 }]]), now);
-  assert.equal(late?.train.no, '1201');
-});
-
-test("trainsNear: the 台鐵 trains that could be yours, up to half an hour late (each one's delay then read alone, not every train's)", () => {
-  const t0 = T(9);
-  const now = t0 + 6 * 60_000 + 15_000;
-  const m = A.motion(fixes(off(P, 5500, 0), 5, 17, now - 40_000), now);
-  // 1201 eight minutes late is here now; 1203 on time is here; 1205 hasn't left; 1199 ran its course an hour ago.
-  const trains = [trip('1201', t0 - 8 * 60_000), trip('1203', t0), trip('1205', t0 + 60 * 60_000), trip('1199', t0 - 90 * 60_000)];
-  assert.deepEqual(A.trainsNear(trains, st, m, now).sort(), ['1201', '1203']);
-  assert.deepEqual(A.trainsNear(trains, st, m, now, 1).length, 1);
-  assert.deepEqual(A.trainsNear(trains, st, null, now), []);
-  // Its delay read, the late one is found as before.
-  assert.equal(A.trainAboard(trains, st, m, new Map([['1201', { delay: 8 }]]), now)?.train.no, '1201');
-});
-
 test('a trip from the train: stay on to the station nearest the place, then walk', () => {
   const t0 = T(9);
   const now = t0 + 6 * 60_000 + 15_000;
   const m = A.motion(fixes(off(P, 5500, 0), 5, 17, now - 40_000), now);
-  const r = A.trainAboard([trip('1201', t0)], st, m, new Map(), now);
+  const r = A.trainRide([trip('1201', t0)], st, '1201', new Map(), now);
   const dest = { name: 'Home', ...off(st[4], 300, 200) };
   const offs = A.getOffAt(r.stops, r.at + 1, dest, m);
   assert.equal(offs[0], 4);
@@ -94,33 +64,6 @@ test('joinRide: a plan from the stop that boards the same train again is that ri
 
 // A bus route east along a straight road, stops every 400 m.
 const way = { dir: 0, headsign: '站9', stops: Array.from({ length: 10 }, (_, k) => ({ uid: `s${k}`, name: `站${k}`, ...off(P, 0, k * 400) })) };
-test('a bus: on its way only with its bus due just ahead, at a bus’s pace', async () => {
-  const now = T(17);
-  // 50 s east at 9 m/s from 站2 + 100 m: the next stop (站4) 350 m ahead... about 40 s.
-  const f = fixes(off(P, 0, 900), 6, 9, now - 50_000, { east: true });
-  const m = A.motion(f, now);
-  assert.ok(A.busPace(m));
-  const at = A.onWay(way, m);
-  assert.equal(at?.j, 4);
-  const rows = [{ StopUID: 's4', Direction: 0, StopStatus: 0, EstimateTime: 50, PlateNumb: 'KKA-1' }];
-  assert.deepEqual(A.busDue(rows, way, at.j, at.d, m), { plate: 'KKA-1', eta: 50 });
-  // The bus due there in 9 minutes is not the one you're on (a car beside the route).
-  assert.equal(A.busDue([{ ...rows[0], EstimateTime: 540 }], way, at.j, at.d, m), null);
-  // The other way round, or off the road by a block: not on it.
-  assert.equal(A.onWay({ ...way, stops: [...way.stops].reverse() }, m), null);
-  assert.equal(A.onWay(way, A.motion(f.map(x => ({ ...x, ...off(x, 300, 0) })), now)), null);
-  // busesAboard puts it together, one per route.
-  const station = { lat: way.stops[4].lat, lon: way.stops[4].lon, stops: [{ routeUID: 'HSZ5608', route: '5608' }, { routeUID: 'HSZ5608A', route: '5608' }] };
-  const got = await A.busesAboard(m, { stationsAround: async () => [station], routeStops: async () => [way], busEta: async () => ({ rows }), routeCity: () => 'Hsinchu' });
-  assert.equal(got.length, 1);
-  assert.equal(got[0].route.name, '5608');
-  const leg = A.busLegTo(got[0], 7, (j, k) => (k - j) * 60, now);
-  assert.equal(leg.from.name, '站3');
-  assert.equal(leg.to.name, '站7');
-  assert.equal(leg.arr, now + 50_000 + 3 * 60_000);
-  assert.ok(leg.dep <= now && leg.aboard);
-});
-
 test('navigation of a trip planned on board starts on the ride, not walking to it', () => {
   const { plan, st: stops } = busTrip({ on: 1, offAt: 5, depMin: 0 });
   clock.set(plan.legs[1].dep + 3 * 60_000);
@@ -128,41 +71,6 @@ test('navigation of a trip planned on board starts on the ride, not walking to i
   const p = { ...plan, legs, dep: clock.get() };
   const { st } = start(p, { here: { ...off(stops[2], 0, 100), at: clock.get() } });
   assert.deepEqual(show(st), { i: 0, phase: 'on', reached: 0 });
-});
-
-// Jay 2026-11-20: on 1825 between 上員 and 竹中, the GPS too weak to show a
-// train's pace, the plans from 目前位置 started on foot from the track.
-test('trainAboard loose: fixes too weak for a pace, on the line between stations with one train there by its clock: that one; on a platform, or two trains as near, none', () => {
-  const t0 = T(9);
-  const now = t0 + 6 * 60_000 + 15_000;
-  // One weak fix, 1201 about there by its clock (half way 站1 → 站2), standing still as far as the fixes say.
-  const here = { ...off(P, 5800, 150), fixes: [], dir: null };
-  assert.equal(A.trainAboard([trip('1201', t0)], st, here, new Map(), now), null, 'not without loose');
-  assert.equal(A.trainAboard([trip('1201', t0), trip('1203', t0 + 30 * 60_000)], st, here, new Map(), now, { loose: true })?.train.no, '1201');
-  // At a station: waiting there, not on board.
-  assert.equal(A.trainAboard([trip('1201', t0)], st, { ...off(st[1], 100, 0), fixes: [], dir: null }, new Map(), t0 + 4 * 60_000 + 10_000, { loose: true }), null);
-  // Two trains as near (one each way): none, never a guess.
-  assert.equal(A.trainAboard([trip('1201', t0), trip('1202', t0 - 8 * 60_000, { back: true })], st, here, new Map(), now, { loose: true }), null);
-});
-
-// Jay 2026-11-24: at home a kilometre east of the 竹北 line, standing, as 區間 1227
-// went by: his trip started "區間 1227 上". Loose is only for someone on the line, with the train.
-test('trainAboard loose: a kilometre off the line, or standing beside it while the train goes by, is never on it', () => {
-  const t0 = T(9);
-  const now = t0 + 6 * 60_000 + 15_000;
-  const one = [trip('1201', t0), trip('1203', t0 + 30 * 60_000)];
-  // 1201 half way 站1 → 站2 by its clock; you a kilometre east of the line, beside where it is.
-  assert.equal(A.trainAboard(one, st, { ...off(P, 6000, 1000), fixes: [], dir: null }, new Map(), now, { loose: true }), null, 'a kilometre off');
-  // On the line (150 m off it), but standing still for two minutes while 1201 went 2 km: watching it, not on it.
-  const still = Array.from({ length: 7 }, (_, k) => ({ ...off(P, 5800, 150), acc: 30, t: now - 120_000 + k * 20_000 }));
-  assert.equal(A.trainAboard(one, st, { ...off(P, 5800, 150), fixes: still, dir: null }, new Map(), now, { loose: true }), null, 'standing beside it');
-  // Moving with it on the line, the fixes rough: that one.
-  const riding = Array.from({ length: 4 }, (_, k) => {
-    const t = now - 60_000 + k * 20_000;
-    const f = (t - (t0 + 4 * 60_000 + 30_000)) / (3.5 * 60_000);
-    return { ...off(P, 4000 + 4000 * f, 120), acc: 150, t };
-  });
-  assert.equal(A.trainAboard(one, st, { ...riding.at(-1), fixes: riding, dir: null }, new Map(), now, { loose: true })?.train.no, '1201', 'riding it');
 });
 
 test('trainRide: the train navigation has you on, where it is by its clock and delay', () => {
@@ -174,4 +82,15 @@ test('trainRide: the train navigation has you on, where it is by its clock and d
   // 3 minutes late: still at 站1's side of the way, left 站1 at 09:07:30.
   assert.equal(A.trainRide([trip('1201', t0)], st, '1201', new Map([['1201', { delay: 3 }]]), now).at, 0);
   assert.equal(A.trainRide([trip('1201', t0)], st, '1201', new Map(), t0 + 90 * 60_000), null, 'its run over');
+});
+
+// Jay 2026-11-24: "remove the on train detection … not reliable as I use it". A trip
+// starts on a ride only when navigation says you're on it, never from the fixes alone.
+test('on board only by navigation: no train or bus guessed from the fixes', async () => {
+  const { readFileSync } = await import('node:fs');
+  const planner = readFileSync(new URL('../public/lib/planner.mjs', import.meta.url), 'utf8');
+  const map = readFileSync(new URL('../public/lib/tab-map.mjs', import.meta.url), 'utf8');
+  assert.match(planner, /export async function findAboard\(now = Date\.now\(\), \{ train = null \} = \{\}\) \{\n {2}if \(train\?\.no == null\) return null;/);
+  assert.match(map, /mayAboard && onTrain \? await/);
+  for (const gone of ['trainAboard', 'busesAboard', 'trainsNear']) assert.equal(A[gone], undefined, `${gone} gone`);
 });
