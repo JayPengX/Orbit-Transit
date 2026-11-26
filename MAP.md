@@ -60,7 +60,7 @@ Jay's, dated (Taiwan day), newest wins; the family's are in Orbit-Core `docs/RUL
 | --- | --- |
 | `app.mjs` | The frame: Pass, tabs, location. 查時刻 (`lib/tab-times.mjs` with its train and metro tabs) is read when first opened and once the opening's tab is up, never imported by the opening's code (`tests/first-code.test.mjs`) |
 | `lib/api.mjs` | The proxy: TDX, places, plans, walks; caches |
-| `lib/book.mjs` | 高鐵訂票: a 高鐵 ride's booking, filled in (Core `/transit/book`, TDX 訂票導訂; 臺鐵's when TDX approves it): a small sheet with the T Express app's link first (ets.thsrc.com.tw, its universal link, tapped for real so iOS can open the app) and 高鐵's website beside it (the Pass's way for links: quick view or Safari) |
+| `lib/book.mjs` | 高鐵訂票 and 台鐵訂票 (11-26): a ride's booking, filled in (Core `/transit/book`, TDX 訂票導訂, `sys`; 台鐵's to railway.gov.tw's applink, its 台鐵e訂通 app): a small sheet with the T Express app's link first (ets.thsrc.com.tw, its universal link, tapped for real so iOS can open the app) and 高鐵's website beside it (the Pass's way for links: quick view or Safari) |
 | `lib/planner.mjs`, `plan.mjs`, `live.mjs` | Planning; YouBike ideas, score and ranking; live re-timing |
 | `lib/chase.mjs` | 追公車: a bus caught further along its way by YouBike |
 | `lib/rail.mjs`, `metro*.mjs` | The train router; metro router, boards, maps |

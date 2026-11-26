@@ -11,10 +11,13 @@ test('高鐵訂票: only a 高鐵 ride with its number still to come; its app’
   const { canBook, bookHtml, bookWays } = await import('../public/lib/book.mjs');
   const dep = Date.now() + 3_600_000;
   assert.equal(canBook({ mode: 'hsr', dep, train: { no: '123' } }), true);
-  assert.equal(canBook({ mode: 'tra', dep, train: { no: '123' } }), false, '臺鐵 waits for TDX');
+  // (臺鐵's approved 11-26: its rides too, said as 台鐵訂票, the railway in its data.)
+  assert.equal(canBook({ mode: 'tra', dep, train: { no: '1831' } }), true);
+  assert.match(bookHtml({ mode: 'tra', from: { name: '竹東' }, to: { name: '新竹' }, dep, train: { no: '1831' } }), /台鐵訂票/);
+  assert.match(bookHtml({ mode: 'tra', from: { name: '竹東' }, to: { name: '新竹' }, dep, train: { no: '1831' } }), /&#34;sys&#34;:&#34;tra&#34;/);
   assert.equal(canBook({ mode: 'hsr', dep }), false, 'no number: nothing to fill in');
   assert.equal(canBook({ mode: 'hsr', dep: Date.now() - 600_000, train: { no: '123' } }), false, 'gone');
-  assert.match(bookHtml({ from: { name: '新竹"' }, to: { name: '台北' }, dep, train: { no: '123' } }), /data-book="\{&#34;from&#34;/, 'its data escaped');
+  assert.match(bookHtml({ from: { name: '新竹"' }, to: { name: '台北' }, dep, train: { no: '123' } }), /data-book="\{&#34;sys&#34;:&#34;hsr&#34;,&#34;from&#34;/, 'its data escaped');
   const was = globalThis.fetch;
   const asked = [];
   globalThis.fetch = async url => {
