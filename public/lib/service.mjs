@@ -358,12 +358,24 @@ function saysTitle(desc, title) {
 // A TDX Bus Alert or News row → { id, city (null: 公路客運's), title, text,
 // routes (Set of RouteIDs), names (Set of routeNorm'd 【numbers】), stops
 // (Set of StopIDs), cities, effect, stop, typhoon, from, to, url }.
+// A notice's text without what isn't news: who to call (聯絡單位, 聯絡人, 聯絡電話, a 客服專線 line), the
+// apology, an empty line or two in a row (Jay 11-26: 快捷9號's notice, its contacts twice, "ugly").
+export function tidyNotice(t) {
+  return String(t || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .map(l => l.replace(/造成(您|旅客|民眾)的?不便，?(本公司)?(深表歉意|敬請(見諒|包涵|鑒諒))[，。]?(敬請見諒[。]?)?/g, '').trimEnd())
+    .filter(l => !/^\s*(聯絡(單位|人|電話|方式)|客服(專線|電話)|洽詢電話)\s*[:：]/.test(l))
+    .join('\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
 export function busNotice(a, city = null) {
   const title = zh(a.Title).trim();
   const desc = zh(a.Description).trim();
   // (The description opening as the title does, most of it, says it: not twice.
   // 新北's 1820: its title 「…板橋地區路線影響停靠站點」, its text 「…板橋地區【1820】…」.)
-  const text = !title || saysTitle(desc, title) ? desc || title : `${title}\n${desc}`;
+  const text = tidyNotice(!title || saysTitle(desc, title) ? desc || title : `${title}\n${desc}`);
   const end = Date.parse(a.EndTime);
   // (An end at midnight sharp is that day's: 「10/23 00:00」 for a notice about the 23rd.)
   const to = !Number.isFinite(end) ? Infinity : /T00:00(:00)?/.test(a.EndTime) ? end + 86_400_000 - 1 : end;
@@ -566,10 +578,10 @@ export function stoppedNow(uid, name, now = Date.now()) {
 // For the banners: what's stopped or changed today around `cities` (TDX
 // City names) and the metro `systems`: [{ kind, title, lines: [text], stop }].
 // `kinds`: which to ask for ('tra', 'hsr', 'bus', 'metro'); `bikes`: the YouBike line, when they're all off.
-export async function loadNotices({ cities = [], systems = [], kinds = ['tra', 'hsr', 'bus', 'metro'], bikes = '' } = {}, now = Date.now()) {
+export async function loadNotices({ cities = [], systems = [], kinds = ['tra', 'hsr', 'bus', 'metro'], bikes = '', known = null } = {}, now = Date.now()) {
   const want = k => kinds.includes(k);
   const [tra, hsr, bus, metro, runs] = await Promise.all([want('tra') ? traNotices() : null, want('hsr') ? hsrNotice() : null, want('bus') ? ensureBus(cities) : [], want('metro') ? metroNotices(systems) : [], want('bus') ? Promise.all(cities.map(c => ensureRunning(c))) : []]);
-  return summarize({ tra, hsr, bus, metro, cities, bikes, running: Object.fromEntries(cities.map((c, i) => [c, runs[i]])) }, now);
+  return summarize({ tra, hsr, bus, metro, cities, bikes, known, running: Object.fromEntries(cities.map((c, i) => [c, runs[i]])) }, now);
 }
 // YouBike closed around you (TDX's ServiceStatus 0 at every station near, three at least): its line.
 export function bikesOff(stations) {
@@ -590,7 +602,10 @@ export function traSummary(rules, date) {
 }
 
 // The banners' rows: [{ kind, sys?, title, sum, lines: [text], stop }].
-export function summarize({ tra, hsr, bus, metro, bikes, cities = [], running = {} }, now = Date.now()) {
+// `known`: the routes (uids and names) and stops the person keeps (常用, their trips' rides): given, a
+// route's or a stop's notice is said only for those, a city-wide one (a typhoon) for everyone; the rest
+// on the route's own page (Jay 11-26: 快捷9號's stop change "I don't even take this bus").
+export function summarize({ tra, hsr, bus, metro, bikes, cities = [], running = {}, known = null }, now = Date.now()) {
   const out = [];
   const today = tw(now).date;
   const traNow = (tra?.notes || []).filter(n => n.from <= now + 6 * 3600_000 && now <= n.to && n.days.some(d => !d || d === today));
@@ -600,7 +615,10 @@ export function summarize({ tra, hsr, bus, metro, bikes, cities = [], running = 
   const here = new Set(cities);
   // Your cities' buses: none on the road (likely off), and today's notices from them and the 公路客運's naming them.
   const idle = cities.filter(c => cityIdle(running?.[c], now));
-  const mine = liveNotices(bus || [], now).filter(n => (n.city ? here.has(n.city) : [...n.cities].some(c => here.has(c))) && (n.typhoon || (n.effect !== 'info' && (n.routes.size || n.names.size || n.stops.size))));
+  // (Names as a notice's are read, routeNorm; a route's id inside a kept one's uid: HSZ0182 holds 0182.)
+  const keptNames = new Set([...(known || [])].map(routeNorm));
+  const ours = n => !known || n.typhoon || [...n.routes].some(r => [...known].some(k => k === r || k.endsWith(r))) || [...n.names].some(r => keptNames.has(routeNorm(r))) || [...n.stops].some(r => [...known].some(k => k === r || k.endsWith(r)));
+  const mine = liveNotices(bus || [], now).filter(n => (n.city ? here.has(n.city) : [...n.cities].some(c => here.has(c))) && (n.typhoon || (n.effect !== 'info' && (n.routes.size || n.names.size || n.stops.size))) && ours(n));
   const uniq = oneEach(mine).sort((a, b) => EFFECTS.indexOf(a.effect) - EFFECTS.indexOf(b.effect));
   if (uniq.length || idle.length) {
     const offs = uniq.filter(n => n.stop).length;

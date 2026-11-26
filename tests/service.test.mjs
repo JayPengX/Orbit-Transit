@@ -163,3 +163,21 @@ test('a notice said twice (Alert and News, a space or a mark apart, or one insid
   assert.deepEqual(oneEach([a, c, d]).map(n => n.id), ['3', '4']);
   assert.deepEqual(oneEach([d]).map(n => n.id), ['4']);
 });
+
+// Jay 11-26: 快捷9號's stop change on 交通 for everyone, "I don't even take this bus": a route's notice only for
+// the routes and stops kept (常用, saved trips); the rest on the route's own page.
+test('the banner: a route notice only for the buses kept', () => {
+  const a = { AlertID: '9', Title: '【站點調整公告—快捷9號路線】', Description: '本公司 【快捷9號】 路線，於11月26日至11月27日往返皆不停靠縣政府站。', Department: '捷乘客運', Status: 2, Scope: { Routes: [{ RouteID: '9009' }] }, StartTime: '2026-11-26T00:00:00+08:00', EndTime: '2026-11-27T23:59:00+08:00', UpdateTime: '2026-11-25T10:00:00+08:00' };
+  const day = Date.parse('2026-11-26T15:00:00+08:00');
+  const list = [busNotice(a, 'HsinchuCounty')];
+  const said = known => summarize({ bus: list, cities: ['HsinchuCounty'], known }, day).find(r => r.kind === 'bus')?.said || [];
+  assert.equal(said(null).length, 1, 'with nothing known: as before');
+  assert.equal(said(new Set(['快捷8號'])).length, 0);
+  assert.equal(said(new Set(['快捷9號'])).length, 1);
+});
+
+test("a bus notice's text without its contacts, apology or empty lines", async () => {
+  const { tidyNotice } = await import('../public/lib/service.mjs');
+  const t = tidyNotice('【快捷9號】 路線，往返皆不停靠縣政府站。造成您的不便，本公司深表歉意，敬請見諒。\n\n\n聯絡單位：捷乘客運有限公司\n聯絡人：客服部\n聯絡電話：03—6214885');
+  assert.equal(t, '【快捷9號】 路線，往返皆不停靠縣政府站。');
+});

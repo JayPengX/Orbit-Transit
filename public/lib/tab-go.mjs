@@ -283,7 +283,9 @@ async function loadNotices_() {
   const ends = ctx.data.trips.flatMap(t => [t.from, t.to]).filter(p => p && Number.isFinite(p.lat)).slice(0, 6);
   const cities = [...new Set([ctx.city, ...(await Promise.all(ends.map(p => ctx.cityOf(p.lat, p.lon).catch(() => null))))].filter(Boolean))];
   const systems = h ? [...new Set(mapsNear([h.lat - 0.05, h.lon - 0.05, h.lat + 0.05, h.lon + 0.05]).flatMap(m => m.systems))] : [];
-  S.notices = await loadNotices({ cities, systems, bikes: '' }).catch(() => S.notices);
+  // (The buses they keep: 常用's stops and routes, and the rides of their saved trips' pinned ways.)
+  const known = new Set([...ctx.data.groups.flatMap(g => g.items.flatMap(i => [i.routeUID, i.route, i.stopUID])), ...ctx.data.saved.flatMap(t => t.picks.flatMap(k => k.split('|').filter(x => x.startsWith('bus:')).map(x => x.slice(4))))].filter(Boolean));
+  S.notices = await loadNotices({ cities, systems, bikes: '', known }).catch(() => S.notices);
 }
 
 async function trainPins() {
