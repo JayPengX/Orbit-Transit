@@ -39,7 +39,7 @@ import { cleanPlace, cleanSaved, rememberTrip, tripKey, PLACE_ICONS, iconName, L
 import { wentTo } from './learn.mjs';
 import { sheet, sheetHead, icon, legChips, fitLegs, depChips, legColor, inkOn, MODE_NAME, ago, timeRange, tagText, trainKind } from './ui.mjs';
 import { COLOR, tile, bikeTile, bikeStats, emptyNote } from './look.mjs';
-import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown } from './util.mjs';
+import { e, hm, minsText, distText, meters, decodeLine, uid, tw, twAt, addDays, walkSec, walkGuess, inTaiwan, stationKey, isRide, readJson, writeJson, shown, joinedPath } from './util.mjs';
 import { placeNamed } from './said.mjs';
 import { openRoute, strip, fitStrips, busWhen, plannedAt } from './bus-ui.mjs';
 import { persistentSheet } from './sheet.mjs';
@@ -2749,10 +2749,15 @@ function drawPlan(p, { fit = true, lit = -1 } = {}) {
   if (!navFull()) drawLayers();
   const lines = [];
   const pts = [];
+  // Each stretch drawn from where the one before it ends and on to its own stop: a ride's road starts on the
+  // street, a few metres from the dock and the walk to it, and the lines stood apart (Jay 11-26: 六家, "the
+  // line should connect"). (Joined only across a gap of a few metres to 60: a real gap is a real walk.)
+  let prev = null;
   for (const [k, l] of p.legs.entries()) {
     knownRoad(l);
-    const path = legPath(l);
+    const path = joinedPath(legPath(l), l, prev);
     if (!path.length) continue;
+    prev = path.at(-1);
     // Navigating: the whole trip in its colours, the step you're on the boldest, the steps behind you faint.
     const done = lit >= 0 && k < lit;
     const on = lit < 0 || k === lit;

@@ -268,3 +268,17 @@ export const stationKey = n => {
 // A pinned way (plan.mjs pickSig) kept from before its lines were read by
 // routeNorm (快捷八號 as 快捷8): read by the rule now, so the pin still holds.
 export const pinSig = k => String(k).split('|').map(x => (/^(tra|hsr):/.test(x) ? x : x.replace(/^(\w+):(.*)$/, (_, m, n) => `${m}:${routeNorm(n)}`))).join('|');
+
+// A trip's stretch on the map joined to the one before it and to its own stop (tab-map drawPlan, Jay 11-26:
+// "the line should connect"): a gap of a few metres to 60 closed, a longer one left (a real walk).
+export function joinedPath(path, l, prev = null, { near = 8, far = 60 } = {}) {
+  if (!path?.length) return path || [];
+  const gap = (a, b) => (a && b ? meters(a[0], a[1], b[0], b[1]) : 0);
+  const out = [...path];
+  const start = prev || (l.from?.lat != null ? [l.from.lat, l.from.lon] : null);
+  const end = l.to?.lat != null ? [l.to.lat, l.to.lon] : null;
+  if (start && gap(start, out[0]) > near && gap(start, out[0]) <= far) out.unshift(start);
+  if (end && gap(out.at(-1), end) > near && gap(out.at(-1), end) <= far) out.push(end);
+  return out;
+}
+

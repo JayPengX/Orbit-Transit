@@ -969,6 +969,8 @@ export function nextStretch(plan, parked, now = Date.now(), v = null) {
 // trip's own bar while navigating (Jay 2026-11-14: switch apps without
 // minimizing first; the switcher floating over the step's card was "ugly").
 const inOrbit = () => typeof document !== 'undefined' && document.documentElement.classList.contains('q-in-suite');
+// Back from the background this long: found again as when opened (state.onShow).
+export const AWAY_SETTLE_MS = 60_000;
 export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction = null, onBus = null, here = null, resume = null, push = null, dest = null, swap30 = false }) {
   // Started by a tap (mostly): the iPhone's chime may sound from now on.
   primeBuzz();
@@ -2360,7 +2362,14 @@ export function startNav(plan, { box, mini = null, draw, follow, onEnd, onAction
   if (mini) mini.onclick = ev => ev.target.closest('[data-nav="open"]') && onAction?.('open');
   // Back from the background (an iPhone pauses the page): where you are now, the buses again.
   state.onShow = () => {
+    // (Put away: when, so coming back after a while is taken as opening it again.)
+    if (document.visibilityState === 'hidden') return void (state.hiddenAt = Date.now());
     if (document.visibilityState !== 'visible' || nav !== state) return;
+    // Back after a minute and more (in a pocket on the train): where you are on the trip found again with the
+    // next fix, exactly as when it's opened, its rides moved onto the ones you can still catch (Jay 11-26:
+    // "not quick enough to switch the time of my trip to my current one, it still require me to close the app").
+    if (state.hiddenAt && Date.now() - state.hiddenAt >= AWAY_SETTLE_MS) state.settled = false;
+    state.hiddenAt = 0;
     if (state.done && Date.now() - state.doneAt >= END_MS) return finish();
     watch();
     state.shownAt = Date.now();
