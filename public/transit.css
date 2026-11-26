@@ -6774,3 +6774,5 @@ html[lang='en'] .ot-sn-tap {
   color: var(--q-label-2);
   font: 400 var(--q-t-footnote, 13px) / 1.2 var(--q-font);
 }
+/* 換條分支: a branch that gets there sooner says so in green (tab-map branchSheet). */
+.ot-nav-menu .q-ritem-value.ot-sooner { color: var(--q-green, #34c759); font-weight: 600; }

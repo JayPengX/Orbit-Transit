@@ -48,12 +48,12 @@ export function changed(key, v) {
   writeJson(TIMES, { ...times, [key]: at });
 }
 // What goes up: JSON only (no promises: the later buses on their way); a
-// very long plan without its roads.
+// very long plan without its roads (and its other ways, 換條分支: offered on the phone that has them).
 export function passCopy(v) {
   if (v == null) return null;
   const text = JSON.stringify(v, (k, x) => (x instanceof Promise ? undefined : x));
   if (text.length <= SLIM_AT) return JSON.parse(text);
-  return JSON.parse(text, (k, x) => (k === 'path' || k === 'road' || k === 'track' ? undefined : x));
+  return JSON.parse(text, (k, x) => (k === 'path' || k === 'road' || k === 'track' || k === 'branches' ? undefined : x));
 }
 // The Pass's shelf (a claim's or the sign-in's): each thing changed there
 // after here taken up; one changed here after there (held for it, or a

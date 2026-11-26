@@ -25,7 +25,8 @@ import { liveTimes, officialLeg } from './live.mjs';
 import { stationEta, bikesAround, etaAround } from './near.mjs';
 import { nearBikes as nearBikeCards } from './near-ui.mjs';
 import { underWay } from './underway.mjs';
-import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, keepNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBest, navLater, lateShown, nextStretch, navDot } from './nav.mjs';
+import { keepBranches } from './branch.mjs';
+import { ownWayNow, startNav, pickedPlan, navigating, canNav, NAV_LEAD, savedNav, keepNav, stopNav, forgetNav, mapsLink, mapsName, GOOGLE_ID, busPath, trainStops, navNow, setNavMin, navStopAt, navChangeOff, wayText, stageView, navRetarget, navRest, navStops, navPickTimes, navCanPick, navBranches, navBranch, navBest, navLater, lateShown, nextStretch, navDot } from './nav.mjs';
 import { fastest } from './trouble.mjs';
 import { setNavPush, setBikePush, notifyLocal } from './alerts.mjs';
 import { rental, onRental, startRental, endRental, markWarned, rentalPush, swapDocks, FREE_MS, WARN_MS } from './rental.mjs';
@@ -2910,6 +2911,8 @@ async function navigate(p, resume = null, { swap = false } = {}) {
   // (the owner, 2026-11-03), filled in once they're planned.
   // (Its own way to the first ride begun now, not by a clock gone past it: nav.mjs ownWayNow.)
   if (!resume) p = ownWayNow(p);
+  // The ways it was picked from that share its start: switched to under way (換條分支, branch.mjs).
+  if (!resume && c?.plans?.length > 1) p = { ...p, branches: keepBranches(p, c.plans) };
   if (c?.then?.length) p = { ...p, then: c.then.map(x => ({ name: x.name || '', lat: x.lat, lon: x.lon, ...(x.gid ? { gid: x.gid } : {}) })), later: laterNow(restOf(c, p)) };
   if (p.then?.length && !p.later?.length) {
     const base = p;
@@ -3252,6 +3255,7 @@ function navMore() {
       ${menuRow('min', 'down', COLOR.walk, W('縮小', 'Minimize'))}
       ${navCanPick() ? menuRow('times', 'clock', COLOR.tra, W('改搭別班', 'Another departure')) : ''}
       ${ride && n.ride ? menuRow('off', 'bell', COLOR.bus, W('改下車站', 'Change stop')) : ''}
+      ${navBranches().length ? menuRow('branch', 'route', COLOR.tra, W(`換條分支（${navBranches().length}）`, `Switch branch (${navBranches().length})`)) : ''}
       ${menuRow('replan', 'route', COLOR.route, W('換一條路', 'Another way'))}
       ${menuRow('edit', 'pin', COLOR.place, W('編輯行程', 'Edit trip'))}
     </div>`);
@@ -3263,9 +3267,40 @@ function navMore() {
     if (m === 'replan') return replanFromHere();
     if (m === 'off') return changeOffSheet();
     if (m === 'times') return navPickTimes();
+    if (m === 'branch') return branchSheet();
     if (m === 'edit') return editTripSheet();
   });
 }
+
+// 換條分支 (Jay 11-26): the trip's other ways that part from this one ahead
+// of you, each said by where it parts and what it takes from there, with when
+// it gets you there against now; one tapped, navigation goes on along it.
+function branchSheet() {
+  const n = navNow();
+  const list = navBranches();
+  if (!n || !list.length) return;
+  const arr = n.plan.arr;
+  const tail = b => b.legs.slice(b.kind === 'off' ? b.n + 1 : b.n).map(l => (isRide(l) ? rideNameShort(l) : l.mode === 'bike' ? 'YouBike' : '')).filter(Boolean);
+  const rows = list
+    .map((b, k) => {
+      const t = tail(b);
+      const title = b.kind === 'off' ? W(`在 ${b.at} 下車`, `Off at ${b.at}`) : W(`到 ${b.at} 後改走`, `From ${b.at}, another way`);
+      const then = t.length ? t.join(' → ') : W('走路', 'Walk');
+      const diff = Math.round((b.arr - arr) / 60_000);
+      const vs = diff === 0 ? W('一樣時間', 'Same time') : diff < 0 ? W(`早 ${-diff} 分`, `${-diff} min sooner`) : W(`晚 ${diff} 分`, `${diff} min later`);
+      return `<button class="q-ritem chevron" type="button" data-b="${k}">${tile('route', diff < 0 ? COLOR.bus : COLOR.tra, 'sm')}<span class="q-ritem-text"><span class="q-ritem-title">${e(title)}</span><small>${e(`${then}・${hm(b.arr)} 到`)}</small></span><span class="q-ritem-value${diff < 0 ? ' ot-sooner' : ''}">${e(vs)}</span></button>`;
+    })
+    .join('');
+  const d = sheet(`${sheetHead(W('換條分支', 'Switch branch'), W(`現在這條 ${hm(arr)} 到，走過的部分一樣`, `This way gets there ${hm(arr)}; the part behind you is the same`))}<div class="q-rowcard ot-nav-menu">${rows}</div>`);
+  d.addEventListener('click', ev => {
+    const k = ev.target.closest('[data-b]')?.dataset.b;
+    if (k == null) return;
+    d.shut();
+    const b = list[Number(k)];
+    if (navBranch(b)) ctx.status(b.kind === 'off' ? W(`改在 ${b.at} 下車`, `Getting off at ${b.at} instead`) : W(`到 ${b.at} 後改走這條`, `From ${b.at}, this way instead`));
+  });
+}
+const rideNameShort = l => (l.mode === 'tra' ? W('台鐵', 'TRA') : l.mode === 'hsr' ? W('高鐵', 'HSR') : `${l.short || l.name || ''}`.trim() || W('公車', 'Bus'));
 
 // 編輯行程, navigating: the places still to go (where you're heading first,
 // then the rest) as one card of numbered rows, each changed with a tap or

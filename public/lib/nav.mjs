@@ -26,6 +26,7 @@ import { busWhere, trainWhere, trainByTime, rideOn, rideAlong, busAhead, nearest
 import { icon, MODE_NAME, legColor, legLabel, sheet, sheetHead, trainKind } from './ui.mjs';
 import { e, hm, minsText, meters, walkSec, tw, decodeLine, isRide, rides, readSaved, UNREAD, writeJson, shown, distText } from './util.mjs';
 import { changed } from './underway.mjs';
+import { branchesOf } from './branch.mjs';
 
 import { W, en } from '#kit/lang.mjs';
 let nav = null;
@@ -2674,6 +2675,44 @@ export function navRest(rest = [], after = null) {
   // What was known of the legs after it is of the old ones.
   for (const m of [s.ride, s.info, s.liveAt]) for (const key of [...m.keys()]) if (key > k) m.delete(key);
   s.go(s.i, s.phase);
+}
+
+// 換條分支: the trip's ways that part from this one at a step you're not yet
+// past (branch.mjs). → the branches open now.
+export const navBranches = (now = Date.now()) => (nav ? branchesOf(nav.plan, nav.i, now) : []);
+// One taken: the steps from where it parts are its own (a ride you're on
+// keeps going, off at its stop instead); the way left is a branch in turn.
+export function navBranch(b) {
+  if (!nav || !b) return false;
+  const s = nav;
+  const was = { legs: structuredClone(s.plan.legs), dep: s.plan.dep, arr: s.plan.arr };
+  const legs = structuredClone(b.legs);
+  const keep = (s.plan.branches || []).filter(o => o.legs !== b.legs);
+  if (b.kind === 'off') {
+    const l = s.plan.legs[b.n];
+    const o = legs[b.n];
+    if (!l || !o) return false;
+    l.to = o.to;
+    l.arr = o.arr;
+    l.dur = Math.max(60, Math.round((o.arr - l.dep) / 1000));
+    if (o.stops != null) l.stops = o.stops;
+    for (const k of ['poly', 'path']) if (o[k]) l[k] = o[k];
+    else delete l[k];
+    // (Where along its stops it now ends: found again, else read again.)
+    const rs = s.ride.get(b.n);
+    const j = rs ? rs.stops.findIndex((x, k) => k > rs.i && x.lat != null && meters(x.lat, x.lon, o.to.lat, o.to.lon) < 300) : -1;
+    if (rs && j > 0) rs.j = j;
+    else s.ride.delete(b.n);
+    s.alerted = -1;
+    s.plan.branches = [...keep, was];
+    navRest(legs.slice(b.n + 1), b.n);
+  } else {
+    if (b.n < 1) return false;
+    s.plan.branches = [...keep, was];
+    navRest(legs.slice(b.n), b.n - 1);
+  }
+  saveNav(s);
+  return true;
 }
 
 export function stopNav() {
