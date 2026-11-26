@@ -94,18 +94,31 @@ const walkOf = (from, to) => Promise.race([walkTo(spotOf(from), to, { line: true
 
 // Our train plans that end far from the place, finished by a direct bus
 // (each train's looked for side by side).
+// (Off at the station a plan changes trains at too, on by bus from there instead of the next train:
+// 1831 to 竹中 and the 快捷8號, not only the 六家線 to 六家 and a bus, Jay 11-26.)
+const TRAIN_BUS_TRIES = 6;
 async function trainThenBus(plans, to, now) {
   const jobs = [];
   const tried = new Set();
+  const offs = [];
   for (const p of plans) {
-    const k = p.legs.findLastIndex(l => TRAINS.has(l.mode));
-    if (k < 0) continue;
+    const last = p.legs.findLastIndex(l => TRAINS.has(l.mode));
+    if (last < 0) continue;
+    offs.push([p, last]);
+    for (let k = 0; k < last; k++) if (TRAINS.has(p.legs[k].mode)) offs.push([p, k]);
+  }
+  // (Every plan's own end first, then the change stations; each the soonest there.)
+  offs.sort((a, b) => a[0].legs[a[1]].arr - b[0].legs[b[1]].arr).sort((a, b) => (a[1] === a[0].legs.findLastIndex(l => TRAINS.has(l.mode)) ? 0 : 1) - (b[1] === b[0].legs.findLastIndex(l => TRAINS.has(l.mode)) ? 0 : 1));
+  for (const [p, k] of offs) {
     const off = p.legs[k];
     if (!off.to?.lat || (meters(off.to.lat, off.to.lon, to.lat, to.lon) < 1200 && !p.legs[k + 1]?.bus)) continue;
-    const key = `${off.to.name}|${Math.round(off.arr / 600_000)}`;
-    if (tried.has(key) || tried.size >= 3) continue;
+    // (Once a station, its soonest train: 千甲 three times over, at 16:55, 17:20 and 17:40, had
+    // left 竹中 no turn.)
+    const key = off.to.name;
+    if (tried.has(key) || tried.size >= TRAIN_BUS_TRIES) continue;
     tried.add(key);
-    jobs.push(busLink(off.to, to, off.arr + 2 * 60_000, { now }).then(links => links.map(b => finish({ ...p, src: 'rail+bus', legs: [...p.legs.slice(0, k + 1), ...b.legs], live: b.live })), () => []));
+    // (Off the bus as far from the place as the direct buses may be, 1.1 km: 快捷8號 from 竹中 to 文興嘉興路口 was 900 m short of it.)
+    jobs.push(busLink(off.to, to, off.arr + 2 * 60_000, { now, toM: 1100, n: 3 }).then(links => links.map(b => finish({ ...p, src: 'rail+bus', legs: [...p.legs.slice(0, k + 1), ...b.legs], live: b.live })), () => []));
   }
   return (await Promise.all(jobs)).flat();
 }

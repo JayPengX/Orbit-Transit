@@ -1036,9 +1036,20 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
   const kind = p => (rides(p).some(l => l.mode === 'bus') ? 'bus' : 'rail');
   const rideMin = p => p.legs.reduce((a, l) => a + (l.mode === 'bike' ? l.dur || 0 : 0), 0);
   const allMin = Math.min(...list.filter(p => p.bike && !rides(p).length).map(rideMin));
+  // The stations this trip's ways change trains at (竹中 for the 六家線), and a way off its last train at one.
+  const changes = new Set(list.flatMap(x => rides(x).slice(0, -1).filter(l => RAIL.has(l.mode)).map(l => l.to?.name).filter(Boolean)));
+  const atJunction = x => {
+    const r = rides(x);
+    return r.length > 0 && RAIL.has(r.at(-1).mode) && changes.has(r.at(-1).to?.name);
+  };
   const river = new Set();
   for (const k of ['rail', 'bus']) {
-    const g = [...over].map(x => x[0]).filter(p => kind(p) === k && !busChain(p) && !trek(p) && rideMin(p) <= allMin * 2 / 3).sort((a, b) => rides(a).length - rides(b).length || a.score - b.score)[0];
+    // (Its longest ride against riding it all, not every minute on a bike: 6 minutes to 竹東's station and
+    // 25 from 竹中 is a train and a ride, not riding it all, Jay 11-26.)
+    const cands = [...over].map(x => x[0]).filter(p => kind(p) === k && !busChain(p) && !trek(p) && longest(p) * 60 <= allMin * 2 / 3).sort((a, b) => rides(a).length - rides(b).length || a.score - b.score);
+    // (Off at the junction, home within 5 minutes of the best of them: that one, where the other line is
+    // still yours to take; 竹中's ride, not 千甲's over 經國大橋 a minute sooner, Jay 11-26: "our regular is 竹中 then bike home".)
+    const g = cands.find(q => atJunction(q) && rides(q).length <= rides(cands[0]).length && q.arr <= cands[0].arr + 5 * 60_000) || cands[0];
     if (g) river.add(groups.get(pickSig(g)));
   }
   const other = (q, p) => groups.get(pickSig(q)) !== groups.get(pickSig(p)) && !over.has(groups.get(pickSig(q)));
@@ -1063,6 +1074,11 @@ export function rank(plans, { now = Date.now(), o = null, d = null, by = 'depart
     const last = rides(p).at(-1);
     const beatenBy = q => {
       if (!other(q, p) || !rides(q).length || q.off || (noChain && busChain(q)) || (noTrek && trek(q))) return false;
+      // (Off the same train at the junction, riding no more than 8 minutes longer and home within 5 of
+      // staying on a stop or two: the junction's, where the other line is still yours to take; the
+      // ride from 新莊, 3 minutes sooner, set 竹中's aside, Jay 11-26: "our regular is 竹中 then bike home".)
+      if (atJunction(p) && !atJunction(q) && offSooner(p, q) && p.arr <= q.arr + 5 * 60_000) return false;
+      if (atJunction(q) && !atJunction(p) && offSooner(q, p) && q.arr <= p.arr + 5 * 60_000) return true;
       // (The same first train, off it sooner and riding home no more than 8
       // minutes longer, there no later: on further was for nothing, however
       // the bother adds up: off at 竹中 for the 六家線, not on to 北新竹.)

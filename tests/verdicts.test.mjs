@@ -144,3 +144,21 @@ test('every verdict ranks the same whatever order the planners answered in (the 
     for (let k = 0; k < 12; k++) assert.equal(view(rankSaved(name, { shuffle })), base, name);
   }
 });
+
+// Jay 11-26: off 1831 at the junction (竹中) and a ride listed, not on to 新莊 for 3 minutes; without YouBike a train
+// still among the ways (the stations a train's ways change at looked at for a bus on, too).
+// (On the day's own times only: with the buses moved, the way to 竹中's 1831 that leads its group may be one
+// that's home 3 minutes before the 六家線, and a ride over 頭前溪 is listed only 5 minutes sooner, 10-15.)
+test('竹東站 → 縣體育場 at 16:45 (11-26): 1831 to 竹中 and a ride listed, never the ride from 新莊; a bus on from a change station weighed', () => {
+  const opts = {};
+  const r = rankSaved('zhudong-stadium-1645', opts);
+  always('stadium-1645', r);
+  const one = p => rides(p).length === 1 && p.legs.some(l => l.mode === 'bike');
+  assert.ok(shown(r).some(p => one(p) && /竹東>竹中/.test(sayPlan(p))), say(shown(r)));
+  assert.deepEqual(shown(r).filter(p => one(p) && /竹東>新莊/.test(sayPlan(p))).map(sayPlan), []);
+  const n = rankSaved('zhudong-stadium-1645-nobike', opts);
+  always('stadium-1645-nobike', n);
+  // (A train's way on by bus from a station its ways change at, 北新竹 for the 快捷9號, among those weighed.)
+  assert.ok(n.some(p => /tra:區間1831:竹東>北新竹 bus:快捷9號/.test(sayPlan(p))), say(n.slice(0, 12)));
+});
+
